@@ -207,13 +207,25 @@ défauts.
 
 ### Checklist « 1.0 prête »
 
-> **État au 2026-06-14 (D-143)** : **Étapes 1→4 ✅** (Space-OCR, parité moteurs,
-> interface/rapport, P2 métriques) **+ i18n finale du rapport ✅** (D-136→D-142 :
-> tout le rapport bilingue FR/EN). **Reste** : **P3** (dataset curé) · **P4**
-> (saveurs servie/IIIF) · **P5** (release 1.0 + gel) ; **petits restes** (3c
-> expose-ALTO [profil métrique ✅ D-144 · config save/load ✅ D-145] · nombres FR ·
-> surface NER vivante) ; et la
-> **décision opérationnelle** segmenteur Space (T2.5, différée — ne bloque pas 1.0).
+> **État au 2026-09-09 (D-223)** : **Étapes 1→4 ✅** (Space-OCR, parité moteurs,
+> interface/rapport, P2 métriques) **+ i18n finale ✅** (D-136→D-142) **+ P0→P3 ✅**
+> (enveloppe données, rapport local, métriques, dataset curé publié) **+ 3c
+> expose-ALTO ✅** (D-219). **Reste pour la 1.0** : **P5** (release + gel) ; **P4**
+> réduit à la *saveur servie*, que ce plan déclare lui-même pouvoir suivre la 1.0.
+> **Aucun tag `git` n'existe** : la version est le repli `setuptools_scm`, donc la
+> 1.0 n'a jamais été publiée.
+>
+> **Hors numérotation P#, livré en août 2026** : l'**axe correction structurée**
+> (`ALTO → ALTO`, `cinoc correct`) — inventorié au roll-up de
+> [`MIGRATION_PLAN.md`](MIGRATION_PLAN.md) §« Axe correction structurée ». Il ne
+> figurait dans aucune des cinq étapes ci-dessous : ce plan décrivait le portage
+> de Picarones, et cet axe est du **neuf**. Il porte **un arbitrage à rendre avant
+> la 1.0** — lui donner une surface web, ou acter qu'il reste un outil de ligne de
+> commande.
+>
+> **Différé opérationnel** : segmenteur Space (T2.5 — dégradé gracieux livré, ne
+> bloque pas 1.0). **Surface NER vivante** : `Competitor.ner` est câblé au
+> planificateur ; le formulaire web reste à trancher avec l'arbitrage ci-dessus.
 
 - [x] **Étape 1 ✅ (D-075)** : le Space public exécute Tesseract gratuitement (build fail-fast, OMP borné, `fra` présent ; mode public fail-closed, binaire tracé au `RunManifest`). *Décision segmenteur (PP-DocLayout, T2.5) **différée** — mesurer le cold-start ; dégradé gracieux livré, ne bloque pas 1.0.*
 - [x] **Étape 2 ✅ (D-076→D-080)** : Google + Azure first-party, Pero + Calamari first-party in-tree (D-078), zero-shot vérifié, jetons remontés par les adapters cloud, **16 prompts curés portés** + prompt libre UI.
@@ -224,8 +236,10 @@ défauts.
 - [x] **i18n finale du rapport ✅ (D-136→D-142)** : passe unique après P2 (D-114) — **tout** le rapport (chrome + héros + 4 onglets + **toutes** les sections + aria-labels) est bilingue FR/EN via `SectionContext.lang` (route web `?lang=en`), mécanisme unique `html.localized` inline (R7 — pas de catalogue). FR byte-identique ; +1 test EN par section.
 - [x] **P3 — Dataset de référence curé ✅** : standardiseur (D-202) + importeur réf-IIIF (D-203) + script de publication HF (D-206) + **dataset Dresden publié** & rapport à liens IIIF/HF prouvé (D-207) + import web (D-211) + **découverte automatique** par compte/tag (D-213). Chaîne prouvée extensible.
 - [ ] **P4 — Saveurs & échelle** : saveur réfs IIIF ✅ (D-207) · saveur dossier/ZIP ✅ (D-214) · *reste* : saveur **servie** (app web : galerie paginée, images à la demande, échelle 5000) — utile seulement pour la consultation web de runs de milliers de pages ; peut suivre la 1.0.
-- [ ] `make ci` vert (3 OS × Python 3.11/3.12), couverture ≥ 85 %, tous les garde-fous d'archi verts.
-- [~] `README`/`CHANGELOG`/`pricing.json` à jour, roll-up réconcilié : **README ✅** (positionnement, matrice extras/moteurs, mode Space) + **CHANGELOG ✅** (D-216) ; roll-up réconcilié au fil des D-entries ; *reste* : vérifier la date de `pricing.json` au moment du tag.
+- [x] `make ci` vert (3 OS × Python 3.11/3.12/3.13), couverture ≥ 85 %, tous les garde-fous d'archi verts. *(Vérifié localement le 2026-09-09 : `ruff` + `mypy --strict` + suite complète, couverture très au-dessus du seuil. Deux défauts trouvés à cette occasion et corrigés : filtre anti-SSRF cassé sur réseau NAT64 — D-221 — et deux briques de la correction structurée hors du gate — D-222.)*
+- [~] `README`/`CHANGELOG`/`pricing.json` à jour, roll-up réconcilié : **README ✅** (positionnement, matrice extras/moteurs, mode Space, **+ axe correction structurée et `cinoc correct`** — D-223) + **CHANGELOG ✅** (D-216, *à compléter de l'axe correction au moment du tag*) ; **roll-up réconcilié ✅ (D-223)** — il sur-déclarait du reste-à-faire déjà livré et ignorait l'axe d'août ; *reste* : vérifier la date de `pricing.json` au moment du tag (`last_updated` 2026-06-10, `valid_until` 2026-12-01 — le rapport avertit au-delà).
+- [ ] **Arbitrage** : surface web de la correction structurée — la livrer, ou acter qu'elle reste en ligne de commande (et l'écrire dans le `README`).
+- [ ] Tag `v1.0.0` posé (aucun tag n'existe à ce jour).
 - [ ] Gel de Picarones exécuté (5b).
 
 ---

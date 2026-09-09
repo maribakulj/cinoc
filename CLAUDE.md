@@ -12,47 +12,35 @@ avant d'écrire la moindre ligne.**
 > **Source de vérité du détail = le roll-up de [`MIGRATION_PLAN.md`](MIGRATION_PLAN.md)
 > + la `DoD vivante` de chaque couche.** Ce bloc donne le *cap*, jamais un statut
 > chiffré couche-par-couche : c'est précisément en redupliquant un statut ici
-> (figé à l'ère T1 : « prochaine = T2 », un compte de tests périmé) qu'on a laissé
-> traîner une consigne fausse **après** que T2→T4e furent livrés, puis propagée
-> aux plans UI. Verrouillé par `tests/architecture/test_status_freshness.py`.
+> qu'on a laissé traîner une consigne fausse, puis propagée aux plans UI.
+> Verrouillé par `tests/architecture/test_status_freshness.py`.
+>
+> **Ce bloc a déjà dérivé deux fois** — figé à l'ère T1, puis à l'ère S6 pendant
+> que P0→P3 étaient livrés. Le garde-fou ne vérifie que ce qui est **mécanisable**
+> (délégation, pas de compte figé, prochaine étape non déjà faite, commandes CLI
+> documentées). Le reste tient au **rituel** : docs et code dans le même commit.
 
-- **Couches 1-2 (`domain`, `formats`) : vertes.** Fondations sans dépendance
-  externe (ALTO/PAGE/text, sécurité XML, 14 profils de normalisation). `mypy
-  --strict` (domain) + `ruff` verts, zéro effet de bord à l'import.
-- **Tranches T1→T4e construites** (axe **texte** + **OCR/LLM** + **vitrine web
-  lecture seule**) : `tesseract` réel, CER/WER/MER (parité `jiwer`), stats
-  `scipy`, `cross_engine`, pipeline 2 étapes OCR→LLM (`openai`+`ollama`),
-  commandes `demo`/`run`/`compare`/`serve`, vitrine `GET`-only + Docker/Space ;
-  **TU1** (coquille au design, rendu serveur) posée par-dessus. Suite verte
-  (compte à jour dans le roll-up). Détail vivant : roll-up + `DoD` par couche.
+- **Les deux axes `T#` / `S#` sont terminés.** Le moteur (couches 1–7) et l'app
+  web (couche 8) portent le périmètre gardé : moteurs OCR/HTR/VLM first-party,
+  pipelines OCR→LLM / VLM zero-shot / hybride seg→reco→ALTO, **toutes** les
+  familles de métriques gardées, rapport autonome interactif bilingue FR/EN,
+  Space public exécutant un vrai OCR gratuit. Le détail vivant, tranche par
+  tranche, est dans le roll-up — **pas ici**.
+- **Le plan qu'exécutent les sessions est [`PLAN_FIN_MIGRATION.md`](PLAN_FIN_MIGRATION.md)**
+  (P0→P5), pas les axes `T#`/`S#` : ceux-ci décrivent comment on est arrivé là.
+  **Étapes 1→4 + P0→P3 livrées.**
+- **Prochaine étape = P5** (release `1.0.0` puis gel de Picarones). Le seul reste
+  de **P4** est la *saveur servie* (galerie paginée à l'échelle de milliers de
+  pages) que le plan lui-même déclare pouvoir suivre la 1.0. Aucun tag `git`
+  n'existe encore : la version est le repli `setuptools_scm`.
+- **Un axe hors numérotation P#, livré en août 2026 : la post-correction
+  structurée** (`ALTO → ALTO` via `saknussemm`, commande `cinoc correct`).
+  Il est **complet côté bibliothèque et CLI**, et **absent de l'app web** — c'est
+  un arbitrage à rendre avant la 1.0, pas un oubli. Voir le roll-up §« Axe
+  correction structurée ».
 - **Garde-fous d'archi actifs** : `tests/architecture/` —
   `layer_dependencies`, `no_legacy_imports`, `no_side_effect_imports`,
   `file_budgets`, `no_broad_except`, `single_version_source`, `status_freshness`.
-- **Parcours global + tableau de bord unique** : [`MIGRATION_PLAN.md`](MIGRATION_PLAN.md)
-  (section **« Les deux axes »** + invariants d'enveloppe). **Il fait autorité sur
-  le statut.** Deux axes, un seul tableau : **`T#`** = bibliothèque déterministe
-  (couches 1–7) · **`S#`** = app web/Space (couche 8) qui consomme le moteur, avec
-  **dépendances explicites**. `PLAN_SPACE_INTERACTIF.md` = **spec UX**, pas
-  autorité de statut. *(Anciens « TU# » = alias des `S#`.)*
-- **Prochaine étape = S6** (axe **Space**, en finition : la **boucle
-  segmentation est fonctionnellement complète** — upload/import → bouton
-  « Segmenter » → run `pp_doclayout` via le même `JobRunner` → sink → page
-  `/segmentation` ; il ne reste que le **déploiement T2.5** : baker PaddleX +
-  poids dans l'image du Space, **différé** par décision opérationnelle —
-  free-tier/cold-start à valider ; sans lui le Space affiche « segmenteur
-  indisponible » en dégradé gracieux). **Axe moteur complet** : T1→T4 ✅ ·
-  **T5** (structure/segmentation : `CanonicalLayout`, fan-out par région, pipeline
-  hybride seg→OCR par bloc) · **T6** (extensibilité tierce : découverte entry-points
-  `cinoc.modules`, plugin de réf, fail-closed public) · **T7** (importeurs cœur,
-  longitudinal, philologie, `synthesis`) **livrés**. **Space S1→S5 ✅** ; **S6 en
-  cours** : importeurs distants (API) + pages `/history`/`/library` + forms d'import
-  + **segmentation** (page `/segmentation`, segmenteur **réel** PP-DocLayout en
-  socle maison, endpoint de run + sink + bouton UI) faits ; reste l'**image Space**
-  (T2.5, différée). Détail vivant : roll-up `MIGRATION_PLAN.md`.
-- Familles de métriques riches (NER/taxonomy/calibration) restent **additives**
-  (enveloppe `RunResult` déjà dimensionnée), non implémentées — pas de dette. Les
-  types `domain` jadis « sans consommateur » (`EvaluationSpec`/`ProjectionSpec`)
-  en ont désormais un (réserves §9 levées).
 
 ---
 

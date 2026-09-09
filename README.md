@@ -49,6 +49,7 @@ Cinoc is the bench you run **before** committing a corpus to a pipeline: reprodu
 | **OCR → VLM** (`text_and_image`) | an OCR engine, then a VLM sees **image + text** together |
 | **VLM zero‑shot** | a VLM transcribes the image directly, no OCR upstream |
 | **Hybrid** (seg → reco → ALTO) | layout segmentation → recognition **per region** (fan‑out) by **any OCR or a VLM (zero‑shot) per block** → assembled ALTO XML |
+| **Structured post‑correction** (ALTO → ALTO) | take **existing** ALTO and correct it *inside* the layout — every line keeps its identifier, so before/after is **known**, not guessed by aligning two lists of lines. Rules (offline, deterministic) or a local LLM via Ollama. |
 | **+ NER** (optional terminal step) | `text → entities`, scored if the corpus carries entity ground truth |
 
 Engines are **interchangeable bricks** behind a single `Module` protocol. Heavy dependencies are **optional extras**: an engine is always listed, and tells you clearly if it needs its extra or API key instead of crashing.
@@ -60,7 +61,8 @@ Far beyond CER/WER — every family ships with its own report section and tests 
 - **Character / word** — CER, diplomatic CER, WER, MER, median/min/max, Gini concentration.
 - **Philology** — diacritics, MUFI (Medieval Unicode) overlap, abbreviations, early‑modern forms, modern‑archive conventions, Roman numerals, archaism rates (AIR/HCPR).
 - **HIPE conformity** — cMER under the HIPE‑OCRepair norm, micro/macro, JSONL export.
-- **Correction balance** *(the "did the LLM help?" family)* — improvement/regression/no‑change triplet, pcis, change ratio (CCR), **over‑normalisation** (correct words the corrector degraded), heavy‑insertion / **hallucination** flags, consecutive‑edit runs, worst regressions.
+- **Correction balance** *(the "did the LLM help?" family)* — improvement/regression/no‑change triplet, pcis, change ratio (CCR), **over‑normalisation** (correct words the corrector degraded), heavy‑insertion / **hallucination** flags, consecutive‑edit runs, worst regressions. When the corrector reports its own **decisions**, the report also shows what it *refused* to change, and why — a refusal is a result, not a silence.
+- **Line identity** — when a pipeline preserves line identifiers (structured post‑correction), before/after are matched **by id** instead of being guessed by alignment: per‑line CER and coverage stop depending on a heuristic.
 - **Structured data** — survival of dates, foliation, amounts, regnal years (strict form *and* equivalent value).
 - **Textual fidelity** — rare‑token recall, lexical modernisation flow.
 - **Named entities (NER)** — precision/recall/F1 per category, missed & hallucinated entities, IoU span matching in GT coordinates.
@@ -136,6 +138,7 @@ Heavy dependencies are **optional extras** — install only what you use:
 | Google Vision · Azure Document Intelligence | `[google]` `[azure]` | REST, API key |
 | PP‑DocLayout segmenter (local) | `[segment]` | PaddleX + weights |
 | Named‑entity step (NER) | `[ner]` | spaCy + a model (`spacy download …`) |
+| Structured post‑correction (ALTO → ALTO) | `[saknussemm]` | installed from its repository — not on PyPI yet |
 | HuggingFace import / publish | `[huggingface]` | `datasets` + `huggingface_hub` |
 | Real report thumbnails | `[images]` | Pillow (graceful fallback without) |
 
@@ -151,9 +154,21 @@ cinoc run   config.yaml -o report.html           # run a benchmark described in 
 cinoc run   config.yaml --report-dir bundle/     # folder report (HTML + separate images)
 cinoc run   config.yaml --json run.json          # also export the machine-readable RunResult
 cinoc hybrid images/ --out alto/                 # segment → per-block OCR → one ALTO per page
+cinoc correct alto/ -o report.html               # post-correct existing ALTO, inside the layout
 cinoc compare a.json b.json -o diff.html         # compare two runs (deltas)
+cinoc history runs.db --pipeline tesseract       # one pipeline's series over time
+cinoc history runs.db --threshold 0.01           # or: which pipelines regressed
 cinoc serve --port 8080                          # local web app
 ```
+
+`cinoc correct` takes a folder of `<name>.xml` + `<name>.png` pairs and benchmarks a post‑corrector on them. Two options carry the honesty of the measurement:
+
+```bash
+cinoc correct alto/ --ocr-sidecar ocr.json       # feed it real OCR, not the ground truth
+cinoc correct alto/ --repeat 5                   # publish a range, never a lone decimal
+```
+
+`--ocr-sidecar` matters on a **ground‑truth** corpus: without it the source reads the reference, the corrector has nothing to correct, and the CER is zero *by construction* — a tautological zero that looks like an excellent result. `--repeat` runs the same configuration *n* times and writes the spread beside the report: a model at temperature 0 is not deterministic, so any comparison tighter than the widest spread is noise. Use `--producer ollama --model <name>` for a local LLM instead of the offline rules.
 
 ---
 
