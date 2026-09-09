@@ -24,13 +24,14 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: Install
         run: pip install -e ".[dev]"
-      # `saknussemm` n'est pas publie : sans lui, les 14 tests de la chaine de
+      # `saknussemm` n'est pas publie : sans lui, les tests de la chaine de
       # correction structuree se SAUTENT, et la CI ne garantit rien sur la
       # seule brique qui touche a la mise en page. On l'installe donc depuis le
       # depot. `continue-on-error` a dessein : une panne reseau ou un depot
       # momentanement injoignable ne doit pas rendre la CI rouge sur du code
       # qui n'a pas change — les tests se sauteront alors, comme avant.
       - name: Install saknussemm (non publie — depuis le depot)
+        id: saknussemm
         continue-on-error: true
         run: pip install ".[saknussemm]"
       - name: Lint
@@ -43,6 +44,12 @@ jobs:
           # sur Python 3.12+ (≈ ×3 plus rapide, MÊME couverture mesurée → gate
           # intact). 3.11 garde le traceur C (`ctrace`).
           COVERAGE_CORE: ${{ matrix.python == '3.11' && 'ctrace' || 'sysmon' }}
+          # L'installation a reussi -> le paquet DOIT etre importable. Sans ce
+          # contrat, un extra renomme ou une dependance cassee ferait sauter les
+          # tests de la chaine de correction exactement comme une panne
+          # reseau : en silence, CI verte, brique non exercee.
+          # (cf. tests/guardrails/test_optional_deps_really_installed.py)
+          CINOC_REQUIRE_SAKNUSSEMM: ${{ steps.saknussemm.outcome == 'success' && '1' || '' }}
         # Le gate (coverage + seuil 85 %) est injecté ICI, pas dans addopts —
         # ainsi les runs locaux restent rapides par défaut (cf. Makefile/pyproject).
         run: python -m pytest -q --cov=cinoc --cov-report=term-missing --cov-fail-under=85
