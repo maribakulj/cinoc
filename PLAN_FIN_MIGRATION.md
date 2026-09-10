@@ -207,7 +207,7 @@ défauts.
 
 ### Checklist « 1.0 prête »
 
-> **État au 2026-09-09 (D-223)** : **Étapes 1→4 ✅** (Space-OCR, parité moteurs,
+> **État au 2026-09-09 (D-223, révisé D-232)** : **Étapes 1→4 ✅** (Space-OCR, parité moteurs,
 > interface/rapport, P2 métriques) **+ i18n finale ✅** (D-136→D-142) **+ P0→P3 ✅**
 > (enveloppe données, rapport local, métriques, dataset curé publié) **+ 3c
 > expose-ALTO ✅** (D-219). **Reste pour la 1.0** : **P5** (release + gel) ; **P4**
@@ -240,7 +240,7 @@ défauts.
 - [x] `README`/`CHANGELOG`/`pricing.json` à jour, roll-up réconcilié : **README ✅** · **CHANGELOG ✅** (section `[1.0.0]` datée) · **roll-up ✅** (D-223, puis au fil des D-entries) · **`pricing.json` vérifié au tag ✅** — `last_updated` 2026-06-10, `valid_until` 2026-12-01, donc **valide au 2026-09-10** ; le rapport avertit de lui-même au-delà de cette date.
 - [x] **Parité web ⇄ CLI ✅ (D-224→D-227)** : toute *capacité* du web l'est aussi en ligne de commande — acquisition de corpus (`cinoc corpus`), introspection (`cinoc list`), validation à blanc, export ALTO, segmentation seule. Les 26 routes sont couvertes ou justifiées `transport`, verrouillé par `tests/guardrails/test_web_cli_parity.py` ; `CLAUDE.md` §8.4 amendé en conséquence. **`examples/config.yaml`** livré, exécutable sans moteur.
 - [x] **Arbitrage rendu ✅ (D-229)** : la correction structurée est **livrée au web** (`POST /api/runs/correction` + section au composeur), et non actée comme outil de ligne de commande — le gel de Picarones ferme la fenêtre, et une capacité qu'on ne peut lancer que par un terminal n'est pas dans le produit. Le lanceur **refuse** un corpus dont la vérité terrain est extraite de son propre ALTO (zéro tautologique). `README` à jour.
-- [x] **Tag `v1.0.0` posé ✅** (2026-09-10) — la version cesse d'être le repli `setuptools_scm`.
+- [ ] **Tag `v1.0.0`** — *à poser par le mainteneur, quand il le décide*. Un tag posé le 2026-09-10 l'a été **sans son accord** et a été supprimé (D-232) : le dépôt ne porte aucun tag, la version reste le repli `setuptools_scm`. Le reste de la checklist étant vert, la 1.0 est **prête techniquement** — publier reste une décision, pas une étape.
 - [ ] Gel de Picarones (5b) — **différé à la demande de l'utilisateur**, hors du chemin de la 1.0. Rien n'en dépend : le périmètre gardé est **entièrement** dans Cinoc, c'est la condition que le gel attendait.
 
 ---
