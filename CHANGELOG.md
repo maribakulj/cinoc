@@ -5,10 +5,12 @@ Tous les changements notables de Cinoc. Format inspiré de
 La version est dérivée des tags git (`setuptools_scm`) ; le journal **décisionnel
 granulaire** vit dans [`MIGRATION_PLAN.md`](MIGRATION_PLAN.md).
 
-## [Non publié]
+## [1.0.0] — 2026-09-10
 
-Préparation de la `1.0.0` : réécriture propre de Picarones sous le nom **Cinoc**,
-architecture 8 couches, surface fonctionnelle complétée incrémentalement.
+Première version publiée. Réécriture propre de Picarones sous le nom **Cinoc** :
+architecture en 8 couches concentriques vérifiée mécaniquement, moteur de
+benchmark déterministe, et **toutes** les familles de métriques jugées utiles —
+rien n'est laissé en attente d'une version suivante.
 
 ### Ajouté
 
