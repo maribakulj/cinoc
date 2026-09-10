@@ -615,8 +615,42 @@
       };
     }
 
+    // Lancer un run et le suivre : **un seul** chemin pour les deux formes de
+    // run que la page sait démarrer (benchmark, post-correction). Elles ne
+    // diffèrent que par leur route et leur charge utile ; dupliquer le POST, la
+    // gestion d'erreur et l'abonnement SSE aurait fait diverger les deux au
+    // premier correctif.
+    function launchAndFollow(url, payload, button) {
+      button.disabled = true;
+      resetRunFeedback(button.dataset.launching);
+      resetProgress();
+      var headers = { "Content-Type": "application/json" };
+      headers[CSRF] = "1";
+      fetchJson(url, {
+        method: "POST",
+        headers: headers,
+        body: JSON.stringify(payload),
+      })
+        .then(function (response) {
+          if (!response.ok) {
+            statusEl.textContent = "HTTP " + response.status;
+            resultEl.textContent = errorText(response);
+            button.disabled = false;
+            return;
+          }
+          subscribe(response.body.job_id, function (state, job) {
+            button.disabled = false;
+            reportTerminal(state, job);
+          });
+        })
+        .catch(function () {
+          statusEl.textContent = resultEl.dataset.neterror || "HTTP 0";
+          resultEl.textContent = resultEl.dataset.errorFallback || "HTTP 0";
+          button.disabled = false;
+        });
+    }
+
     function reportTerminal(state, job) {
-      launchBtn.disabled = false;
       if (state === "done" && job.report_name) {
         var link = document.createElement("a");
         link.href = "/reports/" + encodeURIComponent(job.report_name);
@@ -661,37 +695,56 @@
     }
 
     launchBtn.addEventListener("click", function () {
-      launchBtn.disabled = true;
-      resetRunFeedback(launchBtn.dataset.launching);
-      resetProgress();
-      var headers = { "Content-Type": "application/json" };
-      headers[CSRF] = "1";
       var payload = { competitors: payloadCompetitors() };
       var corpusId = currentCorpusId();
       if (corpusId) payload.corpus_id = corpusId;
       if (normalization && normalization.value) payload.normalization = normalization.value;
       if (charExclude && charExclude.value) payload.char_exclude = charExclude.value;
       if (metricProfile && metricProfile.value) payload.metric_profile = metricProfile.value;
-      fetchJson("/api/runs", {
-        method: "POST",
-        headers: headers,
-        body: JSON.stringify(payload),
-      })
-        .then(function (response) {
-          if (!response.ok) {
-            statusEl.textContent = "HTTP " + response.status;
-            resultEl.textContent = errorText(response);
-            launchBtn.disabled = false;
-            return;
-          }
-          subscribe(response.body.job_id, reportTerminal);
-        })
-        .catch(function () {
-          statusEl.textContent = resultEl.dataset.neterror || "HTTP 0";
-          resultEl.textContent = resultEl.dataset.errorFallback || "HTTP 0";
-          launchBtn.disabled = false;
-        });
+      launchAndFollow("/api/runs", payload, launchBtn);
     });
+
+    // Post-correction structurée : une **autre forme de run** (un ALTO déjà là
+    // qu'on corrige), pas un concurrent de plus dans la file — donc sa propre
+    // route et son propre bouton. Elle réutilise `subscribe` et
+    // `reportTerminal` : le suivi SSE et le lien vers le rapport ne sont pas
+    // réécrits une seconde fois.
+    var correctBtn = document.getElementById("correct-launch");
+    if (correctBtn) {
+      var correctProducer = document.getElementById("correct-producer");
+      var correctModel = document.getElementById("correct-model");
+      var correctHost = document.getElementById("correct-host");
+
+      function syncCorrectFields() {
+        var ollama = correctProducer && correctProducer.value === "ollama";
+        var wrap = document.getElementById("correct-ollama-fields");
+        if (wrap) wrap.hidden = !ollama;
+      }
+
+      if (correctProducer) {
+        correctProducer.addEventListener("change", syncCorrectFields);
+        syncCorrectFields();
+      }
+
+      correctBtn.addEventListener("click", function () {
+        var corpusId = currentCorpusId();
+        if (!corpusId) {
+          resultEl.textContent = correctBtn.dataset.noCorpus || "";
+          return;
+        }
+        var payload = {
+          corpus_id: corpusId,
+          producer: correctProducer ? correctProducer.value : "rules",
+        };
+        if (correctModel && correctModel.value.trim()) {
+          payload.model = correctModel.value.trim();
+        }
+        if (correctHost && correctHost.value.trim()) {
+          payload.host = correctHost.value.trim();
+        }
+        launchAndFollow("/api/runs/correction", payload, correctBtn);
+      });
+    }
 
   });
 })();

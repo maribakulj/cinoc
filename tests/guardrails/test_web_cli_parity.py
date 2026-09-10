@@ -36,16 +36,14 @@ from cinoc.interfaces._cli_parser import SUBCOMMANDS
 #: Dettes connues : identifiant → ce qui la ferme. Une entrée ici est un
 #: engagement, pas une excuse ; la liste ne doit que rétrécir.
 #:
-#: Les cinq dettes ouvertes par D-224 dans le sens web → CLI sont fermées
-#: (D-225→D-227). Le sens CLI → web en ouvre une, et une seule.
-DETTES: dict[str, str] = {
-    # La post-correction structurée (`cinoc correct`) est complète côté
-    # bibliothèque et CLI depuis août 2026, et n'a **aucune** surface web : elle
-    # ne se lance que par la ligne de commande. Ce n'était pas un oubli mais un
-    # arbitrage laissé ouvert (roll-up §« Axe correction structurée ») ; l'écrire
-    # ici le rend visible et daté au lieu de le laisser se perdre.
-    "correction-web": "tranche f — lanceur web de la correction structurée",
-}
+#: Dettes connues : identifiant → ce qui la ferme.
+#:
+#: **Vide.** Les cinq dettes ouvertes par D-224 (sens web → CLI) sont fermées par
+#: D-225→D-227, et `correction-web` (sens CLI → web) par D-229. Le dictionnaire
+#: reste : c'est lui qui rend une nouvelle dette *déclarable*, donc visible et
+#: datée, plutôt que tolérée en silence — comme l'a été pendant des mois
+#: l'absence de surface web de la post-correction.
+DETTES: dict[str, str] = {}
 
 #: Route → statut. Trois formes, et trois seulement :
 #: ``"transport"`` · ``"cli:<sous-commande>"`` · ``"dette:<identifiant>"``.
@@ -89,6 +87,11 @@ PARITE: dict[str, str] = {
     # le plan et n'exécute rien — une spec de benchmark engage des appels
     # facturés.
     "POST /api/runs/config": "cli:run",
+    # La correction structurée n'est pas un concurrent de plus dans la file du
+    # composeur : c'est une **autre forme de run** (un ALTO déjà là qu'on
+    # corrige), planifiée par `plan_correction_run`. Elle a donc sa route,
+    # comme la segmentation a la sienne.
+    "POST /api/runs/correction": "cli:correct",
     # L'état d'un job, son annulation et son flux d'événements n'existent que
     # parce que le web exécute **en arrière-plan**. En CLI le run est au premier
     # plan : la progression va sur stdout, l'annulation est Ctrl-C (coopérative,
@@ -205,7 +208,7 @@ PARITE_CLI: dict[str, str] = {
     "compare": "web:GET /reports/{name}",
     # `serve` **est** le web : lui chercher un pendant web n'aurait pas de sens.
     "serve": "cli-only: c'est la commande qui démarre l'app web.",
-    "correct": "dette:correction-web",
+    "correct": "web:POST /api/runs/correction",
 }
 
 

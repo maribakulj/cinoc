@@ -39,6 +39,7 @@ from cinoc.app.corpus_upload import CorpusStore
 from cinoc.app.data_dir import resolve_data_dir
 from cinoc.app.engines import (
     EngineStatus,
+    correction_status,
     engine_statuses,
     ner_status,
     segmenter_statuses,
@@ -251,6 +252,12 @@ def create_app(
     def ner_status_provider() -> EngineStatus:
         return ner_status()
 
+    # Post-correction structurée (extra [saknussemm]) : brique de
+    # post-traitement, sondée comme la NER — refusée avant le lancement
+    # plutôt qu'en plein run.
+    def correction_status_provider() -> EngineStatus:
+        return correction_status()
+
     app.include_router(
         build_home_router(
             runtime_dir,
@@ -284,6 +291,7 @@ def create_app(
             statuses=engine_status_provider,
             segmenters=segmenter_status_provider,
             ner_available=lambda: ner_status_provider().available,
+            correction_available=lambda: correction_status_provider().available,
             public_mode=is_public,
         )
     )
