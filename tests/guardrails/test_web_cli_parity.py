@@ -34,12 +34,6 @@ from cinoc.interfaces._cli_parser import SUBCOMMANDS
 #: Dettes connues : identifiant → ce qui la ferme. Une entrée ici est un
 #: engagement, pas une excuse ; la liste ne doit que rétrécir.
 DETTES: dict[str, str] = {
-    # Acquisition de corpus. `app/corpus_import.py` porte déjà les cinq
-    # importeurs et n'a qu'un seul appelant : le routeur web. La CLI n'a donc
-    # rien à ré-implémenter — il lui manque une **destination** : là où le web
-    # matérialise dans un `CorpusStore` serveur indexé par id, la CLI doit
-    # écrire un dossier + un `corpus.yaml` relisible par `cinoc run`.
-    "corpus": "tranche b — `cinoc corpus import|search|discover`",
     # Introspection. `app/engines.py` expose déjà `engine_statuses`,
     # `installed_ollama_models`, `normalization_profiles`, `curated_prompts` ;
     # le web les met en HTML. La CLI doit les mettre en texte — deux transports
@@ -68,17 +62,24 @@ PARITE: dict[str, str] = {
     # --- Pages qui portent une capacité, pas seulement un rendu. -------------
     # `/library` expose le catalogue HTR-United et la découverte des datasets
     # curés : de la **découverte de corpus**, pas de la mise en page.
-    "GET /library": "dette:corpus",
+    "GET /library": "cli:corpus",
     "GET /engines": "dette:introspection",
     "GET /history": "cli:history",
-    # --- Acquisition de corpus : rien côté CLI aujourd'hui. ------------------
-    "POST /api/corpus": "dette:corpus",
-    "POST /api/corpus/import/iiif": "dette:corpus",
-    "POST /api/corpus/import/escriptorium": "dette:corpus",
-    "POST /api/corpus/import/gallica": "dette:corpus",
-    "POST /api/corpus/import/huggingface": "dette:corpus",
-    "POST /api/corpus/import/curated": "dette:corpus",
-    "DELETE /api/corpus/{corpus_id}": "dette:corpus",
+    # --- Acquisition de corpus. ----------------------------------------------
+    # `cinoc corpus import <source>` appelle **les mêmes** builders que ces
+    # routes ; seule la destination change (dossier + `corpus.yaml` au lieu d'un
+    # store serveur indexé par id).
+    "POST /api/corpus": "cli:corpus",
+    "POST /api/corpus/import/iiif": "cli:corpus",
+    "POST /api/corpus/import/escriptorium": "cli:corpus",
+    "POST /api/corpus/import/gallica": "cli:corpus",
+    "POST /api/corpus/import/huggingface": "cli:corpus",
+    "POST /api/corpus/import/curated": "cli:corpus",
+    # Supprimer : le corpus d'une CLI **est** un dossier, et l'effacer relève du
+    # système de fichiers. Fournir un `cinoc corpus rm` doublerait `rm -rf` sans
+    # rien garantir de plus. Le web, lui, a besoin de la route parce que son
+    # store est un registre serveur que l'utilisateur ne peut pas atteindre.
+    "DELETE /api/corpus/{corpus_id}": "transport",
     # --- Introspection. ------------------------------------------------------
     "GET /api/models/{model_provider}": "dette:introspection",
     "POST /api/normalization/preview": "dette:introspection",

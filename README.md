@@ -150,6 +150,7 @@ A remote segmenter needs no local extra — it delegates to a HuggingFace object
 
 ```bash
 cinoc demo  --output report.html                 # demo report, no engine required
+cinoc corpus import gallica ark:/12148/bpt6k5619759j  # fetch a corpus, write corpus.yaml
 cinoc run   config.yaml -o report.html           # run a benchmark described in YAML
 cinoc run   config.yaml --report-dir bundle/     # folder report (HTML + separate images)
 cinoc run   config.yaml --json run.json          # also export the machine-readable RunResult
@@ -160,6 +161,28 @@ cinoc history runs.db --pipeline tesseract       # one pipeline's series over ti
 cinoc history runs.db --threshold 0.01           # or: which pipelines regressed
 cinoc serve --port 8080                          # local web app
 ```
+
+### Getting a corpus
+
+Everything the web app can fetch, the CLI can fetch — same importers, same code, different destination. The web materialises into a server-side store; `cinoc corpus` materialises into **a folder you choose**, next to a `corpus.yaml`:
+
+```bash
+cinoc corpus import iiif <manifest-url>       --dest corpus/   # any IIIF manifest
+cinoc corpus import gallica ark:/12148/...    --dest corpus/   # Gallica, --no-ocr to skip its OCR
+cinoc corpus import escriptorium <url> <pk>   --token ...      # an eScriptorium document
+cinoc corpus import hf <owner/dataset>        --split train    # a HuggingFace dataset
+cinoc corpus import curated <owner/dataset>   --revision ...   # a curated Cinoc dataset, pinned
+cinoc corpus import zip corpus.zip                             # a local archive
+
+cinoc corpus search "presse"        # the HTR-United catalogue
+cinoc corpus discover               # your own curated datasets on HuggingFace
+```
+
+The written `corpus.yaml` holds the `corpus:` key of a run config, with **paths relative to itself** — move or archive the folder and it still resolves. Complete it with `pipelines:` and `evaluation:`, or paste its block into an existing config, then `cinoc run` it.
+
+Two flags carry the honesty of the measurement: `--no-ocr` on Gallica (its OCR is OCR, not a verified transcription — importing it as ground truth changes how every score reads), and `--revision` on a curated dataset (pins the exact data a run was measured against).
+
+An import is **atomic**: if it fails halfway — network, non-conforming source — the partially materialised folder is removed rather than left as a half corpus.
 
 `cinoc correct` takes a folder of `<name>.xml` + `<name>.png` pairs and benchmarks a post‑corrector on them. Two options carry the honesty of the measurement:
 

@@ -37,6 +37,11 @@ from cinoc.domain.errors import CinocError
 from cinoc.evaluation.analysis import EconomicsPayload
 from cinoc.evaluation.result import RunResult
 from cinoc.interfaces._cli_parser import build_parser
+from cinoc.interfaces._corpus_command import (
+    run_corpus_discover,
+    run_corpus_import,
+    run_corpus_search,
+)
 from cinoc.interfaces._correction_command import run_correction, write_variance
 from cinoc.reports import default_report_renderer, render_comparison
 from cinoc.reports.csv_export import run_result_csv
@@ -374,6 +379,14 @@ def main(argv: list[str] | None = None) -> int:
                 endpoint=args.segmenter_endpoint,
                 token=args.segmenter_token,
             )
+        if args.command == "corpus":
+            # Sous-arbre : le verbe choisi porte la capacité (importer,
+            # chercher, découvrir) ; argparse a déjà borné les valeurs.
+            if args.corpus_command == "import":
+                return run_corpus_import(args)
+            if args.corpus_command == "search":
+                return run_corpus_search(args)
+            return run_corpus_discover(args)
         if args.command == "compare":
             return _compare_command(args.run_a, args.run_b, args.output)
         if args.command == "serve":
