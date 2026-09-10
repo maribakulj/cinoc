@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import shutil
 from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Protocol
@@ -27,6 +29,7 @@ from cinoc.adapters.corpus.huggingface import (
     HFPage,
     snapshot_curated_layout,
     stream_pages,
+    whoami,
 )
 from cinoc.adapters.corpus.iiif import IIIFImage, IIIFImporter
 from cinoc.app.security import PathSecurityError, validated_path
@@ -438,7 +441,75 @@ def import_curated_hf_corpus(
     )
 
 
+#: Variable d'environnement nommant explicitement le compte HF à interroger.
+HF_AUTHOR_ENV = "CINOC_HF_AUTHOR"
+
+#: Jetons HF reconnus, dans l'ordre de lecture : présent → le handle de
+#: l'opérateur est résolu par ``whoami``, ses datasets curés apparaissent sans
+#: configuration.
+HF_TOKEN_ENVS = ("HF_TOKEN", "HUGGINGFACE_TOKEN", "HUGGING_FACE_HUB_TOKEN")
+
+#: Identifiant du Space (``owner/name``, injecté par HuggingFace). Son ``owner``
+#: **est** le handle de l'opérateur → résolution pure, sans réseau.
+SPACE_ID_ENV = "SPACE_ID"
+
+
+def resolve_curated_author() -> str | None:
+    """Compte HF dont lister les datasets curés — **zéro config** quand possible.
+
+    Ordre : ``CINOC_HF_AUTHOR`` explicite > handle résolu d'un jeton HF
+    (``whoami``, poste local connecté) > ``owner`` du ``SPACE_ID`` (sur un Space,
+    le propriétaire **est** l'opérateur — pur, sans réseau). Aucun signal →
+    ``None`` : on ne devine pas « vos » datasets, mais l'import manuel par
+    ``repo_id`` reste offert.
+
+    Vit en couche ``app`` et non dans un transport : « quel compte est le mien »
+    est une **capacité**, et la CLI comme le web doivent y répondre pareil
+    (``CLAUDE.md`` §8.4 — une capacité, une fonction, deux transports).
+    """
+    explicit = os.environ.get(HF_AUTHOR_ENV, "").strip()
+    if explicit:
+        return explicit
+    for env in HF_TOKEN_ENVS:
+        token = os.environ.get(env, "").strip()
+        if token:
+            handle = whoami(token)
+            if handle:
+                return handle
+    space = os.environ.get(SPACE_ID_ENV, "").strip()
+    if space:
+        owner = space.split("/", 1)[0].strip()
+        if owner:
+            return owner
+    return None
+
+
+def materialize_corpus(
+    dest: str | Path, builder: Callable[[Path], CorpusSpec]
+) -> CorpusSpec:
+    """Construit un corpus dans ``dest``, **atomiquement**.
+
+    ``builder`` reçoit le dossier de destination et renvoie la ``CorpusSpec``
+    matérialisée — agnostique de la source. Si le builder échoue en cours de
+    route (réseau, source non conforme, annulation), le dossier **partiellement**
+    matérialisé est nettoyé : pas de corpus à demi importé laissé derrière.
+
+    Unique implémentation de cette garantie : le ``CorpusStore`` du web y délègue
+    (il n'ajoute que l'allocation d'un identifiant et l'enregistrement au
+    registre), la CLI l'appelle avec un dossier choisi par l'utilisateur.
+    """
+    dest_dir = Path(dest)
+    try:
+        return builder(dest_dir)
+    except BaseException:
+        shutil.rmtree(dest_dir, ignore_errors=True)
+        raise
+
+
 __all__ = [
+    "HF_AUTHOR_ENV",
+    "HF_TOKEN_ENVS",
+    "SPACE_ID_ENV",
     "CorpusImportError",
     "import_curated_corpus",
     "import_curated_hf_corpus",
@@ -446,4 +517,6 @@ __all__ = [
     "import_gallica_corpus",
     "import_hf_corpus",
     "import_iiif_corpus",
+    "materialize_corpus",
+    "resolve_curated_author",
 ]

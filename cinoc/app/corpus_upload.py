@@ -31,6 +31,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from cinoc.app.corpus_import import materialize_corpus
 from cinoc.app.security import validated_path
 from cinoc.domain.artifacts import ArtifactType
 from cinoc.domain.corpus import CorpusSpec
@@ -245,18 +246,15 @@ class CorpusStore:
         Gallica…). Le store reste un **registre** : il alloue l'id et le dossier,
         sans connaître le format d'entrée.
 
-        **Atomicité (F3)** : si ``builder`` échoue en cours de route (réseau,
-        source non conforme, annulation), le dossier **partiellement** matérialisé
-        est nettoyé — pas de corpus à demi importé laissé sous ``base_dir``, et
-        rien n'est enregistré.
+        **Atomicité (F3)** : déléguée à ``materialize_corpus`` — un builder qui
+        échoue en cours de route ne laisse pas de dossier à demi importé, et rien
+        n'est enregistré. Le store n'ajoute que ce qui lui est propre :
+        l'allocation d'un identifiant et l'inscription au registre. La garantie,
+        elle, n'a **qu'une** implémentation, partagée avec la CLI.
         """
         corpus_id = uuid.uuid4().hex
         dest = self._base / corpus_id
-        try:
-            spec = builder(dest)
-        except BaseException:
-            shutil.rmtree(dest, ignore_errors=True)
-            raise
+        spec = materialize_corpus(dest, builder)
         with self._lock:
             self._corpora[corpus_id] = spec
         return corpus_id, spec

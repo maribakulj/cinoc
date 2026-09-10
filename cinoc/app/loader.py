@@ -1,4 +1,4 @@
-"""Loader YAML → ``RunSpec`` (couche 6).
+"""Pont YAML ⇄ specs (couche 6) : lire un ``RunSpec``, écrire un corpus.
 
 Un run est décrit par un fichier YAML, **validé** par Pydantic
 (``RunSpec.model_validate`` — ``extra="forbid"`` rejette les clés inconnues),
@@ -16,6 +16,7 @@ import yaml
 from pydantic import ValidationError
 
 from cinoc.app.security import validated_path
+from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.documents import DocumentRef
 from cinoc.domain.errors import CinocError
 from cinoc.domain.run_spec import RunSpec
@@ -76,4 +77,67 @@ def _secure_document(document: DocumentRef, base: Path) -> DocumentRef:
     )
 
 
-__all__ = ["RunSpecError", "load_run_spec"]
+def dump_corpus_spec(spec: CorpusSpec, path: str | Path) -> Path:
+    """Écrit ``spec`` en YAML sous la clé ``corpus`` — le bloc d'un ``RunSpec``.
+
+    **Pourquoi la clé et pas l'objet nu** : un ``RunSpec`` refuse les clés
+    inconnues, donc un fichier corpus se colle tel quel dans un fichier de run,
+    ou se complète de ``pipelines:`` et ``evaluation:``. Un objet nu obligerait à
+    le ré-indenter à la main.
+
+    **Chemins relatifs au fichier écrit** : l'import matérialise des images sous
+    un dossier, et un chemin absolu rendrait le corpus intransportable d'une
+    machine à l'autre. ``load_run_spec`` résout les relatifs contre le dossier du
+    YAML — la boucle est donc fermée. Les URI **distantes** (``http``/``https``,
+    corpus curé à références épinglées) passent inchangées : les réécrire n'aurait
+    aucun sens.
+    """
+    cible = Path(path)
+    base = cible.parent
+    documents = [
+        _relative_document(document, base) for document in spec.documents
+    ]
+    charge = {
+        "corpus": {
+            "name": spec.name,
+            "documents": documents,
+            **({"metadata": dict(spec.metadata)} if spec.metadata else {}),
+        }
+    }
+    cible.parent.mkdir(parents=True, exist_ok=True)
+    cible.write_text(
+        yaml.safe_dump(charge, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+    return cible
+
+
+def _relative_document(document: DocumentRef, base: Path) -> dict[str, object]:
+    entree: dict[str, object] = {"id": document.id}
+    if document.image_uri is not None:
+        entree["image_uri"] = _portable_uri(document.image_uri, base)
+    if document.ground_truths:
+        entree["ground_truths"] = [
+            {"type": truth.type.value, "uri": _portable_uri(truth.uri, base)}
+            for truth in document.ground_truths
+        ]
+    if document.metadata:
+        entree["metadata"] = dict(document.metadata)
+    return entree
+
+
+def _portable_uri(uri: str, base: Path) -> str:
+    """Chemin local → relatif à ``base`` (POSIX) ; URI distante → inchangée."""
+    if uri.startswith(("http://", "https://")):
+        return uri
+    chemin = Path(uri)
+    try:
+        return chemin.relative_to(base).as_posix()
+    except ValueError:
+        # Hors du dossier du YAML (l'utilisateur a choisi deux emplacements
+        # sans rapport) : on garde l'absolu plutôt qu'une chaîne de « .. »
+        # qui casserait au premier déplacement.
+        return chemin.as_posix()
+
+
+__all__ = ["RunSpecError", "dump_corpus_spec", "load_run_spec"]
