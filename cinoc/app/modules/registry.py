@@ -242,6 +242,29 @@ def _build_precomputed_layout(kwargs: Mapping[str, ParamValue]) -> Module:
     return PrecomputedLayoutSource()
 
 
+def _build_preprocess(kwargs: Mapping[str, ParamValue]) -> Module:
+    """``preprocess:<label>`` — prépare l'image avant lecture (``IMAGE → IMAGE``).
+
+    ``operations`` est une chaîne séparée par des virgules : les paramètres
+    d'adapter sont plats par contrat, et l'ordre déclaré est respecté tel quel —
+    redresser puis binariser n'est pas la même chose que l'inverse.
+    """
+    from cinoc.adapters.preprocess import ImagePreprocessor  # noqa: PLC0415
+
+    label = kwargs.get("label")
+    if not isinstance(label, str):
+        raise ModuleResolutionError(
+            "preprocess : 'label' (str) requis dans adapter_kwargs."
+        )
+    operations = kwargs.get("operations", "deskew,binarize")
+    amplitude = kwargs.get("skew_amplitude_deg", 5.0)
+    return ImagePreprocessor(
+        label=label,
+        operations=str(operations),
+        skew_amplitude_deg=float(amplitude),  # type: ignore[arg-type]
+    )
+
+
 def _build_saknussemm(kwargs: Mapping[str, ParamValue]) -> Module:
     from cinoc.adapters.layout.saknussemm_correct import SaknussemmCorrector
     from cinoc.adapters.llm._base import validate_llm_label
@@ -362,6 +385,7 @@ def register_default_modules(registry: ModuleRegistry) -> None:
     registry.register_builder("precomputed_region", _build_precomputed_region)
     registry.register_builder("alto_assembler", _build_alto_assembler)
     registry.register_builder("layout_to_text", _build_layout_to_text)
+    registry.register_builder("preprocess", _build_preprocess)
 
 
 __all__ = [

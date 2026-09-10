@@ -27,6 +27,7 @@ from cinoc.app.engines import (
     llm_modes,
     ner_status,
     normalization_profiles,
+    preprocess_status,
     segmenter_statuses,
 )
 from cinoc.app.models import provider_models
@@ -47,8 +48,8 @@ def run_list_engines(args: argparse.Namespace) -> int:
     _print_statuses("Moteurs (OCR / HTR / LLM / VLM)", engine_statuses())
     _print_statuses("Segmenteurs de mise en page", segmenter_statuses())
     _print_statuses(
-        "Post-traitement (briques, pas des moteurs)",
-        (correction_status(), ner_status()),
+        "Pré- et post-traitement (briques, pas des moteurs)",
+        (preprocess_status(), correction_status(), ner_status()),
     )
     print(
         "\n✓ = utilisable ici et maintenant. Un moteur listé mais indisponible "

@@ -48,6 +48,7 @@ Cinoc is the bench you run **before** committing a corpus to a pipeline: reprodu
 | **OCR → LLM** (`text_only`) | an OCR engine, then an LLM corrects the text |
 | **OCR → VLM** (`text_and_image`) | an OCR engine, then a VLM sees **image + text** together |
 | **VLM zero‑shot** | a VLM transcribes the image directly, no OCR upstream |
+| **Image preprocessing** (`image → image`) | deskew and binarise before reading, so you can measure whether restoring the page actually lowers the error rate — instead of asserting it from a quality score. The angle is **searched**, the threshold is **computed from the image** (Otsu); no magic constant decides anything. |
 | **Hybrid** (seg → reco → ALTO) | layout segmentation → recognition **per region** (fan‑out) by **any OCR or a VLM (zero‑shot) per block** → assembled ALTO XML |
 | **Structured post‑correction** (ALTO → ALTO) | take **existing** ALTO and correct it *inside* the layout — every line keeps its identifier, so before/after is **known**, not guessed by aligning two lists of lines. Rules (offline, deterministic) or a local LLM via Ollama. |
 | **+ NER** (optional terminal step) | `text → entities`, scored if the corpus carries entity ground truth |
@@ -137,6 +138,7 @@ Heavy dependencies are **optional extras** — install only what you use:
 | OpenAI · Anthropic · Mistral · Ollama (LLM/VLM) | `[openai]` `[anthropic]` `[mistral]` `[ollama]` | API key |
 | Google Vision · Azure Document Intelligence | `[google]` `[azure]` | REST, API key |
 | PP‑DocLayout segmenter (local) | `[segment]` | PaddleX + weights |
+| Image preprocessing | `[images]` | Pillow to decode; the maths are plain numpy |
 | Named‑entity step (NER) | `[ner]` | spaCy + a model (`spacy download …`) |
 | Structured post‑correction (ALTO → ALTO) | `[saknussemm]` | installed from its repository — not on PyPI yet |
 | HuggingFace import / publish | `[huggingface]` | `datasets` + `huggingface_hub` |

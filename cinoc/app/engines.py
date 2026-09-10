@@ -258,6 +258,26 @@ def correction_status(*, has_module: ModuleProbe = _module_present) -> EngineSta
     )
 
 
+def preprocess_status(*, has_module: ModuleProbe = _module_present) -> EngineStatus:
+    """Disponibilité du **prétraitement d'image** (extra ``[images]``, Pillow).
+
+    Brique de pré-traitement, comme la NER et la post-correction sont des briques
+    de post-traitement : ni l'une ni l'autre n'est un moteur de transcription.
+    Les mathématiques sont en numpy pur — c'est le **décodage** de l'image qui
+    demande Pillow, et rien d'autre.
+    """
+    if has_module("PIL"):
+        detail, ok = "prêt (Pillow installé)", True
+    else:
+        detail, ok = "Pillow non installé (extra [images])", False
+    return EngineStatus(
+        kind="preprocess",
+        label="Prétraitement d'image",
+        available=ok,
+        detail=detail,
+    )
+
+
 def segmenter_statuses(
     *, has_module: ModuleProbe = _module_present
 ) -> tuple[EngineStatus, ...]:
@@ -386,6 +406,7 @@ __all__ = [
     "StatusProvider",
     "correction_status",
     "llm_modes",
+    "preprocess_status",
     "providers_for_mode",
     "engine_statuses",
     "ner_status",
