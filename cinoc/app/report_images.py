@@ -11,6 +11,11 @@ façon de produire le href :
 - **sidecar / dossier** (``build_sidecar_*`` + ``write_report_bundle``) → dérivés
   écrits dans ``report-assets/``, hrefs **relatifs** ; **caps relâchés** (les
   octets sont sur disque, plus dans le HTML).
+- **servie** (``build_served_hrefs``) → hrefs vers une **route** de l'app web, qui
+  produit la vignette à la demande. **Aucun plafond** : rien n'est ni encodé ni
+  écrit à l'avance, le navigateur ne charge que ce qu'il affiche (les cartes
+  portent déjà ``loading="lazy"``). C'est la saveur des runs de milliers de pages,
+  où inliner plafonnerait à quelques centaines de documents **en silence**.
 
 Dégradé gracieux partout : ``{}`` si rien n'est résoluble (pas d'image, pas de
 Pillow) ; aucune exception large.
@@ -21,7 +26,7 @@ from __future__ import annotations
 import io
 import tempfile
 import zipfile
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Protocol
 
@@ -227,12 +232,48 @@ def build_report_zip(
         return buffer.getvalue()
 
 
+def build_served_hrefs(
+    result: RunResult, url_for: Callable[[str], str]
+) -> dict[str, str]:
+    """``{document_id: href}`` — saveur **servie**, sans plafond ni octets.
+
+    ``url_for`` fabrique l'URL d'un document : la couche ``app`` ne connaît pas
+    les routes de l'app web (couche 8), elle reçoit de quoi les nommer. Même
+    sélection que les autres saveurs (``_ordered_refs``), mais **sans cap** —
+    l'intérêt de cette saveur est précisément de ne plus en avoir : un href ne
+    coûte rien tant que le navigateur ne le suit pas.
+
+    Un document **sans** référence d'image reste absent du résultat, comme
+    ailleurs : le rapport retombe alors sur l'aperçu synthétique plutôt que de
+    pointer une route qui répondrait 404.
+    """
+    return {
+        doc_id: url_for(doc_id)
+        for doc_id, _ in _ordered_refs(result, max_docs=None)
+    }
+
+
+def image_ref_for(result: RunResult, document_id: str) -> str | None:
+    """Référence d'image d'un document, ou ``None``.
+
+    Résolue **depuis le ``RunResult``**, jamais depuis l'URL : l'identifiant reçu
+    par la route sert de clé de recherche, pas de chemin. Un identifiant inventé
+    ne désigne donc rien — il ne peut pas désigner autre chose.
+    """
+    for document in result.documents:
+        if document.document_id == document_id and document.image_ref:
+            return document.image_ref
+    return None
+
+
 __all__ = [
     "ReportHtmlRenderer",
     "build_facsimiles",
+    "build_served_hrefs",
     "build_report_zip",
     "build_sidecar_facsimiles",
     "build_sidecar_thumbnails",
     "build_thumbnails",
+    "image_ref_for",
     "write_report_bundle",
 ]

@@ -246,7 +246,16 @@ cinoc correct alto/ --repeat 5                   # publish a range, never a lone
 
 By default an instance runs its engines with the operator's own key (no gate). The **opt‑in** public mode (`CINOC_PUBLIC_MODE=true`) makes a deployment *fail‑closed* — only the free first‑party base (Tesseract — no key, no billed call) runs; cloud engines and third‑party plugins are refused (`403`) — for protecting a key on a *public* Space. See [`deploy/`](deploy/) for the HuggingFace Space image.
 
-Report **flavors**: single file (inline base64 images), folder/ZIP (separate images, offline), and IIIF/HF references (light HTML, images loaded from HuggingFace). The report is **bilingual FR/EN** (`?lang=en`).
+Report **flavors**, four of them, differing only in *where the pixels come from* — the report itself just receives `{document: href}`:
+
+| Flavor | Images | For |
+|---|---|---|
+| **Single file** | inlined base64 | one file to archive or email; capped at a few hundred documents |
+| **Folder / ZIP** | written beside the HTML | offline reading at any size (`cinoc run --report-dir`, or the web download) |
+| **IIIF / HF references** | fetched from the published dataset | a light HTML over pinned remote data |
+| **Served** | produced on demand by the web app | **runs of thousands of pages** — no cap, nothing pre-encoded, the browser loads only what it shows |
+
+The served flavor is what `GET /reports/{name}` uses: the gallery is paginated and every card is lazy, so a 5000-page run opens without a 50 MB download and without silently dropping the previews past the cap. The report is **bilingual FR/EN** (`?lang=en`).
 
 ---
 

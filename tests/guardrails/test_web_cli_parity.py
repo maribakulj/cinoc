@@ -113,6 +113,12 @@ PARITE: dict[str, str] = {
     # `cinoc run`, et le bundle dossier est `--report-dir`.
     "GET /reports/{name}": "transport",
     "GET /reports/{name}/bundle.zip": "cli:run",
+    # Saveur **servie** : la page ne porte que des URL, ces routes produisent
+    # les vignettes à la demande. Du transport — l'équivalent en ligne de
+    # commande n'est pas une commande de plus mais l'autre saveur,
+    # `cinoc run --report-dir`, qui écrit les mêmes dérivés sur disque.
+    "GET /reports/{name}/image/{document_id}": "transport",
+    "GET /reports/{name}/facsimile/{document_id}": "transport",
     "GET /reports/{name}/alto.zip": "cli:run",
 }
 

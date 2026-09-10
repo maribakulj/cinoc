@@ -23,10 +23,12 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
-def _render_jpeg(source: str | Path, max_px: int) -> bytes | None:
+def thumbnail_bytes(source: str | Path, *, max_px: int = 280) -> bytes | None:
     """Octets JPEG d'une image locale redimensionnée ; ``None`` si indisponible.
 
-    Cœur partagé des deux saveurs (data-URI / fichier) : redimensionne pour que le
+    Cœur partagé des **trois** saveurs — data-URI (fichier unique), fichier
+    (dossier) et **servie** (le web renvoie ces octets tels quels) : redimensionne
+    pour que le
     plus grand côté ≤ ``max_px`` (jamais agrandi), convertit en RGB, encode JPEG.
     ``None`` (avec ``logger.warning``) si Pillow absent, fichier introuvable, ou
     image illisible — le rendu reste fonctionnel (aperçu synthétique)."""
@@ -59,7 +61,7 @@ def thumbnail_data_uri(source: str | Path, *, max_px: int = 280) -> str | None:
 
     Saveur fichier unique : les octets sont inlinés dans le HTML. ``None`` si le
     dérivé n'a pu être produit (Pillow absent, fichier manquant/illisible)."""
-    raw = _render_jpeg(source, max_px)
+    raw = thumbnail_bytes(source, max_px=max_px)
     if raw is None:
         return None
     payload = base64.b64encode(raw).decode("ascii")
@@ -77,7 +79,7 @@ def thumbnail_to_file(
     portable) : l'appelant garantit que le HTML est un voisin de ``dest_dir`` (cf.
     ``app.report_images.write_report_bundle``). ``None`` si le dérivé n'a pu être
     produit (dégradé gracieux, aucun fichier écrit, aucun dossier créé)."""
-    raw = _render_jpeg(source, max_px)
+    raw = thumbnail_bytes(source, max_px=max_px)
     if raw is None:
         return None
     folder = Path(dest_dir)
@@ -127,4 +129,9 @@ def iiif_derivative(
     return (target_w, target_h)
 
 
-__all__ = ["thumbnail_data_uri", "thumbnail_to_file", "iiif_derivative"]
+__all__ = [
+    "iiif_derivative",
+    "thumbnail_bytes",
+    "thumbnail_data_uri",
+    "thumbnail_to_file",
+]
