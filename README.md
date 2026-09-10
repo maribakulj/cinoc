@@ -151,10 +151,13 @@ A remote segmenter needs no local extra — it delegates to a HuggingFace object
 ```bash
 cinoc demo  --output report.html                 # demo report, no engine required
 cinoc corpus import gallica ark:/12148/bpt6k5619759j  # fetch a corpus, write corpus.yaml
+cinoc run   config.yaml --check                  # validate + print the plan, run nothing
 cinoc run   config.yaml -o report.html           # run a benchmark described in YAML
 cinoc run   config.yaml --report-dir bundle/     # folder report (HTML + separate images)
 cinoc run   config.yaml --json run.json          # also export the machine-readable RunResult
+cinoc run   config.yaml --alto-dir alto/         # also keep the ALTO the run produced
 cinoc hybrid images/ --out alto/                 # segment → per-block OCR → one ALTO per page
+cinoc hybrid images/ --segment-only --out seg/   # stop at the layout, one LAYOUT per page
 cinoc correct alto/ -o report.html               # post-correct existing ALTO, inside the layout
 cinoc compare a.json b.json -o diff.html         # compare two runs (deltas)
 cinoc history runs.db --pipeline tesseract       # one pipeline's series over time
@@ -183,6 +186,21 @@ cinoc list profiles --preview "ABC" --config my-normalisation.yaml
 ```
 
 Nothing is persisted — a custom config is applied on the fly, exactly as in the web preview.
+
+### The run config
+
+`cinoc run` takes a full `RunSpec` in YAML — a corpus, candidate pipelines, and the views that score them. A **runnable, commented example** ships with the repo:
+
+```bash
+cinoc run examples/config.yaml --check     # read the plan first
+cinoc run examples/config.yaml -o report.html
+```
+
+It needs **no engine and no network**: it replays frozen outputs through `precomputed`, so it works before you install anything. Swap `precomputed:<label>` for `tesseract`, `openai`, `kraken`… for a real run. A test loads *and runs* every example in `examples/`, so they cannot go stale.
+
+Two flags worth knowing. `--check` validates the file and prints what would run without executing it — a benchmark spec commits billed API calls and hours of compute, so reading it first is not a luxury. `--alto-dir` keeps the ALTO a run produced: without it, an ALTO your spec asked for dies with the temporary workspace.
+
+`cinoc hybrid --segment-only` stops after segmentation and writes one `<doc>.layout.json` per page — exactly what `precomputed_layout` reads back, so you can segment once and then compare several recognisers on the same layout.
 
 ### Getting a corpus
 

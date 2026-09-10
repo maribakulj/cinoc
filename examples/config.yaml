@@ -1,0 +1,117 @@
+# Exemple de fichier de run Cinoc — exécutable tel quel, sans aucun moteur.
+#
+#   cinoc run examples/config.yaml --check      # lire le plan, ne rien exécuter
+#   cinoc run examples/config.yaml -o rapport.html
+#
+# C'est la forme complète d'un `RunSpec` : un corpus, des pipelines candidats,
+# et les vues d'évaluation qui les notent. Le moteur `precomputed` rejoue des
+# sorties figées, ce qui rend cet exemple hors ligne et déterministe ; remplace
+# `precomputed:<label>` par `tesseract`, `openai`, `kraken`… pour un vrai run.
+#
+# Les quatre blocs :
+#
+#   corpus       les documents et leur vérité terrain. Les chemins sont relatifs
+#                à CE fichier. `cinoc corpus import <source>` écrit ce bloc pour
+#                toi depuis IIIF, Gallica, eScriptorium, HuggingFace ou un ZIP.
+#   pipelines    un candidat par entrée. Chaque étape déclare ce qu'elle consomme
+#                (`input_types`), ce qu'elle produit (`output_types`) et de quelle
+#                étape elle tient chaque entrée (`inputs_from`) — c'est un DAG
+#                typé, pas une liste figée. `cinoc list engines` dit lesquels
+#                sont utilisables ici.
+#   evaluation   les vues qui notent. Une vue choisit ce qu'elle compare, un
+#                profil de normalisation (`cinoc list profiles`) et ses métriques.
+#                Deux vues sur le même run = deux lectures des mêmes sorties.
+#   adapter_kwargs  les paramètres de construction d'un adapter, par nom.
+#
+# Ce fichier est vérifié par `tests/interfaces/test_examples.py` : il ne peut pas
+# se périmer en silence.
+
+corpus:
+  name: demo
+  documents:
+  - id: folio_001
+    image_uri: corpus/folio_001.png
+    ground_truths:
+    - type: raw_text
+      uri: corpus/folio_001.gt.txt
+    metadata:
+      stratum: manuscrit médiéval
+  - id: folio_002
+    image_uri: corpus/folio_002.png
+    ground_truths:
+    - type: raw_text
+      uri: corpus/folio_002.gt.txt
+    metadata:
+      stratum: manuscrit médiéval
+  - id: folio_003
+    image_uri: corpus/folio_003.png
+    ground_truths:
+    - type: raw_text
+      uri: corpus/folio_003.gt.txt
+    metadata:
+      stratum: manuscrit médiéval
+  - id: imprime_001
+    image_uri: corpus/imprime_001.png
+    ground_truths:
+    - type: raw_text
+      uri: corpus/imprime_001.gt.txt
+    metadata:
+      stratum: imprimé ancien
+  - id: imprime_002
+    image_uri: corpus/imprime_002.png
+    ground_truths:
+    - type: raw_text
+      uri: corpus/imprime_002.gt.txt
+    metadata:
+      stratum: imprimé ancien
+pipelines:
+- name: tesseract
+  initial_inputs:
+  - image
+  steps:
+  - id: ocr
+    kind: ocr
+    adapter_name: precomputed:tesseract
+    input_types:
+    - image
+    output_types:
+    - raw_text
+- name: pero
+  initial_inputs:
+  - image
+  steps:
+  - id: ocr
+    kind: ocr
+    adapter_name: precomputed:pero
+    input_types:
+    - image
+    output_types:
+    - raw_text
+evaluation:
+  views:
+  - name: text
+    candidate_types:
+    - raw_text
+    metric_names:
+    - cer
+    - cer_diplo
+    - wer
+    - mer
+    - air
+  - name: francais_medieval
+    candidate_types:
+    - raw_text
+    normalization_profile: medieval_french
+    metric_names:
+    - cer
+    - wer
+    - mer
+adapter_kwargs:
+  precomputed:tesseract:
+    source_label: tesseract
+  precomputed:pero:
+    source_label: pero
+run_id: exemple
+metadata:
+  archaic_list: archaic_core
+  archaic_list_hash: 71ef04713304dc76220ea57d18167313115d7807166d51a1a2936ac5387cb005

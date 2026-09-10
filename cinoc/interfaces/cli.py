@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import sys
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -26,6 +27,7 @@ from cinoc.app.modules import (
     discover_plugins,
     register_default_modules,
 )
+from cinoc.app.orchestrator import PipelineOutputs
 from cinoc.app.report_images import (
     build_facsimiles,
     build_thumbnails,
@@ -34,6 +36,8 @@ from cinoc.app.report_images import (
 from cinoc.app.resume import ResumeStore
 from cinoc.app.variance import run_repeatedly
 from cinoc.domain.errors import CinocError
+from cinoc.domain.run import RunManifest
+from cinoc.domain.run_spec import RunSpec
 from cinoc.evaluation.analysis import EconomicsPayload
 from cinoc.evaluation.result import RunResult
 from cinoc.interfaces._cli_parser import build_parser
@@ -140,6 +144,52 @@ def _run_demo(output: str) -> int:
     return 0
 
 
+
+#: Signature du puits d'artefacts de l'orchestrateur.
+ArtifactSink = Callable[[PipelineOutputs, RunManifest], None]
+
+
+def _combined_sink(sinks: list[ArtifactSink]) -> ArtifactSink | None:
+    """Compose plusieurs puits en un seul (l'orchestrateur n'en accepte qu'un)."""
+    if not sinks:
+        return None
+    if len(sinks) == 1:
+        return sinks[0]
+
+    def _tous(outputs: PipelineOutputs, manifest: RunManifest) -> None:
+        for sink in sinks:
+            sink(outputs, manifest)
+
+    return _tous
+
+
+def _report_alto(out_dir: Path, outputs: PipelineOutputs) -> None:
+    from cinoc.app.transcription import write_alto_files
+
+    ecrits = write_alto_files(out_dir, outputs)
+    print(f"{len(ecrits)} ALTO écrit(s) dans {out_dir}")
+
+
+def _print_plan(spec: RunSpec) -> int:
+    """Décrit ce qu'un run **ferait**, sans rien exécuter.
+
+    Une spec de benchmark engage des appels facturés et des heures de calcul ;
+    pouvoir la relire avant de la lancer n'est pas un confort.
+    """
+    print(f"Corpus     : {spec.corpus.name} — {len(spec.corpus.documents)} document(s)")
+    print(f"Pipelines  : {len(spec.pipelines)}")
+    for pipeline in spec.pipelines:
+        etapes = " → ".join(
+            f"{step.kind}:{step.adapter_name}" for step in pipeline.steps
+        )
+        print(f"  {pipeline.name}\n    {etapes or '(aucune étape)'}")
+    print(f"Évaluation : {len(spec.evaluation.views)} vue(s)")
+    for view in spec.evaluation.views:
+        print(f"  {view.name} — {', '.join(view.metric_names) or '(aucune métrique)'}")
+    print("\nSpec valide. Rien n'a été exécuté (--check).")
+    return 0
+
+
 def _run_config(
     config_path: str,
     output: str,
@@ -150,6 +200,8 @@ def _run_config(
     max_workers: int | None = None,
     report_dir: str | None = None,
     repeat: int = 1,
+    check: bool = False,
+    alto_dir: str | None = None,
 ) -> int:
     if repeat > 1 and resume_dir:
         raise CinocError(
@@ -160,14 +212,26 @@ def _run_config(
     register_default_modules(registry)
     discover_plugins(registry, enabled=True)  # CLI local : code de confiance
     spec = load_run_spec(config_path)
+    if check:
+        # Valider **sans exécuter** : le chargement a déjà refusé une spec
+        # invalide (Pydantic + chemins sécurisés) ; reste à montrer ce qui
+        # serait lancé, pour qu'on le lise avant de payer des appels d'API.
+        return _print_plan(spec)
     resume_store = ResumeStore(Path(resume_dir)) if resume_dir else None
     # Export HIPE = sink d'artefacts (les textes sont lus avant le nettoyage du
     # workspace) — le format JSONL porte les textes, pas les scores.
-    artifact_sink = None
+    sinks: list[ArtifactSink] = []
     if hipe_jsonl is not None:
         from cinoc.app.hipe_export import hipe_jsonl_sink
 
-        artifact_sink = hipe_jsonl_sink(Path(hipe_jsonl), spec.corpus)
+        sinks.append(hipe_jsonl_sink(Path(hipe_jsonl), spec.corpus))
+    if alto_dir is not None:
+        # Un run qui produit des ALTO les laissait mourir avec le workspace :
+        # seule la voie web les persistait. Même écrivain que `cinoc hybrid`.
+
+        cible = Path(alto_dir)
+        sinks.append(lambda outputs, _manifest: _report_alto(cible, outputs))
+    artifact_sink = _combined_sink(sinks)
     def _once(index: int) -> RunResult:
         if repeat > 1:
             print(f"run {index + 1}/{repeat}…", flush=True)
@@ -227,6 +291,7 @@ def _run_hybrid(
     prompt: str | None = None,
     endpoint: str | None = None,
     token: str | None = None,
+    segment_only: bool = False,
 ) -> int:
     """Transcription **hybride** : segmente, reconnaît par bloc, assemble un ALTO/page.
 
@@ -234,26 +299,42 @@ def _run_hybrid(
     (pp_doclayout + tesseract par défaut ; tout OCR réel ou un VLM zero-shot via
     ``--ocr``) → orchestrateur ; les ``ALTO_XML`` sont écrits dans ``out`` par un
     sink (avant nettoyage du workspace).
+
+    ``segment_only`` s'arrête à la mise en page : même corpus, même orchestrateur,
+    mais ``plan_segmentation_run`` et un ``LAYOUT`` par page en sortie.
     """
-    from cinoc.app.orchestrator import PipelineOutputs
-    from cinoc.app.structure_planning import plan_hybrid_run
-    from cinoc.app.transcription import corpus_from_images, write_alto_files
-    from cinoc.domain.run import RunManifest
+    from cinoc.app import structure_planning
+    from cinoc.app.transcription import (
+        corpus_from_images,
+        write_alto_files,
+        write_layout_files,
+    )
 
     corpus = corpus_from_images(images)
     registry = ModuleRegistry()
     register_default_modules(registry)
     discover_plugins(registry, enabled=True)  # CLI local : code de confiance
-    spec = plan_hybrid_run(
-        corpus, "hybrid", segmenter=segmenter, ocr=ocr, label=label,
-        source_label=source_label, lang=lang, model=model, prompt=prompt,
-        endpoint=endpoint, token=token,
-    )(Path(out))
+    if segment_only:
+        # La mise en page est un livrable en soi : on la relit, on la corrige,
+        # on rejoue plusieurs reconnaissances dessus sans re-segmenter.
+        builder = structure_planning.plan_segmentation_run(
+            corpus, "segmentation", segmenter=segmenter,
+            endpoint=endpoint, token=token,
+        )
+        ecrire = write_layout_files
+    else:
+        builder = structure_planning.plan_hybrid_run(
+            corpus, "hybrid", segmenter=segmenter, ocr=ocr, label=label,
+            source_label=source_label, lang=lang, model=model, prompt=prompt,
+            endpoint=endpoint, token=token,
+        )
+        ecrire = write_alto_files
+    spec = builder(Path(out))
     out_dir = Path(out)
     written: list[Path] = []
 
     def _sink(outputs: PipelineOutputs, manifest: RunManifest) -> None:
-        written.extend(write_alto_files(out_dir, outputs))
+        written.extend(ecrire(out_dir, outputs))
 
     run_orchestrator(
         spec,
@@ -261,7 +342,8 @@ def _run_hybrid(
         code_version=resolve_code_version(),
         artifact_sink=_sink,
     )
-    print(f"{len(written)} ALTO écrit(s) dans {out_dir}")
+    quoi = "LAYOUT" if segment_only else "ALTO"
+    print(f"{len(written)} {quoi} écrit(s) dans {out_dir}")
     return 0
 
 
@@ -355,6 +437,8 @@ def main(argv: list[str] | None = None) -> int:
                 args.workers,
                 args.report_dir,
                 args.repeat,
+                args.check,
+                args.alto_dir,
             )
         if args.command == "correct":
             return run_correction(
@@ -384,6 +468,7 @@ def main(argv: list[str] | None = None) -> int:
                 prompt=args.prompt,
                 endpoint=args.segmenter_endpoint,
                 token=args.segmenter_token,
+                segment_only=args.segment_only,
             )
         if args.command == "corpus":
             # Sous-arbre : le verbe choisi porte la capacité (importer,
