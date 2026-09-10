@@ -7,7 +7,6 @@ pré-calculé en mémoire → ``precomputed`` → CER → ``RunResult`` → HTML
 
 from __future__ import annotations
 
-import argparse
 import os
 import sys
 from datetime import UTC, datetime
@@ -37,6 +36,7 @@ from cinoc.app.variance import run_repeatedly
 from cinoc.domain.errors import CinocError
 from cinoc.evaluation.analysis import EconomicsPayload
 from cinoc.evaluation.result import RunResult
+from cinoc.interfaces._cli_parser import build_parser
 from cinoc.interfaces._correction_command import run_correction, write_variance
 from cinoc.reports import default_report_renderer, render_comparison
 from cinoc.reports.csv_export import run_result_csv
@@ -214,6 +214,8 @@ def _run_hybrid(
     lang: str = "fra",
     model: str | None = None,
     prompt: str | None = None,
+    endpoint: str | None = None,
+    token: str | None = None,
 ) -> int:
     """Transcription **hybride** : segmente, reconnaît par bloc, assemble un ALTO/page.
 
@@ -234,6 +236,7 @@ def _run_hybrid(
     spec = plan_hybrid_run(
         corpus, "hybrid", segmenter=segmenter, ocr=ocr, label=label,
         source_label=source_label, lang=lang, model=model, prompt=prompt,
+        endpoint=endpoint, token=token,
     )(Path(out))
     out_dir = Path(out)
     written: list[Path] = []
@@ -323,199 +326,7 @@ def _serve_command(host: str, port: int, reports_dir: str | None) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(
-        prog="cinoc",
-        description="Banc d'essai déterministe de pipelines de transcription.",
-    )
-    subparsers = parser.add_subparsers(dest="command", required=True)
-    demo = subparsers.add_parser(
-        "demo",
-        help="Génère un rapport de démonstration déterministe (sans moteur).",
-    )
-    demo.add_argument(
-        "-o", "--output", default="rapport_demo.html", help="Fichier HTML de sortie."
-    )
-    run_cmd = subparsers.add_parser(
-        "run", help="Exécute un run décrit dans un fichier YAML."
-    )
-    run_cmd.add_argument("config", help="Fichier YAML décrivant le run.")
-    run_cmd.add_argument(
-        "--resume-dir",
-        default=None,
-        help="Cache de reprise : les (pipeline × document) déjà produits à "
-        "l'identique y sont rechargés au lieu d'être ré-exécutés.",
-    )
-    run_cmd.add_argument(
-        "--csv",
-        default=None,
-        dest="csv_output",
-        help="Export CSV tableur (agrégats + détail par-document).",
-    )
-    run_cmd.add_argument(
-        "-o", "--output", default="rapport.html", help="Fichier HTML de sortie."
-    )
-    run_cmd.add_argument(
-        "--report-dir",
-        dest="report_dir",
-        default=None,
-        help="Écrit un bundle dossier (report.html + report-assets/ d'images "
-        "réelles, liens relatifs) au lieu du HTML autonome de -o. Recommandé pour "
-        "les gros corpus à images.",
-    )
-    run_cmd.add_argument(
-        "--json",
-        dest="json_output",
-        default=None,
-        help="Écrit aussi le RunResult en JSON (pour comparer plus tard).",
-    )
-    run_cmd.add_argument(
-        "--hipe-jsonl",
-        dest="hipe_jsonl",
-        default=None,
-        help="Exporte les sorties au format JSONL HIPE-OCRepair "
-        "(un fichier par pipeline — soumission leaderboard).",
-    )
-    run_cmd.add_argument(
-        "--repeat",
-        type=int,
-        default=1,
-        help="Exécute la même spec N fois et écrit une FOURCHETTE par métrique "
-        "au lieu d'une décimale isolée (≥5 recommandé). Le rapport et le JSON "
-        "portent le dernier run ; le bilan de variance va dans "
-        "<sortie>.variance.json. Incompatible avec --resume-dir : rejouer un "
-        "cache mesurerait le cache.",
-    )
-    run_cmd.add_argument(
-        "--workers",
-        type=int,
-        default=None,
-        help="Threads d'exécution (gros corpus). Défaut : CINOC_MAX_WORKERS "
-        "puis le nombre de CPU. 1 = séquentiel. Résultat identique quel que "
-        "soit le nombre (assemblage ordonné par le spec).",
-    )
-    history_cmd = subparsers.add_parser(
-        "history",
-        help="Historique longitudinal : série d'un pipeline ou régressions.",
-    )
-    history_cmd.add_argument("db", help="Base SQLite de l'historique.")
-    history_cmd.add_argument("--view", default="text")
-    history_cmd.add_argument("--metric", default="cer")
-    history_cmd.add_argument(
-        "--pipeline",
-        default=None,
-        help="Série chronologique de ce pipeline (sinon : régressions).",
-    )
-    history_cmd.add_argument("--threshold", type=float, default=0.0)
-
-    compare_cmd = subparsers.add_parser(
-        "compare", help="Compare deux RunResult JSON → rapport de deltas."
-    )
-    compare_cmd.add_argument("run_a", help="Premier RunResult (JSON).")
-    compare_cmd.add_argument("run_b", help="Second RunResult (JSON).")
-    compare_cmd.add_argument(
-        "-o", "--output", default="comparaison.html", help="Fichier HTML de sortie."
-    )
-    hybrid_cmd = subparsers.add_parser(
-        "hybrid",
-        help="Transcription hybride : segmente → OCR par bloc → ALTO/page.",
-    )
-    hybrid_cmd.add_argument("images", help="Dossier d'images à transcrire.")
-    hybrid_cmd.add_argument(
-        "--out", default="alto", help="Dossier de sortie des ALTO (défaut : alto/)."
-    )
-    hybrid_cmd.add_argument(
-        "--segmenter",
-        default="pp_doclayout",
-        help="Segmenteur (pp_doclayout, remote_segmenter, precomputed_layout).",
-    )
-    hybrid_cmd.add_argument(
-        "--ocr",
-        default="tesseract",
-        help="Reconnaisseur par bloc : OCR réel (tesseract, mistral_ocr, "
-        "google_vision, azure_di, kraken, pero, calamari) ou VLM zero-shot "
-        "(openai, anthropic, mistral) ; precomputed_region en démo.",
-    )
-    hybrid_cmd.add_argument(
-        "--label", default="hybrid", help="Étiquette du moteur (identité)."
-    )
-    hybrid_cmd.add_argument(
-        "--source-label",
-        default=None,
-        help="Jeu de textes par région (mode precomputed_region).",
-    )
-    hybrid_cmd.add_argument(
-        "--lang", default="fra", help="Langue OCR par bloc (moteurs OCR réels)."
-    )
-    hybrid_cmd.add_argument(
-        "--model",
-        default=None,
-        help="Modèle du reconnaisseur (chemin/checkpoint OCR ou modèle VLM).",
-    )
-    hybrid_cmd.add_argument(
-        "--prompt",
-        default=None,
-        help="Prompt de transcription pour un reconnaisseur VLM (zero-shot).",
-    )
-
-    correct_cmd = subparsers.add_parser(
-        "correct",
-        help="Corrige un dossier d'ALTO existants (post-correction structurée).",
-    )
-    correct_cmd.add_argument(
-        "alto_dir", help="Dossier de paires <nom>.xml + <nom>.png/.jpg."
-    )
-    correct_cmd.add_argument(
-        "-o", "--output", default="rapport.html", help="Fichier HTML de sortie."
-    )
-    correct_cmd.add_argument(
-        "--producer",
-        default="rules",
-        choices=("rules", "ollama"),
-        help="Producteur de corrections. 'rules' est déterministe et hors "
-        "ligne ; 'ollama' parle à un serveur local (exige --model).",
-    )
-    correct_cmd.add_argument(
-        "--model", default="", help="Modèle ollama (ex. gemma4:e2b)."
-    )
-    correct_cmd.add_argument(
-        "--host", default="http://localhost:11434", help="Serveur ollama."
-    )
-    correct_cmd.add_argument(
-        "--ocr-sidecar",
-        dest="ocr_sidecar",
-        default="",
-        help="JSON d'OCR réel {'ocr': {fichier: {line_id: texte}}} qui remplace "
-        "le texte des lignes. INDISPENSABLE sur un corpus à vérité terrain : "
-        "sans lui la source lit la référence, il n'y a rien à corriger, et le "
-        "CER vaut zéro par construction.",
-    )
-    correct_cmd.add_argument(
-        "--no-ground-truth",
-        dest="ground_truth",
-        action="store_false",
-        help="L'ALTO est de l'OCR, pas une transcription : aucune vue de "
-        "structure n'est ajoutée (il n'y aurait rien à quoi comparer).",
-    )
-    correct_cmd.add_argument(
-        "--repeat",
-        type=int,
-        default=1,
-        help="Exécute N fois et écrit une fourchette (≥5 recommandé).",
-    )
-    serve_cmd = subparsers.add_parser(
-        "serve", help="Sert la vitrine web des rapports (extra [serve])."
-    )
-    serve_cmd.add_argument(
-        "--host", default="127.0.0.1", help="Adresse d'écoute (défaut : local)."
-    )
-    serve_cmd.add_argument(
-        "--port", type=int, default=8000, help="Port d'écoute (défaut : 8000)."
-    )
-    serve_cmd.add_argument(
-        "--reports-dir",
-        default=None,
-        help="Dossier des rapports RunResult JSON à servir.",
-    )
+    parser = build_parser()
     args = parser.parse_args(argv)
     # Les erreurs métier (spec invalide, chemin hors zone…) et d'E/S sont
     # rapportées proprement sur stderr + code de sortie 1 — jamais une trace nue.
@@ -560,6 +371,8 @@ def main(argv: list[str] | None = None) -> int:
                 lang=args.lang,
                 model=args.model,
                 prompt=args.prompt,
+                endpoint=args.segmenter_endpoint,
+                token=args.segmenter_token,
             )
         if args.command == "compare":
             return _compare_command(args.run_a, args.run_b, args.output)

@@ -21,6 +21,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from cinoc.interfaces._cli_parser import SUBCOMMANDS
+
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -113,20 +115,12 @@ def test_next_session_does_not_recap_delivered_tranches() -> None:
     )
 
 
-def _cli_subcommands() -> set[str]:
-    """Les sous-commandes déclarées par la CLI, lues dans sa source.
-
-    Le parseur est construit dans ``main()`` ; le lire par la source évite
-    d'importer la couche 8 pour un contrôle documentaire, et suit la seule
-    forme que la CLI utilise (``subparsers.add_parser("nom"``).
-    """
-    source = (ROOT / "cinoc" / "interfaces" / "cli.py").read_text(encoding="utf-8")
-    return set(re.findall(r'add_parser\(\s*"(\w+)"', source))
-
-
 def test_every_cli_command_is_documented_in_the_readme() -> None:
     """Une commande absente du README n'est pas une commande — personne ne peut
     la trouver.
+
+    La surface est lue dans ``_cli_parser.SUBCOMMANDS`` — le contrat que la CLI
+    déclare — et non devinée par expression régulière dans sa source.
 
     Ce contrôle est né d'un cas réel : ``cinoc correct`` (post-correction
     structurée) a vécu des semaines livrée, testée et invisible — ni dans le
@@ -136,9 +130,7 @@ def test_every_cli_command_is_documented_in_the_readme() -> None:
     décrite là où un utilisateur la cherche.
     """
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    manquantes = sorted(
-        nom for nom in _cli_subcommands() if f"cinoc {nom}" not in readme
-    )
+    manquantes = sorted(nom for nom in SUBCOMMANDS if f"cinoc {nom}" not in readme)
     assert not manquantes, (
         f"commandes absentes du README : {manquantes}. Une commande livrée mais "
         "non documentée est invisible : la documenter, ou la retirer."

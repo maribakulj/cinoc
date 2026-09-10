@@ -323,8 +323,26 @@ couche 3), DTO web (transport → couche 8).
    `Protocol Section` typé unique, 4-5 sections.
 3. Data-layer `reports/html/data/` qui ré-agrège `evaluation/`. → consommer
    `RunResult` directement.
-4. Workflows CLI pré-câblés (`diagnose`/`economics`/`edition`). → seulement
-   `run`/`report`/`compare`/`demo`/`serve`.
+4. Workflows CLI pré-câblés (`diagnose`/`economics`/`edition`). → **pas de
+   *lentille d'analyse* en commande** : une commande qui fige *une façon de lire
+   les résultats* est interdite ; le rapport porte toutes les lectures.
+   **Amendé (D-224)** — la règle disait « seulement
+   `run`/`report`/`compare`/`demo`/`serve` », et ce compte a été lu comme un
+   plafond de commandes alors qu'il visait les lentilles. Deux clauses la
+   remplacent :
+   - **Une *capacité* offerte par le web l'est aussi par la CLI.** Une capacité
+     (importer un corpus, connaître les moteurs disponibles, exporter un ALTO)
+     existe des deux côtés ; un *transport* (SSE, CSRF, page HTML, servir un
+     fichier déjà produit) n'a pas à être dupliqué. Verrouillé par
+     `tests/guardrails/test_web_cli_parity.py` : toute route web y a un statut,
+     et une dette y porte l'échéance qui la ferme.
+   - **Une capacité = une fonction en couche `app`, deux transports minces.**
+     La CLI n'ajoute *jamais* de logique : elle appelle ce que le web appelle
+     déjà. S'il manque quelque chose en `app`, on l'y met et le web l'utilise
+     aussi — jamais une seconde implémentation côté CLI. C'est la clause
+     anti-doublon ; elle prime sur le confort d'écrire vite.
+   Regrouper reste la règle : `corpus`/`list` (capacités) plutôt qu'un verbe par
+   source ou par catalogue.
 5. Sécurité web éclatée en 7 modules `security_*`. → un package `security/`.
 6. Noms à suffixe interne dans le code livré (`_v2`, `legacy`).
 7. Commentaires de sprint dans le code.
