@@ -43,6 +43,12 @@ from cinoc.interfaces._corpus_command import (
     run_corpus_search,
 )
 from cinoc.interfaces._correction_command import run_correction, write_variance
+from cinoc.interfaces._list_command import (
+    run_list_engines,
+    run_list_models,
+    run_list_profiles,
+    run_list_prompts,
+)
 from cinoc.reports import default_report_renderer, render_comparison
 from cinoc.reports.csv_export import run_result_csv
 
@@ -387,6 +393,14 @@ def main(argv: list[str] | None = None) -> int:
             if args.corpus_command == "search":
                 return run_corpus_search(args)
             return run_corpus_discover(args)
+        if args.command == "list":
+            sujets = {
+                "engines": run_list_engines,
+                "models": run_list_models,
+                "profiles": run_list_profiles,
+                "prompts": run_list_prompts,
+            }
+            return sujets[args.topic](args)
         if args.command == "compare":
             return _compare_command(args.run_a, args.run_b, args.output)
         if args.command == "serve":

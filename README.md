@@ -162,6 +162,28 @@ cinoc history runs.db --threshold 0.01           # or: which pipelines regressed
 cinoc serve --port 8080                          # local web app
 ```
 
+### Knowing what your install can do
+
+The `/engines` page, the composer's model dropdowns and the normalisation preview all read probes that live in the `app` layer. `cinoc list` reads the same ones, in text:
+
+```bash
+cinoc list engines                 # engines, segmenters, NER — and *why* one is unavailable
+cinoc list models anthropic        # canonical model suggestions, vision flagged
+cinoc list profiles                # the normalisation profiles
+cinoc list prompts                 # the curated period prompts
+```
+
+An unavailable engine is never hidden: it says what it needs — an extra, a binary, an API key — instead of quietly not being there.
+
+A profile is judged on a text, not on its name, so you can try one before committing a run to it:
+
+```bash
+cinoc list profiles --preview "Il eſtoit vne fois" --profile heritage
+cinoc list profiles --preview "ABC" --config my-normalisation.yaml
+```
+
+Nothing is persisted — a custom config is applied on the fly, exactly as in the web preview.
+
 ### Getting a corpus
 
 Everything the web app can fetch, the CLI can fetch — same importers, same code, different destination. The web materialises into a server-side store; `cinoc corpus` materialises into **a folder you choose**, next to a `corpus.yaml`:
