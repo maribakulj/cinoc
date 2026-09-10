@@ -5,6 +5,19 @@ Tous les changements notables de Cinoc. Format inspiré de
 La version est dérivée des tags git (`setuptools_scm`) ; le journal **décisionnel
 granulaire** vit dans [`MIGRATION_PLAN.md`](MIGRATION_PLAN.md).
 
+## [1.1.0] — 2026-09-10
+
+### Ajouté
+
+- **Saveur de rapport « servie »** : la page web ne porte plus ses images, elle
+  les **nomme**. Les vignettes sont produites à la demande
+  (`/reports/{nom}/image/{document}`), **sans plafond** — le rapport autonome,
+  lui, s'arrête à 300 documents *sans le dire*. Avec la galerie paginée et le
+  chargement paresseux déjà en place, un run de milliers de pages se consulte
+  sans télécharger des dizaines de mégaoctets. Les trois autres saveurs
+  (fichier unique, dossier/ZIP hors ligne, références IIIF/HF) sont inchangées :
+  le rapport reçoit toujours un simple `{document: href}`.
+
 ## [1.0.0] — 2026-09-10
 
 Première version publiée. Réécriture propre de Picarones sous le nom **Cinoc** :
