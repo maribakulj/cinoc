@@ -50,13 +50,16 @@ def test_engines_name_what_is_missing(
 def test_engines_covers_the_three_categories(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """Moteurs, segmenteurs et étape NER : la page web montre les trois, la
-    commande aussi — sinon la parité serait de façade."""
+    """Moteurs, segmenteurs et briques de post-traitement : la page web montre
+    les trois catégories, la commande aussi — sinon la parité serait de façade."""
     assert main(["list", "engines"]) == 0
     sortie = capsys.readouterr().out
     assert "Moteurs" in sortie
     assert "Segmenteurs" in sortie
+    # Les briques de post-traitement sont une catégorie à part — ni des moteurs
+    # de transcription, ni des segmenteurs.
     assert "ner" in sortie
+    assert "saknussemm" in sortie
 
 
 def test_models_of_one_provider(capsys: pytest.CaptureFixture[str]) -> None:

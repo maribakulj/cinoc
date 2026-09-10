@@ -3,7 +3,9 @@
 La règle, et la distinction qui la rend applicable :
 
 * une **capacité** — importer un corpus, savoir quels moteurs sont disponibles,
-  exporter un ALTO — doit exister des **deux** côtés ;
+  exporter un ALTO — doit exister des **deux** côtés, et le contrôle va **dans
+  les deux sens** : :data:`PARITE` (chaque route web a son pendant CLI) et
+  :data:`PARITE_CLI` (chaque commande a son pendant web) ;
 * un **transport** — SSE, CSRF, une page HTML, servir un fichier déjà produit —
   n'a pas à être dupliqué. L'équivalent CLI de « suivre la progression en SSE »
   est stdout, pas une seconde implémentation.
@@ -34,11 +36,16 @@ from cinoc.interfaces._cli_parser import SUBCOMMANDS
 #: Dettes connues : identifiant → ce qui la ferme. Une entrée ici est un
 #: engagement, pas une excuse ; la liste ne doit que rétrécir.
 #:
-#: **Vide depuis D-227** : les cinq dettes ouvertes par D-224 (corpus,
-#: introspection, run-check, segmentation, alto-export) sont fermées. Le
-#: dictionnaire reste — c'est lui qui rend une nouvelle dette *déclarable*, donc
-#: visible, plutôt que tolérée en silence.
-DETTES: dict[str, str] = {}
+#: Les cinq dettes ouvertes par D-224 dans le sens web → CLI sont fermées
+#: (D-225→D-227). Le sens CLI → web en ouvre une, et une seule.
+DETTES: dict[str, str] = {
+    # La post-correction structurée (`cinoc correct`) est complète côté
+    # bibliothèque et CLI depuis août 2026, et n'a **aucune** surface web : elle
+    # ne se lance que par la ligne de commande. Ce n'était pas un oubli mais un
+    # arbitrage laissé ouvert (roll-up §« Axe correction structurée ») ; l'écrire
+    # ici le rend visible et daté au lieu de le laisser se perdre.
+    "correction-web": "tranche f — lanceur web de la correction structurée",
+}
 
 #: Route → statut. Trois formes, et trois seulement :
 #: ``"transport"`` · ``"cli:<sous-commande>"`` · ``"dette:<identifiant>"``.
@@ -177,12 +184,96 @@ def test_declared_cli_counterparts_exist() -> None:
     )
 
 
+#: Sous-commande CLI → statut, dans l'autre sens. Trois formes :
+#: ``"web:<route>"`` · ``"cli-only: <raison>"`` · ``"dette:<identifiant>"``.
+#:
+#: **Pourquoi la table symétrique.** La première version de ce garde-fou ne
+#: regardait que web → CLI, parce que c'est le manque qu'on venait de constater.
+#: Un contrôle unidirectionnel laisse l'autre sens dériver exactement pareil — et
+#: c'était déjà le cas : `cinoc correct` existait depuis des mois sans surface
+#: web, sous la forme d'un « arbitrage à rendre » que rien ne rappelait.
+PARITE_CLI: dict[str, str] = {
+    # Le run de démonstration est ce que lance `POST /api/runs` sans concurrent.
+    "demo": "web:POST /api/runs",
+    "run": "web:POST /api/runs",
+    "hybrid": "web:POST /api/runs",
+    "corpus": "web:POST /api/corpus",
+    "list": "web:GET /engines",
+    "history": "web:GET /history",
+    # Le rapport autonome embarque son propre comparateur (client-side, sans
+    # réseau) : la « route » du web est celle qui sert ce rapport.
+    "compare": "web:GET /reports/{name}",
+    # `serve` **est** le web : lui chercher un pendant web n'aurait pas de sens.
+    "serve": "cli-only: c'est la commande qui démarre l'app web.",
+    "correct": "dette:correction-web",
+}
+
+
+def _cli_status_targets() -> set[str]:
+    """Routes citées par :data:`PARITE_CLI`, sans le préfixe ``web:``."""
+    return {
+        statut.removeprefix("web:")
+        for statut in PARITE_CLI.values()
+        if statut.startswith("web:")
+    }
+
+
+def test_every_cli_command_has_a_declared_counterpart() -> None:
+    """Aucune commande hors table, aucune entrée orpheline."""
+    commandes, declarees = set(SUBCOMMANDS), set(PARITE_CLI)
+    non_declarees = sorted(commandes - declarees)
+    fantomes = sorted(declarees - commandes)
+    assert not non_declarees, (
+        f"commandes sans statut de parité : {non_declarees}. Déclare pour "
+        "chacune la route web équivalente (`web:<route>`), pourquoi elle n'a de "
+        "sens qu'en CLI (`cli-only: …`), ou la dette (`dette:<id>`)."
+    )
+    assert not fantomes, (
+        f"entrées de parité sans commande correspondante : {fantomes}."
+    )
+
+
+def test_cli_statuses_are_well_formed() -> None:
+    mauvais = {
+        commande: statut
+        for commande, statut in PARITE_CLI.items()
+        if not statut.startswith(("web:", "cli-only:", "dette:"))
+    }
+    assert not mauvais, (
+        f"statuts hors grammaire : {mauvais}. Trois formes seulement — "
+        "'web:<route>', 'cli-only: <raison>', 'dette:<identifiant>'."
+    )
+
+
+def test_declared_web_counterparts_exist() -> None:
+    """Une route citée qui n'existe pas cacherait la dette au lieu de la dire."""
+    inconnues = sorted(_cli_status_targets() - _web_routes())
+    assert not inconnues, (
+        f"routes citées mais inexistantes : {inconnues}. "
+        "Elles ont été renommées ou retirées."
+    )
+
+
+def test_a_cli_only_command_says_why() -> None:
+    """« CLI seulement » sans raison est une dette déguisée."""
+    muettes = sorted(
+        commande
+        for commande, statut in PARITE_CLI.items()
+        if statut.startswith("cli-only:")
+        and len(statut.removeprefix("cli-only:").strip()) < 15
+    )
+    assert not muettes, (
+        f"« cli-only » sans justification : {muettes}. Écris pourquoi cette "
+        "capacité n'a de sens qu'en ligne de commande."
+    )
+
+
 def test_debts_are_declared_and_none_is_stale() -> None:
     """Chaque dette porte son identifiant **et** ce qui la ferme, dans les deux
     sens : pas de dette non déclarée, pas de dette déclarée puis oubliée."""
     citees = {
         statut.removeprefix("dette:")
-        for statut in PARITE.values()
+        for statut in (*PARITE.values(), *PARITE_CLI.values())
         if statut.startswith("dette:")
     }
     non_declarees = sorted(citees - set(DETTES))
