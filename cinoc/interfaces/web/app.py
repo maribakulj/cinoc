@@ -24,16 +24,22 @@ from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from cinoc.adapters.corpus.huggingface import whoami
 from cinoc.adapters.storage import JobStore
 from cinoc.adapters.storage.history_store import HistoryStore
 from cinoc.adapters.storage.publisher import resolve_publisher
 from cinoc.app import resolve_code_version
 from cinoc.app.alto_store import AltoStore
+from cinoc.app.corpus_import import (
+    HF_AUTHOR_ENV,
+    HF_TOKEN_ENVS,
+    SPACE_ID_ENV,
+    resolve_curated_author,
+)
 from cinoc.app.corpus_upload import CorpusStore
 from cinoc.app.data_dir import resolve_data_dir
 from cinoc.app.engines import (
     EngineStatus,
+    correction_status,
     engine_statuses,
     ner_status,
     segmenter_statuses,
@@ -85,16 +91,13 @@ METRICS_ENV = "CINOC_METRICS"
 #: automatiquement dans la Bibliothèque (sans coller le ``repo_id``). Override
 #: explicite ; à défaut le handle est résolu **tout seul** (jeton/Space, cf.
 #: ``_resolve_curated_author``). Aucun signal → section masquée (import manuel OK).
-HF_AUTHOR_ENV = "CINOC_HF_AUTHOR"
 
 #: Jetons HF reconnus (ordre de lecture) : présent → on résout le handle de
 #: l'opérateur via ``whoami`` → ses datasets curés apparaissent sans config.
-HF_TOKEN_ENVS = ("HF_TOKEN", "HUGGINGFACE_TOKEN", "HUGGING_FACE_HUB_TOKEN")
 
 #: Identifiant du Space (``owner/name``, injecté par HuggingFace). Son ``owner``
 #: EST le handle de l'opérateur → datasets curés automatiques sur un Space, sans
 #: jeton ni appel réseau pour la résolution.
-SPACE_ID_ENV = "SPACE_ID"
 
 
 def _resolve_reports_dir(reports_dir: Path | str | None) -> Path:
@@ -138,31 +141,6 @@ def _resolve_metrics(metrics: bool | None) -> bool:
     if metrics is not None:
         return metrics
     return os.environ.get(METRICS_ENV, "").strip().lower() in {"1", "true", "yes"}
-
-
-def _resolve_curated_author() -> str | None:
-    """Compte HF dont lister les datasets curés — **zéro config** quand c'est possible.
-
-    Ordre : ``CINOC_HF_AUTHOR`` explicite > handle résolu d'un jeton HF (``whoami``,
-    poste local connecté) > ``owner`` du ``SPACE_ID`` (sur un Space, le propriétaire
-    EST l'opérateur — pur, sans réseau). Aucun signal → ``None`` : l'app ne peut
-    pas deviner « vos » datasets, mais l'import manuel par ``repo_id`` reste offert.
-    """
-    explicit = os.environ.get(HF_AUTHOR_ENV, "").strip()
-    if explicit:
-        return explicit
-    for env in HF_TOKEN_ENVS:
-        token = os.environ.get(env, "").strip()
-        if token:
-            handle = whoami(token)
-            if handle:
-                return handle
-    space = os.environ.get(SPACE_ID_ENV, "").strip()
-    if space:
-        owner = space.split("/", 1)[0].strip()
-        if owner:
-            return owner
-    return None
 
 
 def create_app(
@@ -274,6 +252,12 @@ def create_app(
     def ner_status_provider() -> EngineStatus:
         return ner_status()
 
+    # Post-correction structurée (extra [saknussemm]) : brique de
+    # post-traitement, sondée comme la NER — refusée avant le lancement
+    # plutôt qu'en plein run.
+    def correction_status_provider() -> EngineStatus:
+        return correction_status()
+
     app.include_router(
         build_home_router(
             runtime_dir,
@@ -283,7 +267,7 @@ def create_app(
             ner=ner_status_provider,
             history_store=history_store,
             corpus_store=corpus_store,
-            curated_author=_resolve_curated_author(),
+            curated_author=resolve_curated_author(),
             public_mode=is_public,
             alto_store=alto_store,
         )
@@ -307,6 +291,7 @@ def create_app(
             statuses=engine_status_provider,
             segmenters=segmenter_status_provider,
             ner_available=lambda: ner_status_provider().available,
+            correction_available=lambda: correction_status_provider().available,
             public_mode=is_public,
         )
     )

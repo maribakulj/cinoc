@@ -40,6 +40,22 @@ _STRINGS: dict[str, dict[str, str]] = {
         "bench_desc": "Compose des concurrents (OCR, OCR→LLM, VLM) et compare-les "
         "sur un corpus, en un seul run. Sans concurrent : démonstration.",
         "bench_run": "Lancer le benchmark",
+        "bench_correction": "Post-correction structurée",
+        "bench_correction_hint": "Corrige un corpus d'ALTO déjà là, **dans** sa "
+        "mise en page : chaque ligne garde son identifiant, donc le rapport dit "
+        "ce qui a été changé et ce que le correcteur a refusé de changer.",
+        "bench_correction_producer": "Producteur de corrections",
+        "bench_correction_rules": "Règles (déterministe, hors ligne)",
+        "bench_correction_ollama": "Ollama (serveur local)",
+        "bench_correction_model": "Modèle ollama",
+        "bench_correction_model_ph": "ex. gemma4:e2b",
+        "bench_correction_host": "Serveur ollama",
+        "bench_correction_launch": "Corriger ce corpus",
+        "bench_correction_no_corpus": "Choisis d'abord un corpus.",
+        "bench_correction_gt_hint": "Le corpus doit porter une transcription à "
+        "part (<nom>.gt.txt) à côté de son ALTO. Sans elle, la référence est "
+        "extraite de l'ALTO lui-même : le correcteur partirait du texte auquel "
+        "on le compare, et le score ne voudrait rien dire.",
         "bench_launching": "Lancement…",
         "bench_status": "État",
         "bench_log": "Journal",
@@ -269,6 +285,22 @@ _STRINGS: dict[str, dict[str, str]] = {
         "bench_desc": "Compose competitors (OCR, OCR→LLM, VLM) and compare them "
         "on a corpus, in a single run. No competitor: demonstration.",
         "bench_run": "Run the benchmark",
+        "bench_correction": "Structured post-correction",
+        "bench_correction_hint": "Corrects an existing ALTO corpus *inside* its "
+        "layout: every line keeps its identifier, so the report can say what was "
+        "changed and what the corrector refused to change.",
+        "bench_correction_producer": "Correction producer",
+        "bench_correction_rules": "Rules (deterministic, offline)",
+        "bench_correction_ollama": "Ollama (local server)",
+        "bench_correction_model": "Ollama model",
+        "bench_correction_model_ph": "e.g. gemma4:e2b",
+        "bench_correction_host": "Ollama server",
+        "bench_correction_launch": "Correct this corpus",
+        "bench_correction_no_corpus": "Pick a corpus first.",
+        "bench_correction_gt_hint": "The corpus must carry a separate "
+        "transcription (<name>.gt.txt) beside its ALTO. Without one, the "
+        "reference is extracted from the ALTO itself: the corrector would start "
+        "from the very text it is scored against, and the score would be void.",
         "bench_launching": "Launching…",
         "bench_status": "Status",
         "bench_log": "Log",

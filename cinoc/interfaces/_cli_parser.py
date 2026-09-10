@@ -16,6 +16,160 @@ vit en couche ``app`` (``CLAUDE.md`` §5 — ``interfaces`` est du transport min
 from __future__ import annotations
 
 import argparse
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:  # pragma: no cover
+    # Type de l'objet rendu par ``add_subparsers`` : ``argparse`` n'en publie
+    # pas d'alias, et la classe n'est pas indiçable à l'exécution. Sous
+    # ``TYPE_CHECKING`` uniquement — c'est du **typage** de la stdlib, pas un
+    # accès à l'état interne d'une lib tierce.
+    _SousCommandes = argparse._SubParsersAction[argparse.ArgumentParser]  # noqa: SLF001
+
+
+def _add_list(subparsers: _SousCommandes) -> None:
+    """Sous-arbre ``cinoc list`` : lire l'état de son installation.
+
+    Un verbe, des **sujets** — moteurs, modèles, profils, prompts. Ce sont les
+    mêmes sondes que celles que le web rend en HTML ; les mettre en texte est un
+    transport, pas une lentille d'analyse (``CLAUDE.md`` §8.4).
+    """
+    list_cmd = subparsers.add_parser(
+        "list",
+        help="Liste moteurs, modèles, profils de normalisation, prompts curés.",
+    )
+    sujets = list_cmd.add_subparsers(dest="topic", required=True)
+
+    sujets.add_parser(
+        "engines",
+        help="Moteurs, segmenteurs et étape NER, avec la cause d'indisponibilité.",
+    )
+
+    modeles = sujets.add_parser(
+        "models", help="Modèles canoniques d'un fournisseur (suggestions)."
+    )
+    modeles.add_argument(
+        "provider",
+        nargs="?",
+        default=None,
+        help="openai, anthropic, mistral, ollama. Omis : tous.",
+    )
+
+    profils = sujets.add_parser(
+        "profiles", help="Profils de normalisation, et leur effet sur un texte."
+    )
+    profils.add_argument(
+        "--preview",
+        default=None,
+        metavar="TEXTE",
+        help="Affiche ce que le profil fait de ce texte (rien n'est persisté).",
+    )
+    profils.add_argument(
+        "--profile", default=None, help="Profil nommé à appliquer à --preview."
+    )
+    profils.add_argument(
+        "--config",
+        default=None,
+        help="Fichier YAML de normalisation custom, appliqué à la volée.",
+    )
+
+    sujets.add_parser("prompts", help="Prompts curés par période.")
+
+
+def _add_corpus(subparsers: _SousCommandes) -> None:
+    """Sous-arbre ``cinoc corpus`` : acquérir un corpus, chercher, découvrir.
+
+    Un **verbe** (``corpus``) plutôt qu'un par source : le §8.4 interdit de
+    multiplier les commandes, et « acquérir un corpus » est **une** capacité,
+    quelle que soit la source d'où elle vient.
+    """
+    corpus_cmd = subparsers.add_parser(
+        "corpus",
+        help="Acquiert un corpus (IIIF, Gallica, eScriptorium, HF, ZIP) et "
+        "écrit son YAML.",
+    )
+    verbes = corpus_cmd.add_subparsers(dest="corpus_command", required=True)
+
+    imp = verbes.add_parser("import", help="Matérialise un corpus depuis une source.")
+    sources = imp.add_subparsers(dest="source", required=True)
+
+    def _commun(parser: argparse.ArgumentParser, *, defaut: str) -> None:
+        """Options que toute source partage : où matérialiser, comment nommer."""
+        parser.add_argument(
+            "--dest",
+            default=defaut,
+            help=f"Dossier où matérialiser les fichiers (défaut : {defaut}/).",
+        )
+        parser.add_argument(
+            "-o",
+            "--output",
+            default=None,
+            help="Fichier YAML du corpus (défaut : <dest>/corpus.yaml).",
+        )
+        parser.add_argument("--name", default=None, help="Nom du corpus.")
+
+    iiif = sources.add_parser("iiif", help="Manifeste IIIF (URL).")
+    iiif.add_argument("manifest_url", help="URL du manifeste IIIF.")
+    iiif.add_argument("--limit", type=int, default=None, help="Borne le nb de pages.")
+    _commun(iiif, defaut="corpus-iiif")
+
+    gallica = sources.add_parser("gallica", help="Document Gallica (ark).")
+    gallica.add_argument("ark", help="Identifiant ark (ex. ark:/12148/bpt6k...).")
+    gallica.add_argument("--limit", type=int, default=None, help="Borne le nb de vues.")
+    gallica.add_argument(
+        "--no-ocr",
+        dest="include_ocr",
+        action="store_false",
+        help="N'importe pas l'OCR de Gallica comme vérité terrain. Sans ce "
+        "drapeau, l'OCR est importé — c'est de l'OCR, pas une transcription "
+        "vérifiée : le savoir change la lecture des scores.",
+    )
+    _commun(gallica, defaut="corpus-gallica")
+
+    escr = sources.add_parser("escriptorium", help="Document eScriptorium (API).")
+    escr.add_argument("base_url", help="URL de l'instance eScriptorium.")
+    escr.add_argument("doc_pk", type=int, help="Identifiant du document.")
+    escr.add_argument("--token", required=True, help="Jeton d'API.")
+    escr.add_argument(
+        "--layer", default="manual", help="Couche de transcription (défaut : manual)."
+    )
+    escr.add_argument("--limit", type=int, default=None, help="Borne le nb de pages.")
+    _commun(escr, defaut="corpus-escriptorium")
+
+    hf = sources.add_parser("hf", help="Dataset HuggingFace (streaming).")
+    hf.add_argument("dataset_id", help="Identifiant du dataset (owner/nom).")
+    hf.add_argument("--split", default="train", help="Split (défaut : train).")
+    hf.add_argument("--limit", type=int, default=None, help="Borne le nb de pages.")
+    _commun(hf, defaut="corpus-hf")
+
+    cure = sources.add_parser("curated", help="Dataset curé Cinoc publié sur HF.")
+    cure.add_argument("repo_id", help="Dépôt du dataset curé (owner/nom).")
+    cure.add_argument(
+        "--revision", default=None, help="Révision à épingler (repro exacte)."
+    )
+    _commun(cure, defaut="corpus-cure")
+
+    zip_cmd = sources.add_parser("zip", help="Archive ZIP locale (images + GT).")
+    zip_cmd.add_argument("archive", help="Fichier .zip du corpus.")
+    _commun(zip_cmd, defaut="corpus-zip")
+
+    cherche = verbes.add_parser(
+        "search", help="Cherche dans le catalogue HTR-United."
+    )
+    cherche.add_argument("query", nargs="?", default="", help="Termes de recherche.")
+    cherche.add_argument("--language", default=None, help="Filtre par langue.")
+    cherche.add_argument(
+        "--limit", type=int, default=20, help="Entrées affichées (défaut : 20)."
+    )
+
+    trouve = verbes.add_parser(
+        "discover", help="Liste les datasets curés Cinoc d'un compte HuggingFace."
+    )
+    trouve.add_argument(
+        "--author",
+        default=None,
+        help="Compte HF. Par défaut : CINOC_HF_AUTHOR, puis un jeton HF, puis "
+        "le propriétaire du SPACE_ID — comme la page Bibliothèque.",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -81,6 +235,20 @@ def build_parser() -> argparse.ArgumentParser:
         "portent le dernier run ; le bilan de variance va dans "
         "<sortie>.variance.json. Incompatible avec --resume-dir : rejouer un "
         "cache mesurerait le cache.",
+    )
+    run_cmd.add_argument(
+        "--check",
+        action="store_true",
+        help="Valide le fichier et affiche le plan, SANS rien exécuter. Une "
+        "spec de benchmark engage des appels facturés : la relire d'abord "
+        "n'est pas un confort.",
+    )
+    run_cmd.add_argument(
+        "--alto-dir",
+        dest="alto_dir",
+        default=None,
+        help="Écrit les ALTO produits par le run dans ce dossier. Sans lui, un "
+        "ALTO demandé par la spec meurt avec le workspace temporaire.",
     )
     run_cmd.add_argument(
         "--workers",
@@ -154,6 +322,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Prompt de transcription pour un reconnaisseur VLM (zero-shot).",
     )
     hybrid_cmd.add_argument(
+        "--segment-only",
+        dest="segment_only",
+        action="store_true",
+        help="S'arrête après la segmentation : écrit un LAYOUT par page au "
+        "lieu d'un ALTO. Relisible par `precomputed_layout` — on segmente une "
+        "fois, on rejoue plusieurs reconnaissances dessus.",
+    )
+    hybrid_cmd.add_argument(
         "--segmenter-endpoint",
         dest="segmenter_endpoint",
         default=None,
@@ -212,6 +388,8 @@ def build_parser() -> argparse.ArgumentParser:
         default=1,
         help="Exécute N fois et écrit une fourchette (≥5 recommandé).",
     )
+    _add_corpus(subparsers)
+    _add_list(subparsers)
     serve_cmd = subparsers.add_parser(
         "serve", help="Sert la vitrine web des rapports (extra [serve])."
     )
@@ -243,6 +421,8 @@ SUBCOMMANDS: tuple[str, ...] = (
     "history",
     "hybrid",
     "compare",
+    "corpus",
+    "list",
     "serve",
 )
 

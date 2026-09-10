@@ -31,6 +31,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from cinoc.app.corpus_import import materialize_corpus
 from cinoc.app.security import validated_path
 from cinoc.domain.artifacts import ArtifactType
 from cinoc.domain.corpus import CorpusSpec
@@ -54,6 +55,14 @@ _GT_EXT = frozenset({".txt"})
 #: texte d'ordre de lecture à l'ingestion (cf. ``_xml_to_text``).
 _GT_XML_EXT = frozenset({".xml"})
 _IMAGE_MAGIC = (b"\x89PNG\r\n\x1a\n", b"\xff\xd8\xff", b"II*\x00", b"MM\x00*")
+#: Clé de métadonnée disant **d'où vient** la vérité terrain d'un document :
+#: ``"text"`` (un ``.txt`` fourni), ``"layout"`` (dérivée de l'ALTO/PAGE du même
+#: document). La distinction n'est pas cosmétique : une GT dérivée de l'ALTO est
+#: le texte que le pipeline **part corriger**, donc la comparer à lui-même donne
+#: un zéro par construction. Le lanceur de correction s'en sert pour refuser
+#: (cf. ``correction_planning.ground_truth_is_its_own_source``).
+GT_SOURCE_KEY = "gt_source"
+
 #: Basename sûr → garantit un ``DocumentRef.id`` valide (pas d'espace/accent/slash).
 _SAFE_NAME = re.compile(r"^[A-Za-z0-9_.\-]+$")
 
@@ -152,11 +161,13 @@ def _pair_documents(written: dict[str, Path]) -> tuple[DocumentRef, ...]:
         if Path(base).suffix.lower() not in _IMAGE_EXT:
             continue
         stem = Path(base).stem
+        refs, source = _ground_truth_for(stem, written)
         documents.append(
             DocumentRef(
                 id=stem,
                 image_uri=str(path),
-                ground_truths=_ground_truth_for(stem, written),
+                ground_truths=refs,
+                metadata={GT_SOURCE_KEY: source} if source else {},
             )
         )
     return tuple(documents)
@@ -164,8 +175,8 @@ def _pair_documents(written: dict[str, Path]) -> tuple[DocumentRef, ...]:
 
 def _ground_truth_for(
     stem: str, written: dict[str, Path]
-) -> tuple[GroundTruthRef, ...]:
-    """Vérité-terrain ``RAW_TEXT`` d'un radical, par priorité de format.
+) -> tuple[tuple[GroundTruthRef, ...], str]:
+    """Vérité-terrain ``RAW_TEXT`` d'un radical, **et sa provenance**.
 
     1. ``.txt`` manuel (``<rad>.gt.txt`` puis ``<rad>.txt``) — chemin direct.
     2. À défaut, ALTO/PAGE (``<rad>.gt.xml`` puis ``<rad>.xml``) : texte d'ordre
@@ -173,16 +184,23 @@ def _ground_truth_for(
        scoring), matérialisé en ``<rad>.gt.txt`` dérivé → le GT reste un
        ``RAW_TEXT``, un seul chemin d'évaluation, déterministe.
     3. Sinon ``()`` : le run reste exécutable, simplement non scoré.
+
+    La **provenance** est retournée avec la référence (``"text"`` / ``"layout"``
+    / ``""``) : elle seule distingue une transcription fournie d'un texte
+    **extrait de l'ALTO du document**, et cette différence décide si un run de
+    post-correction mesure quelque chose ou se compare à lui-même.
     """
     txt = next((c for c in (f"{stem}.gt.txt", f"{stem}.txt") if c in written), None)
     if txt is not None:
-        return (GroundTruthRef(type=ArtifactType.RAW_TEXT, uri=str(written[txt])),)
+        ref = GroundTruthRef(type=ArtifactType.RAW_TEXT, uri=str(written[txt]))
+        return (ref,), "text"
     xml = next((c for c in (f"{stem}.gt.xml", f"{stem}.xml") if c in written), None)
     if xml is None:
-        return ()
+        return (), ""
     derived = written[xml].with_name(f"{stem}.gt.txt")
     derived.write_text(_xml_to_text(written[xml]), encoding="utf-8")
-    return (GroundTruthRef(type=ArtifactType.RAW_TEXT, uri=str(derived)),)
+    ref = GroundTruthRef(type=ArtifactType.RAW_TEXT, uri=str(derived))
+    return (ref,), "layout"
 
 
 def _xml_to_text(path: Path) -> str:
@@ -245,18 +263,15 @@ class CorpusStore:
         Gallica…). Le store reste un **registre** : il alloue l'id et le dossier,
         sans connaître le format d'entrée.
 
-        **Atomicité (F3)** : si ``builder`` échoue en cours de route (réseau,
-        source non conforme, annulation), le dossier **partiellement** matérialisé
-        est nettoyé — pas de corpus à demi importé laissé sous ``base_dir``, et
-        rien n'est enregistré.
+        **Atomicité (F3)** : déléguée à ``materialize_corpus`` — un builder qui
+        échoue en cours de route ne laisse pas de dossier à demi importé, et rien
+        n'est enregistré. Le store n'ajoute que ce qui lui est propre :
+        l'allocation d'un identifiant et l'inscription au registre. La garantie,
+        elle, n'a **qu'une** implémentation, partagée avec la CLI.
         """
         corpus_id = uuid.uuid4().hex
         dest = self._base / corpus_id
-        try:
-            spec = builder(dest)
-        except BaseException:
-            shutil.rmtree(dest, ignore_errors=True)
-            raise
+        spec = materialize_corpus(dest, builder)
         with self._lock:
             self._corpora[corpus_id] = spec
         return corpus_id, spec
@@ -281,6 +296,7 @@ class CorpusStore:
 
 
 __all__ = [
+    "GT_SOURCE_KEY",
     "MAX_ZIP_BYTES",
     "CorpusStore",
     "CorpusUploadError",

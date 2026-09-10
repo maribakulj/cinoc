@@ -228,6 +228,36 @@ def ner_status(*, has_module: ModuleProbe = _module_present) -> EngineStatus:
     return EngineStatus(kind="ner", label="NER (spaCy)", available=ok, detail=detail)
 
 
+def correction_status(*, has_module: ModuleProbe = _module_present) -> EngineStatus:
+    """Disponibilité de la **post-correction structurée** (extra ``[saknussemm]``).
+
+    Catégorie distincte des moteurs, comme la NER : c'est une brique de
+    post-traitement (``LAYOUT → LAYOUT``), pas un moteur de transcription. La
+    bibliothèque n'étant pas publiée sur PyPI, elle s'installe depuis son dépôt —
+    le détail le dit, parce qu'un ``pip install cinoc[saknussemm]`` qui échoue
+    sans explication est le pire des silences.
+
+    Le **producteur** de corrections, lui, est choisi au run : ``rules``
+    (déterministe, hors ligne) ou ``ollama`` (serveur local). Cette sonde ne
+    répond que de la bibliothèque ; un serveur ollama injoignable est un échec
+    d'étape nommé, à l'exécution.
+    """
+    if has_module("saknussemm"):
+        detail, ok = "prêt (saknussemm installé)", True
+    else:
+        detail, ok = (
+            "saknussemm non installé (extra [saknussemm] — depuis le dépôt, "
+            "le paquet n'est pas publié sur PyPI)",
+            False,
+        )
+    return EngineStatus(
+        kind="saknussemm",
+        label="Post-correction structurée",
+        available=ok,
+        detail=detail,
+    )
+
+
 def segmenter_statuses(
     *, has_module: ModuleProbe = _module_present
 ) -> tuple[EngineStatus, ...]:
@@ -319,6 +349,7 @@ __all__ = [
     "EngineStatus",
     "PUBLIC_ENGINE_KINDS",
     "StatusProvider",
+    "correction_status",
     "engine_statuses",
     "ner_status",
     "segmenter_statuses",

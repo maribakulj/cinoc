@@ -32,11 +32,16 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from cinoc.adapters.storage import JobStore
 from cinoc.app.corpus_upload import CorpusStore
+from cinoc.app.correction_planning import (
+    ground_truth_is_its_own_source,
+    plan_correction_run,
+)
 from cinoc.app.demo import demo_spec_builder
 from cinoc.app.engines import PUBLIC_ENGINE_KINDS, StatusProvider
 from cinoc.app.jobs import JobRunner
 from cinoc.app.run_planning import Competitor, RunPlanningError, plan_benchmark_run
 from cinoc.domain.corpus import CorpusSpec
+from cinoc.domain.errors import CinocError
 from cinoc.interfaces.web.security.csrf import csrf_protect
 
 
@@ -53,6 +58,25 @@ class LaunchRequest(BaseModel):
     #: Nom d'un profil de métriques (``standard``/``essentiel``/``philologie``) :
     #: choisit les colonnes de classement de la vue ``text``. Inconnu → 422 (plan).
     metric_profile: str | None = Field(default=None, max_length=64)
+
+
+class CorrectionRequest(BaseModel):
+    """Corps d'un run de **post-correction structurée** : un corpus, un producteur.
+
+    Pas un ``Competitor`` : la correction n'est pas un moteur de plus dans la
+    file du composeur, c'est une **autre forme de run** (ALTO déjà là → corrigé),
+    planifiée par ``plan_correction_run``. Elle a donc sa route, comme la
+    segmentation a la sienne.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    corpus_id: str
+    #: ``rules`` (déterministe, hors ligne) ou ``ollama`` (serveur local).
+    producer: str = Field(default="rules", max_length=32)
+    #: Modèle ollama — **exigé** par le planificateur si ``producer == "ollama"``.
+    model: str | None = Field(default=None, max_length=128)
+    host: str = Field(default="http://localhost:11434", max_length=2048)
 
 
 def _referenced_kinds(comp: Competitor) -> tuple[str, ...]:
@@ -109,6 +133,7 @@ def build_runs_router(
     statuses: StatusProvider,
     segmenters: StatusProvider | None = None,
     ner_available: Callable[[], bool] = lambda: True,
+    correction_available: Callable[[], bool] = lambda: True,
     public_mode: bool = False,
 ) -> APIRouter:
     """Construit le routeur du lanceur (monté par ``create_app``).
@@ -121,6 +146,11 @@ def build_runs_router(
     concurrent NER demandé sans la lib tombe en ``409`` **avant** le lancement
     (plutôt qu'un échec d'étape en cours de run). spaCy étant local first-party,
     la NER reste autorisée en mode public.
+
+    ``correction_available`` fait de même pour la **post-correction structurée**
+    (extra ``[saknussemm]``). Elle est en revanche **refusée en mode public** :
+    son producteur utile parle à un serveur LLM local, qu'un Space exposé n'a
+    pas, et le producteur ``rules`` seul ne justifie pas d'ouvrir la surface.
     """
     router = APIRouter()
 
@@ -209,6 +239,63 @@ def build_runs_router(
         except RunPlanningError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         return {"job_id": runner.launch(build)}
+
+
+    @router.post(
+        "/api/runs/correction",
+        status_code=201,
+        dependencies=[Depends(csrf_protect)],
+    )
+    def launch_correction(payload: CorrectionRequest) -> dict[str, str]:
+        """Lance une **post-correction structurée** sur un corpus d'ALTO.
+
+        Ordre de garde, du plus général au plus spécifique — chaque refus nomme
+        sa cause, aucun ne retombe sur un défaut muet :
+
+        1. mode public → ``403`` (le producteur utile exige un LLM local) ;
+        2. bibliothèque absente → ``409`` (avant le lancement, pas en plein run) ;
+        3. corpus introuvable → ``404`` ;
+        4. **vérité terrain dérivée de l'ALTO** → ``422``. C'est le refus qui
+           compte : sans lui, le banc compare le texte à lui-même et publie un
+           verdict inversé. Voir ``ground_truth_is_its_own_source``.
+        5. producteur incohérent (``ollama`` sans modèle) → ``422`` (plan).
+        """
+        if public_mode:
+            raise HTTPException(
+                status_code=403,
+                detail="post-correction refusée en mode public (elle suppose un "
+                "serveur LLM local).",
+            )
+        if not correction_available():
+            raise HTTPException(
+                status_code=409,
+                detail="post-correction indisponible : extra [saknussemm] non "
+                "installé (le paquet n'est pas publié sur PyPI, il s'installe "
+                "depuis son dépôt).",
+            )
+        corpus = corpus_store.get(payload.corpus_id)
+        if corpus is None:
+            raise HTTPException(status_code=404, detail="corpus introuvable.")
+        if ground_truth_is_its_own_source(corpus):
+            raise HTTPException(
+                status_code=422,
+                detail="la vérité terrain de ce corpus est extraite de son "
+                "propre ALTO : le correcteur partirait du texte auquel on le "
+                "compare, et le CER vaudrait zéro par construction. Dépose une "
+                "transcription à part (<nom>.gt.txt) à côté de chaque ALTO.",
+            )
+        run_id = f"web-corr-{uuid.uuid4().hex[:12]}"
+        try:
+            spec = plan_correction_run(
+                corpus,
+                run_id,
+                producer=payload.producer,
+                model=payload.model or "",
+                host=payload.host,
+            )
+        except CinocError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return {"job_id": runner.launch(lambda _ws: spec)}
 
     @router.post(
         "/api/runs/config", dependencies=[Depends(csrf_protect)]

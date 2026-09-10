@@ -3,7 +3,9 @@
 La règle, et la distinction qui la rend applicable :
 
 * une **capacité** — importer un corpus, savoir quels moteurs sont disponibles,
-  exporter un ALTO — doit exister des **deux** côtés ;
+  exporter un ALTO — doit exister des **deux** côtés, et le contrôle va **dans
+  les deux sens** : :data:`PARITE` (chaque route web a son pendant CLI) et
+  :data:`PARITE_CLI` (chaque commande a son pendant web) ;
 * un **transport** — SSE, CSRF, une page HTML, servir un fichier déjà produit —
   n'a pas à être dupliqué. L'équivalent CLI de « suivre la progression en SSE »
   est stdout, pas une seconde implémentation.
@@ -33,30 +35,15 @@ from cinoc.interfaces._cli_parser import SUBCOMMANDS
 
 #: Dettes connues : identifiant → ce qui la ferme. Une entrée ici est un
 #: engagement, pas une excuse ; la liste ne doit que rétrécir.
-DETTES: dict[str, str] = {
-    # Acquisition de corpus. `app/corpus_import.py` porte déjà les cinq
-    # importeurs et n'a qu'un seul appelant : le routeur web. La CLI n'a donc
-    # rien à ré-implémenter — il lui manque une **destination** : là où le web
-    # matérialise dans un `CorpusStore` serveur indexé par id, la CLI doit
-    # écrire un dossier + un `corpus.yaml` relisible par `cinoc run`.
-    "corpus": "tranche b — `cinoc corpus import|search|discover`",
-    # Introspection. `app/engines.py` expose déjà `engine_statuses`,
-    # `installed_ollama_models`, `normalization_profiles`, `curated_prompts` ;
-    # le web les met en HTML. La CLI doit les mettre en texte — deux transports
-    # d'une même capacité, aucune logique nouvelle.
-    "introspection": "tranche c — `cinoc list engines|models|profiles|prompts`",
-    # Valider une configuration sans l'exécuter. Le web valide un
-    # `LaunchRequest` ; l'équivalent CLI est de valider le YAML et d'afficher le
-    # plan. Un drapeau, pas une commande.
-    "run-check": "tranche d — `cinoc run --check`",
-    # Segmentation seule + aperçu de mise en page. `plan_segmentation_run`
-    # existe en couche `app` et n'a **aucun** appelant CLI.
-    "segmentation": "tranche d — `cinoc hybrid --segment-only`",
-    # Export ALTO d'un run YAML. Le sink qui persiste les `ALTO_XML` vit dans
-    # `JobRunner` (chemin web) ; un `cinoc run` qui demande le type produit
-    # l'artefact, qui meurt ensuite avec le workspace.
-    "alto-export": "tranche d — `cinoc run --alto-dir`",
-}
+#:
+#: Dettes connues : identifiant → ce qui la ferme.
+#:
+#: **Vide.** Les cinq dettes ouvertes par D-224 (sens web → CLI) sont fermées par
+#: D-225→D-227, et `correction-web` (sens CLI → web) par D-229. Le dictionnaire
+#: reste : c'est lui qui rend une nouvelle dette *déclarable*, donc visible et
+#: datée, plutôt que tolérée en silence — comme l'a été pendant des mois
+#: l'absence de surface web de la post-correction.
+DETTES: dict[str, str] = {}
 
 #: Route → statut. Trois formes, et trois seulement :
 #: ``"transport"`` · ``"cli:<sous-commande>"`` · ``"dette:<identifiant>"``.
@@ -68,25 +55,43 @@ PARITE: dict[str, str] = {
     # --- Pages qui portent une capacité, pas seulement un rendu. -------------
     # `/library` expose le catalogue HTR-United et la découverte des datasets
     # curés : de la **découverte de corpus**, pas de la mise en page.
-    "GET /library": "dette:corpus",
-    "GET /engines": "dette:introspection",
+    "GET /library": "cli:corpus",
+    "GET /engines": "cli:list",
     "GET /history": "cli:history",
-    # --- Acquisition de corpus : rien côté CLI aujourd'hui. ------------------
-    "POST /api/corpus": "dette:corpus",
-    "POST /api/corpus/import/iiif": "dette:corpus",
-    "POST /api/corpus/import/escriptorium": "dette:corpus",
-    "POST /api/corpus/import/gallica": "dette:corpus",
-    "POST /api/corpus/import/huggingface": "dette:corpus",
-    "POST /api/corpus/import/curated": "dette:corpus",
-    "DELETE /api/corpus/{corpus_id}": "dette:corpus",
+    # --- Acquisition de corpus. ----------------------------------------------
+    # `cinoc corpus import <source>` appelle **les mêmes** builders que ces
+    # routes ; seule la destination change (dossier + `corpus.yaml` au lieu d'un
+    # store serveur indexé par id).
+    "POST /api/corpus": "cli:corpus",
+    "POST /api/corpus/import/iiif": "cli:corpus",
+    "POST /api/corpus/import/escriptorium": "cli:corpus",
+    "POST /api/corpus/import/gallica": "cli:corpus",
+    "POST /api/corpus/import/huggingface": "cli:corpus",
+    "POST /api/corpus/import/curated": "cli:corpus",
+    # Supprimer : le corpus d'une CLI **est** un dossier, et l'effacer relève du
+    # système de fichiers. Fournir un `cinoc corpus rm` doublerait `rm -rf` sans
+    # rien garantir de plus. Le web, lui, a besoin de la route parce que son
+    # store est un registre serveur que l'utilisateur ne peut pas atteindre.
+    "DELETE /api/corpus/{corpus_id}": "transport",
     # --- Introspection. ------------------------------------------------------
-    "GET /api/models/{model_provider}": "dette:introspection",
-    "POST /api/normalization/preview": "dette:introspection",
+    # Mêmes sondes de la couche `app` : le web les rend en HTML, `cinoc list`
+    # en texte. L'aperçu de normalisation est `cinoc list profiles --preview`,
+    # sans persistance des deux côtés.
+    "GET /api/models/{model_provider}": "cli:list",
+    "POST /api/normalization/preview": "cli:list",
     # --- Lancement et suivi d'un run. ----------------------------------------
     # `cinoc run` est **plus général** que le composeur web : il accepte un
     # `RunSpec` complet là où le web assemble des `Competitor`.
     "POST /api/runs": "cli:run",
-    "POST /api/runs/config": "dette:run-check",
+    # Valider avant de lancer : `cinoc run --check` relit la spec, affiche
+    # le plan et n'exécute rien — une spec de benchmark engage des appels
+    # facturés.
+    "POST /api/runs/config": "cli:run",
+    # La correction structurée n'est pas un concurrent de plus dans la file du
+    # composeur : c'est une **autre forme de run** (un ALTO déjà là qu'on
+    # corrige), planifiée par `plan_correction_run`. Elle a donc sa route,
+    # comme la segmentation a la sienne.
+    "POST /api/runs/correction": "cli:correct",
     # L'état d'un job, son annulation et son flux d'événements n'existent que
     # parce que le web exécute **en arrière-plan**. En CLI le run est au premier
     # plan : la progression va sur stdout, l'annulation est Ctrl-C (coopérative,
@@ -95,8 +100,11 @@ PARITE: dict[str, str] = {
     "POST /api/runs/{job_id}/cancel": "transport",
     "GET /api/runs/{job_id}/events": "transport",
     # --- Segmentation. -------------------------------------------------------
-    "POST /api/segmentation/run": "dette:segmentation",
-    "GET /api/segmentation/preview": "dette:segmentation",
+    # `cinoc hybrid --segment-only` écrit un LAYOUT par page, relisible par
+    # `precomputed_layout`. L'« aperçu » web est le rendu de ce même LAYOUT :
+    # côté CLI le fichier **est** l'aperçu, on l'ouvre avec ses outils.
+    "POST /api/segmentation/run": "cli:hybrid",
+    "GET /api/segmentation/preview": "cli:hybrid",
     # Sert une image du store serveur : transport pur (en CLI, le fichier est
     # déjà sur le disque de l'utilisateur).
     "GET /api/segmentation/{seg_id}/image": "transport",
@@ -105,7 +113,7 @@ PARITE: dict[str, str] = {
     # `cinoc run`, et le bundle dossier est `--report-dir`.
     "GET /reports/{name}": "transport",
     "GET /reports/{name}/bundle.zip": "cli:run",
-    "GET /reports/{name}/alto.zip": "dette:alto-export",
+    "GET /reports/{name}/alto.zip": "cli:run",
 }
 
 
@@ -179,12 +187,96 @@ def test_declared_cli_counterparts_exist() -> None:
     )
 
 
+#: Sous-commande CLI → statut, dans l'autre sens. Trois formes :
+#: ``"web:<route>"`` · ``"cli-only: <raison>"`` · ``"dette:<identifiant>"``.
+#:
+#: **Pourquoi la table symétrique.** La première version de ce garde-fou ne
+#: regardait que web → CLI, parce que c'est le manque qu'on venait de constater.
+#: Un contrôle unidirectionnel laisse l'autre sens dériver exactement pareil — et
+#: c'était déjà le cas : `cinoc correct` existait depuis des mois sans surface
+#: web, sous la forme d'un « arbitrage à rendre » que rien ne rappelait.
+PARITE_CLI: dict[str, str] = {
+    # Le run de démonstration est ce que lance `POST /api/runs` sans concurrent.
+    "demo": "web:POST /api/runs",
+    "run": "web:POST /api/runs",
+    "hybrid": "web:POST /api/runs",
+    "corpus": "web:POST /api/corpus",
+    "list": "web:GET /engines",
+    "history": "web:GET /history",
+    # Le rapport autonome embarque son propre comparateur (client-side, sans
+    # réseau) : la « route » du web est celle qui sert ce rapport.
+    "compare": "web:GET /reports/{name}",
+    # `serve` **est** le web : lui chercher un pendant web n'aurait pas de sens.
+    "serve": "cli-only: c'est la commande qui démarre l'app web.",
+    "correct": "web:POST /api/runs/correction",
+}
+
+
+def _cli_status_targets() -> set[str]:
+    """Routes citées par :data:`PARITE_CLI`, sans le préfixe ``web:``."""
+    return {
+        statut.removeprefix("web:")
+        for statut in PARITE_CLI.values()
+        if statut.startswith("web:")
+    }
+
+
+def test_every_cli_command_has_a_declared_counterpart() -> None:
+    """Aucune commande hors table, aucune entrée orpheline."""
+    commandes, declarees = set(SUBCOMMANDS), set(PARITE_CLI)
+    non_declarees = sorted(commandes - declarees)
+    fantomes = sorted(declarees - commandes)
+    assert not non_declarees, (
+        f"commandes sans statut de parité : {non_declarees}. Déclare pour "
+        "chacune la route web équivalente (`web:<route>`), pourquoi elle n'a de "
+        "sens qu'en CLI (`cli-only: …`), ou la dette (`dette:<id>`)."
+    )
+    assert not fantomes, (
+        f"entrées de parité sans commande correspondante : {fantomes}."
+    )
+
+
+def test_cli_statuses_are_well_formed() -> None:
+    mauvais = {
+        commande: statut
+        for commande, statut in PARITE_CLI.items()
+        if not statut.startswith(("web:", "cli-only:", "dette:"))
+    }
+    assert not mauvais, (
+        f"statuts hors grammaire : {mauvais}. Trois formes seulement — "
+        "'web:<route>', 'cli-only: <raison>', 'dette:<identifiant>'."
+    )
+
+
+def test_declared_web_counterparts_exist() -> None:
+    """Une route citée qui n'existe pas cacherait la dette au lieu de la dire."""
+    inconnues = sorted(_cli_status_targets() - _web_routes())
+    assert not inconnues, (
+        f"routes citées mais inexistantes : {inconnues}. "
+        "Elles ont été renommées ou retirées."
+    )
+
+
+def test_a_cli_only_command_says_why() -> None:
+    """« CLI seulement » sans raison est une dette déguisée."""
+    muettes = sorted(
+        commande
+        for commande, statut in PARITE_CLI.items()
+        if statut.startswith("cli-only:")
+        and len(statut.removeprefix("cli-only:").strip()) < 15
+    )
+    assert not muettes, (
+        f"« cli-only » sans justification : {muettes}. Écris pourquoi cette "
+        "capacité n'a de sens qu'en ligne de commande."
+    )
+
+
 def test_debts_are_declared_and_none_is_stale() -> None:
     """Chaque dette porte son identifiant **et** ce qui la ferme, dans les deux
     sens : pas de dette non déclarée, pas de dette déclarée puis oubliée."""
     citees = {
         statut.removeprefix("dette:")
-        for statut in PARITE.values()
+        for statut in (*PARITE.values(), *PARITE_CLI.values())
         if statut.startswith("dette:")
     }
     non_declarees = sorted(citees - set(DETTES))

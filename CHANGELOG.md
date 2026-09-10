@@ -41,8 +41,20 @@ architecture 8 couches, surface fonctionnelle complétée incrémentalement.
   longitudinal, page de segmentation, mode public *fail-closed*.
 - **Extensibilité** : point d'extension unique (briques de pipeline) via
   entry-points `cinoc.modules`, découverte runtime, fail-closed en mode public.
-- **CLI** : `demo`, `run`, `compare`, `serve`, `history` ; export JSON/CSV ;
-  export JSONL conforme HIPE-OCRepair.
+- **Post-correction structurée** (`ALTO → ALTO`) : corrige un ALTO existant
+  **dans** sa mise en page — chaque ligne garde son identifiant, donc
+  l'appariement avant/après est *connu* au lieu d'être deviné. Producteurs
+  déterministe (règles, hors ligne) ou LLM local (Ollama). Le rapport montre
+  ce qui a été changé **et ce que le correcteur a refusé de changer**
+  (artefact `DECISIONS`), avec des métriques d'identité de ligne appariées
+  par identifiant. Disponible en CLI (`cinoc correct`) **et** au lanceur web.
+- **CLI** : `demo`, `run`, `correct`, `corpus`, `list`, `hybrid`, `compare`,
+  `history`, `serve` ; export JSON/CSV ; export JSONL conforme
+  HIPE-OCRepair ; validation à blanc (`--check`) et fourchette sur runs
+  répétés (`--repeat`). **Toute capacité de l'app web est accessible en
+  ligne de commande**, et réciproquement — vérifié mécaniquement.
+- **Exemple exécutable** : `examples/config.yaml`, un run complet qui tourne
+  sans moteur ni réseau.
 
 ### Sécurité
 

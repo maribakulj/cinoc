@@ -150,16 +150,79 @@ A remote segmenter needs no local extra — it delegates to a HuggingFace object
 
 ```bash
 cinoc demo  --output report.html                 # demo report, no engine required
+cinoc corpus import gallica ark:/12148/bpt6k5619759j  # fetch a corpus, write corpus.yaml
+cinoc run   config.yaml --check                  # validate + print the plan, run nothing
 cinoc run   config.yaml -o report.html           # run a benchmark described in YAML
 cinoc run   config.yaml --report-dir bundle/     # folder report (HTML + separate images)
 cinoc run   config.yaml --json run.json          # also export the machine-readable RunResult
+cinoc run   config.yaml --alto-dir alto/         # also keep the ALTO the run produced
 cinoc hybrid images/ --out alto/                 # segment → per-block OCR → one ALTO per page
+cinoc hybrid images/ --segment-only --out seg/   # stop at the layout, one LAYOUT per page
 cinoc correct alto/ -o report.html               # post-correct existing ALTO, inside the layout
 cinoc compare a.json b.json -o diff.html         # compare two runs (deltas)
 cinoc history runs.db --pipeline tesseract       # one pipeline's series over time
 cinoc history runs.db --threshold 0.01           # or: which pipelines regressed
 cinoc serve --port 8080                          # local web app
 ```
+
+### Knowing what your install can do
+
+The `/engines` page, the composer's model dropdowns and the normalisation preview all read probes that live in the `app` layer. `cinoc list` reads the same ones, in text:
+
+```bash
+cinoc list engines                 # engines, segmenters, NER — and *why* one is unavailable
+cinoc list models anthropic        # canonical model suggestions, vision flagged
+cinoc list profiles                # the normalisation profiles
+cinoc list prompts                 # the curated period prompts
+```
+
+An unavailable engine is never hidden: it says what it needs — an extra, a binary, an API key — instead of quietly not being there.
+
+A profile is judged on a text, not on its name, so you can try one before committing a run to it:
+
+```bash
+cinoc list profiles --preview "Il eſtoit vne fois" --profile heritage
+cinoc list profiles --preview "ABC" --config my-normalisation.yaml
+```
+
+Nothing is persisted — a custom config is applied on the fly, exactly as in the web preview.
+
+### The run config
+
+`cinoc run` takes a full `RunSpec` in YAML — a corpus, candidate pipelines, and the views that score them. A **runnable, commented example** ships with the repo:
+
+```bash
+cinoc run examples/config.yaml --check     # read the plan first
+cinoc run examples/config.yaml -o report.html
+```
+
+It needs **no engine and no network**: it replays frozen outputs through `precomputed`, so it works before you install anything. Swap `precomputed:<label>` for `tesseract`, `openai`, `kraken`… for a real run. A test loads *and runs* every example in `examples/`, so they cannot go stale.
+
+Two flags worth knowing. `--check` validates the file and prints what would run without executing it — a benchmark spec commits billed API calls and hours of compute, so reading it first is not a luxury. `--alto-dir` keeps the ALTO a run produced: without it, an ALTO your spec asked for dies with the temporary workspace.
+
+`cinoc hybrid --segment-only` stops after segmentation and writes one `<doc>.layout.json` per page — exactly what `precomputed_layout` reads back, so you can segment once and then compare several recognisers on the same layout.
+
+### Getting a corpus
+
+Everything the web app can fetch, the CLI can fetch — same importers, same code, different destination. The web materialises into a server-side store; `cinoc corpus` materialises into **a folder you choose**, next to a `corpus.yaml`:
+
+```bash
+cinoc corpus import iiif <manifest-url>       --dest corpus/   # any IIIF manifest
+cinoc corpus import gallica ark:/12148/...    --dest corpus/   # Gallica, --no-ocr to skip its OCR
+cinoc corpus import escriptorium <url> <pk>   --token ...      # an eScriptorium document
+cinoc corpus import hf <owner/dataset>        --split train    # a HuggingFace dataset
+cinoc corpus import curated <owner/dataset>   --revision ...   # a curated Cinoc dataset, pinned
+cinoc corpus import zip corpus.zip                             # a local archive
+
+cinoc corpus search "presse"        # the HTR-United catalogue
+cinoc corpus discover               # your own curated datasets on HuggingFace
+```
+
+The written `corpus.yaml` holds the `corpus:` key of a run config, with **paths relative to itself** — move or archive the folder and it still resolves. Complete it with `pipelines:` and `evaluation:`, or paste its block into an existing config, then `cinoc run` it.
+
+Two flags carry the honesty of the measurement: `--no-ocr` on Gallica (its OCR is OCR, not a verified transcription — importing it as ground truth changes how every score reads), and `--revision` on a curated dataset (pins the exact data a run was measured against).
+
+An import is **atomic**: if it fails halfway — network, non-conforming source — the partially materialised folder is removed rather than left as a half corpus.
 
 `cinoc correct` takes a folder of `<name>.xml` + `<name>.png` pairs and benchmarks a post‑corrector on them. Two options carry the honesty of the measurement:
 
@@ -178,6 +241,7 @@ cinoc correct alto/ --repeat 5                   # publish a range, never a lone
 
 - **Library** — prepare a corpus: drag‑and‑drop ZIP upload, or import from **IIIF / Gallica / eScriptorium / HuggingFace / HTR‑United**. Your curated Cinoc datasets (tagged `cinoc-corpus`) appear **automatically** — your handle is resolved from the Space (`SPACE_ID`) or an HF token, with `CINOC_HF_AUTHOR` as an explicit override; images stay as revision‑pinned remote references (a static‑IIIF layout served from the HF repo), fetched automatically — SSRF‑hardened, size‑capped — when a run needs the pixels.
 - **Benchmark** — the composer: pick a corpus, add competitors (OCR, OCR→LLM, VLM, **Hybrid**), launch (live progress over SSE). The **Hybrid** mode composes *segmenter → per‑region OCR/VLM → assembled text*, scored side‑by‑side with flat pipelines; a **layout preview** panel shows the detected regions before you launch. (There is no separate segmentation tab — it lives here.)
+- **Structured post-correction** — point it at a corpus of existing ALTO and correct it *inside* the layout, with the same producers as `cinoc correct` (offline rules, or a local LLM through Ollama). The corpus must carry a **separate** transcription beside its ALTO: without one the reference is extracted from the ALTO itself, the corrector would start from the very text it is scored against, and the launcher refuses the run rather than publish a meaningless number.
 - **Reports / History** — browse rendered reports and longitudinal trends.
 
 By default an instance runs its engines with the operator's own key (no gate). The **opt‑in** public mode (`CINOC_PUBLIC_MODE=true`) makes a deployment *fail‑closed* — only the free first‑party base (Tesseract — no key, no billed call) runs; cloud engines and third‑party plugins are refused (`403`) — for protecting a key on a *public* Space. See [`deploy/`](deploy/) for the HuggingFace Space image.
