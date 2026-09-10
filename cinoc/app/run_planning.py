@@ -27,7 +27,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from cinoc.app.engines import EngineStatus
+from cinoc.app.engines import EngineStatus, providers_for_mode
 from cinoc.domain.artifacts import ArtifactType
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.errors import CinocError
@@ -51,10 +51,21 @@ _OCR_ENGINES = frozenset(
         "mistral_ocr", "google_vision", "azure_di",
     }
 )
-#: Fournisseurs de post-correction LLM (mode ``text_only``).
-_LLM_ENGINES = frozenset({"openai", "anthropic", "mistral", "ollama"})
-#: Fournisseurs **vision** (modes ``text_and_image`` et ``zero_shot``).
-_VLM_ENGINES = frozenset({"openai", "anthropic", "mistral"})
+#: Fournisseurs par mode — **dérivés des adapters**, jamais recopiés.
+#:
+#: Ces deux ensembles étaient des littéraux tenus à la main, et ils ont dérivé :
+#: ollama a gagné ses modes vision en août 2026 sans que ``_VLM_ENGINES`` le
+#: sache, si bien que le planificateur refusait deux modes que l'adapter savait
+#: exécuter — le seul VLM local et gratuit, précisément (D-233). La capacité se
+#: lit désormais là où elle est implémentée.
+def _llm_engines() -> frozenset[str]:
+    """Fournisseurs de post-correction texte (mode ``text_only``)."""
+    return providers_for_mode("text_only")
+
+
+def _vlm_engines() -> frozenset[str]:
+    """Fournisseurs **vision** (modes ``text_and_image`` et ``zero_shot``)."""
+    return providers_for_mode("zero_shot") & providers_for_mode("text_and_image")
 
 
 class RunPlanningError(CinocError):
@@ -350,7 +361,7 @@ def _hybrid_reco_kwargs(
     rôle ``zero_shot`` (transcription par bloc, prompt curé/libre optionnel).
     """
     name = f"{comp.engine}:{suffix}"
-    if comp.engine in _VLM_ENGINES:
+    if comp.engine in _vlm_engines():
         kwargs: dict[str, str | int | float | bool] = {
             "label": suffix,
             "role": "zero_shot",
@@ -372,16 +383,22 @@ def _hybrid_competitor(
     (fan-out, image découpée) → aplatissement texte (scoré CER/WER à la page) — et,
     si ``alto``, assemblage ALTO XML téléchargeable. C'est « segmentation puis OCR/
     VLM » jugé **côte à côte** avec un pipeline à plat, dans le même run."""
-    from cinoc.app.structure_planning import SEGMENTER_KINDS  # cycle → import local
+    from cinoc.app.structure_planning import (  # cycle → import local
+        PIPELINE_SEGMENTERS,
+        pipeline_recognizers,
+    )
 
-    if comp.segmenter not in SEGMENTER_KINDS:
+    # Même ensemble que la transcription autonome : la même intention ne peut
+    # pas recevoir deux réponses selon le mode d'entrée (D-233).
+    if comp.segmenter not in PIPELINE_SEGMENTERS:
         raise RunPlanningError(
             f"hybride : segmenteur non câblé : {comp.segmenter!r} "
-            f"(attendu l'un de {sorted(SEGMENTER_KINDS)})."
+            f"(attendu l'un de {sorted(PIPELINE_SEGMENTERS)})."
         )
-    if comp.engine not in (_OCR_ENGINES | _VLM_ENGINES):
+    if comp.engine not in pipeline_recognizers():
         raise RunPlanningError(
-            f"hybride : reconnaisseur par bloc non câblé : {comp.engine!r}."
+            f"hybride : reconnaisseur par bloc non câblé : {comp.engine!r} "
+            f"(attendu l'un de {sorted(pipeline_recognizers())})."
         )
     if comp.mode is not None:
         raise RunPlanningError("hybride : aucun mode (le pipeline est seg → bloc).")
@@ -514,7 +531,7 @@ def _pipeline_for_competitor(
         return pipeline, ocr_kwargs
 
     if comp.mode == "zero_shot":
-        if comp.engine not in _VLM_ENGINES:
+        if comp.engine not in _vlm_engines():
             raise RunPlanningError(
                 f"zero_shot : {comp.engine!r} n'a pas de VLM (vision)."
             )
@@ -551,7 +568,7 @@ def _pipeline_for_competitor(
         )
     if not comp.llm:
         raise RunPlanningError(f"{comp.mode} : un fournisseur LLM est requis.")
-    allowed = _LLM_ENGINES if comp.mode == "text_only" else _VLM_ENGINES
+    allowed = _llm_engines() if comp.mode == "text_only" else _vlm_engines()
     if comp.llm not in allowed:
         raise RunPlanningError(
             f"{comp.mode} : fournisseur {comp.llm!r} indisponible pour ce mode."
@@ -704,8 +721,8 @@ def benchmark_engine_catalog(
 
     return {
         "ocr": role(_OCR_ENGINES),
-        "llm": role(_LLM_ENGINES),
-        "vlm": role(_VLM_ENGINES),
+        "llm": role(_llm_engines()),
+        "vlm": role(_vlm_engines()),
     }
 
 

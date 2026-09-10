@@ -18,10 +18,9 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
-from cinoc.app.engines import EngineStatus
+from cinoc.app.engines import EngineStatus, providers_for_mode
 from cinoc.app.run_planning import (
     _OCR_ENGINES,
-    _VLM_ENGINES,
     RunPlanningError,
 )
 from cinoc.domain.artifacts import ArtifactType
@@ -39,6 +38,14 @@ SEGMENTER_KIND = "pp_doclayout"
 #: (poids) ; ``remote_segmenter`` **délègue** à un endpoint object-detection HF
 #: (le modèle tourne à distance — on change de modèle en changeant l'endpoint).
 SEGMENTER_KINDS = ("pp_doclayout", "remote_segmenter")
+
+#: Segmenteurs acceptés **en tête d'un pipeline**, benchmark ou transcription
+#: autonome : les réels, plus la brique de rejeu. **Source unique** — les deux
+#: planificateurs lisaient jusqu'ici deux ensembles différents, si bien que la
+#: même intention exprimée en mode benchmark ou en mode transcription donnait
+#: deux réponses (D-233). Le rejeu appartient à la liste : il sert la démo et la
+#: CI, où il n'y a ni PaddleX ni endpoint distant.
+PIPELINE_SEGMENTERS = frozenset(SEGMENTER_KINDS) | {"precomputed_layout"}
 
 
 def _segmentation_spec(
@@ -112,15 +119,33 @@ def plan_segmentation_run(
 
 
 #: Segmenteurs valides en tête d'un run hybride (réels + précalculé pour la démo).
-_HYBRID_SEGMENTERS = frozenset(SEGMENTER_KINDS) | {"precomputed_layout"}
+_HYBRID_SEGMENTERS = PIPELINE_SEGMENTERS
 #: Reconnaisseurs **par région** câblés : tout moteur ``IMAGE → RAW_TEXT`` convient
 #: au slot de fan-out (le bloc découpé est OCRisé/transcrit puis réinjecté). Donc
 #: l'ensemble des OCR réels (dont ``mistral_ocr``, ``google_vision``, ``azure_di``)
 #: **et** les VLM en transcription **zero-shot** par bloc — c'est exactement « un
 #: VLM derrière une segmentation ». ``precomputed_region`` reste le mode démo/CI.
 _HYBRID_OCR = _OCR_ENGINES | {"precomputed_region"}
-_HYBRID_VLM = _VLM_ENGINES
-_HYBRID_RECOGNIZERS = _HYBRID_OCR | _HYBRID_VLM
+
+
+def _hybrid_vlm() -> frozenset[str]:
+    """VLM utilisables **par bloc** : ceux qui savent transcrire une image.
+
+    Le mode par région est du ``zero_shot`` appliqué à un découpage — la
+    capacité pertinente est donc celle-là, et elle est lue sur les adapters
+    (aucune liste tenue à la main ne peut plus diverger, cf. D-233).
+    """
+    return providers_for_mode("zero_shot")
+
+
+def pipeline_recognizers() -> frozenset[str]:
+    """Reconnaisseurs valides **par bloc**, benchmark ou transcription autonome.
+
+    Source unique, pour la même raison que ``PIPELINE_SEGMENTERS`` : les deux
+    planificateurs en tenaient deux versions, et le rejeu manquait à celle du
+    benchmark (D-233).
+    """
+    return frozenset(_HYBRID_OCR) | _hybrid_vlm()
 
 _HybridKwargs = dict[str, dict[str, str | int | float | bool]]
 
@@ -145,7 +170,7 @@ def _hybrid_recognizer(
                 "plan_hybrid_run : 'source_label' requis pour precomputed_region."
             )
         return f"precomputed_region:{source_label}", {"source_label": source_label}
-    if ocr in _HYBRID_VLM:
+    if ocr in _hybrid_vlm():
         kwargs: dict[str, str | int | float | bool] = {
             "label": label,
             "role": "zero_shot",
@@ -165,7 +190,7 @@ def _hybrid_recognizer(
         return f"{ocr}:{label}", ocr_kwargs
     raise RunPlanningError(
         f"plan_hybrid_run : reconnaisseur par région inconnu {ocr!r} "
-        f"(attendu l'un de {sorted(_HYBRID_RECOGNIZERS)})."
+        f"(attendu l'un de {sorted(pipeline_recognizers())})."
     )
 
 
@@ -180,7 +205,7 @@ def hybrid_recognizer_catalog(
     """
     by_kind = {s.kind: s for s in statuses}
     out: list[dict[str, object]] = []
-    for vlm, kinds in ((False, sorted(_OCR_ENGINES)), (True, sorted(_HYBRID_VLM))):
+    for vlm, kinds in ((False, sorted(_OCR_ENGINES)), (True, sorted(_hybrid_vlm()))):
         for kind in kinds:
             status = by_kind.get(kind)
             if status is not None:

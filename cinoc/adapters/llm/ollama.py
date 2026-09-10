@@ -15,7 +15,7 @@ fragile (dette de l'implémentation source, corrigée au portage).
 
 from __future__ import annotations
 
-from typing import NoReturn
+from typing import ClassVar, NoReturn
 
 from cinoc.adapters.llm._base import (
     LLMCompletion,
@@ -151,6 +151,15 @@ class OllamaAdapter:
     pouvait pas concourir au banc, alors que des poids figés sont **plus**
     reproductibles qu'un instantané d'API susceptible d'être déprécié.
     """
+
+    #: Modes que cet adapter implémente **réellement**. Déclaré ici, à côté du
+    #: code qui les rend possibles : la capacité vision est une closure passée à
+    #: ``run_llm_step``, invérifiable de l'extérieur. Une liste tenue ailleurs
+    #: dérive — c'est arrivé (D-233).
+    SUPPORTED_MODES: ClassVar[frozenset[PipelineMode]] = frozenset(
+        {"text_only", "text_and_image", "zero_shot"}
+    )
+
 
     def __init__(
         self,

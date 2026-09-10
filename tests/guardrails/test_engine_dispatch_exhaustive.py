@@ -8,6 +8,8 @@ historique « ``mistral`` → tesseract ».
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from cinoc.app.run_planning import (
@@ -47,11 +49,35 @@ def test_text_only_requires_llm_provider() -> None:
         )
 
 
-def test_text_and_image_rejects_text_only_provider() -> None:
-    # ollama est text_only (pas de vision) → refusé en text_and_image.
-    with pytest.raises(RunPlanningError):
+def test_text_and_image_rejects_a_provider_without_vision(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Un fournisseur sans vision est refusé en ``text_and_image``.
+
+    Cette vérification citait ``ollama`` en exemple — « pas de vision ». C'est
+    devenu faux à la PR #91, et le test a alors **protégé** la dérive au lieu de
+    la détecter (D-233). L'intention reste juste ; c'est l'exemple codé en dur
+    qui ne l'était pas. On retire donc le mode à un adapter pour la vérifier,
+    plutôt que de parier sur ce qu'un fournisseur sait faire cette année.
+    """
+    from cinoc.adapters.llm.ollama import OllamaAdapter
+
+    monkeypatch.setattr(
+        OllamaAdapter, "SUPPORTED_MODES", frozenset({"text_only"})
+    )
+    with pytest.raises(RunPlanningError, match="indisponible"):
         plan_benchmark_run(
             (Competitor(engine="tesseract", mode="text_and_image", llm="ollama"),),
             _corpus(),
             "r-1",
         )
+
+
+def test_a_vision_provider_is_accepted_in_text_and_image() -> None:
+    """Le pendant : ce qui déclare la vision doit passer."""
+    spec = plan_benchmark_run(
+        (Competitor(engine="tesseract", mode="text_and_image", llm="ollama"),),
+        _corpus(),
+        "r-1",
+    )(Path("/tmp"))
+    assert spec.pipelines

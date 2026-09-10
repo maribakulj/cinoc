@@ -10,7 +10,7 @@ sans clé ni réseau). La ``Deadline`` borne l'appel.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, ClassVar
 
 from cinoc.adapters._resilience import call_resilient
 from cinoc.adapters.llm._base import (
@@ -122,6 +122,15 @@ def _invoke_anthropic_vision(  # pragma: no cover -- réseau + clé API (cf. 'li
 
 class AnthropicAdapter:
     """Adapter Anthropic multi-mode (post-correction texte/image, transcription)."""
+
+    #: Modes que cet adapter implémente **réellement**. Déclaré ici, à côté du
+    #: code qui les rend possibles : la capacité vision est une closure passée à
+    #: ``run_llm_step``, invérifiable de l'extérieur. Une liste tenue ailleurs
+    #: dérive — c'est arrivé (D-233).
+    SUPPORTED_MODES: ClassVar[frozenset[PipelineMode]] = frozenset(
+        {"text_only", "text_and_image", "zero_shot"}
+    )
+
 
     def __init__(
         self,
