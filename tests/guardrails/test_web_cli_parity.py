@@ -33,19 +33,12 @@ from cinoc.interfaces._cli_parser import SUBCOMMANDS
 
 #: Dettes connues : identifiant → ce qui la ferme. Une entrée ici est un
 #: engagement, pas une excuse ; la liste ne doit que rétrécir.
-DETTES: dict[str, str] = {
-    # Valider une configuration sans l'exécuter. Le web valide un
-    # `LaunchRequest` ; l'équivalent CLI est de valider le YAML et d'afficher le
-    # plan. Un drapeau, pas une commande.
-    "run-check": "tranche d — `cinoc run --check`",
-    # Segmentation seule + aperçu de mise en page. `plan_segmentation_run`
-    # existe en couche `app` et n'a **aucun** appelant CLI.
-    "segmentation": "tranche d — `cinoc hybrid --segment-only`",
-    # Export ALTO d'un run YAML. Le sink qui persiste les `ALTO_XML` vit dans
-    # `JobRunner` (chemin web) ; un `cinoc run` qui demande le type produit
-    # l'artefact, qui meurt ensuite avec le workspace.
-    "alto-export": "tranche d — `cinoc run --alto-dir`",
-}
+#:
+#: **Vide depuis D-227** : les cinq dettes ouvertes par D-224 (corpus,
+#: introspection, run-check, segmentation, alto-export) sont fermées. Le
+#: dictionnaire reste — c'est lui qui rend une nouvelle dette *déclarable*, donc
+#: visible, plutôt que tolérée en silence.
+DETTES: dict[str, str] = {}
 
 #: Route → statut. Trois formes, et trois seulement :
 #: ``"transport"`` · ``"cli:<sous-commande>"`` · ``"dette:<identifiant>"``.
@@ -85,7 +78,10 @@ PARITE: dict[str, str] = {
     # `cinoc run` est **plus général** que le composeur web : il accepte un
     # `RunSpec` complet là où le web assemble des `Competitor`.
     "POST /api/runs": "cli:run",
-    "POST /api/runs/config": "dette:run-check",
+    # Valider avant de lancer : `cinoc run --check` relit la spec, affiche
+    # le plan et n'exécute rien — une spec de benchmark engage des appels
+    # facturés.
+    "POST /api/runs/config": "cli:run",
     # L'état d'un job, son annulation et son flux d'événements n'existent que
     # parce que le web exécute **en arrière-plan**. En CLI le run est au premier
     # plan : la progression va sur stdout, l'annulation est Ctrl-C (coopérative,
@@ -94,8 +90,11 @@ PARITE: dict[str, str] = {
     "POST /api/runs/{job_id}/cancel": "transport",
     "GET /api/runs/{job_id}/events": "transport",
     # --- Segmentation. -------------------------------------------------------
-    "POST /api/segmentation/run": "dette:segmentation",
-    "GET /api/segmentation/preview": "dette:segmentation",
+    # `cinoc hybrid --segment-only` écrit un LAYOUT par page, relisible par
+    # `precomputed_layout`. L'« aperçu » web est le rendu de ce même LAYOUT :
+    # côté CLI le fichier **est** l'aperçu, on l'ouvre avec ses outils.
+    "POST /api/segmentation/run": "cli:hybrid",
+    "GET /api/segmentation/preview": "cli:hybrid",
     # Sert une image du store serveur : transport pur (en CLI, le fichier est
     # déjà sur le disque de l'utilisateur).
     "GET /api/segmentation/{seg_id}/image": "transport",
@@ -104,7 +103,7 @@ PARITE: dict[str, str] = {
     # `cinoc run`, et le bundle dossier est `--report-dir`.
     "GET /reports/{name}": "transport",
     "GET /reports/{name}/bundle.zip": "cli:run",
-    "GET /reports/{name}/alto.zip": "dette:alto-export",
+    "GET /reports/{name}/alto.zip": "cli:run",
 }
 
 

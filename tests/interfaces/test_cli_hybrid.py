@@ -153,3 +153,69 @@ def test_the_flags_are_declared_on_the_hybrid_command() -> None:
     )
     assert args.segmenter_endpoint == "https://x.test"
     assert args.segmenter_token == "t"
+
+
+def test_segment_only_stops_after_the_layout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``--segment-only`` : la mise en page est un livrable en soi.
+
+    Elle se relit, se corrige, et sert à rejouer plusieurs reconnaissances sans
+    re-segmenter. Le web avait sa route ``/api/segmentation/run`` ; la CLI
+    n'avait rien, alors que le planificateur existait déjà.
+
+    Le segmenteur réel exige PaddleX (ou un endpoint distant) : ce qui est
+    vérifié ici est le **choix** — le planificateur de segmentation, pas celui
+    du pipeline hybride.
+    """
+    images = tmp_path / "imgs"
+    _scene(images, {"r1": "x", "r2": "y"})
+    appels: list[str] = []
+
+    def _seg(*args: object, **kwargs: object) -> object:
+        appels.append("segmentation")
+        raise CinocError("sonde : planification interrompue")
+
+    def _hyb(*args: object, **kwargs: object) -> object:  # pragma: no cover
+        appels.append("hybride")
+        raise CinocError("le pipeline hybride ne doit pas être planifié")
+
+    monkeypatch.setattr(structure_planning, "plan_segmentation_run", _seg)
+    monkeypatch.setattr(structure_planning, "plan_hybrid_run", _hyb)
+
+    code = main(
+        ["hybrid", str(images), "--out", str(tmp_path / "seg"), "--segment-only"]
+    )
+
+    assert code == 1  # la sonde interrompt : on ne mesure que l'aiguillage
+    assert appels == ["segmentation"]
+
+
+def test_layout_files_are_named_so_they_can_be_replayed(tmp_path: Path) -> None:
+    """``<doc>.layout.json`` : exactement ce que ``precomputed_layout`` relit.
+
+    Un nom arbitraire aurait fait de la segmentation un cul-de-sac ; celui-ci
+    boucle la chaîne — segmenter une fois, comparer plusieurs moteurs dessus.
+    """
+    from cinoc.app.transcription import write_layout_files
+    from cinoc.domain.artifacts import Artifact, ArtifactType
+
+    source = tmp_path / "layout.json"
+    source.write_text('{"pages": []}', encoding="utf-8")
+    outputs = {
+        "seg": {
+            "doc/1": {
+                ArtifactType.LAYOUT: Artifact(
+                    id="a1",
+                    document_id="doc/1",
+                    type=ArtifactType.LAYOUT,
+                    uri=str(source),
+                )
+            }
+        }
+    }
+
+    ecrits = write_layout_files(tmp_path / "out", outputs)
+
+    assert [p.name for p in ecrits] == ["doc_1.layout.json"]
+    assert ecrits[0].read_text(encoding="utf-8") == '{"pages": []}'

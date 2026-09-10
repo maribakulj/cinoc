@@ -237,6 +237,20 @@ def build_parser() -> argparse.ArgumentParser:
         "cache mesurerait le cache.",
     )
     run_cmd.add_argument(
+        "--check",
+        action="store_true",
+        help="Valide le fichier et affiche le plan, SANS rien exécuter. Une "
+        "spec de benchmark engage des appels facturés : la relire d'abord "
+        "n'est pas un confort.",
+    )
+    run_cmd.add_argument(
+        "--alto-dir",
+        dest="alto_dir",
+        default=None,
+        help="Écrit les ALTO produits par le run dans ce dossier. Sans lui, un "
+        "ALTO demandé par la spec meurt avec le workspace temporaire.",
+    )
+    run_cmd.add_argument(
         "--workers",
         type=int,
         default=None,
@@ -306,6 +320,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--prompt",
         default=None,
         help="Prompt de transcription pour un reconnaisseur VLM (zero-shot).",
+    )
+    hybrid_cmd.add_argument(
+        "--segment-only",
+        dest="segment_only",
+        action="store_true",
+        help="S'arrête après la segmentation : écrit un LAYOUT par page au "
+        "lieu d'un ALTO. Relisible par `precomputed_layout` — on segmente une "
+        "fois, on rejoue plusieurs reconnaissances dessus.",
     )
     hybrid_cmd.add_argument(
         "--segmenter-endpoint",

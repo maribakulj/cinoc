@@ -104,4 +104,31 @@ def write_alto_files(out_dir: Path, outputs: PipelineOutputs) -> list[Path]:
     return sorted(written)
 
 
-__all__ = ["TranscriptionError", "corpus_from_images", "write_alto_files"]
+def write_layout_files(out_dir: Path, outputs: PipelineOutputs) -> list[Path]:
+    """Écrit un ``LAYOUT`` JSON par document segmenté. Retourne les chemins.
+
+    Jumeau de :func:`write_alto_files`, pour la sortie d'un run de segmentation
+    seule. Même convention de nom (``<doc>.layout.json``), donc **relisible**
+    par ``precomputed_layout`` : on peut segmenter une fois, puis rejouer
+    plusieurs reconnaissances sur la même mise en page sans re-segmenter.
+    """
+    out_dir.mkdir(parents=True, exist_ok=True)
+    written: list[Path] = []
+    for by_document in outputs.values():
+        for document_id, artifacts in by_document.items():
+            artifact = artifacts.get(ArtifactType.LAYOUT)
+            if artifact is None or artifact.uri is None:
+                continue
+            target = out_dir / f"{document_id.replace('/', '_')}.layout.json"
+            shutil.copyfile(artifact.uri, target)
+            written.append(target)
+            logger.info("[transcription] %s → %s", document_id, target)
+    return sorted(written)
+
+
+__all__ = [
+    "TranscriptionError",
+    "corpus_from_images",
+    "write_alto_files",
+    "write_layout_files",
+]
