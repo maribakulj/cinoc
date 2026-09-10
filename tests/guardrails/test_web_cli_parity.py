@@ -34,11 +34,6 @@ from cinoc.interfaces._cli_parser import SUBCOMMANDS
 #: Dettes connues : identifiant → ce qui la ferme. Une entrée ici est un
 #: engagement, pas une excuse ; la liste ne doit que rétrécir.
 DETTES: dict[str, str] = {
-    # Introspection. `app/engines.py` expose déjà `engine_statuses`,
-    # `installed_ollama_models`, `normalization_profiles`, `curated_prompts` ;
-    # le web les met en HTML. La CLI doit les mettre en texte — deux transports
-    # d'une même capacité, aucune logique nouvelle.
-    "introspection": "tranche c — `cinoc list engines|models|profiles|prompts`",
     # Valider une configuration sans l'exécuter. Le web valide un
     # `LaunchRequest` ; l'équivalent CLI est de valider le YAML et d'afficher le
     # plan. Un drapeau, pas une commande.
@@ -63,7 +58,7 @@ PARITE: dict[str, str] = {
     # `/library` expose le catalogue HTR-United et la découverte des datasets
     # curés : de la **découverte de corpus**, pas de la mise en page.
     "GET /library": "cli:corpus",
-    "GET /engines": "dette:introspection",
+    "GET /engines": "cli:list",
     "GET /history": "cli:history",
     # --- Acquisition de corpus. ----------------------------------------------
     # `cinoc corpus import <source>` appelle **les mêmes** builders que ces
@@ -81,8 +76,11 @@ PARITE: dict[str, str] = {
     # store est un registre serveur que l'utilisateur ne peut pas atteindre.
     "DELETE /api/corpus/{corpus_id}": "transport",
     # --- Introspection. ------------------------------------------------------
-    "GET /api/models/{model_provider}": "dette:introspection",
-    "POST /api/normalization/preview": "dette:introspection",
+    # Mêmes sondes de la couche `app` : le web les rend en HTML, `cinoc list`
+    # en texte. L'aperçu de normalisation est `cinoc list profiles --preview`,
+    # sans persistance des deux côtés.
+    "GET /api/models/{model_provider}": "cli:list",
+    "POST /api/normalization/preview": "cli:list",
     # --- Lancement et suivi d'un run. ----------------------------------------
     # `cinoc run` est **plus général** que le composeur web : il accepte un
     # `RunSpec` complet là où le web assemble des `Competitor`.

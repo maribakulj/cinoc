@@ -26,6 +26,55 @@ if TYPE_CHECKING:  # pragma: no cover
     _SousCommandes = argparse._SubParsersAction[argparse.ArgumentParser]  # noqa: SLF001
 
 
+def _add_list(subparsers: _SousCommandes) -> None:
+    """Sous-arbre ``cinoc list`` : lire l'état de son installation.
+
+    Un verbe, des **sujets** — moteurs, modèles, profils, prompts. Ce sont les
+    mêmes sondes que celles que le web rend en HTML ; les mettre en texte est un
+    transport, pas une lentille d'analyse (``CLAUDE.md`` §8.4).
+    """
+    list_cmd = subparsers.add_parser(
+        "list",
+        help="Liste moteurs, modèles, profils de normalisation, prompts curés.",
+    )
+    sujets = list_cmd.add_subparsers(dest="topic", required=True)
+
+    sujets.add_parser(
+        "engines",
+        help="Moteurs, segmenteurs et étape NER, avec la cause d'indisponibilité.",
+    )
+
+    modeles = sujets.add_parser(
+        "models", help="Modèles canoniques d'un fournisseur (suggestions)."
+    )
+    modeles.add_argument(
+        "provider",
+        nargs="?",
+        default=None,
+        help="openai, anthropic, mistral, ollama. Omis : tous.",
+    )
+
+    profils = sujets.add_parser(
+        "profiles", help="Profils de normalisation, et leur effet sur un texte."
+    )
+    profils.add_argument(
+        "--preview",
+        default=None,
+        metavar="TEXTE",
+        help="Affiche ce que le profil fait de ce texte (rien n'est persisté).",
+    )
+    profils.add_argument(
+        "--profile", default=None, help="Profil nommé à appliquer à --preview."
+    )
+    profils.add_argument(
+        "--config",
+        default=None,
+        help="Fichier YAML de normalisation custom, appliqué à la volée.",
+    )
+
+    sujets.add_parser("prompts", help="Prompts curés par période.")
+
+
 def _add_corpus(subparsers: _SousCommandes) -> None:
     """Sous-arbre ``cinoc corpus`` : acquérir un corpus, chercher, découvrir.
 
@@ -318,6 +367,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Exécute N fois et écrit une fourchette (≥5 recommandé).",
     )
     _add_corpus(subparsers)
+    _add_list(subparsers)
     serve_cmd = subparsers.add_parser(
         "serve", help="Sert la vitrine web des rapports (extra [serve])."
     )
@@ -350,6 +400,7 @@ SUBCOMMANDS: tuple[str, ...] = (
     "hybrid",
     "compare",
     "corpus",
+    "list",
     "serve",
 )
 
