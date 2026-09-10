@@ -21,6 +21,7 @@ from pathlib import Path
 
 from cinoc.app.engines import (
     EngineStatus,
+    correction_status,
     curated_prompts,
     engine_statuses,
     ner_status,
@@ -47,7 +48,10 @@ def run_list_engines(args: argparse.Namespace) -> int:
     """Moteurs, segmenteurs et étape NER, avec la **cause** d'indisponibilité."""
     _print_statuses("Moteurs (OCR / HTR / LLM / VLM)", engine_statuses())
     _print_statuses("Segmenteurs de mise en page", segmenter_statuses())
-    _print_statuses("Étape terminale", (ner_status(),))
+    _print_statuses(
+        "Post-traitement (briques, pas des moteurs)",
+        (correction_status(), ner_status()),
+    )
     print(
         "\n✓ = utilisable ici et maintenant. Un moteur listé mais indisponible "
         "n'est pas une erreur : il dit ce qui lui manque (extra, binaire, clé)."

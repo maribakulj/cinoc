@@ -72,10 +72,17 @@ ASSET_BUDGETS: dict[str, int] = {
     # CSS de la coquille web (design system inline auto-hébergé).
     "interfaces/web/static/css/shell.css": 1477,
     # Script du composeur Banc d'essai (formulaire interactif) : + mode **hybride**
-    # (segmenteur + reconnaisseur par bloc) et **aperçu de mise en page** (lance une
-    # segmentation et injecte le SVG des régions — remplace l'ancienne page dédiée).
-    # Re-basé au courant (~697 LOC) + ~5 %.
-    "interfaces/web/static/js/benchmark.js": 730,
+    # (segmenteur + reconnaisseur par bloc), **aperçu de mise en page** (lance une
+    # segmentation et injecte le SVG des régions — remplace l'ancienne page
+    # dédiée) et **post-correction structurée** (D-229 : seconde forme de run
+    # lançable depuis la page).
+    # Hausse **délibérée** 730 → 790 : la page sait démarrer deux formes de run,
+    # pas une. Le dépassement a d'abord servi à **factoriser** — `launchAndFollow`
+    # est désormais l'unique chemin « poster, gérer l'erreur, suivre en SSE,
+    # rendre la main », partagé par les deux boutons (−15 LOC et une divergence
+    # de moins). Ce qui reste est la surface propre de la capacité.
+    # Re-basé au courant (~750 LOC) + ~5 %.
+    "interfaces/web/static/js/benchmark.js": 790,
     # Script du rapport autonome (enrichissement progressif, CSP-hashé).
     "reports/_assets/report.js": 714,
 }

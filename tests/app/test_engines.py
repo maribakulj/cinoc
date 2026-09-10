@@ -236,3 +236,25 @@ def test_ner_status_unavailable_signals_extra() -> None:
 def test_ner_not_in_ocr_engine_list() -> None:
     # la NER est un post-traitement, pas un moteur de transcription.
     assert "ner" not in {s.kind for s in engine_statuses()}
+
+
+def test_correction_status_available_with_saknussemm() -> None:
+    from cinoc.app.engines import correction_status
+
+    status = correction_status(has_module=lambda n: n == "saknussemm")
+    assert status.kind == "saknussemm"
+    assert status.available is True
+
+
+def test_correction_status_says_the_package_is_not_on_pypi() -> None:
+    """Anti-silence : ``pip install cinoc[saknussemm]`` va chercher un dépôt git.
+
+    Ne pas le dire ferait chercher longtemps pourquoi un extra « manquant »
+    reste manquant après installation.
+    """
+    from cinoc.app.engines import correction_status
+
+    status = correction_status(has_module=lambda n: False)
+    assert status.available is False
+    assert "saknussemm" in status.detail
+    assert "pas publié" in status.detail or "dépôt" in status.detail

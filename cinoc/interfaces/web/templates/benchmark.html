@@ -252,6 +252,29 @@
       <pre id="norm-result" class="norm-result" aria-live="polite"></pre>
     </div>
     <div class="panel stack-panel">
+      <label class="label">{{ t.bench_correction }}</label>
+      <span class="dropzone-meta">{{ t.bench_correction_hint }}</span>
+      <label class="label" for="correct-producer">{{ t.bench_correction_producer }}</label>
+      <select id="correct-producer" class="select">
+        <option value="rules">{{ t.bench_correction_rules }}</option>
+        <option value="ollama">{{ t.bench_correction_ollama }}</option>
+      </select>
+      <div id="correct-ollama-fields" hidden>
+        <label class="label" for="correct-model">{{ t.bench_correction_model }}</label>
+        <input id="correct-model" class="input" type="text"
+               placeholder="{{ t.bench_correction_model_ph }}">
+        <label class="label" for="correct-host">{{ t.bench_correction_host }}</label>
+        <input id="correct-host" class="input" type="url"
+               placeholder="http://localhost:11434">
+      </div>
+      <button id="correct-launch" class="btn" type="button"
+              data-launching="{{ t.bench_launching }}"
+              data-no-corpus="{{ t.bench_correction_no_corpus }}">
+        {{ t.bench_correction_launch }}
+      </button>
+      <span class="dropzone-meta">{{ t.bench_correction_gt_hint }}</span>
+    </div>
+    <div class="panel stack-panel">
       <label class="label" for="char-exclude">{{ t.bench_char_exclude }}</label>
       <input id="char-exclude" class="input" type="text"
              placeholder="{{ t.bench_char_exclude_ph }}">

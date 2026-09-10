@@ -22,6 +22,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from cinoc.app.corpus_upload import GT_SOURCE_KEY
 from cinoc.domain.artifacts import ArtifactType
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.documents import DocumentRef, GroundTruthRef
@@ -206,4 +207,27 @@ def corpus_from_alto(
     return CorpusSpec(name=name or folder.name, documents=tuple(documents))
 
 
-__all__ = ["corpus_from_alto", "plan_correction_run"]
+def ground_truth_is_its_own_source(corpus: CorpusSpec) -> bool:
+    """La vérité terrain du corpus est-elle **extraite de l'ALTO à corriger** ?
+
+    C'est le piège du banc de correction, et il est silencieux. Un corpus déposé
+    sous forme d'images + ALTO, sans transcription à part, voit sa vérité terrain
+    **dérivée de cet ALTO** (``corpus_upload``). Or c'est exactement le texte
+    dont part le correcteur : le comparer à lui-même donne un CER nul pour la
+    sortie brute, et n'attribue au correcteur que ses propres changements. Le
+    rapport dirait alors « corriger dégrade », quel que soit le correcteur.
+
+    Vrai dès qu'**un** document est dans ce cas : un corpus à moitié piégé
+    produit un classement à moitié faux, ce qui ne vaut pas mieux.
+    """
+    return any(
+        document.metadata.get(GT_SOURCE_KEY) == "layout"
+        for document in corpus.documents
+    )
+
+
+__all__ = [
+    "corpus_from_alto",
+    "ground_truth_is_its_own_source",
+    "plan_correction_run",
+]
