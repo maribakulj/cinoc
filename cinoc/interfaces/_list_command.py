@@ -24,6 +24,7 @@ from cinoc.app.engines import (
     correction_status,
     curated_prompts,
     engine_statuses,
+    llm_modes,
     ner_status,
     normalization_profiles,
     segmenter_statuses,
@@ -31,9 +32,6 @@ from cinoc.app.engines import (
 from cinoc.app.models import provider_models
 from cinoc.app.normalization_preview import preview_normalization
 from cinoc.domain.errors import CinocError
-
-#: Fournisseurs dont ``provider_models`` connaît un catalogue canonique.
-_PROVIDERS = ("openai", "anthropic", "mistral", "ollama")
 
 
 def _print_statuses(titre: str, statuses: tuple[EngineStatus, ...]) -> None:
@@ -61,7 +59,9 @@ def run_list_engines(args: argparse.Namespace) -> int:
 
 def run_list_models(args: argparse.Namespace) -> int:
     """Modèles canoniques d'un fournisseur — les mêmes suggestions qu'à l'UI."""
-    fournisseurs = (args.provider,) if args.provider else _PROVIDERS
+    # Lus sur les adapters : une liste recopiée ici dériverait le jour où un
+    # fournisseur arrive ou perd un mode (cf. le garde-fou des capacités).
+    fournisseurs = (args.provider,) if args.provider else sorted(llm_modes())
     for provider in fournisseurs:
         modeles = provider_models(provider)
         print(f"\n{provider}")

@@ -343,6 +343,41 @@ def curated_prompts() -> tuple[str, ...]:
     return available_prompts()
 
 
+#: Fournisseurs LLM/VLM du socle, avec les modes que **leur adapter déclare**.
+#:
+#: Source unique : la capacité est lue là où elle est implémentée, pas recopiée.
+#: Une seconde liste tenue à la main dérive — c'est exactement ce qui est arrivé
+#: à ``_VLM_ENGINES`` (D-233), qui a privé ollama de ses deux modes vision
+#: pendant des semaines après que l'adapter les eut gagnés.
+_LLM_ADAPTERS: tuple[tuple[str, str, str], ...] = (
+    ("openai", "cinoc.adapters.llm.openai", "OpenAIAdapter"),
+    ("anthropic", "cinoc.adapters.llm.anthropic", "AnthropicAdapter"),
+    ("mistral", "cinoc.adapters.llm.mistral", "MistralAdapter"),
+    ("ollama", "cinoc.adapters.llm.ollama", "OllamaAdapter"),
+)
+
+
+def llm_modes() -> dict[str, frozenset[str]]:
+    """``{fournisseur: modes déclarés}`` — lu sur les classes d'adapter.
+
+    L'import est **léger** : les adapters n'importent leur SDK qu'à
+    l'exécution, jamais au chargement du module (garde-fou
+    ``no_side_effect_imports``).
+    """
+    import importlib  # noqa: PLC0415
+
+    modes: dict[str, frozenset[str]] = {}
+    for nom, module, classe in _LLM_ADAPTERS:
+        adapter = getattr(importlib.import_module(module), classe)
+        modes[nom] = frozenset(adapter.SUPPORTED_MODES)
+    return modes
+
+
+def providers_for_mode(mode: str) -> frozenset[str]:
+    """Fournisseurs déclarant supporter ``mode``."""
+    return frozenset(nom for nom, m in llm_modes().items() if mode in m)
+
+
 __all__ = [
     "normalization_profiles",
     "curated_prompts",
@@ -350,6 +385,8 @@ __all__ = [
     "PUBLIC_ENGINE_KINDS",
     "StatusProvider",
     "correction_status",
+    "llm_modes",
+    "providers_for_mode",
     "engine_statuses",
     "ner_status",
     "segmenter_statuses",

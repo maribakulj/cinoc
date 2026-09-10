@@ -390,7 +390,10 @@ def test_engine_catalog_groups_by_role() -> None:
     vlm = {e["kind"] for e in catalog["vlm"]}
     assert ocr == {"tesseract"}
     assert "openai" in llm and "ollama" in llm  # post-correction texte
-    assert "openai" in vlm and "ollama" not in vlm  # ollama : pas de vision
+    # ollama EST un VLM depuis la PR #91. Cette ligne affirmait le contraire et
+    # protégeait donc la dérive qu'elle aurait dû détecter (D-233) : le rôle est
+    # désormais lu sur l'adapter, plus décidé ici.
+    assert {"openai", "ollama"} <= vlm
     # precomputed est le moteur de démo, jamais proposé comme concurrent.
     assert "precomputed" not in (ocr | llm | vlm)
     # indisponibilité reflétée (grisé côté UI), pas masquée.
