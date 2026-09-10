@@ -21,6 +21,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from cinoc.interfaces._cli_parser import SUBCOMMANDS
+
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -33,13 +35,24 @@ def _status_section() -> str:
 
 
 def _done_tranches() -> set[str]:
-    """Tranches marquées « ✅ … fait » dans le roll-up — les deux axes ``T#``/``S#``
-    (ex. ``{T1, T2, T3, T4, S1}``)."""
-    plan = (ROOT / "MIGRATION_PLAN.md").read_text(encoding="utf-8")
+    """Tranches et phases déjà livrées, d'après les **deux** plans d'autorité.
+
+    Les axes ``T#``/``S#`` (roll-up de ``MIGRATION_PLAN.md``) **et** les phases
+    ``P#`` cochées dans la checklist « 1.0 prête » de ``PLAN_FIN_MIGRATION.md``.
+    Ne lire que le premier laissait la porte ouverte à la dérive suivante : les
+    axes ``T#``/``S#`` sont terminés, le plan qu'exécutent les sessions parle en
+    ``P#``, et une « prochaine étape » nommée dans ce vocabulaire-là échappait
+    au contrôle.
+    """
     done: set[str] = set()
+    plan = (ROOT / "MIGRATION_PLAN.md").read_text(encoding="utf-8")
     for line in plan.splitlines():
         if "✅" in line and "fait" in line:
             done.update(re.findall(r"\b[TS]\d\b", line))
+    fin = (ROOT / "PLAN_FIN_MIGRATION.md").read_text(encoding="utf-8")
+    for line in fin.splitlines():
+        if line.startswith("- [x]"):
+            done.update(re.findall(r"\bP\d\b", line))
     return done
 
 
@@ -57,13 +70,13 @@ def test_status_section_has_no_hardcoded_test_count() -> None:
 
 
 def test_next_step_is_not_an_already_done_tranche() -> None:
-    match = re.search(r"Prochaine étape\s*=\s*([TS]U?\d[a-z]?)", _status_section())
-    assert match, "CLAUDE.md §0 doit nommer une « Prochaine étape = T…/S… »."
+    match = re.search(r"Prochaine étape\s*=\s*([TSP]U?\d[a-z]?)", _status_section())
+    assert match, "CLAUDE.md §0 doit nommer une « Prochaine étape = T…/S…/P… »."
     next_step = match.group(1)
     done = _done_tranches()
     assert next_step not in done, (
-        f"CLAUDE.md §0 désigne « {next_step} » comme prochaine étape, mais le "
-        f"roll-up de MIGRATION_PLAN.md la marque déjà faite ({sorted(done)}). "
+        f"CLAUDE.md §0 désigne « {next_step} » comme prochaine étape, mais les "
+        f"plans d'autorité la marquent déjà livrée ({sorted(done)}). "
         "Réconcilie le statut."
     )
 
@@ -99,4 +112,26 @@ def test_next_session_does_not_recap_delivered_tranches() -> None:
     ), (
         "NEXT_SESSION.md ne doit pas porter de récap « tranche — fait » : "
         "déléguer au roll-up de MIGRATION_PLAN.md."
+    )
+
+
+def test_every_cli_command_is_documented_in_the_readme() -> None:
+    """Une commande absente du README n'est pas une commande — personne ne peut
+    la trouver.
+
+    La surface est lue dans ``_cli_parser.SUBCOMMANDS`` — le contrat que la CLI
+    déclare — et non devinée par expression régulière dans sa source.
+
+    Ce contrôle est né d'un cas réel : ``cinoc correct`` (post-correction
+    structurée) a vécu des semaines livrée, testée et invisible — ni dans le
+    README, ni dans aucun plan. Les trois autres contrôles de ce fichier
+    surveillent la **forme** du statut ; celui-ci surveille la seule chose qu'on
+    puisse vérifier mécaniquement de son **fond** : la surface utilisateur est
+    décrite là où un utilisateur la cherche.
+    """
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    manquantes = sorted(nom for nom in SUBCOMMANDS if f"cinoc {nom}" not in readme)
+    assert not manquantes, (
+        f"commandes absentes du README : {manquantes}. Une commande livrée mais "
+        "non documentée est invisible : la documenter, ou la retirer."
     )

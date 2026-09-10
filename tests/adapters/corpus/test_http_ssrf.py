@@ -136,3 +136,52 @@ def test_connection_pins_validated_ip_not_rebind(
     assert targets == [public_ip]
     # Une seule résolution DNS : aucune fenêtre de rebinding.
     assert resolves["n"] == 1
+
+
+def test_ip_literal_never_resolves(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Une IP écrite dans l'URL ne passe pas par le résolveur.
+
+    Sur un réseau IPv6-seul (DNS64), ``getaddrinfo`` répond à une IPv4 littérale
+    par une adresse NAT64 synthétique. La résoudre revenait à refuser l'IP qu'on
+    venait d'écrire noir sur blanc.
+    """
+
+    def boom(*a: object, **k: object) -> list:
+        raise AssertionError("une IP littérale ne doit pas être résolue.")
+
+    monkeypatch.setattr(_http.socket, "getaddrinfo", boom)
+    assert assert_public_url("http://93.184.216.34/x") == ("93.184.216.34",)
+    assert assert_public_url("http://[2600:9000::1]/x") == ("2600:9000::1",)
+    with pytest.raises(SsrfError):
+        assert_public_url("http://127.0.0.1/x")
+
+
+@pytest.mark.parametrize(
+    ("resolved", "accepted"),
+    [
+        ("64:ff9b::5db8:d822", True),  # NAT64 de 93.184.216.34 — publique
+        ("64:ff9b::7f00:1", False),  # NAT64 de 127.0.0.1 — loopback traduit
+        ("64:ff9b::a9fe:a9fe", False),  # NAT64 de 169.254.169.254 — métadonnées
+        ("::ffff:93.184.216.34", True),  # IPv4-mapped publique
+        ("::ffff:10.0.0.1", False),  # IPv4-mapped privée
+    ],
+)
+def test_judges_embedded_ipv4_not_the_envelope(
+    monkeypatch: pytest.MonkeyPatch, resolved: str, accepted: bool
+) -> None:
+    """NAT64 / IPv4-mapped : c'est l'IPv4 embarquée qui décide, pas l'enveloppe.
+
+    Sans cela le filtre est faux dans les deux sens : il refuse tout un réseau
+    IPv6-seul (``64:ff9b::`` tombe dans ``::/8``, « réservé »), et il laisserait
+    passer une enveloppe qui traduit du loopback.
+    """
+
+    def fake_getaddrinfo(host: str, *a: object, **k: object) -> list:
+        return [(socket.AF_INET6, socket.SOCK_STREAM, 0, "", (resolved, 80, 0, 0))]
+
+    monkeypatch.setattr(_http.socket, "getaddrinfo", fake_getaddrinfo)
+    if accepted:
+        assert assert_public_url("http://example.test/x") == (resolved,)
+    else:
+        with pytest.raises(SsrfError):
+            assert_public_url("http://example.test/x")

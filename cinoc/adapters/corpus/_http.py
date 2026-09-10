@@ -8,6 +8,8 @@ sans borne (DoS mémoire/disque). Défenses, toutes testées :
 - **pas de userinfo** dans l'URL ;
 - **résolution DNS validée** : *toutes* les IP résolues doivent être **publiques**
   (rejet loopback / privé / link-local / réservé / multicast / non-spécifié) ;
+  une IP **littérale** n'est pas résolue du tout, et une adresse qui **encapsule**
+  une IPv4 (IPv4-mapped, NAT64 bien connu) est jugée sur cette IPv4 ;
 - **redirections re-validées** à chaque saut (une 30x ne peut pas pointer vers
   l'interne) ; nombre de sauts borné ;
 - **taille plafonnée** au fil de l'eau (on ne fait pas confiance à
@@ -67,7 +69,42 @@ class HttpFetchError(CorpusHttpError):
     """La requête a échoué (statut, redirection cassée, dépassement de taille)."""
 
 
+#: Préfixe NAT64 « bien connu » (RFC 6052 §2.1) : les **32 derniers bits**
+#: portent l'IPv4 traduite. Sur un réseau IPv6-seul (DNS64 — macOS et beaucoup
+#: de réseaux mobiles), *toute* résolution d'un hôte IPv4 passe par là. Juger
+#: l'enveloppe IPv6 au lieu de l'IPv4 embarquée revient à refuser Gallica, IIIF
+#: et HuggingFace : ``64:ff9b::`` commence par un octet nul, donc tombe dans
+#: ``::/8``, que ``ipaddress`` classe **réservé**.
+_NAT64_WELL_KNOWN = ipaddress.IPv6Network("64:ff9b::/96")
+
+
+def _embedded_ipv4(
+    ip: ipaddress.IPv4Address | ipaddress.IPv6Address,
+) -> ipaddress.IPv4Address | None:
+    """L'IPv4 réellement visée par ``ip``, ou ``None`` si elle n'en encapsule pas.
+
+    Deux encapsulations existent : ``::ffff:a.b.c.d`` (IPv4-mapped) et le NAT64
+    bien connu. Un préfixe NAT64 **propre au site** (RFC 6052 §2.2) est
+    indétectable et reste jugé comme l'IPv6 globale qu'il est.
+    """
+    mapped = getattr(ip, "ipv4_mapped", None)
+    if mapped is not None:
+        return typing.cast(ipaddress.IPv4Address, mapped)
+    if isinstance(ip, ipaddress.IPv6Address) and ip in _NAT64_WELL_KNOWN:
+        return ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
+    return None
+
+
 def _is_public(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """``ip`` vise-t-elle une ressource publique ?
+
+    Une adresse qui **encapsule** une IPv4 est jugée sur cette IPv4 : le filtre
+    ne se laisse donc pas contourner par l'enveloppe (``64:ff9b::7f00:1`` est
+    du loopback, et refusé) ni ne refuse à tort une cible publique traduite.
+    """
+    embedded = _embedded_ipv4(ip)
+    if embedded is not None:
+        ip = embedded
     return not (
         ip.is_private
         or ip.is_loopback
@@ -95,6 +132,17 @@ def assert_public_url(url: str) -> tuple[str, ...]:
     host = parts.hostname
     if not host:
         raise SsrfError("URL sans hôte.")
+    try:
+        literal = ipaddress.ip_address(host)
+    except ValueError:
+        literal = None  # type: ignore[assignment]
+    if literal is not None:
+        # Promesse tenue : une IP littérale ne passe **pas** par le résolveur.
+        # Y passer laissait un DNS64 substituer une adresse NAT64 à l'IP écrite
+        # noir sur blanc dans l'URL — et la rejeter.
+        if not _is_public(literal):
+            raise SsrfError(f"IP non publique : {host}.")
+        return (host,)
     port = parts.port or (443 if parts.scheme == "https" else 80)
     try:
         infos = socket.getaddrinfo(host, port, proto=socket.IPPROTO_TCP)
