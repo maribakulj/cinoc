@@ -78,6 +78,9 @@ include = ["cinoc*"]
 "cinoc.evaluation" = ["pricing.json"]
 # Prompts curés par période (donnée LLM/VLM) — doivent voyager dans le wheel.
 "cinoc.prompts" = ["*.txt"]
+# Recettes de pipeline (donnée, comme les profils et les prompts) : une forme
+# nommée par son intention, choisie plutôt que composée.
+"cinoc.recipes" = ["*.yaml"]
 
 [tool.setuptools_scm]
 fallback_version = "0.1.0"

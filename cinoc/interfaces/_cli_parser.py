@@ -74,6 +74,14 @@ def _add_list(subparsers: _SousCommandes) -> None:
 
     sujets.add_parser("prompts", help="Prompts curés par période.")
 
+    recettes = sujets.add_parser(
+        "recipes",
+        help="Recettes : des formes de pipeline nommées par leur intention.",
+    )
+    recettes.add_argument(
+        "--lang", default="fr", choices=("fr", "en"), help="Langue des libellés."
+    )
+
 
 def _add_corpus(subparsers: _SousCommandes) -> None:
     """Sous-arbre ``cinoc corpus`` : acquérir un corpus, chercher, découvrir.

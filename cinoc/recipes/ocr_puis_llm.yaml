@@ -1,0 +1,19 @@
+# OCR puis post-correction par un LLM : la question du « le modèle répare-t-il,
+# ou réécrit-il ? », que le bilan de correction du rapport mesure.
+name: ocr_puis_llm
+title:
+  fr: OCR puis correction par un LLM
+  en: OCR then LLM post-correction
+description:
+  fr: >-
+    Un OCR lit la page, un modèle de langue corrige son texte. Le rapport dit
+    ce qui a été amélioré, ce qui a été dégradé, et ce qui a été réécrit sans
+    raison.
+  en: >-
+    An OCR reads the page, a language model corrects its text. The report says
+    what improved, what got worse, and what was rewritten for nothing.
+steps:
+  - id: ocr
+    role: ocr
+  - id: correction
+    role: correction

@@ -171,6 +171,16 @@ cinoc history runs.db --threshold 0.01           # or: which pipelines regressed
 cinoc serve --port 8080                          # local web app
 ```
 
+### Recipes — a named shape, not a blank canvas
+
+The typed graph admits hundreds of valid pipeline shapes. They don't fit in a form, and a node editor would be both heavy to build and hostile to use. A **recipe** is the third way: a proven shape, named by its intent — *historic multi-column press* — of which you only fill in the bricks.
+
+```bash
+cinoc list recipes
+```
+
+A recipe declares **roles**, never types: the builder knows each role's typed signature, so a recipe cannot describe a mis-wired pipeline — it can only name a role that doesn't exist, which shows up at load time. Recipes are **data**, like normalisation profiles and curated prompts: adding one is a YAML file, not a code change.
+
 ### Knowing what your install can do
 
 The `/engines` page, the composer's model dropdowns and the normalisation preview all read probes that live in the `app` layer. `cinoc list` reads the same ones, in text:
@@ -180,6 +190,7 @@ cinoc list engines                 # engines, segmenters, NER — and *why* one 
 cinoc list models anthropic        # canonical model suggestions, vision flagged
 cinoc list profiles                # the normalisation profiles
 cinoc list prompts                 # the curated period prompts
+cinoc list recipes                 # named pipeline shapes, and what you get to choose
 ```
 
 An unavailable engine is never hidden: it says what it needs — an extra, a binary, an API key — instead of quietly not being there.

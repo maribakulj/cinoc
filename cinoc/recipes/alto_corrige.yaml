@@ -1,0 +1,23 @@
+# Retraitement d'un fonds déjà océrisé : la posture de NDNP, qui repart de lots
+# numérisés et océrisés pour en refaire le texte.
+name: alto_corrige
+title:
+  fr: Corriger un ALTO existant
+  en: Correct an existing ALTO
+description:
+  fr: >-
+    Fait entrer un ALTO déjà là et le corrige **dans** sa mise en page : chaque
+    ligne garde son identifiant, donc le rapport dit ce qui a été changé et ce
+    que le correcteur a refusé de changer.
+  en: >-
+    Takes an existing ALTO and corrects it *inside* its layout: every line keeps
+    its identifier, so the report can say what changed and what the corrector
+    refused to change.
+steps:
+  - id: source
+    role: alto_source
+  - id: brut
+    role: projection
+  - id: correction
+    role: structured_correction
+    after: source
