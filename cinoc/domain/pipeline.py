@@ -85,6 +85,45 @@ class PipelineStep(BaseModel):
     inputs_from: dict[ArtifactType, str] = Field(default_factory=dict)
     fanout: bool = False
     crop: bool = False
+    #: Étape de **fusion** : identifiants des étapes dont les sorties sont
+    #: réunies. Le pool étant indexé par type, deux sorties du même type s'y
+    #: écrasent — c'est pourquoi une fusion ne peut pas se déclarer par
+    #: ``inputs_from``, qui ne nomme qu'une source par type. Nommer les étapes
+    #: ici les fait toutes parvenir au module, sans changer le pool ni la
+    #: signature des 22 autres briques.
+    merge_from: tuple[str, ...] = ()
+
+    @model_validator(mode="after")
+    def _check_merge_contract(self) -> PipelineStep:
+        if not self.merge_from:
+            return self
+        from cinoc.domain.errors import CinocError
+
+        if len(self.merge_from) < 2:
+            raise CinocError(
+                f"step {self.id!r} : merge_from exige au moins deux sources "
+                "(fusionner une seule sortie ne fusionne rien)."
+            )
+        if len(set(self.merge_from)) != len(self.merge_from):
+            raise CinocError(
+                f"step {self.id!r} : merge_from répète une source "
+                f"({list(self.merge_from)}) — le même avis compterait double."
+            )
+        if len(self.input_types) != 1:
+            raise CinocError(
+                f"step {self.id!r} : une fusion porte sur **un** type "
+                f"(reçu {[t.value for t in self.input_types]})."
+            )
+        if self.id in self.merge_from:
+            raise CinocError(
+                f"step {self.id!r} : une étape ne peut pas se fusionner elle-même."
+            )
+        if self.fanout:
+            raise CinocError(
+                f"step {self.id!r} : fanout et merge_from s'excluent — l'un "
+                "démultiplie une étape par région, l'autre réunit des étapes."
+            )
+        return self
 
     @model_validator(mode="after")
     def _check_fanout_contract(self) -> PipelineStep:

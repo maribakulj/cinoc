@@ -53,6 +53,7 @@ Cinoc is the bench you run **before** committing a corpus to a pipeline: reprodu
 | **Hybrid** (seg → reco → ALTO) | layout segmentation → recognition **per region** (fan‑out) by **any OCR or a VLM (zero‑shot) per block** → assembled ALTO XML |
 | **Structured post‑correction** (ALTO → ALTO) | take **existing** ALTO and correct it *inside* the layout — every line keeps its identifier, so before/after is **known**, not guessed by aligning two lists of lines. Rules (offline, deterministic) or a local LLM via Ollama. |
 | **Chained correction** (`corrected_text → corrected_text`) | a second corrector picks up where the first left off — a fast pass then a careful one, or structured correction then textual. The `refine` mode is the only one whose input *and* output are corrected text, which is what makes a chain expressible at all. |
+| **Engine fusion** (N × `raw_text` → `raw_text`) | run several engines and **combine** them by per‑token majority vote, instead of only ranking them. It fixes what one engine gets wrong where the others are right — and is powerless when they all fail the same way, which is exactly what the bench is there to tell you. |
 | **+ NER** (optional terminal step) | `text → entities`, scored if the corpus carries entity ground truth |
 
 Engines are **interchangeable bricks** behind a single `Module` protocol. Heavy dependencies are **optional extras**: an engine is always listed, and tells you clearly if it needs its extra or API key instead of crashing.

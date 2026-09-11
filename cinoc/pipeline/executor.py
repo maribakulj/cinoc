@@ -82,7 +82,11 @@ class PipelineExecutor:
                     f"étape {step.id!r} : module {step.adapter_name!r} "
                     "absent du registre."
                 )
-            inputs = self._resolve_inputs(step, pool, by_step)
+            inputs = (
+                {}
+                if step.merge_from
+                else self._resolve_inputs(step, pool, by_step)
+            )
             context = RunContext(
                 document_id=document_id,
                 code_version=self._code_version,
@@ -91,7 +95,9 @@ class PipelineExecutor:
                 workspace_uri=workspace_uri,
             )
             started = time.monotonic()
-            if step.fanout:
+            if step.merge_from:
+                output = self._run_merge(step, module, by_step, context, ctrl)
+            elif step.fanout:
                 output = self._run_fanout(step, module, inputs, context, ctrl, cropper)
             else:
                 output = module.execute(inputs, dict(step.params), context, ctrl)
@@ -104,6 +110,47 @@ class PipelineExecutor:
             by_step[step.id] = stamped
             pool.update(stamped)
         return DocumentExecution(artifacts=pool, usage=usage)
+
+    def _run_merge(
+        self,
+        step: PipelineStep,
+        module: object,
+        by_step: Mapping[str, dict[ArtifactType, Artifact]],
+        context: RunContext,
+        ctrl: RunControl,
+    ) -> StepOutput:
+        """Réunit les sorties de plusieurs étapes en une seule.
+
+        Le pool est indexé par type : deux sorties du même type s'y écrasent, et
+        ``inputs_from`` ne nomme qu'une source par type. Les avis sont donc pris
+        dans ``by_step``, qui les garde **tous** — la donnée existait déjà, seule
+        la façon de la demander manquait.
+        """
+        if not hasattr(module, "execute_merge"):
+            raise PipelineStepError(
+                f"étape {step.id!r} : {step.adapter_name!r} n'est pas une brique "
+                "de fusion (pas d'``execute_merge``). Une étape déclarant "
+                "``merge_from`` exige un module qui sache réunir plusieurs avis."
+            )
+        (attendu,) = tuple(step.input_types)
+        sources: dict[str, Artifact] = {}
+        for source in step.merge_from:
+            produits = by_step.get(source)
+            if produits is None:
+                raise PipelineStepError(
+                    f"étape {step.id!r} : source {source!r} inconnue — une "
+                    "fusion ne peut nommer qu'une étape déjà exécutée."
+                )
+            artefact = produits.get(attendu)
+            if artefact is None:
+                raise PipelineStepError(
+                    f"étape {step.id!r} : la source {source!r} ne produit pas "
+                    f"de {attendu.value!r}."
+                )
+            sources[source] = artefact
+        return module.execute_merge(  # type: ignore[attr-defined,no-any-return]
+            sources, dict(step.params), context, ctrl
+        )
 
     def _run_fanout(
         self,

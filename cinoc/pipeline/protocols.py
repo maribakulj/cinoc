@@ -24,6 +24,7 @@ deux exécutions ne sont comparables qu'à version de module égale
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Protocol, runtime_checkable
 
 from cinoc.domain.artifacts import Artifact, ArtifactType
@@ -59,4 +60,39 @@ class Module(Protocol):
     ) -> StepOutput: ...
 
 
-__all__ = ["Module", "ParamValue"]
+class MergingModule(Protocol):
+    """Brique qui réunit **plusieurs** sorties du même type (couche 4).
+
+    Protocole **distinct** de :class:`Module`, et non un élargissement de sa
+    signature : élargir ``execute`` aurait obligé les vingt-deux briques
+    existantes à connaître un cas qui ne les concerne pas. L'exécuteur choisit
+    l'un ou l'autre selon ``PipelineStep.merge_from``, exactement comme il
+    choisit déjà le fan-out selon ``PipelineStep.fanout``.
+
+    ``sources`` est indexé par **identifiant d'étape** : une fusion doit pouvoir
+    dire d'où vient chaque avis — pour départager une égalité de façon
+    déterministe, et pour que le rapport puisse nommer les votants.
+    """
+
+    @property
+    def name(self) -> str: ...
+
+    @property
+    def version(self) -> str: ...
+
+    @property
+    def input_types(self) -> frozenset[ArtifactType]: ...
+
+    @property
+    def output_types(self) -> frozenset[ArtifactType]: ...
+
+    def execute_merge(
+        self,
+        sources: Mapping[str, Artifact],
+        params: dict[str, ParamValue],
+        context: RunContext,
+        control: RunControl,
+    ) -> StepOutput: ...
+
+
+__all__ = ["MergingModule", "Module", "ParamValue"]

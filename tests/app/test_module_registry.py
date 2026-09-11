@@ -50,6 +50,7 @@ def test_kinds_listed() -> None:
         "remote_segmenter",
         "saknussemm",
         "tesseract",
+        "vote",
     )
 
 
