@@ -31,6 +31,8 @@ def test_default_metrics_registration_is_idempotent() -> None:
         "ner_f1",
         "numseq_strict",
         "numseq_value",
+        "reading_order_coverage",
+        "reading_order_tau",
         "region_cer",
         "region_detection",
         "searchability",
@@ -76,6 +78,8 @@ def test_get_and_select_by_input_types() -> None:
     assert {metric.name for metric in layout_metrics} == {
         "line_identity_cer",
         "line_identity_coverage",
+        "reading_order_coverage",
+        "reading_order_tau",
         "region_cer",
         "region_detection",
     }

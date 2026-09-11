@@ -242,6 +242,25 @@ def _build_precomputed_layout(kwargs: Mapping[str, ParamValue]) -> Module:
     return PrecomputedLayoutSource()
 
 
+def _build_reading_order(kwargs: Mapping[str, ParamValue]) -> Module:
+    """``reading_order:<label>`` — ordonne les blocs d'une mise en page.
+
+    ``strategy`` choisit entre la ligne de base (``topdown``) et le regroupement
+    en colonnes : ce sont deux hypothèses sur la page, et c'est précisément ce
+    qu'un banc sert à départager.
+    """
+    from cinoc.adapters.layout.reading_order import ReadingOrderModule  # noqa: PLC0415
+
+    label = kwargs.get("label")
+    if not isinstance(label, str):
+        raise ModuleResolutionError(
+            "reading_order : 'label' (str) requis dans adapter_kwargs."
+        )
+    return ReadingOrderModule(
+        label=label, strategy=str(kwargs.get("strategy", "columns"))
+    )
+
+
 def _build_preprocess(kwargs: Mapping[str, ParamValue]) -> Module:
     """``preprocess:<label>`` — prépare l'image avant lecture (``IMAGE → IMAGE``).
 
@@ -386,6 +405,7 @@ def register_default_modules(registry: ModuleRegistry) -> None:
     registry.register_builder("alto_assembler", _build_alto_assembler)
     registry.register_builder("layout_to_text", _build_layout_to_text)
     registry.register_builder("preprocess", _build_preprocess)
+    registry.register_builder("reading_order", _build_reading_order)
 
 
 __all__ = [

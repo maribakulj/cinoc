@@ -49,6 +49,7 @@ Cinoc is the bench you run **before** committing a corpus to a pipeline: reprodu
 | **OCR → VLM** (`text_and_image`) | an OCR engine, then a VLM sees **image + text** together |
 | **VLM zero‑shot** | a VLM transcribes the image directly, no OCR upstream |
 | **Image preprocessing** (`image → image`) | deskew and binarise before reading, so you can measure whether restoring the page actually lowers the error rate — instead of asserting it from a quality score. The angle is **searched**, the threshold is **computed from the image** (Otsu); no magic constant decides anything. |
+| **Reading order** (`layout → layout`) | put the blocks back in the order a human reads them. On a two‑column page, reading top‑to‑bottom interleaves the columns and the text becomes unusable — a dedicated metric (Kendall distance) attributes that damage to the *ordering*, where CER alone cannot tell it apart from a bad transcription. |
 | **Hybrid** (seg → reco → ALTO) | layout segmentation → recognition **per region** (fan‑out) by **any OCR or a VLM (zero‑shot) per block** → assembled ALTO XML |
 | **Structured post‑correction** (ALTO → ALTO) | take **existing** ALTO and correct it *inside* the layout — every line keeps its identifier, so before/after is **known**, not guessed by aligning two lists of lines. Rules (offline, deterministic) or a local LLM via Ollama. |
 | **+ NER** (optional terminal step) | `text → entities`, scored if the corpus carries entity ground truth |
