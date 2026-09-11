@@ -195,3 +195,115 @@ def test_an_unknown_recipe_lists_the_known_ones() -> None:
 def test_the_title_falls_back_to_french() -> None:
     recette = Recipe.model_validate(_recette(title={"fr": "Essai"}))
     assert describe(recette, "en") == "Essai"
+
+
+# --------------------------------------------------------------------------- #
+# Une spec déposée, liée à un corpus — et la règle qui protège le disque
+# --------------------------------------------------------------------------- #
+
+
+def test_a_submitted_spec_never_keeps_its_own_corpus() -> None:
+    """**La décision de sécurité de la tranche, testée là où elle vit.**
+
+    Une spec porte des URI de fichiers. Les accepter d'un client ferait d'un
+    lanceur web un lecteur de disque à distance. Le corpus déposé est donc
+    écarté **avant** la validation — le résolveur de chemins ne voit jamais une
+    URI choisie par le client.
+
+    Ce test est en couche ``app`` et non dans le routeur : un second transport
+    qui oublierait la règle ne doit pas pouvoir rouvrir la porte en silence.
+    """
+    from cinoc.app.recipes import spec_for_corpus
+    from cinoc.domain.corpus import CorpusSpec
+    from cinoc.domain.documents import DocumentRef
+
+    legitime = CorpusSpec(
+        name="depot",
+        documents=(DocumentRef(id="ok", image_uri="ok.png", ground_truths=()),),
+    )
+    depose = yaml.safe_dump(
+        {
+            "corpus": {
+                "name": "vol",
+                "documents": [{"id": "x", "image_uri": "/etc/passwd"}],
+            },
+            "pipelines": [
+                {
+                    "name": "p",
+                    "initial_inputs": ["image"],
+                    "steps": [
+                        {
+                            "id": "ocr",
+                            "kind": "ocr",
+                            "adapter_name": "precomputed:ocr",
+                            "input_types": ["image"],
+                            "output_types": ["raw_text"],
+                        }
+                    ],
+                }
+            ],
+            "evaluation": {"views": []},
+        }
+    )
+
+    spec = spec_for_corpus(depose, legitime, run_id="r")
+
+    assert spec.corpus.name == "depot"
+    assert [d.image_uri for d in spec.corpus.documents] == ["ok.png"]
+
+
+def test_an_unreadable_spec_is_named_not_swallowed() -> None:
+    from cinoc.app.recipes import spec_for_corpus
+    from cinoc.domain.corpus import CorpusSpec
+    from cinoc.domain.documents import DocumentRef
+
+    corpus = CorpusSpec(
+        name="c", documents=(DocumentRef(id="d", image_uri="d.png", ground_truths=()),)
+    )
+    with pytest.raises(RecipeError, match="illisible"):
+        spec_for_corpus("{ pas: du: yaml", corpus, run_id="r")
+
+
+def test_referenced_kinds_reads_the_adapter_convention() -> None:
+    """``<kind>:<label>`` : c'est ce qui permet de garder une spec arbitraire
+    sans avoir à la comprendre."""
+    from cinoc.app.recipes import plan_recipe_run, referenced_kinds
+    from cinoc.domain.corpus import CorpusSpec
+    from cinoc.domain.documents import DocumentRef
+
+    corpus = CorpusSpec(
+        name="c", documents=(DocumentRef(id="d", image_uri="d.png", ground_truths=()),)
+    )
+    spec = plan_recipe_run(corpus, "presse_ancienne", run_id="r")
+    assert "preprocess" in referenced_kinds(spec)
+    assert "reading_order" in referenced_kinds(spec)
+
+
+def test_the_evaluation_follows_what_the_pipeline_produces() -> None:
+    """Imposer une vue fixe en donnerait une **vide** sur la moitié des recettes,
+    et une vue vide vaut moins que pas de vue."""
+    from cinoc.app.recipes import plan_recipe_run
+    from cinoc.domain.corpus import CorpusSpec
+    from cinoc.domain.documents import DocumentRef
+
+    corpus = CorpusSpec(
+        name="c", documents=(DocumentRef(id="d", image_uri="d.png", ground_truths=()),)
+    )
+    texte = plan_recipe_run(corpus, "ocr_simple", run_id="r")
+    assert [v.name for v in texte.evaluation.views] == ["texte"]
+
+    structure = plan_recipe_run(corpus, "presse_ancienne", run_id="r")
+    noms = {v.name for v in structure.evaluation.views}
+    assert {"texte", "structure"} <= noms
+
+
+def test_the_catalogue_is_the_same_for_both_transports() -> None:
+    """``cinoc list recipes`` et l'API lisent le **même** catalogue : deux
+    transports d'une même donnée ne doivent pas la décrire différemment."""
+    from cinoc.app.recipes import recipe_catalog
+
+    catalogue = recipe_catalog("fr")
+    assert {c["name"] for c in catalogue} == {r.name for r in load_recipes()}
+    une = next(c for c in catalogue if c["name"] == "presse_ancienne")
+    assert une["shape"][0] == "preprocess"
+    assert une["title"] and une["description"]
