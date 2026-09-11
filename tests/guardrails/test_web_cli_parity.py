@@ -92,6 +92,13 @@ PARITE: dict[str, str] = {
     # corrige), planifiée par `plan_correction_run`. Elle a donc sa route,
     # comme la segmentation a la sienne.
     "POST /api/runs/correction": "cli:correct",
+    # Le composeur ouvert (D-240). Une recette se lance des deux côtés —
+    # `cinoc list recipes` la montre, `cinoc run` l'exécute via sa spec ; et la
+    # porte « spec complète » donne au web le graphe entier, que la CLI avait
+    # déjà par son YAML.
+    "GET /api/recipes": "cli:list",
+    "POST /api/runs/recipe": "cli:run",
+    "POST /api/runs/spec": "cli:run",
     # L'état d'un job, son annulation et son flux d'événements n'existent que
     # parce que le web exécute **en arrière-plan**. En CLI le run est au premier
     # plan : la progression va sur stdout, l'annulation est Ctrl-C (coopérative,

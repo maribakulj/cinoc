@@ -30,8 +30,11 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from cinoc.domain.artifacts import ArtifactType
+from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.errors import CinocError
+from cinoc.domain.evaluation import EvaluationSpec, EvaluationView
 from cinoc.domain.pipeline import INITIAL_STEP_ID, PipelineSpec, PipelineStep
+from cinoc.domain.run_spec import RunSpec
 
 RECIPES_DIR = Path(__file__).resolve().parent.parent / "recipes"
 
@@ -283,15 +286,155 @@ def describe(recipe: Recipe, lang: str = "fr") -> str:
     return recipe.title.get(lang) or recipe.title.get("fr") or recipe.name
 
 
+def default_evaluation(pipeline: PipelineSpec) -> EvaluationSpec:
+    """Vues d'évaluation déduites de ce que le pipeline **produit réellement**.
+
+    Une recette décrit une forme, pas une façon de la noter. Plutôt que d'imposer
+    une vue fixe — qui serait vide sur la moitié des recettes — on regarde les
+    types de sortie : du texte se note en texte, une mise en page en structure,
+    des entités en entités. Un type qu'aucune étape ne produit ne donne pas de
+    vue : une vue vide vaut moins que pas de vue.
+    """
+    produits = {
+        t for etape in pipeline.steps for t in etape.output_types
+    }
+    vues: list[EvaluationView] = []
+    candidats_texte = produits & {RAW, CORR}
+    if candidats_texte:
+        vues.append(
+            EvaluationView(
+                name="texte",
+                candidate_types=frozenset(candidats_texte),
+                metric_names=("cer", "wer"),
+            )
+        )
+    if LAYOUT in produits:
+        vues.append(
+            EvaluationView(
+                name="structure",
+                candidate_types=frozenset({LAYOUT}),
+                metric_names=("region_cer", "reading_order_tau"),
+            )
+        )
+    if ENTITIES in produits:
+        vues.append(
+            EvaluationView(
+                name="entites",
+                candidate_types=frozenset({ENTITIES}),
+                metric_names=("ner_f1",),
+            )
+        )
+    return EvaluationSpec(views=tuple(vues))
+
+
+def plan_recipe_run(
+    corpus: CorpusSpec,
+    recipe_name: str,
+    *,
+    run_id: str,
+    choices: Mapping[str, str] | None = None,
+    params: Mapping[str, Mapping[str, str | int | float | bool]] | None = None,
+) -> RunSpec:
+    """``RunSpec`` complet d'une recette, sur un corpus donné.
+
+    Assembler une spec est un acte de la couche ``app`` : les feuilles de
+    transport (CLI, web) choisissent la recette et le corpus, jamais la forme du
+    résultat. Un garde-fou d'architecture le vérifie.
+    """
+    recette = recipe_by_name(recipe_name)
+    pipeline, kwargs = plan_from_recipe(recette, choices=choices, params=params)
+    return RunSpec(
+        corpus=corpus,
+        pipelines=(pipeline,),
+        evaluation=default_evaluation(pipeline),
+        adapter_kwargs=kwargs,
+        run_id=run_id,
+    )
+
+
+def spec_for_corpus(document: str, corpus: CorpusSpec, *, run_id: str) -> RunSpec:
+    """Lit une spec **déposée** et la lie au corpus fourni par l'appelant.
+
+    **Le corpus de la spec est écarté avant même la validation.** Une spec porte
+    des URI de fichiers ; les accepter d'un client ferait d'un lanceur web un
+    lecteur de disque à distance. La spec décrit donc les pipelines et
+    l'évaluation ; le corpus, c'est l'appelant qui le fournit — et le résolveur
+    de chemins ne voit jamais une URI choisie par le client.
+
+    C'est ici, en couche ``app``, que cette décision doit vivre : un transport
+    qui l'oublierait rouvrirait la porte sans qu'aucun test ne le voie.
+    """
+    try:
+        brut = yaml.safe_load(document)
+    except yaml.YAMLError as exc:
+        raise RecipeError(f"spec illisible : {exc}") from exc
+    if not isinstance(brut, dict):
+        raise RecipeError("spec : un objet est attendu à la racine.")
+    brut.pop("corpus", None)
+    brut["corpus"] = corpus.model_dump(mode="json")
+    brut["run_id"] = run_id
+    try:
+        return RunSpec.model_validate(brut)
+    except ValidationError as exc:
+        raise RecipeError(f"spec invalide : {exc}") from exc
+
+
+def referenced_kinds(spec: RunSpec) -> set[str]:
+    """Les ``kind`` de briques qu'une spec met en jeu.
+
+    Le nom d'adapter suit la convention ``<kind>:<label>`` : c'est ce qui permet
+    d'appliquer à une spec **arbitraire** les mêmes gardes qu'à un concurrent du
+    composeur, sans avoir à comprendre la spec.
+    """
+    return {
+        etape.adapter_name.split(":", 1)[0]
+        for pipeline in spec.pipelines
+        for etape in pipeline.steps
+    }
+
+
+def recipe_catalog(lang: str = "fr") -> list[dict[str, object]]:
+    """Catalogue des recettes, prêt à afficher : forme, intention, choix restants.
+
+    Vit en couche ``app`` et non dans le routeur : c'est la **même** donnée que
+    montre ``cinoc list recipes``, et deux transports d'un même catalogue ne
+    doivent pas le décrire différemment.
+    """
+    table = roles()
+    langue = "en" if lang == "en" else "fr"
+    sorties: list[dict[str, object]] = []
+    for recette in load_recipes():
+        pipeline, _ = plan_from_recipe(recette)
+        sorties.append(
+            {
+                "name": recette.name,
+                "title": describe(recette, langue),
+                "description": recette.description.get(langue, ""),
+                "shape": [etape.kind for etape in pipeline.steps],
+                "choices": [
+                    {"step": e.id, "bricks": list(table[e.role].briques)}
+                    for e in recette.steps
+                    if len(table[e.role].briques) > 1
+                ],
+            }
+        )
+    return sorties
+
+
 __all__ = [
     "RECIPES_DIR",
     "Recipe",
     "RecipeError",
     "RecipeStep",
     "Role",
+    "default_evaluation",
     "describe",
     "load_recipes",
     "plan_from_recipe",
+    "recipe_catalog",
+    "plan_recipe_run",
+    "referenced_kinds",
+    "spec_for_corpus",
     "recipe_by_name",
     "roles",
 ]

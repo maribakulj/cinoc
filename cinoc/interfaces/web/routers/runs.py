@@ -39,9 +39,18 @@ from cinoc.app.correction_planning import (
 from cinoc.app.demo import demo_spec_builder
 from cinoc.app.engines import PUBLIC_ENGINE_KINDS, StatusProvider
 from cinoc.app.jobs import JobRunner
+from cinoc.app.modules import ModuleRegistry, register_default_modules
+from cinoc.app.recipes import (
+    RecipeError,
+    plan_recipe_run,
+    recipe_catalog,
+    referenced_kinds,
+    spec_for_corpus,
+)
 from cinoc.app.run_planning import Competitor, RunPlanningError, plan_benchmark_run
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.errors import CinocError
+from cinoc.domain.run_spec import RunSpec
 from cinoc.interfaces.web.security.csrf import csrf_protect
 
 
@@ -58,6 +67,43 @@ class LaunchRequest(BaseModel):
     #: Nom d'un profil de métriques (``standard``/``essentiel``/``philologie``) :
     #: choisit les colonnes de classement de la vue ``text``. Inconnu → 422 (plan).
     metric_profile: str | None = Field(default=None, max_length=64)
+
+
+class RecipeRequest(BaseModel):
+    """Lancer une **recette** : une forme nommée, sur un corpus du dépôt.
+
+    L'utilisateur choisit l'intention (« presse ancienne multi-colonnes ») et les
+    briques ; la forme, elle, vient de la recette. C'est la voie ergonomique : le
+    graphe admet des centaines de formes, elles ne rentrent pas dans un formulaire.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    corpus_id: str
+    recipe: str = Field(min_length=1, max_length=64)
+    #: Brique retenue par étape (``{"ocr": "tesseract"}``). Absente → le défaut
+    #: de la recette.
+    choices: dict[str, str] = Field(default_factory=dict)
+
+
+class SpecRequest(BaseModel):
+    """Lancer une **spec complète**, décrite en YAML ou en JSON.
+
+    La porte qui donne au web l'intégralité du graphe sans une case de plus : on
+    compose en YAML — ou on part d'une recette et on l'exporte pour la modifier —
+    puis on dépose le fichier.
+
+    **Le corpus n'est jamais celui de la spec.** Il vient du dépôt, par
+    ``corpus_id`` : une spec porte des URI de fichiers, et les accepter d'un
+    client ferait du lanceur un lecteur de disque à distance. La spec décrit donc
+    les pipelines et l'évaluation ; le corpus, c'est le serveur qui le fournit.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    corpus_id: str
+    #: Le document de spec, tel quel. YAML accepté (le JSON en est un sous-ensemble).
+    spec: str = Field(min_length=1, max_length=200_000)
 
 
 class CorrectionRequest(BaseModel):
@@ -240,6 +286,85 @@ def build_runs_router(
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         return {"job_id": runner.launch(build)}
 
+
+
+    def _garder(spec: RunSpec) -> None:
+        """Applique à une spec les gardes du lanceur, dans le même ordre.
+
+        Une spec composée à la main ne doit pas ouvrir une porte que le
+        formulaire ferme : ce serait un contournement, pas une fonctionnalité.
+        """
+        sts = statuses()
+        registre = ModuleRegistry()
+        register_default_modules(registre)
+        connus = {s.kind for s in sts} | set(registre.kinds())
+        disponibles = {s.kind for s in sts if s.available}
+        for kind in sorted(referenced_kinds(spec)):
+            if kind not in connus:
+                raise HTTPException(
+                    status_code=422, detail=f"brique inconnue : {kind!r}"
+                )
+            if public_mode and kind not in PUBLIC_ENGINE_KINDS:
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"brique indisponible en mode public : {kind!r} "
+                    "(seul le socle gratuit est exécuté).",
+                )
+            # Une brique hors catalogue moteur (projection, assembleur, vote…)
+            # n'a pas de sonde de disponibilité : elle est intégrée, donc prête.
+            if kind in {s.kind for s in sts} and kind not in disponibles:
+                raise HTTPException(
+                    status_code=409, detail=f"brique indisponible : {kind!r}"
+                )
+
+    def _corpus_du_depot(corpus_id: str) -> CorpusSpec:
+        corpus = corpus_store.get(corpus_id)
+        if corpus is None:
+            raise HTTPException(status_code=404, detail="corpus introuvable")
+        return corpus
+
+    @router.get("/api/recipes")
+    def list_recipes(lang: str = "fr") -> dict[str, object]:
+        """Recettes livrées : forme, intention, et ce qu'il reste à choisir."""
+        return {"recipes": recipe_catalog(lang)}
+
+    @router.post(
+        "/api/runs/recipe", status_code=201, dependencies=[Depends(csrf_protect)]
+    )
+    def launch_recipe(payload: RecipeRequest) -> dict[str, str]:
+        """Lance une recette sur un corpus du dépôt."""
+        corpus = _corpus_du_depot(payload.corpus_id)
+        try:
+            spec = plan_recipe_run(
+                corpus,
+                payload.recipe,
+                run_id=f"web-rec-{uuid.uuid4().hex[:12]}",
+                choices=payload.choices,
+            )
+        except RecipeError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        _garder(spec)
+        return {"job_id": runner.launch(lambda _ws: spec)}
+
+    @router.post(
+        "/api/runs/spec", status_code=201, dependencies=[Depends(csrf_protect)]
+    )
+    def launch_spec(payload: SpecRequest) -> dict[str, str]:
+        """Lance une **spec complète** déposée par l'utilisateur.
+
+        Le corpus vient du dépôt, jamais de la spec — la règle et sa raison
+        vivent en couche ``app`` (``spec_for_corpus``), pour qu'un transport qui
+        l'oublierait ne puisse pas rouvrir la porte en silence.
+        """
+        corpus = _corpus_du_depot(payload.corpus_id)
+        try:
+            spec = spec_for_corpus(
+                payload.spec, corpus, run_id=f"web-spec-{uuid.uuid4().hex[:12]}"
+            )
+        except RecipeError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        _garder(spec)
+        return {"job_id": runner.launch(lambda _ws: spec)}
 
     @router.post(
         "/api/runs/correction",
