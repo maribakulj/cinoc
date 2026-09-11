@@ -141,7 +141,12 @@ def test_no_hand_written_provider_list_remains() -> None:
 
     Une liste peut réapparaître ailleurs sous un autre nom, et le contrôle
     ci-dessus ne la verrait pas. Celui-ci cherche la **forme** du défaut : un
-    ensemble ou un tuple littéral contenant au moins deux noms de fournisseurs.
+    ensemble, un tuple, une liste — **ou les clés d'un dictionnaire** —
+    contenant au moins deux noms de fournisseurs.
+
+    Le dictionnaire a été ajouté après coup : il était l'angle mort évident de
+    ce contrôle, puisqu'une table ``{"mistral": …, "ollama": …}`` est une liste
+    de fournisseurs sous un autre habit et passait sans un mot.
     """
     coupables: dict[str, list[str]] = {}
     for chemin in sorted(CINOC.rglob("*.py")):
@@ -149,11 +154,15 @@ def test_no_hand_written_provider_list_remains() -> None:
             continue
         arbre = ast.parse(chemin.read_text(encoding="utf-8"))
         for noeud in ast.walk(arbre):
-            if not isinstance(noeud, ast.Set | ast.Tuple | ast.List):
+            if isinstance(noeud, ast.Dict):
+                elements: list[ast.expr] = [k for k in noeud.keys if k is not None]
+            elif isinstance(noeud, ast.Set | ast.Tuple | ast.List):
+                elements = list(noeud.elts)
+            else:
                 continue
             noms = {
                 e.value
-                for e in noeud.elts
+                for e in elements
                 if isinstance(e, ast.Constant) and isinstance(e.value, str)
             }
             trouves = noms & set(FOURNISSEURS)
@@ -162,10 +171,23 @@ def test_no_hand_written_provider_list_remains() -> None:
                 coupables.setdefault(rel, []).append(
                     f"L{noeud.lineno} {sorted(trouves)}"
                 )
-    # `_LLM_ADAPTERS` (app/engines.py) est **la** table de correspondance
-    # fournisseur → classe : c'est la source, pas une copie. Elle est nommée ici
-    # pour que toute autre occurrence ressorte.
-    autorise = {"app/engines.py"}
+    # Trois **tables sources** — pas des copies. Nommées ici pour que toute
+    # autre occurrence ressorte, et vérifiées par le test suivant : une source
+    # autorisée dont les clés dérivent serait le pire des deux mondes.
+    #
+    #   app/engines.py                        fournisseur → classe d'adapter
+    #   app/models.py                         fournisseur → modèles suggérés (curé)
+    #   adapters/layout/saknussemm_correct.py producteur saknussemm → client
+    #
+    # Le dernier n'est **pas** dérivable de `providers_for_mode` : saknussemm
+    # consomme un `StructuredCompletionClient`, écrit à la main par fournisseur.
+    # Un fournisseur de cinoc absent de sa table est un client qui n'existe pas
+    # encore, pas un oubli.
+    autorise = {
+        "app/engines.py",
+        "app/models.py",
+        "adapters/layout/saknussemm_correct.py",
+    }
     fautifs = {k: v for k, v in coupables.items() if k not in autorise}
     assert not fautifs, (
         f"listes de fournisseurs recopiées : {fautifs}. Lis les capacités via "
@@ -279,3 +301,35 @@ def _nom_affecte(instruction: ast.stmt) -> str | None:
         if isinstance(cible, ast.Name):
             return cible.id
     return None
+
+
+def test_the_allowed_source_tables_only_name_real_providers() -> None:
+    """Une table **source** peut garder ses clés en dur — pas les inventer.
+
+    Sans ce contrôle, l'autorisation du test précédent serait un blanc-seing :
+    un fournisseur retiré de cinoc continuerait d'être suggéré par le catalogue
+    de modèles, ou proposé comme producteur de correction, et rien ne le dirait.
+    Ici les clés sont **confrontées** aux fournisseurs réels ; le contenu, lui,
+    reste curé à la main (c'est ce qui fait de ces tables des sources).
+
+    ``saknussemm`` a un nom en plus, et c'est voulu : ``mistral_vision`` n'est
+    pas un fournisseur mais une **capacité** (regarder le scan) offerte par un
+    fournisseur qui, lui, doit exister.
+    """
+    from cinoc.adapters.layout.saknussemm_correct import MODEL_PRODUCERS
+    from cinoc.app.models import _CANONICAL
+
+    reels = set(FOURNISSEURS)
+    assert set(_CANONICAL) <= reels, (
+        f"app/models.py suggère des modèles pour {set(_CANONICAL) - reels}, "
+        "qui n'est plus un fournisseur de cinoc."
+    )
+    producteurs = set(MODEL_PRODUCERS) - {"mistral_vision"}
+    assert producteurs <= reels, (
+        f"saknussemm propose {producteurs - reels} comme producteur, mais cinoc "
+        "ne connaît pas ce fournisseur."
+    )
+    assert "mistral" in MODEL_PRODUCERS, (
+        "mistral_vision est une capacité de mistral : le fournisseur texte doit "
+        "rester câblé à côté."
+    )

@@ -16,6 +16,14 @@ publier, et son moment, appartiennent au mainteneur.
 
 ### Ajouté
 
+- **Post-correction structurée voyant le scan**, pilotée par Mistral.
+  `saknussemm` livrait une chaîne vision complète (découpe par ligne, gardes
+  desserrées, plafond d'images) qu'aucun client de ce dépôt ne pouvait
+  atteindre : deux producteurs de plus la branchent — `mistral` (sur le texte)
+  et `mistral_vision` (qui découpe chaque ligne dans l'image et la montre au
+  modèle). Le plafond de huit images par appel est déclaré au moteur, donc le
+  lot est scindé avant la requête plutôt que refusé après. Disponibles depuis la
+  CLI (`cinoc correct --producer`) comme depuis le web, sans liste recopiée.
 - **Moteur déterministe** : pipelines OCR / HTR / VLM / OCR→LLM, exécutés via un
   orchestrateur unique (CLI **et** web), `RunManifest` reproductible, annulation
   et timeout coopératifs.

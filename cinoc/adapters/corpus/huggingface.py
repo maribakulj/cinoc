@@ -445,7 +445,12 @@ def snapshot_curated_layout(
     """
     try:
         from huggingface_hub import snapshot_download  # type: ignore[import-not-found]
-        from huggingface_hub.utils import (  # type: ignore[import-not-found]
+
+        # Deux codes, et les deux servent : sans le paquet mypy voit
+        # ``import-not-found`` ; **avec** lui (transformers l'installe) il voit
+        # ``attr-defined``, parce que ``utils`` ré-exporte sans ``__all__``.
+        # N'en couvrir qu'un fait rougir la CI selon ce qui est installé.
+        from huggingface_hub.utils import (  # type: ignore[import-not-found,attr-defined]  # noqa: E501
             HfHubHTTPError,
         )
     except ImportError as exc:

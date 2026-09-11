@@ -22,6 +22,17 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from cinoc.adapters.layout.saknussemm_correct import (
+    #: Producteurs câblés dans l'adapter — **lus là-bas, jamais recopiés**.
+    #:
+    #: C'en était une copie, et elle aurait dérivé dès que l'adapter a gagné
+    #: ``mistral`` : la CLI et le web auraient continué d'offrir deux
+    #: producteurs sur quatre. Le garde-fou des listes recopiées ne l'aurait pas
+    #: vue — elle ne contenait qu'un seul nom de fournisseur, et son seuil est
+    #: deux.
+    MODEL_PRODUCERS,
+    PRODUCERS,
+)
 from cinoc.app.corpus_upload import GT_SOURCE_KEY
 from cinoc.domain.artifacts import ArtifactType
 from cinoc.domain.corpus import CorpusSpec
@@ -30,9 +41,6 @@ from cinoc.domain.errors import CinocError
 from cinoc.domain.evaluation import EvaluationSpec, EvaluationView
 from cinoc.domain.pipeline import INITIAL_STEP_ID, PipelineSpec, PipelineStep
 from cinoc.domain.run_spec import RunSpec
-
-#: Producteurs câblés dans l'adapter de correction.
-_PRODUCERS = ("rules", "ollama")
 
 #: Extensions d'image cherchées à côté d'un ALTO (mêmes que ``transcription``).
 _IMAGE_EXT = (".png", ".jpg", ".jpeg", ".tif", ".tiff", ".jp2")
@@ -68,14 +76,14 @@ def plan_correction_run(
     — sans référence, il n'y a rien à noter, et une vue vide vaut moins que pas
     de vue.
     """
-    if producer not in _PRODUCERS:
+    if producer not in PRODUCERS:
         raise CinocError(
             f"plan_correction_run : producteur {producer!r} inconnu "
-            f"(attendu : {', '.join(_PRODUCERS)})."
+            f"(attendu : {', '.join(PRODUCERS)})."
         )
-    if producer == "ollama" and not model:
+    if producer in MODEL_PRODUCERS and not model:
         raise CinocError(
-            "plan_correction_run : le producteur 'ollama' exige un `model`."
+            f"plan_correction_run : le producteur {producer!r} exige un `model`."
         )
     if not corpus.documents:
         raise CinocError("plan_correction_run : corpus vide.")
@@ -227,6 +235,10 @@ def ground_truth_is_its_own_source(corpus: CorpusSpec) -> bool:
 
 
 __all__ = [
+    # Ré-exportés pour les transports : une interface lit la capacité en couche
+    # `app`, jamais en couche `adapters` — et surtout jamais en la recopiant.
+    "MODEL_PRODUCERS",
+    "PRODUCERS",
     "corpus_from_alto",
     "ground_truth_is_its_own_source",
     "plan_correction_run",
