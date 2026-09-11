@@ -30,6 +30,8 @@ from cinoc.formats.pagexml.types import (
     PageRegion,
     PageTextLine,
     PageTextRegion,
+    ReadingOrderGroup,
+    ReadingOrderRef,
 )
 
 
@@ -103,4 +105,83 @@ def page_to_layout(document: PageDocument) -> CanonicalLayout:
     )
 
 
-__all__ = ["page_to_layout"]
+__all__ = ["layout_to_page", "page_to_layout"]
+
+
+def _points_from_bbox(geometry: Geometry | None) -> tuple[Point, ...] | None:
+    """Polygone d'une région : le polygone natif s'il existe, sinon la boîte.
+
+    PAGE décrit des régions par un **polygone**, pas par un rectangle. Quand la
+    mise en page neutre ne porte qu'une boîte — c'est le cas d'un ALTO, qui n'a
+    que des rectangles — on la rend en ses quatre coins plutôt que de laisser la
+    région sans coordonnées : un PAGE sans ``Coords`` n'est pas ré-importable.
+    """
+    if geometry is None:
+        return None
+    if geometry.polygon:
+        return tuple(geometry.polygon)
+    boite = geometry.bbox
+    if boite is None:
+        return None
+    droite, bas = boite.x + boite.width, boite.y + boite.height
+    return (
+        (boite.x, boite.y),
+        (droite, boite.y),
+        (droite, bas),
+        (boite.x, bas),
+    )
+
+
+def _page_line(line: Line) -> PageTextLine:
+    return PageTextLine(
+        id=line.id,
+        coords=_points_from_bbox(line.geometry),
+        baseline=tuple(line.baseline) if line.baseline else None,
+        text=line.text,
+        confidence=line.confidence,
+    )
+
+
+def _page_region(region: Region) -> PageTextRegion:
+    return PageTextRegion(
+        id=region.id,
+        region_type=region.region_type,
+        coords=_points_from_bbox(region.geometry),
+        text_lines=tuple(_page_line(line) for line in region.lines),
+        regions=tuple(_page_region(sous) for sous in region.regions),
+    )
+
+
+def _page_reading_order(page: LayoutPage) -> ReadingOrderGroup | None:
+    """Ordre de lecture PAGE, s'il y en a un à écrire.
+
+    PAGE le porte explicitement, contrairement à ALTO où il n'est qu'implicite
+    dans l'ordre des blocs. C'est l'une des raisons de tenir ce format : un
+    ordre corrigé à la main survit à l'export.
+    """
+    if not page.reading_order:
+        return None
+    return ReadingOrderGroup(
+        ordered=True,
+        children=tuple(ReadingOrderRef(region_ref=rid) for rid in page.reading_order),
+    )
+
+
+def _page_page(page: LayoutPage) -> PagePage:
+    return PagePage(
+        image_width=page.width,
+        image_height=page.height,
+        reading_order=_page_reading_order(page),
+        regions=tuple(_page_region(region) for region in page.regions),
+    )
+
+
+def layout_to_page(layout: CanonicalLayout) -> PageDocument:
+    """Assemble un ``CanonicalLayout`` en ``PageDocument`` sérialisable.
+
+    Inverse de :func:`page_to_layout`. Les régions gardent leur **ordre
+    déclaré** — contrairement à l'assemblage ALTO, qui les réordonne parce que
+    ce format n'a pas d'autre façon d'exprimer la lecture ; ici l'ordre est
+    écrit à part, donc le déplacer serait le dire deux fois.
+    """
+    return PageDocument(pages=tuple(_page_page(page) for page in layout.pages))

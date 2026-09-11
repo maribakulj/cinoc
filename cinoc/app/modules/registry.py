@@ -242,6 +242,18 @@ def _build_precomputed_layout(kwargs: Mapping[str, ParamValue]) -> Module:
     return PrecomputedLayoutSource()
 
 
+def _build_page_assembler(kwargs: Mapping[str, ParamValue]) -> Module:
+    """``page_assembler`` — sortie PAGE XML, ré-importable en relecture.
+
+    Sans paramètre, comme ``alto_assembler`` : un assembleur n'a rien à régler,
+    il traduit.
+    """
+    from cinoc.adapters.layout.page_assembler import PageAssembler  # noqa: PLC0415
+
+    del kwargs
+    return PageAssembler()
+
+
 def _build_vote(kwargs: Mapping[str, ParamValue]) -> Module:
     """``vote:<label>`` — fusionne N transcriptions par vote majoritaire.
 
@@ -424,6 +436,7 @@ def register_default_modules(registry: ModuleRegistry) -> None:
     registry.register_builder("preprocess", _build_preprocess)
     registry.register_builder("reading_order", _build_reading_order)
     registry.register_builder("vote", _build_vote)
+    registry.register_builder("page_assembler", _build_page_assembler)
 
 
 __all__ = [
