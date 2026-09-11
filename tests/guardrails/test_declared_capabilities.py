@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import ast
 from pathlib import Path
+from typing import get_args
 
 import pytest
 
@@ -30,8 +31,12 @@ CINOC = Path(__file__).resolve().parents[2] / "cinoc"
 #: Les quatre fournisseurs LLM/VLM du socle.
 FOURNISSEURS = ("openai", "anthropic", "mistral", "ollama")
 
-#: Les trois modes du contrat ``run_llm_step``.
-MODES: tuple[PipelineMode, ...] = ("text_only", "text_and_image", "zero_shot")
+#: Les modes du contrat ``run_llm_step`` — **dérivés du type du domaine**.
+#:
+#: Les recopier ici aurait rejoué le défaut que ce fichier existe pour
+#: fermer : le jour où un mode s'ajoute, le garde-fou déclarerait « mode
+#: inconnu » sur le mode tout neuf.
+MODES: tuple[PipelineMode, ...] = get_args(PipelineMode)
 
 
 def test_every_provider_declares_its_modes() -> None:
@@ -46,9 +51,42 @@ def test_every_provider_declares_its_modes() -> None:
         assert not inconnus, f"{nom} déclare des modes inconnus : {inconnus}"
 
 
-@pytest.mark.parametrize("mode", MODES)
+#: Modes que le **composeur** expose, et la fonction qui en dresse la liste.
+#: ``refine`` n'y figure pas : chaîner deux correcteurs se décrit en spec,
+#: pas dans le modèle ``Competitor`` (c'est la dette que la tranche *g* du
+#: plan d'intégration ferme, en ouvrant le composeur aux specs).
+PLANIFIES: dict[str, str] = {
+    "text_only": "llm",
+    "text_and_image": "vlm",
+    "zero_shot": "vlm",
+}
+
+
+def test_every_mode_is_either_planned_or_knowingly_spec_only() -> None:
+    """Aucun mode ne peut être **inatteignable** sans qu'on l'ait décidé.
+
+    Un mode déclaré par les adapters mais absent du composeur reste utilisable
+    par une spec YAML — ce qui est légitime, et doit être **su**. Ce test
+    interdit qu'un mode tombe entre les deux sans que personne le remarque.
+    """
+    hors_composeur = sorted(set(MODES) - set(PLANIFIES))
+    assert hors_composeur == ["refine"], (
+        f"modes hors composeur : {hors_composeur}. Chacun doit être un choix "
+        "écrit ici, pas un oubli — sinon il est inatteignable en silence."
+    )
+    # Et ceux-là restent construisibles, donc utilisables en spec.
+    from cinoc.app.modules import ModuleRegistry, register_default_modules
+
+    registre = ModuleRegistry()
+    register_default_modules(registre)
+    for mode in hors_composeur:
+        module = registre.build("openai:x", {"label": "x", "role": mode})
+        assert module.input_types, f"{mode} : aucune entrée déclarée"
+
+
+@pytest.mark.parametrize("mode", sorted(PLANIFIES))
 def test_the_planner_follows_the_declaration_at_runtime(
-    mode: PipelineMode, monkeypatch: pytest.MonkeyPatch
+    mode: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Le planificateur **suit** la déclaration, il n'en garde pas une copie.
 
@@ -67,7 +105,7 @@ def test_the_planner_follows_the_declaration_at_runtime(
         OllamaAdapter, "SUPPORTED_MODES", frozenset(m for m in MODES if m != mode)
     )
     apres = providers_for_mode(mode)
-    accepte = _llm_engines() if mode == "text_only" else _vlm_engines()
+    accepte = _llm_engines() if PLANIFIES[mode] == "llm" else _vlm_engines()
 
     assert "ollama" not in apres, "la capacité est lue trop tard, ou mise en cache"
     assert "ollama" not in accepte, (
@@ -192,3 +230,52 @@ def test_both_planners_accept_the_same_bricks() -> None:
     assert not refus, (
         "couples valides d'un côté et refusés de l'autre :\n  " + "\n  ".join(refus)
     )
+
+
+def test_no_module_level_mode_list_shadows_the_declaration() -> None:
+    """Aucun module ne ré-énumère les **modes** à côté de la déclaration.
+
+    Ce contrôle est né d'une récidive, et par moi. En posant `SUPPORTED_MODES`
+    sur les classes (D-233), je n'avais pas vu que chaque adapter gardait aussi
+    un `_SUPPORTED` au niveau module : deux sources coexistaient, et l'ajout du
+    mode `refine` n'a été refusé que par la seconde (D-236). Le contrôle des
+    *fournisseurs* ne voyait pas celui des *modes* — il en fallait un pour
+    chaque forme du même défaut.
+    """
+    llm = CINOC / "adapters" / "llm"
+    coupables: dict[str, list[str]] = {}
+    for chemin in sorted(llm.glob("*.py")):
+        arbre = ast.parse(chemin.read_text(encoding="utf-8"))
+        for noeud in ast.walk(arbre):
+            # Une affectation au niveau module (pas un attribut de classe).
+            if not isinstance(noeud, ast.Module):
+                continue
+            for instruction in noeud.body:
+                cible = _nom_affecte(instruction)
+                if cible is None:
+                    continue
+                litteraux = {
+                    e.value
+                    for e in ast.walk(instruction)
+                    if isinstance(e, ast.Constant) and isinstance(e.value, str)
+                }
+                if len(litteraux & set(MODES)) >= 2:
+                    coupables.setdefault(chemin.name, []).append(cible)
+    assert not coupables, (
+        f"listes de modes au niveau module : {coupables}. Les modes se "
+        "déclarent sur la classe d'adapter (`SUPPORTED_MODES`), qui est la "
+        "seule source — une liste parallèle a déjà dérivé une fois."
+    )
+
+
+def _nom_affecte(instruction: ast.stmt) -> str | None:
+    """Nom de la variable affectée par une instruction de module, ou ``None``."""
+    if isinstance(instruction, ast.AnnAssign) and isinstance(
+        instruction.target, ast.Name
+    ):
+        return instruction.target.id
+    if isinstance(instruction, ast.Assign) and len(instruction.targets) == 1:
+        cible = instruction.targets[0]
+        if isinstance(cible, ast.Name):
+            return cible.id
+    return None

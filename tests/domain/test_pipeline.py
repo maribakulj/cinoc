@@ -15,10 +15,16 @@ from cinoc.domain.errors import CinocError
 
 
 def test_pipeline_mode_values():
+    """Les quatre modes d'une étape LLM/VLM.
+
+    ``refine`` (D-236) est le seul dont l'entrée **et** la sortie sont du texte
+    corrigé : c'est lui qui rend une chaîne de correcteurs exprimable.
+    """
     assert set(typing.get_args(PipelineMode)) == {
         "text_only",
         "text_and_image",
         "zero_shot",
+        "refine",
     }
 
 

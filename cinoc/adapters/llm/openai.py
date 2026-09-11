@@ -34,7 +34,6 @@ from cinoc.pipeline.types import RunContext, StepOutput
 
 _VERSION = "1.0"
 _DEFAULT_MODEL = "gpt-4o-mini"
-_SUPPORTED: frozenset[str] = frozenset({"text_only", "text_and_image", "zero_shot"})
 
 
 def _completion_from_chat(response: Any) -> LLMCompletion:
@@ -123,7 +122,7 @@ class OpenAIAdapter:
     #: ``run_llm_step``, invérifiable de l'extérieur. Une liste tenue ailleurs
     #: dérive — c'est arrivé (D-233).
     SUPPORTED_MODES: ClassVar[frozenset[PipelineMode]] = frozenset(
-        {"text_only", "text_and_image", "zero_shot"}
+        {"text_only", "text_and_image", "zero_shot", "refine"}
     )
 
 
@@ -137,7 +136,9 @@ class OpenAIAdapter:
     ) -> None:
         self._label = validate_llm_label(label, "OpenAIAdapter")
         self._model = model
-        self._role: PipelineMode = validate_role(role, "OpenAIAdapter", _SUPPORTED)
+        self._role: PipelineMode = validate_role(
+            role, "OpenAIAdapter", self.SUPPORTED_MODES
+        )
         self._prompt = (
             prompt if prompt is not None else default_prompt_for_role(self._role)
         )
