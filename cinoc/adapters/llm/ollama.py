@@ -40,8 +40,6 @@ _VERSION = "1.0"
 _DEFAULT_MODEL = "llama3"
 #: Les trois modes, comme les fournisseurs distants. ``zero_shot`` a un sens
 #: particulier ici : un modèle d'OCR local (churro, par exemple) transcrit
-#: l'image sans OCR amont.
-_SUPPORTED: frozenset[str] = frozenset({"text_only", "text_and_image", "zero_shot"})
 
 _DEFAULT_HOST = "http://localhost:11434"
 
@@ -157,7 +155,7 @@ class OllamaAdapter:
     #: ``run_llm_step``, invérifiable de l'extérieur. Une liste tenue ailleurs
     #: dérive — c'est arrivé (D-233).
     SUPPORTED_MODES: ClassVar[frozenset[PipelineMode]] = frozenset(
-        {"text_only", "text_and_image", "zero_shot"}
+        {"text_only", "text_and_image", "zero_shot", "refine"}
     )
 
 
@@ -173,7 +171,9 @@ class OllamaAdapter:
         self._label = validate_llm_label(label, "OllamaAdapter")
         self._model = model
         self._host = host
-        self._role: PipelineMode = validate_role(role, "OllamaAdapter", _SUPPORTED)
+        self._role: PipelineMode = validate_role(
+            role, "OllamaAdapter", self.SUPPORTED_MODES
+        )
         self._prompt = (
             prompt if prompt is not None else default_prompt_for_role(self._role)
         )

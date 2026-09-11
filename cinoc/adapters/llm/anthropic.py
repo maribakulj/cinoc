@@ -35,7 +35,6 @@ from cinoc.pipeline.types import RunContext, StepOutput
 _VERSION = "1.0"
 _DEFAULT_MODEL = "claude-haiku-4-5-20251001"
 _MAX_TOKENS = 4096
-_SUPPORTED: frozenset[str] = frozenset({"text_only", "text_and_image", "zero_shot"})
 
 
 def _completion_from_message(response: Any) -> LLMCompletion:
@@ -128,7 +127,7 @@ class AnthropicAdapter:
     #: ``run_llm_step``, invérifiable de l'extérieur. Une liste tenue ailleurs
     #: dérive — c'est arrivé (D-233).
     SUPPORTED_MODES: ClassVar[frozenset[PipelineMode]] = frozenset(
-        {"text_only", "text_and_image", "zero_shot"}
+        {"text_only", "text_and_image", "zero_shot", "refine"}
     )
 
 
@@ -142,7 +141,9 @@ class AnthropicAdapter:
     ) -> None:
         self._label = validate_llm_label(label, "AnthropicAdapter")
         self._model = model
-        self._role: PipelineMode = validate_role(role, "AnthropicAdapter", _SUPPORTED)
+        self._role: PipelineMode = validate_role(
+            role, "AnthropicAdapter", self.SUPPORTED_MODES
+        )
         self._prompt = (
             prompt if prompt is not None else default_prompt_for_role(self._role)
         )

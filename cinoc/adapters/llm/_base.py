@@ -128,6 +128,10 @@ def llm_input_types(role: PipelineMode) -> frozenset[ArtifactType]:
         return frozenset({ArtifactType.RAW_TEXT})
     if role == "text_and_image":
         return frozenset({ArtifactType.RAW_TEXT, ArtifactType.IMAGE})
+    if role == "refine":
+        # Reprend une sortie **déjà corrigée** : c'est le seul mode qui ferme la
+        # boucle du texte, et donc qui rend une chaîne de correcteurs possible.
+        return frozenset({ArtifactType.CORRECTED_TEXT})
     return frozenset({ArtifactType.IMAGE})  # zero_shot
 
 
@@ -153,13 +157,30 @@ def build_prompt(template: str, ocr_text: str) -> str:
     return template.replace("{ocr_text}", ocr_text)
 
 
-def load_ocr_text(inputs: dict[ArtifactType, Artifact], adapter_name: str) -> str:
-    artifact = inputs.get(ArtifactType.RAW_TEXT)
+def load_text(
+    inputs: dict[ArtifactType, Artifact],
+    adapter_name: str,
+    *,
+    kind: ArtifactType = ArtifactType.RAW_TEXT,
+) -> str:
+    """Charge le texte d'entrée du ``kind`` demandé.
+
+    ``kind`` distingue le texte **brut** (sortie d'OCR) du texte **déjà
+    corrigé** (mode ``refine``) : deux étages d'une chaîne consomment des types
+    différents, et confondre les deux ferait re-corriger la sortie d'OCR au lieu
+    de reprendre celle du correcteur précédent.
+    """
+    artifact = inputs.get(kind)
     if artifact is None or artifact.uri is None:
         raise AdapterStepError(
-            f"{adapter_name} : input RAW_TEXT manquant ou sans URI."
+            f"{adapter_name} : input {kind.value.upper()} manquant ou sans URI."
         )
     return read_plaintext(Path(artifact.uri).read_bytes())
+
+
+def load_ocr_text(inputs: dict[ArtifactType, Artifact], adapter_name: str) -> str:
+    """Texte brut d'entrée — conservé pour les appelants existants."""
+    return load_text(inputs, adapter_name)
 
 
 def load_image_b64(
@@ -243,6 +264,12 @@ def run_llm_step(
         completion = vision_invoke(
             build_prompt(prompt, ocr_text), media_type, image_b64
         )
+    elif role == "refine":
+        # Un correcteur qui reprend un texte corrigé : même invocation, autre
+        # entrée. C'est la seule différence, et c'est voulu — un deuxième étage
+        # n'est pas un autre outil, c'est le même appliqué plus loin.
+        precedent = load_text(inputs, name, kind=ArtifactType.CORRECTED_TEXT)
+        completion = text_invoke(build_prompt(prompt, precedent))
     else:  # text_only
         ocr_text = load_ocr_text(inputs, name)
         completion = text_invoke(build_prompt(prompt, ocr_text))

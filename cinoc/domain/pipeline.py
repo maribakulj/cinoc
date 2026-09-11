@@ -29,7 +29,11 @@ _STEP_ID_RE = re.compile(r"^[A-Za-z0-9_\-]+$")
 #:   voir l'image.
 #: - ``text_and_image`` — le VLM corrige le texte en s'appuyant sur l'image.
 #: - ``zero_shot`` — pas d'OCR amont ; un VLM transcrit l'image directement.
-PipelineMode = Literal["text_only", "text_and_image", "zero_shot"]
+#: Modes d'une étape LLM/VLM. ``refine`` accepte du texte **déjà corrigé** :
+#: c'est ce qui rend une chaîne de correcteurs exprimable — « OCR → correcteur
+#: rapide → correcteur lent », le montage le plus courant en production, que
+#: rien ne pouvait décrire tant que seul ``RAW_TEXT`` entrait dans un correcteur.
+PipelineMode = Literal["text_only", "text_and_image", "zero_shot", "refine"]
 
 #: Sentinel pour ``inputs_from`` désignant les artefacts initiaux fournis
 #: au runner (typiquement ``IMAGE``).
