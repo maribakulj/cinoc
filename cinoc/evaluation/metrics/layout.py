@@ -23,6 +23,7 @@ from cinoc.evaluation.context import DocContext
 from cinoc.evaluation.errors import EvaluationError
 from cinoc.evaluation.metric import DocumentMetric, Observation, document_metric
 from cinoc.evaluation.metrics.text import _edit_distance
+from cinoc.evaluation.reading_order import kendall_distance, order_coverage
 
 _MISSING = ""
 
@@ -262,17 +263,76 @@ def line_identity_coverage(ctx: DocContext) -> Observation | None:
     return Observation(value=retrouvees / len(ref_lines), weight=len(ref_lines))
 
 
+def _ordres(ctx: DocContext) -> tuple[list[str], list[str]]:
+    """Ordres de lecture (référence, hypothèse), toutes pages concaténées."""
+    reference, hypothesis = _layout_pair(ctx)
+    ref = [rid for page in reference.pages for rid in page.reading_order]
+    hyp = [rid for page in hypothesis.pages for rid in page.reading_order]
+    return ref, hyp
+
+
+@document_metric(
+    name="reading_order_tau",
+    input_types=(ArtifactType.LAYOUT, ArtifactType.LAYOUT),
+    description=(
+        "Désaccord d'ordre de lecture (Kendall normalisé) : part des paires de "
+        "blocs rangées dans l'ordre inverse de la référence."
+    ),
+    higher_is_better=False,
+    tags=frozenset({"structure", "layout", "reading_order"}),
+)
+def reading_order_tau(ctx: DocContext) -> Observation | None:
+    """Attribue à l'**ordonnancement** ce que le CER attribuerait à la lecture.
+
+    Un texte projeté dans le mauvais ordre a un CER catastrophique, mais ce CER
+    ne dit pas où est la faute. Celle-ci ne mesure que l'ordre — et seulement
+    sur les blocs présents des deux côtés, la détection ayant sa propre métrique.
+    """
+    reference, hypothese = _ordres(ctx)
+    valeur = kendall_distance(reference, hypothese)
+    if valeur is None:
+        return None
+    communs = len(set(reference) & set(hypothese))
+    return Observation(value=valeur, weight=communs)
+
+
+@document_metric(
+    name="reading_order_coverage",
+    input_types=(ArtifactType.LAYOUT, ArtifactType.LAYOUT),
+    description="Part des blocs de la référence que l'hypothèse a ordonnés.",
+    higher_is_better=True,
+    tags=frozenset({"structure", "layout", "reading_order"}),
+)
+def reading_order_coverage(ctx: DocContext) -> Observation | None:
+    """Le compagnon obligatoire du désaccord.
+
+    Un ordre parfait sur deux blocs trouvés sur trente n'est pas un bon
+    résultat, et la distance seule le dirait excellent.
+    """
+    reference, hypothese = _ordres(ctx)
+    valeur = order_coverage(reference, hypothese)
+    if valeur is None:
+        return None
+    return Observation(value=valeur, weight=len(set(reference)))
+
+
+
 LAYOUT_METRICS: tuple[DocumentMetric, ...] = (
     region_cer,
     region_detection,
     line_identity_cer,
     line_identity_coverage,
+    reading_order_tau,
+    reading_order_coverage,
 )
+
 
 __all__ = [
     "LAYOUT_METRICS",
     "line_identity_cer",
     "line_identity_coverage",
+    "reading_order_coverage",
+    "reading_order_tau",
     "region_cer",
     "region_detection",
 ]

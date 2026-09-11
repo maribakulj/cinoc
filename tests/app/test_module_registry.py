@@ -46,6 +46,7 @@ def test_kinds_listed() -> None:
         "precomputed_layout",
         "precomputed_region",
         "preprocess",
+        "reading_order",
         "remote_segmenter",
         "saknussemm",
         "tesseract",
