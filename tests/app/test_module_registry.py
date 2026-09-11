@@ -40,6 +40,7 @@ def test_kinds_listed() -> None:
         "ner",
         "ollama",
         "openai",
+        "page_assembler",
         "pero",
         "pp_doclayout",
         "precomputed",
