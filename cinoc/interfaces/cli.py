@@ -52,6 +52,7 @@ from cinoc.interfaces._list_command import (
     run_list_models,
     run_list_profiles,
     run_list_prompts,
+    run_list_recipes,
 )
 from cinoc.reports import default_report_renderer, render_comparison
 from cinoc.reports.csv_export import run_result_csv
@@ -484,6 +485,7 @@ def main(argv: list[str] | None = None) -> int:
                 "models": run_list_models,
                 "profiles": run_list_profiles,
                 "prompts": run_list_prompts,
+                "recipes": run_list_recipes,
             }
             return sujets[args.topic](args)
         if args.command == "compare":

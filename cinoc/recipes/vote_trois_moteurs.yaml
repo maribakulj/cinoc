@@ -1,0 +1,31 @@
+# Fusion : trois lectures, un vote. Corrige ce qu'un seul moteur se trompe là où
+# les autres ont juste — et reste impuissante quand tous se trompent pareil.
+name: vote_trois_moteurs
+title:
+  fr: Trois moteurs, un vote
+  en: Three engines, one vote
+description:
+  fr: >-
+    Trois OCR lisent la même page, un vote majoritaire par jeton les fusionne.
+    Utile quand aucun moteur ne domine ; sans effet quand ils se trompent tous
+    de la même façon, ce que le rapport permet de vérifier.
+  en: >-
+    Three OCR engines read the same page; a per-token majority vote merges them.
+steps:
+  - id: ocr_a
+    role: ocr
+    brick: tesseract
+  - id: ocr_b
+    role: ocr
+    brick: kraken
+    after: ocr_a
+  - id: ocr_c
+    role: ocr
+    brick: pero
+    after: ocr_a
+  - id: fusion
+    role: vote
+    merge:
+      - ocr_a
+      - ocr_b
+      - ocr_c

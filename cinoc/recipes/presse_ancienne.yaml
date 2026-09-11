@@ -1,0 +1,30 @@
+# Presse ancienne multi-colonnes — la forme que NDNP et PP-Structure traitent
+# tous deux par un module d'ordre de lecture dédié. Sans cet étage, les colonnes
+# s'entrelacent et le texte devient inexploitable.
+name: presse_ancienne
+title:
+  fr: Presse ancienne multi-colonnes
+  en: Historic multi-column press
+description:
+  fr: >-
+    Redresse et binarise la page, détecte les blocs, lit chaque bloc, puis
+    remet les colonnes dans l'ordre avant de projeter le texte. C'est la
+    chaîne des grands programmes de numérisation de presse.
+  en: >-
+    Deskew and binarise, detect blocks, read each block, then put the columns
+    back in reading order before projecting the text.
+steps:
+  - id: prep
+    role: preprocess
+    params:
+      operations: deskew,binarize
+  - id: seg
+    role: segmenter
+  - id: reco
+    role: region_recognizer
+  - id: ordre
+    role: reading_order
+    params:
+      strategy: columns
+  - id: texte
+    role: projection

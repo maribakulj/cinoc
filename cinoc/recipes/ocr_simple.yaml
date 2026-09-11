@@ -1,0 +1,16 @@
+# La ligne de base : un moteur, rien d'autre. C'est contre elle que toutes les
+# autres recettes se mesurent — une chaîne plus longue doit prouver son gain.
+name: ocr_simple
+title:
+  fr: OCR seul
+  en: OCR only
+description:
+  fr: >-
+    Un moteur d'OCR sur la page entière, sans prétraitement ni segmentation.
+    La référence contre laquelle juger toute chaîne plus élaborée.
+  en: >-
+    One OCR engine on the whole page, nothing else. The baseline any longer
+    chain has to beat.
+steps:
+  - id: ocr
+    role: ocr

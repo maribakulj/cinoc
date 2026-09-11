@@ -111,6 +111,39 @@ def run_list_profiles(args: argparse.Namespace) -> int:
     return 0
 
 
+def run_list_recipes(args: argparse.Namespace) -> int:
+    """Recettes livrées : des formes de pipeline nommées par leur intention.
+
+    Une recette porte son intention en clair, ce que douze cases à cocher ne
+    feront jamais — et une dizaine bien choisies couvre l'essentiel des usages,
+    parce que les formes possibles ne sont pas équiprobables.
+    """
+    from cinoc.app.recipes import describe, load_recipes, plan_from_recipe, roles
+
+    langue = "en" if args.lang == "en" else "fr"
+    table = roles()
+    for recette in load_recipes():
+        spec, _ = plan_from_recipe(recette)
+        forme = " → ".join(etape.kind for etape in spec.steps)
+        print(f"\n{recette.name}  —  {describe(recette, langue)}")
+        print(f"  {forme}")
+        texte = recette.description.get(langue) or recette.description.get("fr", "")
+        if texte:
+            print(f"  {texte.strip()}")
+        choisissables = [
+            f"{e.id} ({', '.join(table[e.role].briques)})"
+            for e in recette.steps
+            if len(table[e.role].briques) > 1
+        ]
+        if choisissables:
+            print(f"  à choisir : {' · '.join(choisissables)}")
+    print(
+        "\nUne recette décrit la forme ; tu choisis les briques. "
+        "Les rôles à une seule brique ne se choisissent pas."
+    )
+    return 0
+
+
 def run_list_prompts(args: argparse.Namespace) -> int:
     """Prompts curés par période — donnée versionnée, pas de la surface."""
     print("Prompts curés (correction et transcription, calibrés par période) :")
