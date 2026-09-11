@@ -242,6 +242,23 @@ def _build_precomputed_layout(kwargs: Mapping[str, ParamValue]) -> Module:
     return PrecomputedLayoutSource()
 
 
+def _build_vote(kwargs: Mapping[str, ParamValue]) -> Module:
+    """``vote:<label>`` — fusionne N transcriptions par vote majoritaire.
+
+    Brique de **fusion** : l'exécuteur l'appelle par ``execute_merge``, sur les
+    étapes que ``merge_from`` nomme. Elle ne peut pas être utilisée comme une
+    étape ordinaire, et c'est voulu — fusionner exige plusieurs avis.
+    """
+    from cinoc.adapters.merge import TextVoteMerger  # noqa: PLC0415
+
+    label = kwargs.get("label")
+    if not isinstance(label, str):
+        raise ModuleResolutionError("vote : 'label' (str) requis dans adapter_kwargs.")
+    return TextVoteMerger(  # type: ignore[return-value]
+        label=label, kind=str(kwargs.get("kind", "raw_text"))
+    )
+
+
 def _build_reading_order(kwargs: Mapping[str, ParamValue]) -> Module:
     """``reading_order:<label>`` — ordonne les blocs d'une mise en page.
 
@@ -406,6 +423,7 @@ def register_default_modules(registry: ModuleRegistry) -> None:
     registry.register_builder("layout_to_text", _build_layout_to_text)
     registry.register_builder("preprocess", _build_preprocess)
     registry.register_builder("reading_order", _build_reading_order)
+    registry.register_builder("vote", _build_vote)
 
 
 __all__ = [
