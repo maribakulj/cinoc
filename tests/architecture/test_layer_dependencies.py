@@ -121,6 +121,14 @@ ADAPTERS_ALLOWED_EXT = ALLOWED_EXT | {
     "spacy",
     # Post-correction structurée (extra `[saknussemm]`, imports paresseux).
     "saknussemm",
+    # Segmenteur de mise en page installable **par pip** (extra `[yolo]`, import
+    # paresseux dans `layout/doclayout_yolo`). Les deux autres segmenteurs
+    # exigent PaddleX ou une adresse : sans celui-ci, la famille hybride n'est
+    # exécutable sur aucune machine nue.
+    "doclayout_yolo",
+    # Scoreur de qualité D'AlemBERT pour le routage sélectif de la correction
+    # (extra `[qe]`, imports paresseux dans `quality/dalembert`).
+    "torch", "transformers",
 }
 
 

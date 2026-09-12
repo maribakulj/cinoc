@@ -289,10 +289,14 @@ def segmenter_statuses(
     segmenteur du socle tourne en **local** (PaddleX) ou **délègue** à un endpoint
     distant (``remote_segmenter``) → pas de surface filesystem cloud à masquer.
 
-    Deux segmenteurs maison :
+    Trois segmenteurs maison :
 
     - ``pp_doclayout`` — modèle **local** PP-DocLayout (extra ``[segment]`` +
       poids) ;
+    - ``doclayout_yolo`` — modèle **local** DocLayout-YOLO (extra ``[yolo]``,
+      poids tirés du Hub au premier run puis mis en cache). Le seul qui
+      s'installe entièrement par pip : c'est lui qui rend la famille hybride
+      exécutable sur une machine où PaddleX n'entre pas et sans endpoint ;
     - ``remote_segmenter`` — **délégué** à un endpoint object-detection HF
       (``httpx``), le modèle tourne à distance : on change de modèle en
       changeant l'``endpoint``, rien à installer ni à baker.
@@ -301,6 +305,10 @@ def segmenter_statuses(
         paddle_detail, paddle_ok = "prêt (PaddleX installé)", True
     else:
         paddle_detail, paddle_ok = "PaddleX non installé (extra [segment])", False
+    if has_module("doclayout_yolo"):
+        yolo_detail, yolo_ok = "prêt (poids tirés du Hub au 1er run)", True
+    else:
+        yolo_detail, yolo_ok = "DocLayout-YOLO non installé (extra [yolo])", False
     if has_module("httpx"):
         remote_detail, remote_ok = "prêt (endpoint distant à fournir)", True
     else:
@@ -311,6 +319,12 @@ def segmenter_statuses(
             label="PP-DocLayout",
             available=paddle_ok,
             detail=paddle_detail,
+        ),
+        EngineStatus(
+            kind="doclayout_yolo",
+            label="DocLayout-YOLO",
+            available=yolo_ok,
+            detail=yolo_detail,
         ),
         EngineStatus(
             kind="remote_segmenter",

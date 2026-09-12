@@ -32,6 +32,7 @@ def test_kinds_listed() -> None:
         "anthropic",
         "azure_di",
         "calamari",
+        "doclayout_yolo",
         "google_vision",
         "kraken",
         "layout_to_text",

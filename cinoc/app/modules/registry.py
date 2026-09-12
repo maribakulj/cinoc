@@ -326,7 +326,20 @@ def _build_saknussemm(kwargs: Mapping[str, ParamValue]) -> Module:
         # ``xml_scale`` : géométrie ALTO → pixels du scan, pour le producteur
         # vision (``mm10`` à 300 DPI ⇒ 1,1811). 1,0 = résolution native.
         xml_scale=float(scale) if isinstance(scale, (int, float)) else 1.0,
+        # Routage QE : sans `qe`, chaque ligne part au producteur comme avant.
+        qe=str(kwargs.get("qe", "")),
+        qe_skip=_seuil(kwargs.get("qe_skip")),
+        qe_escalate=_seuil(kwargs.get("qe_escalate")),
     )
+
+
+def _seuil(valeur: ParamValue | None) -> float | None:
+    """Seuil de routage : un nombre, ou ``None`` (« pas de borne de ce côté »).
+
+    Distinguer les deux importe : ``0.0`` veut dire « ne saute que les lignes
+    notées zéro », ``None`` veut dire « ne saute rien ».
+    """
+    return float(valeur) if isinstance(valeur, (int, float)) else None
 
 
 def _build_alto_source(kwargs: Mapping[str, ParamValue]) -> Module:
@@ -346,6 +359,30 @@ def _build_pp_doclayout(kwargs: Mapping[str, ParamValue]) -> Module:
     if not isinstance(model, str) or not model:
         model = os.environ.get("CINOC_PPDOCLAYOUT_MODEL", "PP-DocLayout-L")
     return PPDocLayoutSegmenter(model=model)
+
+
+def _build_doclayout_yolo(kwargs: Mapping[str, ParamValue]) -> Module:
+    """``doclayout_yolo`` — segmenteur réel installable par pip.
+
+    Le seul du socle qui ne demande ni PaddleX ni une adresse distante : c'est
+    lui qui rend la famille hybride exécutable sur une machine nue.
+    """
+    from cinoc.adapters.layout.doclayout_yolo import (  # noqa: PLC0415
+        DEFAULT_IMGSZ,
+        DEFAULT_MIN_SCORE,
+        DocLayoutYoloSegmenter,
+    )
+
+    score = kwargs.get("min_score")
+    taille = kwargs.get("imgsz")
+    return DocLayoutYoloSegmenter(
+        weights=str(kwargs.get("weights", "")),
+        imgsz=int(taille) if isinstance(taille, (int, float)) else DEFAULT_IMGSZ,
+        min_score=(
+            float(score) if isinstance(score, (int, float)) else DEFAULT_MIN_SCORE
+        ),
+        device=str(kwargs.get("device", "cpu")),
+    )
 
 
 def _build_remote_segmenter(kwargs: Mapping[str, ParamValue]) -> Module:
@@ -420,6 +457,7 @@ def register_default_modules(registry: ModuleRegistry) -> None:
     registry.register_builder("anthropic", _build_anthropic)
     # Segmenteurs réels (étape IMAGE → LAYOUT), composables dès aujourd'hui.
     registry.register_builder("pp_doclayout", _build_pp_doclayout)
+    registry.register_builder("doclayout_yolo", _build_doclayout_yolo)
     registry.register_builder("remote_segmenter", _build_remote_segmenter)
     registry.register_builder("ner", _build_ner)
     # --- Enveloppe T5 : pipeline hybride seg → reconnaissance par région → ALTO ---
