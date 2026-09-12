@@ -203,10 +203,15 @@ class SaknussemmCorrector:
         découpes et l'API le refuserait après les avoir encodées pour rien ; le
         déclarer fait scinder le lot en amont de la requête.
         """
+        # La clé d'abord : c'est le manque le plus fréquent et le moins cher à
+        # constater. Importer avant elle ferait répondre « module introuvable »
+        # à qui a simplement oublié d'exporter sa clé.
+        cle = self._api_key()
+
         from saknussemm.core.schemas import (  # type: ignore[import-not-found]  # noqa: PLC0415, E501
             ModelCapabilities,
         )
-        from saknussemm.integrations.vision import (  # type: ignore[import-not-found]  # noqa: PLC0415, E501
+        from saknussemm.producers.vision import (  # type: ignore[import-not-found]  # noqa: PLC0415, E501
             VisionEditProducer,
         )
 
@@ -217,7 +222,7 @@ class SaknussemmCorrector:
 
         return VisionEditProducer(
             MistralMultimodalClient(),
-            api_key=self._api_key(),
+            api_key=cle,
             model=self._model,
             capabilities=ModelCapabilities(
                 text=True,
@@ -247,7 +252,7 @@ class SaknussemmCorrector:
         from saknussemm.core.schemas import (  # type: ignore[import-not-found]  # noqa: PLC0415, E501
             ImageTransform,
         )
-        from saknussemm.integrations.vision import (  # type: ignore[import-not-found]  # noqa: PLC0415, E501
+        from saknussemm.producers.vision import (  # type: ignore[import-not-found]  # noqa: PLC0415, E501
             build_image_asset,
         )
 
