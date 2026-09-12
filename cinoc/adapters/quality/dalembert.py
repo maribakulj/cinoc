@@ -89,7 +89,7 @@ def platt(surprisal: float) -> float:
 def _load(model_name: str) -> tuple[Any, Any]:
     """Tokeniseur + modèle, chargés **une fois**. Grands, et immuables."""
     try:
-        import torch  # noqa: PLC0415
+        import torch  # type: ignore[import-not-found]  # noqa: PLC0415
         from transformers import (  # type: ignore[import-not-found]  # noqa: PLC0415
             AutoModelForMaskedLM,
             AutoTokenizer,
@@ -135,7 +135,7 @@ class DalembertQEScorer:
         Exposé, et pas seulement la note : c'est ce qui permet de dire **quel**
         mot a déclenché la note. Une note seule ne s'audite pas.
         """
-        import torch  # noqa: PLC0415
+        import torch  # type: ignore[import-not-found]  # noqa: PLC0415
 
         propre = deglyph(text)
         if not propre.strip():
