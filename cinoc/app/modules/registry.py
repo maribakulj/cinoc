@@ -317,11 +317,15 @@ def _build_saknussemm(kwargs: Mapping[str, ParamValue]) -> Module:
     from cinoc.adapters.layout.saknussemm_correct import SaknussemmCorrector
     from cinoc.adapters.llm._base import validate_llm_label
 
+    scale = kwargs.get("xml_scale", 1.0)
     return SaknussemmCorrector(
         label=validate_llm_label(str(kwargs["label"]), "SaknussemmCorrector"),
         producer=str(kwargs.get("producer", "rules")),
         model=str(kwargs.get("model", "")),
         host=str(kwargs.get("host", "http://localhost:11434")),
+        # ``xml_scale`` : géométrie ALTO → pixels du scan, pour le producteur
+        # vision (``mm10`` à 300 DPI ⇒ 1,1811). 1,0 = résolution native.
+        xml_scale=float(scale) if isinstance(scale, (int, float)) else 1.0,
     )
 
 

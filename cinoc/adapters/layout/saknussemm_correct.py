@@ -42,10 +42,29 @@ from cinoc.pipeline.types import RunContext, StepOutput
 
 _VERSION = "1.0"
 
-#: Producteurs câblés. ``rules`` ne demande rien (déterministe, hors ligne) ;
-#: ``ollama`` parle à un serveur local, sans clé d'API. Les fournisseurs
-#: distants s'ajouteront quand un run les demandera — pas avant.
-_PRODUCERS = ("rules", "ollama")
+#: Le seul producteur qui consomme l'image de la page.
+VISION_PRODUCER = "mistral_vision"
+
+#: **La** table des producteurs qui interrogent un modèle : nom → le client que
+#: ``saknussemm`` recevra. Tout le reste en dérive (noms acceptés, exigence de
+#: ``model``), pour qu'ajouter un fournisseur soit une ligne et non trois.
+#:
+#: Elle n'est **pas** dérivable de ``app.engines.providers_for_mode`` et c'est
+#: délibéré : ``saknussemm`` ne consomme pas un adapter de pipeline mais un
+#: ``StructuredCompletionClient``, que chaque fournisseur doit implémenter à la
+#: main. Un fournisseur présent dans cinoc mais absent ici n'est pas un oubli —
+#: c'est un client qui n'existe pas encore, et le proposer ferait échouer le run
+#: au premier appel. ``mistral_vision`` n'a d'ailleurs aucun pendant là-bas :
+#: c'est une *capacité* (regarder le scan), pas un fournisseur de plus.
+MODEL_PRODUCERS: dict[str, str] = {
+    "ollama": "serveur local, sans clé",
+    "mistral": "API Mistral, correction sur le texte",
+    VISION_PRODUCER: "API Mistral, découpe chaque ligne dans le scan",
+}
+
+#: Producteurs câblés. ``rules`` est déterministe et hors ligne : il n'interroge
+#: aucun modèle, donc il ne figure pas dans la table ci-dessus.
+PRODUCERS = ("rules", *sorted(MODEL_PRODUCERS))
 
 
 def _require_saknussemm() -> Any:
@@ -69,20 +88,30 @@ class SaknussemmCorrector:
         producer: str = "rules",
         model: str = "",
         host: str = "http://localhost:11434",
+        xml_scale: float = 1.0,
     ) -> None:
-        if producer not in _PRODUCERS:
+        if producer not in PRODUCERS:
             raise AdapterStepError(
                 f"SaknussemmCorrector : producteur {producer!r} inconnu "
-                f"(attendu : {', '.join(_PRODUCERS)})."
+                f"(attendu : {', '.join(PRODUCERS)})."
             )
-        if producer == "ollama" and not model:
+        if producer in MODEL_PRODUCERS and not model:
             raise AdapterStepError(
-                "SaknussemmCorrector : le producteur 'ollama' exige un `model`."
+                f"SaknussemmCorrector : le producteur {producer!r} exige un `model`."
+            )
+        if xml_scale <= 0:
+            raise AdapterStepError(
+                f"SaknussemmCorrector : `xml_scale` doit être > 0 (reçu {xml_scale})."
             )
         self._label = label
         self._producer = producer
         self._model = model
         self._host = host
+        self._xml_scale = xml_scale
+
+    @property
+    def _wants_image(self) -> bool:
+        return self._producer == VISION_PRODUCER
 
     @property
     def name(self) -> str:
@@ -94,6 +123,14 @@ class SaknussemmCorrector:
 
     @property
     def input_types(self) -> frozenset[ArtifactType]:
+        """``LAYOUT`` seul, **+ ``IMAGE``** pour le producteur vision.
+
+        Déclaré d'après le producteur et non en dur : une étape qui exigerait
+        l'image sans l'utiliser refuserait des pipelines parfaitement valides,
+        et une étape qui l'utiliserait sans la déclarer la recevrait vide.
+        """
+        if self._wants_image:
+            return frozenset({ArtifactType.LAYOUT, ArtifactType.IMAGE})
         return frozenset({ArtifactType.LAYOUT})
 
     @property
@@ -108,6 +145,22 @@ class SaknussemmCorrector:
 
     # -- producteur ---------------------------------------------------------
 
+    def _api_key(self) -> str:
+        """``MISTRAL_API_KEY``, exigée **avant** le premier appel.
+
+        Échouer ici plutôt qu'à la première ligne évite de découvrir la clé
+        manquante après avoir traduit tout un manifeste.
+        """
+        import os  # noqa: PLC0415
+
+        key = os.environ.get("MISTRAL_API_KEY", "")
+        if not key:
+            raise AdapterStepError(
+                f"{self.name} : le producteur {self._producer!r} exige "
+                "MISTRAL_API_KEY."
+            )
+        return key
+
     def _build_producer(self) -> Any:
         if self._producer == "rules":
             from saknussemm.producers.rules import (  # type: ignore[import-not-found]  # noqa: PLC0415
@@ -117,9 +170,23 @@ class SaknussemmCorrector:
 
             return RulesProducer(default_french_ocr_rules())
 
+        if self._producer == VISION_PRODUCER:
+            return self._build_vision_producer()
+
         from saknussemm.producers.llm_edit import (  # type: ignore[import-not-found]  # noqa: PLC0415, E501
             LLMEditProducer,
         )
+
+        if self._producer == "mistral":
+            from cinoc.adapters.llm.mistral_structured import (  # noqa: PLC0415
+                MistralStructuredClient,
+            )
+
+            return LLMEditProducer(
+                MistralStructuredClient(),
+                api_key=self._api_key(),
+                model=self._model,
+            )
 
         from cinoc.adapters.llm.ollama_structured import (  # noqa: PLC0415
             OllamaStructuredClient,
@@ -128,6 +195,78 @@ class SaknussemmCorrector:
         return LLMEditProducer(
             OllamaStructuredClient(host=self._host), api_key="", model=self._model
         )
+
+    def _build_vision_producer(self) -> Any:
+        """``VisionEditProducer`` + le plafond d'images **déclaré** au moteur.
+
+        Sans ``max_images``, le routeur composerait un lot de plus de huit
+        découpes et l'API le refuserait après les avoir encodées pour rien ; le
+        déclarer fait scinder le lot en amont de la requête.
+        """
+        # La clé d'abord : c'est le manque le plus fréquent et le moins cher à
+        # constater. Importer avant elle ferait répondre « module introuvable »
+        # à qui a simplement oublié d'exporter sa clé.
+        cle = self._api_key()
+
+        from saknussemm.core.schemas import (  # type: ignore[import-not-found]  # noqa: PLC0415, E501
+            ModelCapabilities,
+        )
+        from saknussemm.producers.vision import (  # type: ignore[import-not-found]  # noqa: PLC0415, E501
+            VisionEditProducer,
+        )
+
+        from cinoc.adapters.llm.mistral_multimodal import (  # noqa: PLC0415
+            MAX_IMAGES_PER_CALL,
+            MistralMultimodalClient,
+        )
+
+        return VisionEditProducer(
+            MistralMultimodalClient(),
+            api_key=cle,
+            model=self._model,
+            capabilities=ModelCapabilities(
+                text=True,
+                vision=True,
+                structured_output=True,
+                max_images=MAX_IMAGES_PER_CALL,
+            ),
+        )
+
+    def _page_images(
+        self, inputs: dict[ArtifactType, Artifact], page_ids: list[str]
+    ) -> dict[str, Any]:
+        """``page_id → ImageAsset`` pour le producteur vision.
+
+        ``xml_scale`` porte le seul décalage que la v1 de ``saknussemm`` traite :
+        une géométrie exprimée dans un autre espace que les pixels du scan. Un
+        ALTO en ``mm10`` numérisé à 300 DPI demande ``dpi/254 ≈ 1,1811`` — le
+        cas du corpus BNL de ce dépôt. Le laisser à 1,0 (le défaut) veut dire
+        « l'OCR a tourné à la résolution native », et c'est le cas courant.
+
+        Il est **explicite** et non deviné : les pages ALTO de la BNL ne
+        déclarent ni ``WIDTH`` ni ``HEIGHT``, donc aucune comparaison avec la
+        taille réelle de l'image ne pourrait le retrouver. Une échelle devinée
+        qui se trompe découpe à côté et le modèle corrige la mauvaise ligne —
+        en silence.
+        """
+        from saknussemm.core.schemas import (  # type: ignore[import-not-found]  # noqa: PLC0415, E501
+            ImageTransform,
+        )
+        from saknussemm.producers.vision import (  # type: ignore[import-not-found]  # noqa: PLC0415, E501
+            build_image_asset,
+        )
+
+        image = inputs.get(ArtifactType.IMAGE)
+        if image is None or image.uri is None:
+            raise AdapterStepError(
+                f"{self.name} : le producteur {self._producer!r} regarde le scan "
+                "et n'a reçu aucune IMAGE."
+            )
+        transform = ImageTransform(scale_x=self._xml_scale, scale_y=self._xml_scale)
+        return {
+            page_id: build_image_asset(page_id, image.uri, transform=transform)
+            for page_id in page_ids
+        }
 
     # -- exécution ----------------------------------------------------------
 
@@ -169,13 +308,34 @@ class SaknussemmCorrector:
             def on_event(self, event_type: str, payload: dict[str, Any]) -> None:
                 pass
 
+        # Le profil de gardes suit le producteur, pas une préférence : un VLM lit
+        # l'image, pas l'OCR, donc une lecture **correcte** d'une ligne bien
+        # abîmée s'écarte du texte source plus que la garde texte ne tolère.
+        # Garder la garde texte ici rejetterait précisément les corrections que
+        # la vision existe pour produire.
+        guard_config = None
+        if self._wants_image:
+            from saknussemm.core.schemas import (  # type: ignore[import-not-found]  # noqa: PLC0415, E501
+                GuardConfig,
+            )
+
+            guard_config = GuardConfig.vision()
         pipeline = CorrectionPipeline(
-            producer=self._build_producer(), observer=_Observer()
+            producer=self._build_producer(),
+            observer=_Observer(),
+            guard_config=guard_config,
+        )
+        page_images = (
+            self._page_images(inputs, manifest_page_ids(manifest))
+            if self._wants_image
+            else None
         )
         # ``source_files`` vide : on ne réécrit aucun XML. L'artefact de sortie
         # est la mise en page, et ``alto_assembler`` sait en faire un ALTO — le
         # moteur n'a donc rien à rendre lui-même.
-        result = pipeline.run_sync(document_manifest=manifest, source_files={})
+        result = pipeline.run_sync(
+            document_manifest=manifest, source_files={}, page_images=page_images
+        )
 
         decided = {
             (outcome.page_id, outcome.line_id): outcome.decision.final_text
@@ -321,4 +481,9 @@ def _flatten(layout: CanonicalLayout) -> str:
     return "\n".join(_page_text(page) for page in layout.pages)
 
 
-__all__ = ["SaknussemmCorrector"]
+__all__ = [
+    "MODEL_PRODUCERS",
+    "PRODUCERS",
+    "VISION_PRODUCER",
+    "SaknussemmCorrector",
+]

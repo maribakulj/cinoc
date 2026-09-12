@@ -118,9 +118,14 @@ class CorrectionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     corpus_id: str
-    #: ``rules`` (déterministe, hors ligne) ou ``ollama`` (serveur local).
+    #: ``rules`` (déterministe, hors ligne), ``ollama`` (serveur local), ou
+    #: ``mistral`` / ``mistral_vision`` (API Mistral — le second découpe chaque
+    #: ligne dans le scan). La liste des valeurs acceptées vit dans l'adapter
+    #: et le planificateur la lit : elle n'est pas répétée ici, sinon cette
+    #: route offrirait un jour un producteur de moins que la CLI.
     producer: str = Field(default="rules", max_length=32)
-    #: Modèle ollama — **exigé** par le planificateur si ``producer == "ollama"``.
+    #: Modèle du producteur — **exigé** par le planificateur dès que le
+    #: producteur en interroge un.
     model: str | None = Field(default=None, max_length=128)
     host: str = Field(default="http://localhost:11434", max_length=2048)
 
@@ -383,7 +388,7 @@ def build_runs_router(
         4. **vérité terrain dérivée de l'ALTO** → ``422``. C'est le refus qui
            compte : sans lui, le banc compare le texte à lui-même et publie un
            verdict inversé. Voir ``ground_truth_is_its_own_source``.
-        5. producteur incohérent (``ollama`` sans modèle) → ``422`` (plan).
+        5. producteur incohérent (un producteur à modèle sans ``model``) → ``422``.
         """
         if public_mode:
             raise HTTPException(

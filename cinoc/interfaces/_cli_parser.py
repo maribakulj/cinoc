@@ -18,6 +18,10 @@ from __future__ import annotations
 import argparse
 from typing import TYPE_CHECKING
 
+# Les producteurs de correction sont lus en couche `app`, pas recopiés ici :
+# une interface qui énumère est une interface qui dérive.
+from cinoc.app.correction_planning import PRODUCERS
+
 if TYPE_CHECKING:  # pragma: no cover
     # Type de l'objet rendu par ``add_subparsers`` : ``argparse`` n'en publie
     # pas d'alias, et la classe n'est pas indiçable à l'exécution. Sous
@@ -364,12 +368,17 @@ def build_parser() -> argparse.ArgumentParser:
     correct_cmd.add_argument(
         "--producer",
         default="rules",
-        choices=("rules", "ollama"),
+        # Dérivés de l'adapter : une troisième copie de la liste aurait laissé
+        # la CLI offrir deux producteurs sur quatre, en silence.
+        choices=PRODUCERS,
         help="Producteur de corrections. 'rules' est déterministe et hors "
-        "ligne ; 'ollama' parle à un serveur local (exige --model).",
+        "ligne ; les autres interrogent un modèle et exigent --model "
+        "('mistral_vision' découpe en plus chaque ligne dans le scan).",
     )
     correct_cmd.add_argument(
-        "--model", default="", help="Modèle ollama (ex. gemma4:e2b)."
+        "--model",
+        default="",
+        help="Modèle du producteur (ex. gemma4:e2b, mistral-medium-latest).",
     )
     correct_cmd.add_argument(
         "--host", default="http://localhost:11434", help="Serveur ollama."
