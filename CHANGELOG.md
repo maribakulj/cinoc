@@ -16,6 +16,17 @@ publier, et son moment, appartiennent au mainteneur.
 
 ### Ajouté
 
+- **Un segmenteur de mise en page installable par pip** : `doclayout_yolo`
+  (extra `[yolo]`). Les deux segmenteurs existants exigeaient PaddleX ou un
+  endpoint distant, donc la famille de pipelines hybrides n'était exécutable
+  sur aucune machine nue. Les poids sont tirés du Hub au premier run.
+- **Le scoreur de qualité D'AlemBERT** (extra `[qe]`) pour le routage sélectif
+  de la post-correction : il note le besoin de correction d'une ligne sans
+  punir l'orthographe d'époque — la note est prise sur une copie dé-glyphée
+  (`ſ` → `s`) pendant que le document reste intact. AUC ligne 0,766, contre
+  0,500 (le hasard) pour l'heuristique de référence.
+
+
 - **Post-correction structurée voyant le scan**, pilotée par Mistral.
   `saknussemm` livrait une chaîne vision complète (découpe par ligne, gardes
   desserrées, plafond d'images) qu'aucun client de ce dépôt ne pouvait

@@ -352,3 +352,60 @@ def test_the_default_scale_is_the_native_resolution() -> None:
     """1,0 = « l'OCR a tourné sur les pixels du scan », le cas courant."""
     module = SaknussemmCorrector(label="x", producer="mistral_vision", model="m")
     assert module._xml_scale == 1.0
+
+
+# --------------------------------------------------------------------------- #
+# Le routage par score de qualité — une économie, donc un opt-in explicite
+# --------------------------------------------------------------------------- #
+
+
+def test_routing_is_off_by_default() -> None:
+    """Sans scoreur, chaque ligne part au producteur, exactement comme avant.
+
+    C'est le défaut conservateur de ``saknussemm`` : allumer le routage change
+    ce que le run **facture**, ça ne peut pas arriver par surprise.
+    """
+    module = SaknussemmCorrector(label="x")
+    assert module._build_qe() == (None, None)
+
+
+def test_an_unknown_qe_scorer_is_refused() -> None:
+    with pytest.raises(AdapterStepError, match="scoreur QE"):
+        SaknussemmCorrector(label="x", qe="devine")
+
+
+def test_thresholds_without_a_scorer_are_refused() -> None:
+    """Le défaut qu'on ne verrait pas autrement.
+
+    Des seuils sans scoreur ne routent rien : le run coûterait le prix plein
+    pendant que l'utilisateur croit avoir activé l'économie. Rien dans le
+    rapport ne distinguerait ce cas d'un routage qui n'aurait rien sauté.
+    """
+    with pytest.raises(AdapterStepError, match="seuils de routage"):
+        SaknussemmCorrector(label="x", qe_skip=0.2)
+
+
+@pytest.mark.parametrize("nom", ["heuristic", "dalembert"])
+def test_a_named_scorer_yields_a_scorer_and_a_policy(nom: str) -> None:
+    """Le scoreur **informe**, la politique **décide** : deux objets distincts.
+
+    ``dalembert`` est construit sans charger le moindre poids — le modèle
+    n'arrive qu'au premier appel. Sans ça, nommer un scoreur coûterait 500 Mo
+    avant même de savoir si le run démarre.
+    """
+    if nom == "dalembert":
+        pytest.importorskip("transformers")
+    module = SaknussemmCorrector(label="x", qe=nom, qe_skip=0.2, qe_escalate=0.8)
+    scoreur, politique = module._build_qe()
+    assert scoreur is not None and hasattr(scoreur, "needs_correction")
+    assert (politique.skip_at_or_below, politique.escalate_at_or_above) == (0.2, 0.8)
+
+
+def test_crossing_thresholds_are_refused_by_the_library() -> None:
+    """Une bande qui se recouvre n'a pas d'étage LLM. ``saknussemm`` le refuse ;
+    ce test dit qu'on ne le contourne pas en chemin."""
+    module = SaknussemmCorrector(
+        label="x", qe="heuristic", qe_skip=0.8, qe_escalate=0.2
+    )
+    with pytest.raises(ValueError, match="escalate"):
+        module._build_qe()

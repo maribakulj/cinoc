@@ -49,6 +49,16 @@ saknussemm = [
 ]
 huggingface = ["datasets", "huggingface_hub"]  # datasets = streaming ; huggingface_hub = publication (scripts/) + snapshot dataset curé (import_curated_hf_corpus)
 segment = ["paddlex"]
+# Segmenteur de mise en page installable **entièrement par pip** (poids tirés du
+# Hub au premier run) : le seul qui rende la famille hybride exécutable sans
+# PaddleX ni endpoint distant.
+yolo = ["doclayout-yolo", "huggingface_hub"]
+# Scoreur de qualité D'AlemBERT (routage sélectif de la post-correction).
+# Plafond `transformers<5` : le dépôt `pjox/dalembert` ne publie que des poids
+# `pytorch_model.bin`, et transformers 5 ne les charge plus. À relever le jour
+# où le modèle publiera des safetensors — pas avant, sinon le scoreur ne charge
+# plus du tout.
+qe = ["torch", "transformers<5"]
 ner = ["spacy"]  # extraction d'entités nommées — modèle téléchargé à part (`spacy download`)
 serve = ["fastapi", "uvicorn", "jinja2", "python-multipart", "httpx", "httpcore"]
 images = ["Pillow"]  # vignettes réelles du rapport (redimensionnement) — dégradé gracieux sans

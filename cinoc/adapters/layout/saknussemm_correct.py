@@ -66,6 +66,14 @@ MODEL_PRODUCERS: dict[str, str] = {
 #: aucun modèle, donc il ne figure pas dans la table ci-dessus.
 PRODUCERS = ("rules", *sorted(MODEL_PRODUCERS))
 
+#: Scoreurs de qualité branchables. Le routage est **opt-in** : sans scoreur,
+#: chaque ligne part au producteur, exactement comme avant.
+#:
+#: ``heuristic`` est celui que ``saknussemm`` livre ; son propre docstring dit
+#: qu'il voudrait D'AlemBERT plutôt qu'une règle de pouce, et la calibration de
+#: ce dépôt lui donne raison — AUC ligne 0,500 (le hasard) contre 0,766.
+QE_SCORERS = ("heuristic", "dalembert")
+
 
 def _require_saknussemm() -> Any:
     try:
@@ -89,6 +97,9 @@ class SaknussemmCorrector:
         model: str = "",
         host: str = "http://localhost:11434",
         xml_scale: float = 1.0,
+        qe: str = "",
+        qe_skip: float | None = None,
+        qe_escalate: float | None = None,
     ) -> None:
         if producer not in PRODUCERS:
             raise AdapterStepError(
@@ -103,11 +114,26 @@ class SaknussemmCorrector:
             raise AdapterStepError(
                 f"SaknussemmCorrector : `xml_scale` doit être > 0 (reçu {xml_scale})."
             )
+        if qe and qe not in QE_SCORERS:
+            raise AdapterStepError(
+                f"SaknussemmCorrector : scoreur QE {qe!r} inconnu "
+                f"(attendu : {', '.join(QE_SCORERS)})."
+            )
+        if not qe and (qe_skip is not None or qe_escalate is not None):
+            # Des seuils sans scoreur ne routent rien, et l'utilisateur croirait
+            # avoir activé une économie qui n'existe pas.
+            raise AdapterStepError(
+                "SaknussemmCorrector : des seuils de routage sans `qe` ne "
+                "s'appliquent à rien — nomme un scoreur."
+            )
         self._label = label
         self._producer = producer
         self._model = model
         self._host = host
         self._xml_scale = xml_scale
+        self._qe = qe
+        self._qe_skip = qe_skip
+        self._qe_escalate = qe_escalate
 
     @property
     def _wants_image(self) -> bool:
@@ -160,6 +186,34 @@ class SaknussemmCorrector:
                 "MISTRAL_API_KEY."
             )
         return key
+
+    def _build_qe(self) -> tuple[Any, Any]:
+        """``(scoreur, politique)`` — ``(None, None)`` si le routage est éteint.
+
+        Le scoreur **informe**, il ne décide pas : c'est la politique qui,
+        au-dessus de sa note, fait sauter une ligne propre ou escalader la plus
+        risquée. Séparer les deux est la doctrine de ``saknussemm``, et la
+        respecter ici évite qu'un seuil se retrouve enfoui dans un modèle.
+        """
+        if not self._qe:
+            return None, None
+        from saknussemm.core.quality import (  # type: ignore[import-not-found]  # noqa: PLC0415, E501
+            HeuristicQEScorer,
+            RoutingPolicy,
+        )
+
+        if self._qe == "dalembert":
+            from cinoc.adapters.quality.dalembert import (  # noqa: PLC0415
+                DalembertQEScorer,
+            )
+
+            scoreur: Any = DalembertQEScorer()
+        else:
+            scoreur = HeuristicQEScorer()
+        return scoreur, RoutingPolicy(
+            skip_at_or_below=self._qe_skip,
+            escalate_at_or_above=self._qe_escalate,
+        )
 
     def _build_producer(self) -> Any:
         if self._producer == "rules":
@@ -320,10 +374,13 @@ class SaknussemmCorrector:
             )
 
             guard_config = GuardConfig.vision()
+        scoreur, politique = self._build_qe()
         pipeline = CorrectionPipeline(
             producer=self._build_producer(),
             observer=_Observer(),
             guard_config=guard_config,
+            qe_scorer=scoreur,
+            routing_policy=politique,
         )
         page_images = (
             self._page_images(inputs, manifest_page_ids(manifest))
@@ -483,6 +540,7 @@ def _flatten(layout: CanonicalLayout) -> str:
 
 __all__ = [
     "MODEL_PRODUCERS",
+    "QE_SCORERS",
     "PRODUCERS",
     "VISION_PRODUCER",
     "SaknussemmCorrector",
