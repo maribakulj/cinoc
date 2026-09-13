@@ -54,6 +54,7 @@ def test_kinds_listed() -> None:
         "saknussemm",
         "tesseract",
         "tesseract_layout",
+        "text_confidences",
         "vote",
     )
 

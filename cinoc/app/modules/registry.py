@@ -481,6 +481,27 @@ def _build_layout_to_text(kwargs: Mapping[str, ParamValue]) -> Module:
     return LayoutToTextExtractor(label=label)
 
 
+def _build_text_confidences(kwargs: Mapping[str, ParamValue]) -> Module:
+    """``text_confidences:<label>`` — une confiance par mot, sans moteur d'OCR.
+
+    Allume la section calibration (ECE/MCE, courbe de fiabilité) pour les
+    pipelines dont le moteur n'émet aucune confiance — l'OCR Mistral, un VLM en
+    transcription directe, un texte corrigé.
+    """
+    from cinoc.adapters.quality.text_confidences import (  # noqa: PLC0415
+        LanguageConfidenceScorer,
+    )
+
+    label = kwargs.get("label")
+    if not isinstance(label, str):
+        raise ModuleResolutionError(
+            "text_confidences : 'label' (str) requis dans adapter_kwargs."
+        )
+    return LanguageConfidenceScorer(
+        label=label, model=str(kwargs.get("model", ""))
+    )
+
+
 def _build_ner(kwargs: Mapping[str, ParamValue]) -> Module:
     label = kwargs.get("label")
     if not isinstance(label, str):
@@ -512,6 +533,7 @@ def register_default_modules(registry: ModuleRegistry) -> None:
     registry.register_builder("tesseract_layout", _build_tesseract_layout)
     registry.register_builder("remote_segmenter", _build_remote_segmenter)
     registry.register_builder("ner", _build_ner)
+    registry.register_builder("text_confidences", _build_text_confidences)
     # --- Enveloppe T5 : pipeline hybride seg → reconnaissance par région → ALTO ---
     # Ces 3 briques (``Module`` Protocol) sont composées par
     # ``run_planning.plan_hybrid_run`` (finition T5 livrée) : segmentation →

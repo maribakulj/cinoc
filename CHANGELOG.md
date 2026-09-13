@@ -16,6 +16,16 @@ publier, et son moment, appartiennent au mainteneur.
 
 ### Ajouté
 
+- **Des confidences par mot pour les moteurs qui n'en produisent pas.**
+  `text_confidences` note chaque mot avec un modèle de langue d'époque, ce qui
+  allume la section calibration (ECE, MCE, courbe de fiabilité) pour l'OCR
+  Mistral, un VLM en transcription directe ou un texte corrigé — jusqu'ici
+  vides faute de donnée. Ce n'est pas la même grandeur qu'une confiance
+  moteur : celle-ci dit la sûreté des pixels, celle-là la plausibilité du mot.
+  Le rapport peut désormais les comparer sur le seul critère commun — laquelle
+  prédit le mieux une erreur.
+
+
 - **La chaîne NDNP de la Library of Congress, exécutable telle quelle.** Trois
   briques manquaient : `tesseract_layout` (l'analyse de page de Tesseract
   lui-même — le segmenteur que NDNP utilise **par défaut**, le détecteur
