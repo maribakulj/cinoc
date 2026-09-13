@@ -59,7 +59,9 @@ def test_cli_hybrid_precomputed_end_to_end(tmp_path: Path) -> None:
         ]
     )
     assert code == 0
-    alto = out / "doc1.alto.xml"
+    # Le nom porte le pipeline depuis D-243 : deux chaînes produisant de l'ALTO
+    # ne doivent plus s'écraser l'une l'autre.
+    alto = out / "doc1.hybrid.alto.xml"
     assert alto.is_file()
     # L'ALTO tokenise en mots (un ``<String CONTENT=…>`` par mot) ; le texte
     # reconnu par région survit l'assemblage.

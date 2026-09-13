@@ -289,7 +289,13 @@ def segmenter_statuses(
     segmenteur du socle tourne en **local** (PaddleX) ou **délègue** à un endpoint
     distant (``remote_segmenter``) → pas de surface filesystem cloud à masquer.
 
-    Trois segmenteurs maison :
+    Quatre segmenteurs maison :
+
+    - ``tesseract_layout`` — **l'analyse de page de Tesseract lui-même**, sans
+      modèle en plus. C'est le segmenteur de la chaîne NDNP de référence, celle
+      que la Library of Congress fait tourner en production ; le détecteur
+      neuronal n'y est qu'une option. Il sert aussi de second avis au
+      rattrapage (`gap_fill`) ;
 
     - ``pp_doclayout`` — modèle **local** PP-DocLayout (extra ``[segment]`` +
       poids) ;
@@ -305,6 +311,10 @@ def segmenter_statuses(
         paddle_detail, paddle_ok = "prêt (PaddleX installé)", True
     else:
         paddle_detail, paddle_ok = "PaddleX non installé (extra [segment])", False
+    if has_module("pytesseract"):
+        tess_detail, tess_ok = "prêt (analyse de page native)", True
+    else:
+        tess_detail, tess_ok = "pytesseract non installé (extra [tesseract])", False
     if has_module("doclayout_yolo"):
         yolo_detail, yolo_ok = "prêt (poids tirés du Hub au 1er run)", True
     else:
@@ -319,6 +329,12 @@ def segmenter_statuses(
             label="PP-DocLayout",
             available=paddle_ok,
             detail=paddle_detail,
+        ),
+        EngineStatus(
+            kind="tesseract_layout",
+            label="Mise en page Tesseract",
+            available=tess_ok,
+            detail=tess_detail,
         ),
         EngineStatus(
             kind="doclayout_yolo",

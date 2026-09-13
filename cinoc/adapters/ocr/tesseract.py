@@ -26,12 +26,13 @@ import json
 import logging
 import re
 import subprocess
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 
 from cinoc.adapters._workspace import workspace_artifact_path
 from cinoc.domain.artifacts import Artifact, ArtifactType, compute_content_hash
 from cinoc.domain.confidence import ConfidenceToken
 from cinoc.domain.errors import AdapterStepError
+from cinoc.pipeline.fanout import REGION_TYPE_PARAM
 from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
@@ -106,7 +107,7 @@ def _invoke_tesseract(  # pragma: no cover -- binaire requis (cf. marqueur 'live
     return str(text).strip()
 
 
-def _invoke_tesseract_alto(  # pragma: no cover -- binaire requis ('live')
+def invoke_tesseract_alto(  # pragma: no cover -- binaire requis ('live')
     *, image_path: str, lang: str, psm: int, oem: int, timeout: float
 ) -> bytes:
     """ALTO XML natif via ``image_to_alto_xml`` (géométrie + texte par mot).
@@ -164,6 +165,35 @@ def _invoke_tesseract_confidences(  # pragma: no cover -- binaire requis ('live'
     return tokens
 
 
+def parse_psm_by_class(spec: str) -> dict[str, int]:
+    """``"article:6,advertisement:3"`` → ``{"article": 6, "advertisement": 3}``.
+
+    Plat par contrat : les paramètres d'adapter sont des scalaires, donc une
+    table se transporte en chaîne. Une entrée malformée **lève** au lieu d'être
+    ignorée — un réglage silencieusement perdu ne se voit que dans le CER, des
+    heures plus tard.
+    """
+    table: dict[str, int] = {}
+    for morceau in (m.strip() for m in spec.split(",")):
+        if not morceau:
+            continue
+        classe, _, valeur = morceau.partition(":")
+        classe = classe.strip()
+        if not classe or not valeur.strip().isdigit():
+            raise AdapterStepError(
+                f"TesseractAdapter : psm_by_class illisible en {morceau!r} "
+                "(forme attendue : 'classe:psm', séparées par des virgules)."
+            )
+        psm = int(valeur)
+        if not 0 <= psm <= 13:
+            raise AdapterStepError(
+                f"TesseractAdapter : psm ∈ [0, 13] pour la classe {classe!r}, "
+                f"reçu {psm}."
+            )
+        table[classe] = psm
+    return table
+
+
 class TesseractAdapter:
     """OCR Tesseract 5 ; écrit le texte dans le workspace, renvoie un ``RAW_TEXT``."""
 
@@ -175,6 +205,7 @@ class TesseractAdapter:
         psm: int = 6,
         oem: int = 3,
         alto: bool = False,
+        psm_by_class: str = "",
     ) -> None:
         if not label or not all(c.isalnum() or c in "_-" for c in label):
             raise AdapterStepError(
@@ -190,12 +221,28 @@ class TesseractAdapter:
             raise AdapterStepError(f"TesseractAdapter : psm ∈ [0, 13], reçu {psm}.")
         if not 0 <= oem <= 3:
             raise AdapterStepError(f"TesseractAdapter : oem ∈ [0, 3], reçu {oem}.")
+        self._psm_by_class = parse_psm_by_class(psm_by_class)
         self._label = label
         self._lang = lang
         self._psm = psm
         self._oem = oem
         #: Émet en plus un artefact ``ALTO_XML`` (ré-import eScriptorium/Transkribus).
         self._alto = alto
+
+    def _psm_for(self, params: Mapping[str, ParamValue]) -> int:
+        """Le psm de cette région, ou le psm par défaut.
+
+        Un pavé d'article et une publicité ne se lisent pas au même réglage :
+        NDNP-Open-OCR bascule de ``--psm 6`` (bloc uniforme) à ``--psm 3``
+        (analyse complète) selon la classe. Sans table, rien ne change — c'est
+        le comportement historique, et il reste le défaut.
+        """
+        if not self._psm_by_class:
+            return self._psm
+        classe = params.get(REGION_TYPE_PARAM)
+        if not isinstance(classe, str) or not classe:
+            return self._psm
+        return self._psm_by_class.get(classe, self._psm)
 
     @property
     def name(self) -> str:
@@ -245,10 +292,11 @@ class TesseractAdapter:
                 f"{self.name} : workspace requis (RunContext.workspace_uri)."
             )
         timeout = max(0.001, context.deadline.clamp_to_remaining(_DEFAULT_TIMEOUT))
+        psm = self._psm_for(params)
         text = _invoke_tesseract(
             image_path=image.uri,
             lang=self._lang,
-            psm=self._psm,
+            psm=psm,
             oem=self._oem,
             timeout=timeout,
         )
@@ -262,7 +310,7 @@ class TesseractAdapter:
             tokens = _invoke_tesseract_confidences(
                 image_path=image.uri,
                 lang=self._lang,
-                psm=self._psm,
+                psm=psm,
                 oem=self._oem,
                 timeout=timeout,
             )
@@ -305,10 +353,10 @@ class TesseractAdapter:
         }
         if self._alto:
             # ALTO demandé → livrable : un échec lève (≠ confidences best-effort).
-            alto_bytes = _invoke_tesseract_alto(
+            alto_bytes = invoke_tesseract_alto(
                 image_path=image.uri,
                 lang=self._lang,
-                psm=self._psm,
+                psm=psm,
                 oem=self._oem,
                 timeout=timeout,
             )
@@ -329,4 +377,6 @@ class TesseractAdapter:
         return StepOutput(artifacts=artifacts)
 
 
-__all__ = ["TesseractAdapter", "tesseract_binary_version"]
+__all__ = [
+    "invoke_tesseract_alto",
+    "parse_psm_by_class","TesseractAdapter", "tesseract_binary_version"]

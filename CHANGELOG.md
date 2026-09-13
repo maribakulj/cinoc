@@ -16,6 +16,21 @@ publier, et son moment, appartiennent au mainteneur.
 
 ### Ajouté
 
+- **La chaîne NDNP de la Library of Congress, exécutable telle quelle.** Trois
+  briques manquaient : `tesseract_layout` (l'analyse de page de Tesseract
+  lui-même — le segmenteur que NDNP utilise **par défaut**, le détecteur
+  neuronal n'étant qu'une option), le choix du `--psm` **selon la classe de
+  région**, et `gap_fill`, qui croise la lecture par régions avec une passe
+  page entière pour que ce qu'un détecteur rate ne disparaisse pas du texte.
+
+### Corrigé
+
+- **Deux pipelines produisant de l'ALTO n'écrasent plus le même fichier.** Le
+  nom de sortie ne portait que l'identifiant de document ; comparer deux chaînes
+  qui émettent toutes deux de l'ALTO — ce qu'un banc fait par définition — n'en
+  laissait qu'une, sans avertissement. Le nom porte désormais le pipeline.
+
+
 - **Un segmenteur de mise en page installable par pip** : `doclayout_yolo`
   (extra `[yolo]`). Les deux segmenteurs existants exigeaient PaddleX ou un
   endpoint distant, donc la famille de pipelines hybrides n'était exécutable
