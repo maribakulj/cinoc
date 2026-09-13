@@ -86,22 +86,39 @@ def corpus_from_images(
 
 
 def write_alto_files(out_dir: Path, outputs: PipelineOutputs) -> list[Path]:
-    """Écrit un ALTO par document portant un ``ALTO_XML``. Retourne les chemins.
+    """Écrit un ALTO par **(pipeline, document)**. Retourne les chemins.
 
-    Nom de sortie ``<doc>.alto.xml`` (``/`` → ``_`` ; les ``id`` de document sont
-    déjà sans ``..`` ni absolu, garanti par ``DocumentRef``)."""
+    Nom de sortie ``<doc>.<pipeline>.alto.xml`` (``/`` → ``_`` ; les ``id`` de
+    document sont déjà sans ``..`` ni absolu, garanti par ``DocumentRef``, et le
+    nom de pipeline est assaini de la même façon).
+
+    **Le nom portait le seul document.** Comparer deux chaînes qui produisent
+    toutes deux de l'ALTO — exactement ce qu'un banc fait — les faisait donc
+    écrire dans le même fichier : le dernier écrasait l'autre, sans un mot, et
+    le compte annoncé (« 2 ALTO écrits ») restait juste alors qu'un seul
+    survivait. Découvert en exécutant les deux chaînes NDNP côte à côte.
+    """
     out_dir.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
-    for by_document in outputs.values():
+    for pipeline_name, by_document in outputs.items():
+        pipeline = _safe(pipeline_name)
         for document_id, artifacts in by_document.items():
             artifact = artifacts.get(ArtifactType.ALTO_XML)
             if artifact is None or artifact.uri is None:
                 continue
-            target = out_dir / f"{document_id.replace('/', '_')}.alto.xml"
+            target = out_dir / f"{_safe(document_id)}.{pipeline}.alto.xml"
             shutil.copyfile(artifact.uri, target)
             written.append(target)
-            logger.info("[transcription] %s → %s", document_id, target)
+            logger.info(
+                "[transcription] %s · %s → %s", pipeline_name, document_id, target
+            )
     return sorted(written)
+
+
+def _safe(name: str) -> str:
+    """Composant de nom de fichier sûr : ``/`` et ``.`` ne doivent pas creuser
+    d'arborescence ni couper l'extension attendue."""
+    return name.replace("/", "_").replace(".", "_")
 
 
 def write_layout_files(out_dir: Path, outputs: PipelineOutputs) -> list[Path]:

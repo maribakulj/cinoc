@@ -33,6 +33,7 @@ def test_kinds_listed() -> None:
         "azure_di",
         "calamari",
         "doclayout_yolo",
+        "gap_fill",
         "google_vision",
         "kraken",
         "layout_to_text",
@@ -52,6 +53,7 @@ def test_kinds_listed() -> None:
         "remote_segmenter",
         "saknussemm",
         "tesseract",
+        "tesseract_layout",
         "vote",
     )
 

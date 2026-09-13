@@ -172,7 +172,7 @@ def test_alto_emits_artifact(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
     # ``alto=True`` : un artefact ALTO_XML est déclaré et produit (octets fidèles).
     _mock_ocr(monkeypatch, "mot")
     monkeypatch.setattr(
-        "cinoc.adapters.ocr.tesseract._invoke_tesseract_alto",
+        "cinoc.adapters.ocr.tesseract.invoke_tesseract_alto",
         lambda **_: b"<alto>geom</alto>",
     )
     adapter = TesseractAdapter(label="fra", lang="fra", alto=True)
@@ -195,7 +195,7 @@ def test_alto_failure_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
         raise AdapterStepError("alto cassé")
 
     monkeypatch.setattr(
-        "cinoc.adapters.ocr.tesseract._invoke_tesseract_alto", boom
+        "cinoc.adapters.ocr.tesseract.invoke_tesseract_alto", boom
     )
     adapter = TesseractAdapter(label="fra", lang="fra", alto=True)
     with pytest.raises(AdapterStepError):
@@ -280,3 +280,62 @@ def test_system_binaries_hook_empty_when_binary_absent(
         "cinoc.adapters.ocr.tesseract.tesseract_binary_version", lambda: None
     )
     assert TesseractAdapter(label="fra").system_binaries() == {}
+
+
+# --------------------------------------------------------------------------- #
+# Le psm selon la classe de région — la finesse que NDNP-Open-OCR applique
+#
+# Un pavé d'article et une publicité ne se lisent pas au même réglage : leur
+# pipeline bascule de `--psm 6` (bloc uniforme) à `--psm 3` (analyse complète)
+# selon la classe rendue par le segmenteur. Sans cette table, cinoc appliquait
+# un réglage unique à toute la page.
+# --------------------------------------------------------------------------- #
+
+
+def test_the_psm_table_is_parsed() -> None:
+    from cinoc.adapters.ocr.tesseract import parse_psm_by_class
+
+    assert parse_psm_by_class("article:6, advertisement:3") == {
+        "article": 6,
+        "advertisement": 3,
+    }
+    assert parse_psm_by_class("") == {}
+
+
+@pytest.mark.parametrize(
+    "spec", ["article", "article:", "article:x", ":6", "article:99"]
+)
+def test_a_malformed_psm_table_raises(spec: str) -> None:
+    """Elle **lève** au lieu d'être ignorée.
+
+    Un réglage silencieusement perdu ne se voit pas : le run tourne, et l'écart
+    n'apparaît que dans le CER, des heures plus tard.
+    """
+    from cinoc.adapters.ocr.tesseract import parse_psm_by_class
+
+    with pytest.raises(AdapterStepError):
+        parse_psm_by_class(spec)
+
+
+def test_the_region_class_selects_the_psm() -> None:
+    """C'est le contrat : la classe posée par le fan-out choisit le réglage."""
+    from cinoc.adapters.ocr.tesseract import TesseractAdapter
+    from cinoc.pipeline.fanout import REGION_TYPE_PARAM
+
+    module = TesseractAdapter(
+        label="x", psm=3, psm_by_class="article:6,author:6"
+    )
+    assert module._psm_for({REGION_TYPE_PARAM: "article"}) == 6
+    assert module._psm_for({REGION_TYPE_PARAM: "photograph"}) == 3, (
+        "une classe hors table retombe sur le psm déclaré, pas sur un défaut caché."
+    )
+    assert module._psm_for({}) == 3, "sans classe, le psm déclaré."
+
+
+def test_without_a_table_nothing_changes() -> None:
+    """Le comportement historique reste le défaut : aucun run existant ne bouge."""
+    from cinoc.adapters.ocr.tesseract import TesseractAdapter
+    from cinoc.pipeline.fanout import REGION_TYPE_PARAM
+
+    module = TesseractAdapter(label="x", psm=6)
+    assert module._psm_for({REGION_TYPE_PARAM: "advertisement"}) == 6

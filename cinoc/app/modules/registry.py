@@ -163,6 +163,9 @@ def _build_tesseract(kwargs: Mapping[str, ParamValue]) -> Module:
         psm=int(kwargs.get("psm", 6)),
         oem=int(kwargs.get("oem", 3)),
         alto=bool(kwargs.get("alto", False)),
+        # Table « classe de région → psm » (NDNP bascule 6 ↔ 3 selon la classe).
+        # Vide = un seul réglage, le comportement historique.
+        psm_by_class=str(kwargs.get("psm_by_class", "")),
     )
 
 
@@ -252,6 +255,34 @@ def _build_page_assembler(kwargs: Mapping[str, ParamValue]) -> Module:
 
     del kwargs
     return PageAssembler()
+
+
+def _build_gap_fill(kwargs: Mapping[str, ParamValue]) -> Module:
+    """``gap_fill:<label>`` — croise deux lectures d'une page (fusion).
+
+    Brique de **fusion** : l'exécuteur l'appelle par ``execute_merge`` sur les
+    étapes que ``merge_from`` nomme, et la **première** source nommée fait
+    autorité. Ce que le détecteur a raté ne doit pas disparaître du texte.
+    """
+    from cinoc.adapters.layout.gap_fill import (  # noqa: PLC0415
+        DEFAULT_OVERLAP,
+        LayoutGapFiller,
+    )
+
+    label = kwargs.get("label")
+    if not isinstance(label, str):
+        raise ModuleResolutionError(
+            "gap_fill : 'label' (str) requis dans adapter_kwargs."
+        )
+    recouvrement = kwargs.get("overlap")
+    return LayoutGapFiller(  # type: ignore[return-value]
+        label=label,
+        overlap=(
+            float(recouvrement)
+            if isinstance(recouvrement, (int, float))
+            else DEFAULT_OVERLAP
+        ),
+    )
 
 
 def _build_vote(kwargs: Mapping[str, ParamValue]) -> Module:
@@ -361,6 +392,26 @@ def _build_pp_doclayout(kwargs: Mapping[str, ParamValue]) -> Module:
     return PPDocLayoutSegmenter(model=model)
 
 
+def _build_tesseract_layout(kwargs: Mapping[str, ParamValue]) -> Module:
+    """``tesseract_layout`` — la mise en page que Tesseract trouve lui-même.
+
+    Le segmenteur de la chaîne NDNP **de référence** : pas de modèle en plus,
+    pas de poids à tirer. Sert aussi de second avis au rattrapage `gap_fill`.
+    """
+    from cinoc.adapters.layout.tesseract_layout import (  # noqa: PLC0415
+        DEFAULT_PSM,
+        TesseractLayoutSegmenter,
+    )
+
+    psm = kwargs.get("psm")
+    oem = kwargs.get("oem")
+    return TesseractLayoutSegmenter(
+        lang=str(kwargs.get("lang", "fra")),
+        psm=int(psm) if isinstance(psm, (int, float)) else DEFAULT_PSM,
+        oem=int(oem) if isinstance(oem, (int, float)) else 3,
+    )
+
+
 def _build_doclayout_yolo(kwargs: Mapping[str, ParamValue]) -> Module:
     """``doclayout_yolo`` — segmenteur réel installable par pip.
 
@@ -458,6 +509,7 @@ def register_default_modules(registry: ModuleRegistry) -> None:
     # Segmenteurs réels (étape IMAGE → LAYOUT), composables dès aujourd'hui.
     registry.register_builder("pp_doclayout", _build_pp_doclayout)
     registry.register_builder("doclayout_yolo", _build_doclayout_yolo)
+    registry.register_builder("tesseract_layout", _build_tesseract_layout)
     registry.register_builder("remote_segmenter", _build_remote_segmenter)
     registry.register_builder("ner", _build_ner)
     # --- Enveloppe T5 : pipeline hybride seg → reconnaissance par région → ALTO ---
@@ -478,6 +530,7 @@ def register_default_modules(registry: ModuleRegistry) -> None:
     registry.register_builder("preprocess", _build_preprocess)
     registry.register_builder("reading_order", _build_reading_order)
     registry.register_builder("vote", _build_vote)
+    registry.register_builder("gap_fill", _build_gap_fill)
     registry.register_builder("page_assembler", _build_page_assembler)
 
 

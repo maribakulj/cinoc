@@ -139,6 +139,20 @@ def _region_image(
     return cropper(page_image, rel, region.id, context)
 
 
+#: Clé **réservée** que le fan-out pose dans les ``params`` du reconnaisseur :
+#: la classe de la région en cours (``article``, ``advertisement``, …), ou une
+#: chaîne vide si la segmentation n'en donne pas.
+#:
+#: Le contrat du ``Module`` dit que ``params`` est une copie mutable fournie par
+#: le runner : la renseigner est donc son rôle, pas un détournement. Ce qui
+#: serait un détournement, c'est qu'un module **écrive** dedans.
+#:
+#: Sans elle, un reconnaisseur applique le même réglage à un pavé d'article et à
+#: une publicité. NDNP-Open-OCR, lui, bascule de ``--psm 6`` à ``--psm 3`` selon
+#: la classe : c'est cette information-là qui manquait pour le reproduire.
+REGION_TYPE_PARAM = "region_type"
+
+
 def _fill_region(
     region: Region,
     page: LayoutPage,
@@ -154,8 +168,10 @@ def _fill_region(
     if region_image is None:
         return region, None
     try:
+        par_region = dict(params)
+        par_region[REGION_TYPE_PARAM] = region.region_type or ""
         output = recognizer.execute(
-            {ArtifactType.IMAGE: region_image}, dict(params), context, control
+            {ArtifactType.IMAGE: region_image}, par_region, context, control
         )
         text = _read_text(output.artifacts)
     except AdapterStepError as exc:
@@ -231,4 +247,9 @@ def execute_region_fanout(
     return StepOutput(artifacts=artifacts, usage=usage)
 
 
-__all__ = ["RegionCropper", "execute_region_fanout", "run_region_fanout"]
+__all__ = [
+    "REGION_TYPE_PARAM",
+    "RegionCropper",
+    "execute_region_fanout",
+    "run_region_fanout",
+]
