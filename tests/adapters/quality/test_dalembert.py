@@ -150,3 +150,49 @@ def test_the_score_says_which_word_triggered_it() -> None:
     assert pire == "c0urt", (
         f"le mot le plus surprenant devrait être 'c0urt', pas {pire!r}."
     )
+
+
+# --------------------------------------------------------------------------- #
+# Le chargement concurrent — le défaut que seul un vrai run a montré
+# --------------------------------------------------------------------------- #
+
+
+def test_concurrent_loads_build_the_model_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """**Un seul fil matérialise les poids, les autres attendent.**
+
+    ``lru_cache`` mémorise le *résultat* mais n'empêche pas deux fils d'exécuter
+    le corps en même temps. Pendant qu'un fil matérialise 500 Mo, l'autre
+    obtenait un modèle à tenseurs *meta* — sans mémoire — et l'erreur
+    (``Tensor.item() cannot be called on meta tensors``) tombait en plein
+    passage avant, loin de sa cause.
+
+    Trouvé en exécutant le banc à ``--workers 4``. Aucun test séquentiel ne
+    l'atteint, d'où celui-ci : un chargement lent, huit fils, un seul appel.
+    """
+    import threading
+    import time
+    from concurrent.futures import ThreadPoolExecutor
+
+    from cinoc.adapters.quality import dalembert
+
+    appels: list[str] = []
+    verrou = threading.Lock()
+
+    def _lent(nom: str) -> tuple[object, object]:
+        with verrou:
+            appels.append(nom)
+        time.sleep(0.05)  # la fenêtre où l'ancien code laissait passer un pair
+        return object(), object()
+
+    monkeypatch.setattr(dalembert, "_charger", _lent)
+    dalembert.reset_cache()
+    try:
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            obtenus = list(pool.map(lambda _: dalembert._load("m"), range(8)))
+    finally:
+        dalembert.reset_cache()
+
+    assert appels == ["m"], f"le modèle a été chargé {len(appels)} fois."
+    assert len({id(o) for o in obtenus}) == 1, "tous les fils doivent partager."
