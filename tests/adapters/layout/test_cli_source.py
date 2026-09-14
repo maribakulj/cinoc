@@ -7,13 +7,18 @@ commande **sans shell**, et relire le XML **quel que soit son dialecte**.
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
 import pytest
 
 from cinoc.adapters.layout._base import read_layout
-from cinoc.adapters.layout.cli_source import CliLayoutSource, build_argv
+from cinoc.adapters.layout.cli_source import (
+    CliLayoutSource,
+    _absolu,
+    build_argv,
+)
 from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.errors import AdapterStepError
 from cinoc.pipeline.protocols import Module
@@ -194,3 +199,22 @@ def test_une_commande_introuvable_le_dit(tmp_path: Path) -> None:
 
     with pytest.raises(AdapterStepError, match="introuvable"):
         brique.execute({ArtifactType.IMAGE: artefact}, {}, contexte, RunControl())
+
+
+def test_le_chemin_de_l_image_est_rendu_absolu(tmp_path: Path) -> None:
+    """**Le cas qui l'a imposé.** Rien ne promet que l'outil reste dans notre
+    dossier : un processeur OCR-D fait ``cd`` dans son workspace, et une image
+    nommée relativement devient introuvable. Le dossier de sortie est déjà
+    absolu ; l'image doit l'être aussi.
+    """
+    image = tmp_path / "p.png"
+    image.write_bytes(b"\x89PNG")
+    relatif = os.path.relpath(image, Path.cwd())
+
+    assert Path(_absolu(relatif)).is_absolute()
+    assert Path(_absolu(relatif)) == image.resolve()
+
+
+def test_un_uri_qui_n_est_pas_un_chemin_local_passe_inchange() -> None:
+    """On ne résout que ce qui existe — le reste regarde l'outil."""
+    assert _absolu("https://exemple.test/p.png") == "https://exemple.test/p.png"
