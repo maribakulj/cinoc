@@ -196,3 +196,29 @@ def test_concurrent_loads_build_the_model_once(
 
     assert appels == ["m"], f"le modèle a été chargé {len(appels)} fois."
     assert len({id(o) for o in obtenus}) == 1, "tous les fils doivent partager."
+
+
+@_needs_torch
+@pytest.mark.slow
+def test_no_backward_graph_is_built(tmp_path: pytest.TempPathFactory) -> None:
+    """**Le gradient est une affaire de fil, pas de processus.**
+
+    ``torch.set_grad_enabled(False)`` posé une fois au chargement ne
+    s'appliquait qu'au fil qui chargeait le modèle : tous les autres
+    construisaient un graphe de rétropropagation dont personne ne voulait, pour
+    chaque ligne de chaque page. Découvert par l'avertissement de PyTorch au
+    second run réel, pas par une relecture.
+
+    Le contrôle porte sur la **sortie**, pas sur un drapeau global : un tenseur
+    qui suit son gradient est exactement ce que `no_grad` doit empêcher.
+    """
+    import torch
+
+    scorer = DalembertQEScorer()
+    # Hors de tout `no_grad` ambiant : c'est le module qui doit se protéger.
+    with torch.enable_grad():
+        mots = scorer.word_surprisals("le cheval court")
+    assert mots, "la ligne porte des mots."
+    assert all(isinstance(s, float) for _, s in mots), (
+        "les surprises doivent être des flottants détachés, pas des tenseurs."
+    )
