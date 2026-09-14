@@ -51,6 +51,19 @@ StatusProvider = Callable[[], tuple[EngineStatus, ...]]
 #: moteur réel offert au visiteur du Space public.
 PUBLIC_ENGINE_KINDS: frozenset[str] = frozenset({"precomputed", "tesseract"})
 
+#: Briques que le **lanceur web ne doit jamais exécuter**, mode public ou non.
+#:
+#: Distinct de ``PUBLIC_ENGINE_KINDS``, et la distinction est le cœur de la
+#: règle : celui-là borne ce qu'une instance *exposée* offre, celui-ci borne ce
+#: qu'une spec *déposée* peut faire — sur n'importe quelle instance.
+#:
+#: ``cli_layout`` exécute une commande lue dans la spec. C'est sa raison d'être
+#: (brancher eynollah, kraken, OCR-D sans écrire de code) et c'est un vecteur
+#: d'exécution de code : accepter une telle spec par HTTP reviendrait à offrir un
+#: shell. « Instance privée » veut dire « les gens que je connais », pas « les
+#: gens à qui je confie un shell ».
+CLI_ONLY_KINDS: frozenset[str] = frozenset({"cli_layout"})
+
 
 def _module_present(name: str) -> bool:
     try:
@@ -438,6 +451,7 @@ __all__ = [
     "normalization_profiles",
     "curated_prompts",
     "EngineStatus",
+    "CLI_ONLY_KINDS",
     "PUBLIC_ENGINE_KINDS",
     "StatusProvider",
     "correction_status",

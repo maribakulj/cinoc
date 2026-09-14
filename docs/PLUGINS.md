@@ -111,3 +111,67 @@ dans une spec (`adapter_name = "my_ocr:c0"`).
   cœur ; installé à part, **désactivé** sur le Space public.
 
 Les deux passent par le **même** `Module` Protocol.
+
+---
+
+## Troisième voie : **aucun code du tout** (`cli_layout`)
+
+Avant d'écrire un module, poser la question : **l'outil sait-il déjà écrire du
+PAGE-XML ou de l'ALTO ?** Si oui, il n'y a rien à écrire.
+
+L'interface d'un segmenteur n'est pas l'outil, c'est le **format**. Le patrimoine
+s'est standardisé sur ces deux-là ; une brique qui lit *le format* branche donc
+toute une famille d'outils, là où un adaptateur par *outil* n'en branche qu'un.
+
+```yaml
+steps:
+  - id: seg
+    kind: segmentation
+    adapter_name: cli_layout:eynollah
+    input_types: [image]
+    output_types: [layout]
+
+adapter_kwargs:
+  cli_layout:eynollah:
+    label: eynollah
+    command: "eynollah -i {image} -o {out} -m ~/modeles/eynollah"
+```
+
+`{image}` est la page, `{out}` un dossier **vide** que Cinoc alloue et nettoie.
+L'outil y écrit **un** fichier `.xml` ; le dialecte est reconnu à son contenu,
+pas à son extension.
+
+Les outils visés — eynollah, `kraken segment -bl`, les processeurs OCR-D,
+dhSegment — écrivent tous du PAGE-XML, et c'est à ce titre qu'ils sont
+branchables. **Aucun n'a été exécuté dans la suite de tests** : celle-ci vérifie
+le contrat (découpage, relecture des deux dialectes, refus) contre un faux outil.
+Le premier branchement réel reste à mesurer.
+
+### Ce que la brique refuse, et pourquoi
+
+| Refus | Raison |
+|---|---|
+| **Aucun shell.** La commande est découpée (`shlex`) *avant* substitution | Un chemin contenant `; rm -rf` reste **un argument**. Substituer d'abord laisserait fabriquer une seconde commande. |
+| **Zéro ou plusieurs `.xml`** produits | En choisir un ferait dépendre le résultat de l'ordre du système de fichiers — l'invariant de déterminisme tombe. |
+| **Un XML sans aucune région** | Bien formé mais vide, il donnerait une page blanche : un CER de 1,0 **sans message**. C'est le pire mode de défaillance d'un banc d'essai. |
+| **Tout appel depuis le web** | Voir ci-dessous. |
+
+### Pourquoi le web la refuse toujours
+
+`cli_layout` exécute une commande **écrite dans la spec**. C'est sa raison d'être
+en local, et ce serait un shell offert par HTTP.
+
+Le refus (`cinoc.app.engines.CLI_ONLY_KINDS`) est donc **inconditionnel** : il ne
+dépend pas du mode public. Le mode public borne une *exposition* ; ce verrou
+borne une *capacité*. « Instance privée » veut dire « les gens que je connais »,
+pas « les gens à qui je confie un shell ».
+
+### Quand écrire quand même un adaptateur
+
+- l'outil est une **bibliothèque Python**, pas une commande (pas de sous-processus
+  à lancer, pas de fichier à relire) ;
+- il rend un format **propre à lui** (JSON maison, masques, tenseurs) ;
+- il faut le charger **une fois** pour mille pages — `cli_layout` relance la
+  commande à chaque page, ce qui est rédhibitoire pour un modèle lourd.
+
+Hors de ces trois cas, une ligne de YAML suffit.

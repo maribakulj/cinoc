@@ -16,6 +16,13 @@ publier, et son moment, appartiennent au mainteneur.
 
 ### Ajouté
 
+- **Brancher un segmenteur sans écrire de Python.** La brique `cli_layout`
+  lance un outil externe et relit le PAGE-XML ou l'ALTO qu'il écrit : eynollah,
+  `kraken segment`, les processeurs OCR-D ou dhSegment deviennent **une ligne
+  de spec** au lieu d'un adaptateur. L'interface n'est pas l'outil, c'est le
+  format. Réservée à la ligne de commande — elle exécute une commande décrite
+  par la spec, et le lanceur web la refuse toujours, instance privée comprise.
+
 - **Le rapport montre ce qu'il y a dans chaque chaîne.** Section « Composition
   des chaînes » : les étapes réellement exécutées, la forme du graphe, le
   fan-out et les réglages effectifs de chaque brique — lus du manifeste. Un nom
