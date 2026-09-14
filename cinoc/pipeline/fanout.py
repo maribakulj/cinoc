@@ -173,14 +173,83 @@ def _fill_region(
         output = recognizer.execute(
             {ArtifactType.IMAGE: region_image}, par_region, context, control
         )
-        text = _read_text(output.artifacts)
+        lignes = _lignes_reconnues(output.artifacts, region)
     except AdapterStepError as exc:
         logger.warning(
             "[fanout] région %r non reconnue (ignorée) : %s", region.id, exc
         )
         return region, None
-    line = Line(id=f"{region.id}:l1", text=text)
-    return region.model_copy(update={"lines": (line,)}), output.usage
+    return region.model_copy(update={"lines": lignes}), output.usage
+
+
+def _lignes_reconnues(
+    outputs: Mapping[ArtifactType, Artifact], region: Region
+) -> tuple[Line, ...]:
+    """Les lignes que le reconnaisseur a rendues — **plusieurs si il sait**.
+
+    Un reconnaisseur qui déclare ``LAYOUT`` en sortie sait découper son bloc en
+    lignes : on les greffe telles quelles. Celui qui ne déclare que ``RAW_TEXT``
+    n'a qu'un texte à donner, et la région n'a donc qu'une ligne.
+
+    **Le défaut que cette distinction ferme.** Le fan-off ne lisait que le texte
+    plat, donc fabriquait *toujours* une ligne par région — non par choix, mais
+    parce que le type ne permettait rien d'autre. Un ALTO de trois blocs sortait
+    avec trois lignes pour une page qui en compte vingt : structurellement faux,
+    illisible par un outil de relecture, et invisible à toute métrique de texte
+    (le contenu, lui, était juste). C'est ce que NDNP évite en océrisant chaque
+    région **en ALTO** plutôt qu'en chaîne.
+    """
+    layout = outputs.get(ArtifactType.LAYOUT)
+    if layout is not None and layout.uri is not None:
+        return _greffer(layout, region)
+    return (Line(id=f"{region.id}:l1", text=_read_text(outputs)),)
+
+
+def _greffer(layout_artifact: Artifact, region: Region) -> tuple[Line, ...]:
+    """Lignes d'un sous-layout de bloc → lignes de la région, **en repères page**.
+
+    Deux traductions, et les oublier rendrait l'ALTO faux de deux façons :
+
+    * **les coordonnées** sont relatives à la découpe, pas à la page. Sans le
+      décalage, toutes les lignes de tous les blocs se superposeraient en haut à
+      gauche ;
+    * **les identifiants** viennent du moteur (``line_0``, ``line_1``…) et sont
+      donc les mêmes d'un bloc à l'autre. Sans préfixe, deux lignes de blocs
+      différents porteraient la même identité — et l'identité de ligne est
+      précisément ce que la chaîne structurée existe pour préserver.
+    """
+    try:
+        sous = CanonicalLayout.model_validate_json(
+            Path(layout_artifact.uri or "").read_bytes()
+        )
+    except (OSError, ValueError) as exc:
+        raise AdapterStepError(
+            f"fanout : sous-layout illisible pour la région {region.id!r} : {exc}"
+        ) from exc
+    origine = region.geometry.bbox if region.geometry else None
+    dx = origine.x if origine else 0
+    dy = origine.y if origine else 0
+    out: list[Line] = []
+    for page in sous.pages:
+        for bloc in page.leaf_regions():
+            for ligne in bloc.lines:
+                out.append(_decalee(ligne, region.id, len(out), dx, dy))
+    if not out:
+        # Le moteur a rendu une mise en page vide : une région sans ligne est un
+        # fait (bloc illisible), pas une erreur. La rendre vide le dit ; inventer
+        # une ligne vide ferait croire à une lecture.
+        return ()
+    return tuple(out)
+
+
+def _decalee(ligne: Line, region_id: str, rang: int, dx: int, dy: int) -> Line:
+    geometrie = ligne.geometry
+    if geometrie is not None and geometrie.bbox is not None:
+        boite = geometrie.bbox
+        decalee = boite.model_copy(update={"x": boite.x + dx, "y": boite.y + dy})
+        geometrie = geometrie.model_copy(update={"bbox": decalee})
+    identifiant = f"{region_id}:{ligne.id or f'l{rang + 1}'}"
+    return ligne.model_copy(update={"id": identifiant, "geometry": geometrie})
 
 
 def _read_text(outputs: Mapping[ArtifactType, Artifact]) -> str:
