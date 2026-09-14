@@ -22,7 +22,10 @@ from typing import Any
 import httpx
 import pytest
 
-from cinoc.adapters.llm.ollama_structured import OllamaStructuredClient, _bare_schema
+from cinoc.adapters.correction.ollama_structured import (
+    OllamaStructuredClient,
+    _bare_schema,
+)
 
 #: Les classes d'erreur attendues appartiennent au contrat de ``saknussemm`` :
 #: sans la bibliothèque, il n'y a pas de contrat à vérifier.

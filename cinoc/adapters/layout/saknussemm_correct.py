@@ -232,7 +232,7 @@ class SaknussemmCorrector:
         )
 
         if self._producer == "mistral":
-            from cinoc.adapters.llm.mistral_structured import (  # noqa: PLC0415
+            from cinoc.adapters.correction.mistral_structured import (  # noqa: PLC0415
                 MistralStructuredClient,
             )
 
@@ -242,7 +242,7 @@ class SaknussemmCorrector:
                 model=self._model,
             )
 
-        from cinoc.adapters.llm.ollama_structured import (  # noqa: PLC0415
+        from cinoc.adapters.correction.ollama_structured import (  # noqa: PLC0415
             OllamaStructuredClient,
         )
 
@@ -269,7 +269,7 @@ class SaknussemmCorrector:
             VisionEditProducer,
         )
 
-        from cinoc.adapters.llm.mistral_multimodal import (  # noqa: PLC0415
+        from cinoc.adapters.correction.mistral_multimodal import (  # noqa: PLC0415
             MAX_IMAGES_PER_CALL,
             MistralMultimodalClient,
         )

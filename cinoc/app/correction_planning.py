@@ -45,6 +45,12 @@ from cinoc.domain.run_spec import RunSpec
 #: Extensions d'image cherchées à côté d'un ALTO (mêmes que ``transcription``).
 _IMAGE_EXT = (".png", ".jpg", ".jpeg", ".tif", ".tiff", ".jp2")
 
+#: Brique de correction structurée par défaut. **Paramétrable** : la couche qui
+#: *planifie* n'a pas à nommer un fournisseur, seulement à en proposer un. Le
+#: jour où un second correcteur `LAYOUT → LAYOUT + CORRECTED_TEXT + DECISIONS`
+#: existe, cette fonction n'a rien à apprendre — l'appelant nomme le sien.
+DEFAULT_CORRECTOR = "saknussemm"
+
 #: Métriques de la vue structure. ``line_identity_*`` n'ont de sens que
 #: **parce que** cette chaîne préserve l'identité de ligne : elles apparient par
 #: identifiant au lieu de deviner par alignement.
@@ -63,6 +69,7 @@ def plan_correction_run(
     model: str = "",
     label: str = "correction",
     host: str = "http://localhost:11434",
+    corrector_kind: str = DEFAULT_CORRECTOR,
     ocr_sidecar: str = "",
 ) -> RunSpec:
     """Spec d'un run de correction structurée sur un corpus porteur d'ALTO.
@@ -88,7 +95,7 @@ def plan_correction_run(
     if not corpus.documents:
         raise CinocError("plan_correction_run : corpus vide.")
 
-    corrector = f"saknussemm:{label}"
+    corrector = f"{corrector_kind}:{label}"
     projector = f"layout_to_text:{label}"
     pipeline = PipelineSpec(
         name=f"alto→{model or producer}",
@@ -241,5 +248,6 @@ __all__ = [
     "PRODUCERS",
     "corpus_from_alto",
     "ground_truth_is_its_own_source",
+    "DEFAULT_CORRECTOR",
     "plan_correction_run",
 ]

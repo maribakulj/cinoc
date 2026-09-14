@@ -251,7 +251,13 @@ def correction_status(*, has_module: ModuleProbe = _module_present) -> EngineSta
             False,
         )
     return EngineStatus(
-        kind="saknussemm",
+        # **La capacité, pas le fournisseur.** Le libellé disait déjà la bonne
+        # chose ; l'identifiant, lui, nommait qui la rend. Un banc dont
+        # l'interface porte le nom d'une bibliothèque promet mal : c'est la
+        # *fonction* qui est stable, pas celui qui l'implémente aujourd'hui.
+        # Le détail continue de nommer la lib — c'est une information
+        # d'installation, et elle reste utile telle quelle.
+        kind="structured_correction",
         label="Post-correction structurée",
         available=ok,
         detail=detail,

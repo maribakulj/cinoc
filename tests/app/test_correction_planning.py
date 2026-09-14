@@ -127,3 +127,28 @@ def test_every_adapter_named_by_the_spec_can_be_built(dossier: Path) -> None:
             etape.adapter_name, spec.adapter_kwargs.get(etape.adapter_name, {})
         )
         assert set(etape.output_types) <= module.output_types, etape.id
+
+
+def test_the_corrector_is_a_parameter_not_a_hardwired_name(dossier: Path) -> None:
+    """**La couche qui planifie n'a pas à nommer un fournisseur.**
+
+    Elle en propose un par défaut — c'est un service, pas une dépendance. Le
+    jour où un second correcteur `LAYOUT → LAYOUT + CORRECTED_TEXT + DECISIONS`
+    existe, cette fonction n'a rien à apprendre : l'appelant nomme le sien.
+
+    Sans ce test, le nom reviendrait en dur à la première modification, et rien
+    ne le signalerait.
+    """
+    from cinoc.app.correction_planning import DEFAULT_CORRECTOR, plan_correction_run
+
+    corpus = corpus_from_alto(dossier)
+    defaut = plan_correction_run(corpus, "r")
+    autre = plan_correction_run(corpus, "r", corrector_kind="un_autre")
+
+    noms_defaut = {e.adapter_name for p in defaut.pipelines for e in p.steps}
+    noms_autre = {e.adapter_name for p in autre.pipelines for e in p.steps}
+    assert any(n.startswith(f"{DEFAULT_CORRECTOR}:") for n in noms_defaut)
+    assert any(n.startswith("un_autre:") for n in noms_autre)
+    assert not any(n.startswith("saknussemm:") for n in noms_autre), (
+        "le fournisseur par défaut ne doit pas survivre au choix de l'appelant."
+    )

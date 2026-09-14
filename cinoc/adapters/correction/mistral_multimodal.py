@@ -34,7 +34,7 @@ import base64
 import json
 from typing import Any
 
-from cinoc.adapters.llm.mistral_structured import (
+from cinoc.adapters.correction.mistral_structured import (
     parse_chat_json,
     post_chat,
     usage_from,

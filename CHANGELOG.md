@@ -23,6 +23,14 @@ publier, et son moment, appartiennent au mainteneur.
 
 ### Corrigé
 
+- **La post-correction structurée s'identifie par sa fonction, pas par sa
+  bibliothèque.** L'identifiant de capacité devient `structured_correction`
+  (le détail continue d'indiquer quoi installer), le planificateur prend le
+  correcteur en paramètre, et les trois clients écrits pour `saknussemm`
+  quittent `adapters/llm/` — où leurs noms génériques induisaient en erreur —
+  pour `adapters/correction/`. Un test d'architecture empêche désormais la
+  confusion de revenir.
+
 - **Les lignes envoyées au correcteur structuré connaissent leurs voisines.**
   Le pont vers `saknussemm` ne posait ni `prev_line_id` ni `next_line_id` :
   le contexte (`prev_text`/`next_text`) était donc toujours vide et chaque

@@ -29,11 +29,11 @@ from typing import Any
 import httpx
 import pytest
 
-from cinoc.adapters.llm.mistral_multimodal import (
+from cinoc.adapters.correction.mistral_multimodal import (
     MAX_IMAGES_PER_CALL,
     MistralMultimodalClient,
 )
-from cinoc.adapters.llm.mistral_structured import (
+from cinoc.adapters.correction.mistral_structured import (
     MistralStructuredClient,
     parse_chat_json,
     usage_from,
