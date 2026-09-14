@@ -35,6 +35,12 @@ publier, et son moment, appartiennent au mainteneur.
 
 ### Corrigé
 
+- **Un bloc composé ne se projette plus en texte vide.** Les lignes d'un ALTO
+  `ComposedBlock` vivent dans ses enfants ; la projection layout → texte ne
+  lisait que le premier rang, donc toute mise en page imbriquée — ce que
+  Tesseract produit systématiquement — donnait un texte vide et un CER de 1,0,
+  sans erreur ni avertissement.
+
 - **Deux pipelines produisant de l'ALTO n'écrasent plus le même fichier.** Le
   nom de sortie ne portait que l'identifiant de document ; comparer deux chaînes
   qui émettent toutes deux de l'ALTO — ce qu'un banc fait par définition — n'en

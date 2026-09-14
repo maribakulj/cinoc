@@ -17,7 +17,7 @@ from pathlib import Path
 
 from cinoc.domain.artifacts import Artifact, ArtifactType, compute_content_hash
 from cinoc.domain.errors import AdapterStepError
-from cinoc.domain.layout import CanonicalLayout, LayoutPage
+from cinoc.domain.layout import CanonicalLayout, LayoutPage, Region
 from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
@@ -25,18 +25,62 @@ from cinoc.pipeline.types import RunContext, StepOutput
 _VERSION = "1.0"
 
 
+def _feuilles(regions: tuple[Region, ...]) -> list[Region]:
+    """Régions **atomiques** : un bloc composé porte ses lignes dans ses enfants.
+
+    Sans cette descente, tout ALTO à ``ComposedBlock`` — ce que Tesseract produit
+    **toujours** — se projetait en texte **vide**, donc en CER de 1,0, sans un
+    mot d'avertissement : les régions existaient, elles n'avaient simplement
+    aucune ligne à leur propre niveau. Le module d'ordre de lecture descendait
+    déjà ; celui-ci ne le faisait pas, et les deux lisent le même modèle.
+    """
+    sorties: list[Region] = []
+    for region in regions:
+        if region.regions:
+            sorties.extend(_feuilles(region.regions))
+        else:
+            sorties.append(region)
+    return sorties
+
+
 def _page_text(page: LayoutPage) -> str:
-    """Texte d'une page, régions dans l'ordre de lecture (repli ordre déclaré)."""
-    by_id = {region.id: region for region in page.regions}
-    ordered = [by_id[rid] for rid in page.reading_order if rid in by_id]
-    seen = {region.id for region in ordered}
-    ordered.extend(region for region in page.regions if region.id not in seen)
+    """Texte d'une page, régions dans l'ordre de lecture (repli ordre déclaré).
+
+    ``reading_order`` nomme des régions qui peuvent être **composées** : on
+    prend alors leurs feuilles, dans l'ordre. Un identifiant inconnu est ignoré,
+    comme avant — un ordre partiel vaut mieux qu'un refus.
+    """
+    par_id = {region.id: region for region in _tous(page.regions)}
+    ordonnees: list[Region] = []
+    vues: set[str] = set()
+    for rid in page.reading_order:
+        region = par_id.get(rid)
+        if region is None:
+            continue
+        for feuille in _feuilles((region,)):
+            if feuille.id not in vues:
+                ordonnees.append(feuille)
+                vues.add(feuille.id)
+    for feuille in _feuilles(page.regions):
+        if feuille.id not in vues:
+            ordonnees.append(feuille)
+            vues.add(feuille.id)
     blocks: list[str] = []
-    for region in ordered:
+    for region in ordonnees:
         lines = "\n".join(line.text for line in region.lines if line.text)
         if lines:
             blocks.append(lines)
     return "\n".join(blocks)
+
+
+def _tous(regions: tuple[Region, ...]) -> list[Region]:
+    """Toutes les régions, composées **et** feuilles : ``reading_order`` peut
+    nommer les unes comme les autres."""
+    out: list[Region] = []
+    for region in regions:
+        out.append(region)
+        out.extend(_tous(region.regions))
+    return out
 
 
 class LayoutToTextExtractor:

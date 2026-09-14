@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from cinoc.adapters.layout.to_text import LayoutToTextExtractor
+from cinoc.adapters.layout.to_text import LayoutToTextExtractor, _page_text
 from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.errors import AdapterStepError
 from cinoc.domain.layout import CanonicalLayout, LayoutPage, Line, Region
@@ -86,3 +86,68 @@ def test_missing_layout_is_clean_error(tmp_path: Path) -> None:
         LayoutToTextExtractor(label="c0").execute(
             {}, {}, _ctx(tmp_path), RunControl()
         )
+
+
+# --------------------------------------------------------------------------- #
+# Les blocs composés — l'angle mort qui rendait un CER de 1,0 sans un mot
+# --------------------------------------------------------------------------- #
+
+
+def _compose() -> CanonicalLayout:
+    """La forme que **Tesseract produit toujours** : lignes dans des enfants."""
+    return CanonicalLayout(
+        pages=(
+            LayoutPage(
+                width=800,
+                height=1000,
+                regions=(
+                    Region(
+                        id="cblock_0",
+                        region_type="composed",
+                        regions=(
+                            Region(
+                                id="block_0",
+                                lines=(Line(id="l1", text="premier"),),
+                            ),
+                            Region(
+                                id="block_1",
+                                lines=(Line(id="l2", text="deuxième"),),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        )
+    )
+
+
+def test_a_composed_block_yields_its_children_text() -> None:
+    """**Le défaut que ce test ferme.**
+
+    Les lignes d'un ``ComposedBlock`` vivent dans ses enfants, pas à son
+    niveau. Sans descente, la page se projetait en texte **vide** — donc en
+    CER de 1,0 — alors que les régions existaient bel et bien. Rien ne
+    l'annonçait : ni erreur, ni avertissement, juste un score catastrophique
+    qu'on aurait attribué au moteur.
+
+    Le module d'ordre de lecture descendait déjà. Les deux lisent le même
+    modèle ; ils devaient le lire pareil.
+    """
+    assert _page_text(_compose().pages[0]) == "premier\ndeuxième"
+
+
+def test_a_reading_order_naming_a_composed_block_is_honoured() -> None:
+    """``reading_order`` peut nommer un bloc **composé** : on prend alors ses
+    feuilles, dans l'ordre, plutôt que de l'ignorer faute de lignes propres."""
+    layout = _compose()
+    page = layout.pages[0]
+    page = page.model_copy(update={"reading_order": ("cblock_0",)})
+    assert _page_text(page) == "premier\ndeuxième"
+
+
+def test_no_leaf_is_emitted_twice() -> None:
+    """Un ordre qui nomme le parent **et** un enfant ne doit pas dupliquer le
+    texte de cet enfant."""
+    page = _compose().pages[0]
+    page = page.model_copy(update={"reading_order": ("block_1", "cblock_0")})
+    assert _page_text(page) == "deuxième\npremier"
