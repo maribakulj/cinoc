@@ -409,3 +409,39 @@ def test_crossing_thresholds_are_refused_by_the_library() -> None:
     )
     with pytest.raises(ValueError, match="escalate"):
         module._build_qe()
+
+
+def test_each_line_knows_its_neighbours(tmp_path: Path) -> None:
+    """**Les lignes doivent être chaînées, sinon chacune arrive seule.**
+
+    ``prev_text``/``next_text`` du payload envoyé au modèle sont résolus depuis
+    ``prev_line_id``/``next_line_id``. Le pont ne les posait pas : le correcteur
+    voyait donc chaque ligne isolée, et ne pouvait pas réparer ce qui n'est
+    lisible qu'avec la voisine.
+
+    Le parser ALTO de ``saknussemm`` fait exactement ce chaînage ; ce pont, qui
+    le remplace, l'avait omis. Les deux voies alimentent le même moteur.
+    """
+    from cinoc.adapters.layout._saknussemm_bridge import layout_to_manifest
+
+    manifest = layout_to_manifest(
+        _layout("première", "deuxième", "troisième"), document_id="d"
+    )
+    lignes = [ligne for page in manifest.pages for ligne in page.lines]
+    assert len(lignes) == 3
+    assert lignes[0].prev_line_id is None, "la première n'a pas de précédente."
+    assert lignes[0].next_line_id == lignes[1].line_id
+    assert lignes[1].prev_line_id == lignes[0].line_id
+    assert lignes[1].next_line_id == lignes[2].line_id
+    assert lignes[2].next_line_id is None, "la dernière n'a pas de suivante."
+
+
+def test_a_single_line_page_has_no_neighbours(tmp_path: Path) -> None:
+    """Le cas limite : chaîner une liste d'un élément ne doit pas l'accrocher
+    à elle-même."""
+    from cinoc.adapters.layout._saknussemm_bridge import layout_to_manifest
+
+    ligne = [x for p in layout_to_manifest(_layout("seule"), document_id="d").pages
+             for x in p.lines][0]
+    assert ligne.prev_line_id is None
+    assert ligne.next_line_id is None

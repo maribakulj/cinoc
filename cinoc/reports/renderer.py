@@ -44,6 +44,7 @@ _SECTION_LABELS = {
     "diagnostics": "Diagnostic",
     "taxonomy": "Taxonomie",
     "calibration": "Calibration",
+    "composition": "Composition des chaînes",
     "methodology": "Méthodologie",
 }
 
@@ -74,6 +75,7 @@ _SECTION_LABELS_EN = {
     "diagnostics": "Diagnostics",
     "taxonomy": "Taxonomy",
     "calibration": "Calibration",
+    "composition": "Pipeline composition",
     "methodology": "Methodology",
 }
 
@@ -100,7 +102,7 @@ _SPINE_LABEL = {"fr": "Sommaire", "en": "Contents"}
 #: ``methodology``). Garde-fou : ``test_groups_cover_grouped_sections``.
 _GROUPS: tuple[tuple[str, str, str, str, tuple[str, ...]], ...] = (
     ("rapport", "key", "Mesures clés", "Key measures",
-     ("key_measures", "overview", "corpus_composition")),
+     ("key_measures", "overview", "corpus_composition", "composition")),
     ("rapport", "compare", "Comparaison", "Engine comparison",
      ("by_engine", "engine_radar", "dispersion")),
     ("rapport", "crosses", "Significativité & recouvrement", "Significance & overlap",
@@ -130,6 +132,11 @@ _SECTION_MODE: dict[str, str] = {
 #: pleine largeur) : elles prennent toute la largeur dans le flux de cartes
 #: (``column-span:all``). Les autres (petits charts/listes) s'écoulent en colonnes.
 _WIDE_SECTIONS: frozenset[str] = frozenset({
+    # ``composition`` : un tableau de cinq colonnes par pipeline, dont une de
+    # réglages qui peut être longue. En colonne étroite, chaque cellule se
+    # replie sur trois lignes et le montage devient illisible — c'est-à-dire
+    # que la section rate précisément ce pour quoi elle existe.
+    "composition",
     "key_measures", "overview", "by_engine", "engine_profiles", "conformity",
     "structured_data", "ner", "lines", "economics", "cross_engine",
     "word_errors", "taxonomy", "correction", "decisions", "textual_fidelity",
@@ -330,6 +337,7 @@ def default_report_renderer() -> ReportRenderer:
     diagnostic. Le glossaire est **hors sections** (dialog du chrome)."""
     from cinoc.reports.sections.by_engine import EngineSection
     from cinoc.reports.sections.calibration import CalibrationSection
+    from cinoc.reports.sections.composition import CompositionSection
     from cinoc.reports.sections.conformity import ConformitySection
     from cinoc.reports.sections.corpus_composition import CorpusCompositionSection
     from cinoc.reports.sections.correction import CorrectionSection
@@ -360,6 +368,7 @@ def default_report_renderer() -> ReportRenderer:
             KeyMeasuresSection(),
             OverviewSection(),
             CorpusCompositionSection(),
+            CompositionSection(),
             EngineSection(),
             EngineRadarSection(),
             EngineProfileSection(),
