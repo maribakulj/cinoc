@@ -36,7 +36,7 @@ n'est qu'un détail d'implémentation.
 from __future__ import annotations
 
 import math
-from functools import lru_cache
+import threading
 from typing import Any
 
 from cinoc.domain.errors import AdapterStepError
@@ -85,9 +85,41 @@ def platt(surprisal: float) -> float:
     return 1.0 / (1.0 + math.exp(-(surprisal - PLATT_MIDPOINT) / PLATT_SCALE))
 
 
-@lru_cache(maxsize=2)
+#: Verrou de chargement. ``lru_cache`` mémorise le **résultat** mais n'empêche
+#: pas deux fils d'exécuter le corps en même temps — et pendant qu'un fil
+#: matérialise les poids, l'autre peut obtenir un modèle à tenseurs *meta*,
+#: c'est-à-dire des tenseurs sans mémoire. L'erreur qui en sort
+#: (``Tensor.item() cannot be called on meta tensors``) survient loin de sa
+#: cause, en plein passage avant.
+#:
+#: Trouvé en exécutant le banc à ``--workers 4`` : un cas qu'aucun test
+#: séquentiel n'atteint.
+_LOCK = threading.Lock()
+_CACHE: dict[str, tuple[Any, Any]] = {}
+
+
 def _load(model_name: str) -> tuple[Any, Any]:
-    """Tokeniseur + modèle, chargés **une fois**. Grands, et immuables."""
+    """Tokeniseur + modèle, chargés **une fois et par un seul fil**.
+
+    Verrouillage à double vérification : le chemin rapide lit le cache sans
+    verrou (lecture de ``dict`` atomique sous le GIL), le chemin lent le reprend
+    **après** l'avoir pris, pour qu'un second fil arrivé entre-temps ne
+    recharge pas 500 Mo pour rien.
+    """
+    en_cache = _CACHE.get(model_name)
+    if en_cache is not None:
+        return en_cache
+    with _LOCK:
+        en_cache = _CACHE.get(model_name)
+        if en_cache is not None:
+            return en_cache
+        charge = _charger(model_name)
+        _CACHE[model_name] = charge
+        return charge
+
+
+def _charger(model_name: str) -> tuple[Any, Any]:
+    """Le chargement lui-même. Appelé **sous verrou**, jamais directement."""
     try:
         import torch  # type: ignore[import-not-found]  # noqa: PLC0415
         from transformers import (  # type: ignore[import-not-found]  # noqa: PLC0415
@@ -105,6 +137,12 @@ def _load(model_name: str) -> tuple[Any, Any]:
     model.eval()
     torch.set_grad_enabled(False)
     return tokenizer, model
+
+
+def reset_cache() -> None:
+    """Vide le cache de modèles. Réservé aux tests de chargement."""
+    with _LOCK:
+        _CACHE.clear()
 
 
 class DalembertQEScorer:
@@ -224,6 +262,7 @@ def _par_mot(
 
 
 __all__ = [
+    "reset_cache",
     "DEFAULT_MODEL",
     "GLYPHS",
     "MAX_SUBWORDS",
