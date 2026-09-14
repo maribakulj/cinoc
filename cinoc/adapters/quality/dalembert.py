@@ -121,7 +121,9 @@ def _load(model_name: str) -> tuple[Any, Any]:
 def _charger(model_name: str) -> tuple[Any, Any]:
     """Le chargement lui-même. Appelé **sous verrou**, jamais directement."""
     try:
-        import torch  # type: ignore[import-not-found]  # noqa: PLC0415
+        # ``torch`` est importé pour être **exigé ici** : sans lui, transformers
+        # échouerait plus loin, dans un message qui ne nomme pas la cause.
+        import torch  # type: ignore[import-not-found]  # noqa: F401, PLC0415
         from transformers import (  # type: ignore[import-not-found]  # noqa: PLC0415
             AutoModelForMaskedLM,
             AutoTokenizer,
@@ -135,7 +137,6 @@ def _charger(model_name: str) -> tuple[Any, Any]:
     tokenizer = AutoTokenizer.from_pretrained(model_name)  # type: ignore[no-untyped-call]
     model = AutoModelForMaskedLM.from_pretrained(model_name)  # type: ignore[no-untyped-call]
     model.eval()
-    torch.set_grad_enabled(False)
     return tokenizer, model
 
 
@@ -200,7 +201,14 @@ class DalembertQEScorer:
         lot = ids.unsqueeze(0).repeat(len(positions), 1)
         for rang, position in enumerate(positions):
             lot[rang, position] = tokenizer.mask_token_id
-        logits = model(input_ids=lot).logits
+        # ``no_grad`` **ici**, et non un ``set_grad_enabled`` global au
+        # chargement : l'état du gradient est **propre à chaque fil** dans
+        # PyTorch. Posé une fois par le fil qui charge le modèle, il ne
+        # s'appliquait à aucun des fils qui s'en servaient ensuite — ils
+        # construisaient donc un graphe de rétropropagation dont personne ne
+        # voulait, pour chaque ligne de chaque page.
+        with torch.no_grad():
+            logits = model(input_ids=lot).logits
 
         surprises: dict[int, float] = {}
         for rang, position in enumerate(positions):
