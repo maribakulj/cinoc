@@ -16,6 +16,18 @@ publier, et son moment, appartiennent au mainteneur.
 
 ### Ajouté
 
+- **Le rapport montre ce qu'il y a dans chaque chaîne.** Section « Composition
+  des chaînes » : les étapes réellement exécutées, la forme du graphe, le
+  fan-out et les réglages effectifs de chaque brique — lus du manifeste. Un nom
+  de pipeline porte une intention, pas un contenu.
+
+### Corrigé
+
+- **Les lignes envoyées au correcteur structuré connaissent leurs voisines.**
+  Le pont vers `saknussemm` ne posait ni `prev_line_id` ni `next_line_id` :
+  le contexte (`prev_text`/`next_text`) était donc toujours vide et chaque
+  ligne arrivait seule au modèle.
+
 - **Des confidences par mot pour les moteurs qui n'en produisent pas.**
   `text_confidences` note chaque mot avec un modèle de langue d'époque, ce qui
   allume la section calibration (ECE, MCE, courbe de fiabilité) pour l'OCR

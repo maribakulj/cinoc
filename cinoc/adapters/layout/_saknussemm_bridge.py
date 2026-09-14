@@ -110,6 +110,23 @@ def layout_to_manifest(layout: CanonicalLayout, *, document_id: str) -> Any:
                     line_ids=line_ids,
                 )
             )
+        # **Chaîner les voisins avant d'apparier les césures.**
+        #
+        # ``prev_text``/``next_text`` du payload envoyé au modèle sont résolus
+        # depuis ces deux liens ; sans eux, **chaque ligne arrive seule**. Le
+        # correcteur ne peut alors pas réparer ce qui n'est lisible qu'avec la
+        # ligne d'à côté — mesuré sur le corpus BNL : `"2 de garanties` reste
+        # `"2 de garanties` là où il fallait lire `tant de garanties`, la
+        # preuve étant dans la ligne précédente (`tout au`).
+        #
+        # Le parser ALTO de ``saknussemm`` fait exactement cette boucle ; ce
+        # pont, qui le remplace, l'avait omise. Les deux voies alimentent le
+        # même moteur : elles doivent le nourrir pareil.
+        for rang, ligne in enumerate(lines):
+            if rang > 0:
+                ligne.prev_line_id = lines[rang - 1].line_id
+            if rang < len(lines) - 1:
+                ligne.next_line_id = lines[rang + 1].line_id
         link_hyphen_pairs(lines)
         pages.append(
             PageManifest(
