@@ -16,6 +16,11 @@ publier, et son moment, appartiennent au mainteneur.
 
 ### Ajouté
 
+- **Les segmenteurs déclarent ce qu'ils savent détecter** — leurs classes et le
+  corpus sur lequel ils ont été entraînés, visible dans `cinoc list engines`.
+  Une table « classe → réglage » qui ne parle pas la langue de son segmenteur
+  est désormais refusée avant le run, au lieu d'être ignorée en silence.
+
 - **Le rapport montre ce qu'il y a dans chaque chaîne.** Section « Composition
   des chaînes » : les étapes réellement exécutées, la forme du graphe, le
   fan-out et les réglages effectifs de chaque brique — lus du manifeste. Un nom
