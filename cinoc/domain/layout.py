@@ -103,6 +103,30 @@ class LayoutPage(BaseModel):
     regions: tuple[Region, ...] = ()
     reading_order: tuple[str, ...] = ()
 
+    def leaf_regions(self) -> tuple[Region, ...]:
+        """Régions **atomiques**, imbrication aplatie.
+
+        Un bloc composé (ALTO ``ComposedBlock``) porte ses lignes dans ses
+        enfants, pas à son niveau : qui lit ``regions`` sans descendre voit des
+        régions vides et conclut à une page blanche. Ce fut le cas — toute mise
+        en page issue de Tesseract se projetait en texte vide, sans un
+        avertissement, parce que trois modules descendaient et un quatrième non.
+
+        Accesseur du type lui-même, comme ``PipelineSpec.step_by_id`` : c'est le
+        modèle qui explique sa propre forme, pas un calcul métier.
+        """
+        return _leaves(self.regions)
+
+
+def _leaves(regions: tuple[Region, ...]) -> tuple[Region, ...]:
+    out: list[Region] = []
+    for region in regions:
+        if region.regions:
+            out.extend(_leaves(region.regions))
+        else:
+            out.append(region)
+    return tuple(out)
+
 
 class CanonicalLayout(BaseModel):
     """Document de mise en page neutre : une ou plusieurs pages.

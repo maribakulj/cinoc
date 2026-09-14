@@ -23,6 +23,17 @@ publier, et son moment, appartiennent au mainteneur.
 
 ### Corrigé
 
+- **Une reconnaissance par région peut rendre plusieurs lignes.** Le fan-out ne
+  lisait que du texte plat : une page de trois blocs sortait avec trois lignes
+  d'ALTO au lieu de vingt, structurellement fausse et illisible par un outil de
+  relecture — sans qu'aucune métrique de texte puisse le voir, le contenu étant
+  juste. Un reconnaisseur qui déclare `LAYOUT` voit désormais ses lignes
+  greffées, coordonnées retraduites et identifiants préfixés.
+- **Le catalogue des recettes ne peut plus ignorer une brique du registre.**
+  Deux segmenteurs — les deux seuls exécutables sans dépendance lourde —
+  n'étaient proposés par aucun rôle. Un garde-fou confronte désormais les deux
+  listes dans les deux sens.
+
 - **La post-correction structurée s'identifie par sa fonction, pas par sa
   bibliothèque.** L'identifiant de capacité devient `structured_correction`
   (le détail continue d'indiquer quoi installer), le planificateur prend le

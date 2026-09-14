@@ -61,7 +61,7 @@ def _page_text(page: LayoutPage) -> str:
             if feuille.id not in vues:
                 ordonnees.append(feuille)
                 vues.add(feuille.id)
-    for feuille in _feuilles(page.regions):
+    for feuille in page.leaf_regions():
         if feuille.id not in vues:
             ordonnees.append(feuille)
             vues.add(feuille.id)

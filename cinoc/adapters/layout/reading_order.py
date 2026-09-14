@@ -198,7 +198,7 @@ class ReadingOrderModule:
         )
 
     def _ordonner(self, page: LayoutPage) -> LayoutPage:
-        feuilles = _feuilles(page.regions)
+        feuilles = list(page.leaf_regions())
         if not feuilles:
             return page
         ordre = (

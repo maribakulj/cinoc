@@ -85,10 +85,36 @@ def roles() -> Mapping[str, Role]:
             (RAW,),
             ("tesseract", "kraken", "pero", "calamari", "precomputed"),
         ),
-        "segmenter": Role((IMAGE,), (LAYOUT,), ("pp_doclayout", "remote_segmenter")),
+        # Ordre = préférence : le premier est le défaut d'une recette qui ne
+        # choisit pas. ``tesseract_layout`` ouvre la marche parce qu'il est le
+        # seul à ne rien exiger — ni poids, ni SDK, ni adresse — et parce que
+        # c'est le segmenteur de la chaîne NDNP de référence.
+        #
+        # La liste reste **écrite à la main** pour garder cet ordre, et elle est
+        # confrontée au registre par ``tests/guardrails/test_recipe_roles.py`` :
+        # deux segmenteurs enregistrés cette semaine n'y étaient jamais arrivés,
+        # et le catalogue ne proposait que des briques inexécutables sur une
+        # machine nue.
+        "segmenter": Role(
+            (IMAGE,),
+            (LAYOUT,),
+            (
+                "tesseract_layout",
+                "doclayout_yolo",
+                "pp_doclayout",
+                "remote_segmenter",
+            ),
+        ),
         "alto_source": Role((IMAGE,), (LAYOUT,), ("alto_source",)),
+        # ``tesseract_layout`` d'abord : il rend un **sous-layout**, donc le
+        # fan-out greffe de vraies lignes. Les reconnaisseurs qui ne rendent que
+        # du texte plat donnent une ligne par bloc — correct, mais une page de
+        # trois blocs y perd ses vingt lignes.
         "region_recognizer": Role(
-            (LAYOUT, IMAGE), (LAYOUT,), ("tesseract", "kraken"), fanout=True
+            (LAYOUT, IMAGE),
+            (LAYOUT,),
+            ("tesseract_layout", "tesseract", "kraken"),
+            fanout=True,
         ),
         "reading_order": Role((LAYOUT,), (LAYOUT,), ("reading_order",)),
         "structured_correction": Role(

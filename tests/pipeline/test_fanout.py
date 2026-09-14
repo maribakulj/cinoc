@@ -16,7 +16,14 @@ from typing import Any
 
 from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.errors import AdapterStepError
-from cinoc.domain.layout import BBox, Geometry, LayoutPage, Region
+from cinoc.domain.layout import (
+    BBox,
+    CanonicalLayout,
+    Geometry,
+    LayoutPage,
+    Line,
+    Region,
+)
 from cinoc.pipeline.fanout import REGION_TYPE_PARAM, _fill_region
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext
@@ -112,3 +119,169 @@ def test_a_failing_region_does_not_abort_the_page(tmp_path: Any) -> None:
     assert rendue.id == "r1"
     assert rendue.lines == (), "aucune ligne n'a pu être lue."
     assert usage is None
+
+
+# --------------------------------------------------------------------------- #
+# Un reconnaisseur qui sait découper son bloc en lignes doit pouvoir le dire
+# --------------------------------------------------------------------------- #
+
+
+class _Multiligne:
+    """Reconnaisseur qui rend un **sous-layout**, pas une chaîne."""
+
+    name = "multiligne"
+    version = "1.0"
+    input_types = frozenset({ArtifactType.IMAGE})
+    output_types = frozenset({ArtifactType.LAYOUT})
+
+    def __init__(self, chemin: Any, layout: CanonicalLayout) -> None:
+        self._chemin = chemin
+        self._chemin.write_bytes(layout.model_dump_json().encode("utf-8"))
+
+    def execute(self, inputs, params, context, control):  # type: ignore[no-untyped-def]
+        from cinoc.pipeline.types import StepOutput
+
+        return StepOutput(
+            artifacts={
+                ArtifactType.LAYOUT: Artifact(
+                    id="sub",
+                    document_id="d",
+                    type=ArtifactType.LAYOUT,
+                    uri=str(self._chemin),
+                    content_hash="0" * 64,
+                )
+            }
+        )
+
+
+def _sous_layout(*textes: str) -> CanonicalLayout:
+    from cinoc.domain.layout import Geometry
+
+    return CanonicalLayout(
+        pages=(
+            LayoutPage(
+                width=100,
+                height=100,
+                regions=(
+                    Region(
+                        id="bloc",
+                        lines=tuple(
+                            Line(
+                                id=f"line_{i}",
+                                text=t,
+                                geometry=Geometry(
+                                    bbox=BBox(x=5, y=10 * i, width=50, height=8)
+                                ),
+                            )
+                            for i, t in enumerate(textes)
+                        ),
+                    ),
+                ),
+            ),
+        )
+    )
+
+
+def _region_remplie(tmp_path: Any, *textes: str) -> Region:
+    module = _Multiligne(tmp_path / "sub.json", _sous_layout(*textes))
+    page = LayoutPage(width=200, height=200, regions=())
+    region = Region(
+        id="r1",
+        region_type="text",
+        geometry=Geometry(bbox=BBox(x=30, y=40, width=100, height=100)),
+    )
+    image = Artifact(
+        id="i", document_id="d", type=ArtifactType.IMAGE,
+        uri=str(tmp_path / "p.png"), content_hash="0" * 64,
+    )
+    remplie, _ = _fill_region(
+        region, page, image, module, _contexte(tmp_path), RunControl(), {}, None
+    )
+    return remplie
+
+
+def test_a_recognizer_that_returns_a_layout_yields_several_lines(
+    tmp_path: Any,
+) -> None:
+    """**Le défaut que ce test ferme.**
+
+    Le fan-out ne lisait que du texte plat, donc fabriquait *toujours* une ligne
+    par région — non par choix, mais parce que le type ne permettait rien
+    d'autre. Un ALTO de trois blocs sortait avec trois lignes pour une page qui
+    en compte vingt : structurellement faux, illisible par un outil de
+    relecture, et **invisible à toute métrique de texte**, puisque le contenu,
+    lui, était juste.
+    """
+    remplie = _region_remplie(tmp_path, "première", "deuxième", "troisième")
+    assert [ligne.text for ligne in remplie.lines] == [
+        "première", "deuxième", "troisième"
+    ]
+
+
+def test_grafted_lines_are_moved_back_into_page_coordinates(tmp_path: Any) -> None:
+    """Les coordonnées du sous-layout sont relatives à la **découpe**.
+
+    Sans le décalage, les lignes de tous les blocs se superposeraient en haut à
+    gauche de la page — un ALTO qui *semble* correct et place tout au même
+    endroit.
+    """
+    remplie = _region_remplie(tmp_path, "a", "b")
+    boites = [ligne.geometry.bbox for ligne in remplie.lines if ligne.geometry]
+    assert [(b.x, b.y) for b in boites if b] == [(35, 40), (35, 50)], (
+        "x doit valoir 5+30 et y 0+40 puis 10+40 — l'origine du bloc."
+    )
+
+
+def test_grafted_line_ids_are_namespaced_by_their_region(tmp_path: Any) -> None:
+    """Le moteur numérote ses lignes à partir de zéro **dans chaque bloc**.
+
+    Sans préfixe, deux lignes de blocs différents porteraient la même identité —
+    et l'identité de ligne est précisément ce que la chaîne structurée existe
+    pour préserver.
+    """
+    remplie = _region_remplie(tmp_path, "a", "b")
+    assert [ligne.id for ligne in remplie.lines] == ["r1:line_0", "r1:line_1"]
+
+
+def test_an_empty_sub_layout_leaves_the_region_without_lines(tmp_path: Any) -> None:
+    """Un bloc illisible est un **fait**, pas une erreur. Inventer une ligne
+    vide ferait croire à une lecture qui n'a pas eu lieu."""
+    assert _region_remplie(tmp_path).lines == ()
+
+
+def test_a_text_only_recognizer_still_yields_one_line(tmp_path: Any) -> None:
+    """Le pendant : rien ne change pour un reconnaisseur qui ne sait rendre
+    qu'une chaîne. Il n'a qu'un texte à donner, la région n'a qu'une ligne."""
+    from cinoc.pipeline.types import StepOutput
+
+    chemin = tmp_path / "t.txt"
+    chemin.write_text("une seule", encoding="utf-8")
+
+    class _Plat:
+        name, version = "plat", "1.0"
+        input_types = frozenset({ArtifactType.IMAGE})
+        output_types = frozenset({ArtifactType.RAW_TEXT})
+
+        def execute(self, inputs, params, context, control):  # type: ignore[no-untyped-def]
+            return StepOutput(
+                artifacts={
+                    ArtifactType.RAW_TEXT: Artifact(
+                        id="t", document_id="d", type=ArtifactType.RAW_TEXT,
+                        uri=str(chemin), content_hash="0" * 64,
+                    )
+                }
+            )
+
+    page = LayoutPage(width=100, height=100, regions=())
+    region = Region(
+        id="r1", geometry=Geometry(bbox=BBox(x=0, y=0, width=10, height=10))
+    )
+    image = Artifact(
+        id="i", document_id="d", type=ArtifactType.IMAGE,
+        uri=str(tmp_path / "p.png"), content_hash="0" * 64,
+    )
+    remplie, _ = _fill_region(
+        region, page, image, _Plat(), _contexte(tmp_path), RunControl(), {}, None
+    )
+    assert [ligne.id for ligne in remplie.lines] == ["r1:l1"]
+    assert remplie.lines[0].text == "une seule"
