@@ -283,3 +283,54 @@ def test_interfaces_imports_are_allowed():
         if bad:
             offenders[str(path.relative_to(ROOT))] = bad
     assert not offenders, f"imports interdits dans interfaces : {offenders}"
+
+
+#: Sous-dossiers d'``adapters`` auxquels une bibliothèque tierce est **interdite**,
+#: et la raison. La clé est le dossier, la valeur le paquet qui n'a rien à y faire.
+#:
+#: ``saknussemm`` hors de son adapter : trois clients ont vécu dans
+#: ``adapters/llm/`` sous des noms génériques (``ollama_structured``,
+#: ``mistral_structured``, ``mistral_multimodal``) alors qu'ils n'existaient que
+#: pour lui — ils implémentent **son** protocole de fournisseur, pas le ``Module``
+#: de cinoc. Un lecteur qui ouvrait ``adapters/llm/mistral_structured.py`` croyait
+#: y trouver le client Mistral du banc. Ils vivent désormais en
+#: ``adapters/correction/``, dont le nom dit à quoi ils servent.
+_FORBIDDEN_IN: dict[str, str] = {"llm": "saknussemm"}
+
+
+def test_no_third_party_bleeds_into_a_neighbouring_adapter_folder() -> None:
+    """Une bibliothèque tierce reste dans le dossier qui la sert.
+
+    **Le défaut que ce test ferme n'est pas une violation de couche** — tout se
+    passait en couche 5, où l'import d'une lib externe est légitime. C'est un
+    défaut de *placement* : du code à la forme d'une bibliothèque, rangé sous un
+    nom qui promet autre chose. Aucun garde-fou ne le voyait, et une seule
+    session y a ajouté trois fichiers sans que personne le remarque.
+
+    La règle est mécanique, donc elle ne dépend pas de la vigilance : si un
+    client de ``saknussemm`` doit exister, il va dans ``adapters/correction/``.
+    """
+    coupables: dict[str, list[str]] = {}
+    for dossier, interdit in _FORBIDDEN_IN.items():
+        racine = ROOT / "adapters" / dossier
+        if not racine.is_dir():
+            continue
+        for chemin in sorted(racine.rglob("*.py")):
+            if "__pycache__" in chemin.parts:
+                continue
+            arbre = ast.parse(chemin.read_text(encoding="utf-8"))
+            for noeud in ast.walk(arbre):
+                if isinstance(noeud, ast.Import):
+                    noms = [a.name for a in noeud.names]
+                elif isinstance(noeud, ast.ImportFrom):
+                    noms = [noeud.module or ""]
+                else:
+                    continue
+                if any(n.split(".")[0] == interdit for n in noms):
+                    rel = chemin.relative_to(ROOT).as_posix()
+                    coupables.setdefault(rel, []).append(f"L{noeud.lineno}")
+    assert not coupables, (
+        f"bibliothèque tierce hors de son dossier : {coupables}. Un client écrit "
+        "pour une bibliothèque va dans le dossier qui la sert "
+        "(`adapters/correction/` pour saknussemm), pas sous un nom générique."
+    )

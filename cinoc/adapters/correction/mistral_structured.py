@@ -1,6 +1,6 @@
 """``MistralStructuredClient`` — sortie JSON contrainte, API Mistral.
 
-Jumeau distant de :mod:`cinoc.adapters.llm.ollama_structured` : ``saknussemm``
+Jumeau distant de :mod:`cinoc.adapters.correction.ollama_structured` : ``saknussemm``
 ne consomme qu'une capacité d'un modèle (``StructuredCompletionClient``) — rendre
 le JSON décrit par un schéma — et ce client la fournit depuis l'API Mistral.
 

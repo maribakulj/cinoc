@@ -238,11 +238,23 @@ def test_ner_not_in_ocr_engine_list() -> None:
     assert "ner" not in {s.kind for s in engine_statuses()}
 
 
-def test_correction_status_available_with_saknussemm() -> None:
+def test_correction_status_names_the_capability_not_the_provider() -> None:
+    """**L'identifiant dit ce qui est offert, pas qui l'offre.**
+
+    Il portait ``saknussemm``, c'est-à-dire le nom d'une bibliothèque, dans une
+    surface que la CLI et le web exposent. Or c'est la *fonction* qui est
+    stable : le fournisseur, lui, peut changer. Le détail continue de nommer la
+    lib — c'est une information d'installation, et elle reste utile.
+    """
     from cinoc.app.engines import correction_status
 
     status = correction_status(has_module=lambda n: n == "saknussemm")
-    assert status.kind == "saknussemm"
+    assert status.kind == "structured_correction"
+    assert status.label == "Post-correction structurée"
+    assert "saknussemm" in status.detail, (
+        "le détail doit dire quoi installer ; c'est l'identifiant qui n'a pas "
+        "à porter le nom d'un fournisseur."
+    )
     assert status.available is True
 
 
