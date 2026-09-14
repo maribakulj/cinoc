@@ -37,7 +37,11 @@ from cinoc.app.correction_planning import (
     plan_correction_run,
 )
 from cinoc.app.demo import demo_spec_builder
-from cinoc.app.engines import PUBLIC_ENGINE_KINDS, StatusProvider
+from cinoc.app.engines import (
+    CLI_ONLY_KINDS,
+    PUBLIC_ENGINE_KINDS,
+    StatusProvider,
+)
 from cinoc.app.jobs import JobRunner
 from cinoc.app.modules import ModuleRegistry, register_default_modules
 from cinoc.app.recipes import (
@@ -221,6 +225,13 @@ def build_runs_router(
                 )
             return {"job_id": runner.launch(demo_spec_builder(run_id))}
 
+        # 0 : briques réservées à la ligne de commande. **Avant tout le reste**,
+        # et sans égard au mode public : le refus ne porte pas sur qui regarde,
+        # il porte sur ce que la brique fait.
+        _refuser_cli(
+            {k for comp in req.competitors for k in _referenced_kinds(comp)}
+            | {comp.segmenter for comp in req.competitors if comp.segmenter}
+        )
         sts = statuses()
         known = {s.kind for s in sts}
         available = {s.kind for s in sts if s.available}
@@ -293,12 +304,35 @@ def build_runs_router(
 
 
 
+    def _refuser_cli(kinds: set[str]) -> None:
+        """Refuse toute brique de ``CLI_ONLY_KINDS``, **quel que soit le mode**.
+
+        Ces briques exécutent une commande décrite par la spec. Les laisser
+        atteignables par HTTP reviendrait à offrir un shell — et « instance
+        privée » veut dire « les gens que je connais », pas « les gens à qui je
+        confie un shell ». D'où un refus inconditionnel, et une seule fonction :
+        un second chemin de lancement qui oublierait la règle rouvrirait la
+        porte en silence.
+        """
+        interdites = sorted(kinds & CLI_ONLY_KINDS)
+        if interdites:
+            raise HTTPException(
+                status_code=403,
+                detail="brique réservée à la ligne de commande : "
+                f"{', '.join(interdites)} (elle exécute une commande décrite "
+                "par la spec).",
+            )
+
     def _garder(spec: RunSpec) -> None:
         """Applique à une spec les gardes du lanceur, dans le même ordre.
 
         Une spec composée à la main ne doit pas ouvrir une porte que le
         formulaire ferme : ce serait un contournement, pas une fonctionnalité.
         """
+        # **Avant tout le reste.** Une brique qui exécute une commande lue dans
+        # la spec ne doit jamais être atteignable par HTTP — sur une instance
+        # publique comme privée. C'est un refus inconditionnel, pas un réglage.
+        _refuser_cli(referenced_kinds(spec))
         sts = statuses()
         registre = ModuleRegistry()
         register_default_modules(registre)

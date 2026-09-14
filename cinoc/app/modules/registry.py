@@ -392,6 +392,53 @@ def _build_pp_doclayout(kwargs: Mapping[str, ParamValue]) -> Module:
     return PPDocLayoutSegmenter(model=model)
 
 
+def _build_cli_layout(kwargs: Mapping[str, ParamValue]) -> Module:
+    """``cli_layout:<label>`` — un outil externe qui écrit du PAGE/ALTO.
+
+    L'interface n'est pas l'outil, c'est le **format** : eynollah, kraken,
+    OCR-D, dhSegment parlent tous PAGE-XML, et deviennent donc des lignes de
+    spec plutôt que des adaptateurs. **Réservée à la CLI** (`CLI_ONLY_KINDS`) :
+    elle exécute une commande décrite par la spec.
+    """
+    from cinoc.adapters.layout.cli_source import CliLayoutSource  # noqa: PLC0415
+
+    label = kwargs.get("label")
+    if not isinstance(label, str):
+        raise ModuleResolutionError(
+            "cli_layout : 'label' (str) requis dans adapter_kwargs."
+        )
+    delai = kwargs.get("timeout")
+    return CliLayoutSource(
+        label=label,
+        command=str(kwargs.get("command", "")),
+        timeout=float(delai) if isinstance(delai, (int, float)) else 600.0,
+    )
+
+
+def _build_ocrd(kwargs: Mapping[str, ParamValue]) -> Module:
+    """``ocrd:<label>`` — un processeur OCR-D, piloté par son workspace METS.
+
+    Distincte de ``cli_layout`` parce que le **contrat** diffère : OCR-D ne voit
+    pas une image mais un workspace. Une brique, une centaine de processeurs.
+    **Réservée à la CLI** (`CLI_ONLY_KINDS`) : la spec nomme un exécutable.
+    """
+    from cinoc.adapters.layout.ocrd_processor import OcrdProcessor  # noqa: PLC0415
+
+    label = kwargs.get("label")
+    if not isinstance(label, str):
+        raise ModuleResolutionError("ocrd : 'label' (str) requis dans adapter_kwargs.")
+    reglages = kwargs.get("parameters")
+    dossier = kwargs.get("bin_dir")
+    delai = kwargs.get("timeout")
+    return OcrdProcessor(
+        label=label,
+        processor=str(kwargs.get("processor", "")),
+        parameters=dict(reglages) if isinstance(reglages, dict) else None,
+        bin_dir=str(dossier) if isinstance(dossier, str) else None,
+        timeout=float(delai) if isinstance(delai, (int, float)) else 900.0,
+    )
+
+
 def _build_tesseract_layout(kwargs: Mapping[str, ParamValue]) -> Module:
     """``tesseract_layout`` — la mise en page que Tesseract trouve lui-même.
 
@@ -531,6 +578,8 @@ def register_default_modules(registry: ModuleRegistry) -> None:
     registry.register_builder("pp_doclayout", _build_pp_doclayout)
     registry.register_builder("doclayout_yolo", _build_doclayout_yolo)
     registry.register_builder("tesseract_layout", _build_tesseract_layout)
+    registry.register_builder("cli_layout", _build_cli_layout)
+    registry.register_builder("ocrd", _build_ocrd)
     registry.register_builder("remote_segmenter", _build_remote_segmenter)
     registry.register_builder("ner", _build_ner)
     registry.register_builder("text_confidences", _build_text_confidences)

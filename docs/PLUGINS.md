@@ -111,3 +111,133 @@ dans une spec (`adapter_name = "my_ocr:c0"`).
   cœur ; installé à part, **désactivé** sur le Space public.
 
 Les deux passent par le **même** `Module` Protocol.
+
+---
+
+## Troisième voie : **aucun code du tout** (`cli_layout`)
+
+Avant d'écrire un module, poser la question : **l'outil sait-il déjà écrire du
+PAGE-XML ou de l'ALTO ?** Si oui, il n'y a rien à écrire.
+
+L'interface d'un segmenteur n'est pas l'outil, c'est le **format**. Le patrimoine
+s'est standardisé sur ces deux-là ; une brique qui lit *le format* branche donc
+toute une famille d'outils, là où un adaptateur par *outil* n'en branche qu'un.
+
+```yaml
+steps:
+  - id: seg
+    kind: segmentation
+    adapter_name: cli_layout:eynollah
+    input_types: [image]
+    output_types: [layout]
+
+adapter_kwargs:
+  cli_layout:eynollah:
+    label: eynollah
+    command: "eynollah -i {image} -o {out} -m ~/modeles/eynollah"
+```
+
+`{image}` est la page, `{out}` un dossier **vide** que Cinoc alloue et nettoie.
+L'outil y écrit **un** fichier `.xml` ; le dialecte est reconnu à son contenu,
+pas à son extension.
+
+#### Écrire les chemins : **barres obliques, sur les trois systèmes**
+
+La commande est découpée selon les règles POSIX **partout**, Windows compris.
+Ce n'est pas un oubli : une spec est une *donnée reproductible*, elle doit se
+lire à l'identique sur toutes les machines. Découper selon l'hôte ferait de la
+même spec deux commandes différentes.
+
+Conséquence : l'antislash est un caractère d'**échappement**, jamais un
+séparateur de chemin.
+
+```yaml
+command: "C:/Outils/eynollah.exe -i {image} -o {out}"    # ✅ Windows accepte
+command: "'C:/Program Files/x/seg.exe' -i {image}"       # ✅ espace → guillemets
+command: "C:\Outils\eynollah.exe -i {image}"             # ❌ refusé au plan
+```
+
+La dernière forme est **refusée à la construction**, et non corrigée en
+douce : sans ce refus, elle devenait `C:Outilseynollah.exe` en silence, et
+l'utilisateur lisait « commande introuvable » sans jamais savoir pourquoi.
+
+Les outils visés — eynollah, `kraken segment -bl`, les processeurs OCR-D,
+dhSegment — écrivent tous du PAGE-XML, et c'est à ce titre qu'ils sont
+branchables. **tesseract, kraken, eynollah et un processeur OCR-D ont été
+branchés pour de vrai** le 14/09/2026, et ce premier contact a trouvé deux
+défauts que la relecture du code n'avait pas vus (D-253, D-256).
+
+La suite de tests, elle, n'exécute **aucun** de ces outils, et c'est délibéré :
+elle vérifie le contrat — découpage, relecture des deux dialectes, refus —
+contre un faux outil, pour rester rapide et ne dépendre d'aucune installation.
+Reste à mesurer : *ce que vaut* chaque segmenteur, sur corpus à vérité terrain.
+
+### Ce que la brique refuse, et pourquoi
+
+| Refus | Raison |
+|---|---|
+| **Aucun shell.** La commande est découpée (`shlex`) *avant* substitution | Un chemin contenant `; rm -rf` reste **un argument**. Substituer d'abord laisserait fabriquer une seconde commande. |
+| **Zéro ou plusieurs `.xml`** produits | En choisir un ferait dépendre le résultat de l'ordre du système de fichiers — l'invariant de déterminisme tombe. |
+| **Un XML sans aucune région** | Bien formé mais vide, il donnerait une page blanche : un CER de 1,0 **sans message**. C'est le pire mode de défaillance d'un banc d'essai. |
+| **Un antislash dans la commande** | Le découpage est POSIX partout (une spec se lit pareil sur toute machine), donc l'antislash y échappe : un chemin Windows collé tel quel serait mangé **en silence**. Refusé au plan, avec la forme à écrire. |
+| **Tout appel depuis le web** | Voir ci-dessous. |
+
+### Pourquoi le web la refuse toujours
+
+`cli_layout` exécute une commande **écrite dans la spec**. C'est sa raison d'être
+en local, et ce serait un shell offert par HTTP.
+
+Le refus (`cinoc.app.engines.CLI_ONLY_KINDS`) est donc **inconditionnel** : il ne
+dépend pas du mode public. Le mode public borne une *exposition* ; ce verrou
+borne une *capacité*. « Instance privée » veut dire « les gens que je connais »,
+pas « les gens à qui je confie un shell ».
+
+## OCR-D : une brique à part, et pourquoi
+
+OCR-D ne rentre pas dans `cli_layout`, et c'est instructif. Ses processeurs ne
+voient **pas une image** : leur unité est un *workspace METS*, ils lisent un
+groupe de fichiers et en écrivent un autre. Les brancher par `cli_layout`
+demanderait d'enchaîner trois commandes — donc un script shell, hors du dépôt,
+sans test ni refus. Ça marche, et c'est du bricolage.
+
+La brique `ocrd` traduit ce contrat :
+
+```yaml
+adapter_name: ocrd:segment
+adapter_kwargs:
+  ocrd:segment:
+    label: segment
+    processor: ocrd-tesserocr-segment
+    parameters: {find_tables: true}
+    bin_dir: ~/outils/ocrd-env/bin   # facultatif : sinon le PATH
+```
+
+Le gain est le même qu'avec `cli_layout` — *une brique, une famille* : la
+centaine de processeurs OCR-D (binarisation, redressement, segmentation,
+reconnaissance) devient un paramètre.
+
+Portée assumée : **`IMAGE → LAYOUT`**. OCR-D enchaîne aussi PAGE → PAGE ;
+réinjecter un layout dans un workspace est un autre travail, qu'aucun
+consommateur ne demande aujourd'hui.
+
+> `ocrd-tesserocr-*` a besoin de `TESSDATA_PREFIX` dans l'environnement
+> (`/opt/homebrew/share/tessdata` sur macOS Homebrew). C'est une affaire
+> d'installation, pas de spec : la brique ne fabrique pas d'environnement.
+
+### La règle générale
+
+L'outil parle-t-il **déjà** PAGE ou ALTO, en une commande sur une image ?
+→ `cli_layout`, une ligne de YAML.
+Son contrat est-il **autre** (workspace, bibliothèque, format maison) ?
+→ un adaptateur, qui traduit ce contrat — et qui vit dans le dépôt, avec ses
+tests et ses refus.
+
+### Quand écrire quand même un adaptateur
+
+- l'outil est une **bibliothèque Python**, pas une commande (pas de sous-processus
+  à lancer, pas de fichier à relire) ;
+- il rend un format **propre à lui** (JSON maison, masques, tenseurs) ;
+- il faut le charger **une fois** pour mille pages — `cli_layout` relance la
+  commande à chaque page, ce qui est rédhibitoire pour un modèle lourd.
+
+Hors de ces trois cas, une ligne de YAML suffit.

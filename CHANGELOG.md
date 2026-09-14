@@ -16,12 +16,37 @@ publier, et son moment, appartiennent au mainteneur.
 
 ### Ajouté
 
+- **Brancher un processeur OCR-D.** La brique `ocrd` fabrique le workspace
+  METS que ces outils attendent, lance le processeur nommé et relit son
+  PAGE-XML — la centaine de processeurs OCR-D devient un paramètre de spec.
+  Réservée à la ligne de commande, comme `cli_layout`.
+
+- **Brancher un segmenteur sans écrire de Python.** La brique `cli_layout`
+  lance un outil externe et relit le PAGE-XML ou l'ALTO qu'il écrit : eynollah,
+  `kraken segment`, les processeurs OCR-D ou dhSegment deviennent **une ligne
+  de spec** au lieu d'un adaptateur. L'interface n'est pas l'outil, c'est le
+  format. Réservée à la ligne de commande — elle exécute une commande décrite
+  par la spec, et le lanceur web la refuse toujours, instance privée comprise.
+
 - **Le rapport montre ce qu'il y a dans chaque chaîne.** Section « Composition
   des chaînes » : les étapes réellement exécutées, la forme du graphe, le
   fan-out et les réglages effectifs de chaque brique — lus du manifeste. Un nom
   de pipeline porte une intention, pas un contenu.
 
 ### Corrigé
+
+- **Un chemin Windows dans une commande `cli_layout` est refusé, plus mangé.**
+  Le découpage est POSIX sur les trois systèmes — une spec est une donnée
+  reproductible, elle doit se lire partout de la même façon — et l'antislash y
+  est un caractère d'échappement : `C:\Outils\eynollah.exe` devenait
+  `C:Outilseynollah.exe` *en silence*, et l'outil paraissait introuvable sans
+  raison. La commande qui en contient un est maintenant refusée au plan, avec
+  la forme à écrire (barres obliques, guillemets pour une espace).
+
+- **Les deux écritures de coordonnées ALTO sont lues.** Le schéma ALTO v4 admet
+  `"x1,y1 x2,y2"` *et* `"x1 y1 x2 y2"` ; cinoc refusait la seconde, et jetait
+  donc en silence toute la géométrie des outils qui l'emploient — kraken entre
+  autres.
 
 - **Une reconnaissance par région peut rendre plusieurs lignes.** Le fan-out ne
   lisait que du texte plat : une page de trois blocs sortait avec trois lignes
