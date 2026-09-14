@@ -74,7 +74,21 @@ def build_argv(command: str, image: str, out: str) -> list[str]:
     biscornu soit-il, reste **un** argument. Substituer d'abord puis découper
     laisserait un nom de fichier contenant une espace — ou pire — se scinder en
     plusieurs jetons.
+
+    Le découpage est **POSIX sur les trois systèmes**, et c'est délibéré : une
+    spec est une donnée reproductible, elle doit se lire à l'identique partout.
+    Découper selon l'hôte ferait de la même spec deux commandes différentes.
     """
+    if "\\" in command:
+        raise AdapterStepError(
+            "cli_layout : 'command' contient un antislash. Le découpage est "
+            "POSIX sur les trois systèmes — une spec doit se lire partout de la "
+            "même façon — et l'antislash y est un caractère d'échappement : il "
+            "serait consommé en silence, et la commande nommerait un programme "
+            "qui n'existe pas. Écrire le chemin avec des barres obliques "
+            "('C:/Outils/eynollah.exe' — Windows les accepte), et des "
+            "guillemets autour d'un chemin qui contient une espace."
+        )
     jetons = shlex.split(command)
     if not jetons:
         raise AdapterStepError("cli_layout : 'command' vide.")

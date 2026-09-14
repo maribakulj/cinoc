@@ -45,6 +45,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 
 from cinoc.adapters.layout._base import layout_step_output, read_layout
@@ -81,6 +82,15 @@ _MIMES = {
 
 _DEFAULT_TIMEOUT = 900.0
 
+#: Lanceur **injectable** : ``(programme, arguments, dossier, délai)``. Le défaut
+#: résout le programme puis le fait tourner ; les tests injectent un faux.
+#:
+#: Même motif que ``DetectorFn`` dans ``_base.py``, et pour la même raison : un
+#: adaptateur se teste sans son outil. Ici le gain est double — les faux
+#: exécutables auraient été des scripts ``#!/bin/sh``, donc la première suite du
+#: projet à ne pas tourner sous Windows.
+RunnerFn = Callable[[str, list[str], Path, float], None]
+
 
 def mime_de(chemin: str) -> str:
     """Type MIME déduit de l'extension, ou refus explicite."""
@@ -92,6 +102,51 @@ def mime_de(chemin: str) -> str:
             f"ocrd : extension d'image non gérée ({suffixe!r}). Connues : {connus}."
         )
     return mime
+
+
+def _resoudre(source: str, bin_dir: str | None, nom: str) -> str:
+    """Chemin de l'exécutable, refusé tôt s'il manque.
+
+    ``shutil.which`` plutôt qu'un test d'existence : il vérifie aussi que le
+    fichier est *exécutable*, et honore ``PATHEXT``. Un processeur absent doit
+    se dire avec son nom — pas se déguiser en « code de retour 127 » à la
+    millième page.
+    """
+    trouve = shutil.which(nom, path=bin_dir) if bin_dir else shutil.which(nom)
+    if trouve is None:
+        ou = f"dans {bin_dir!r}" if bin_dir else "dans le PATH"
+        raise AdapterStepError(
+            f"{source} : {nom!r} introuvable {ou}. OCR-D est-il installé "
+            "(et son environnement actif) ?"
+        )
+    return trouve
+
+
+def _lancer_sous_processus(
+    source: str,
+    bin_dir: str | None,
+    nom: str,
+    args: list[str],
+    atelier: Path,
+    delai: float,
+) -> None:
+    """Lanceur par défaut : résout le programme, puis le fait tourner."""
+    argv = [_resoudre(source, bin_dir, nom), *args]
+    logger.info("[ocrd] %s", " ".join(argv))
+    try:
+        # ``shell=False`` : aucun argument n'est réinterprété.
+        fini = subprocess.run(  # noqa: S603
+            argv, cwd=atelier, capture_output=True, timeout=delai, check=False
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise AdapterStepError(
+            f"{source} : {nom} n'a pas rendu la main en {delai:.0f}s."
+        ) from exc
+    if fini.returncode != 0:
+        detail = fini.stderr.decode("utf-8", "replace").strip()[-400:]
+        raise AdapterStepError(
+            f"{source} : {nom} a terminé en {fini.returncode} — {detail}"
+        )
 
 
 class OcrdProcessor:
@@ -111,6 +166,7 @@ class OcrdProcessor:
         parameters: dict[str, ParamValue] | None = None,
         bin_dir: str | None = None,
         timeout: float = _DEFAULT_TIMEOUT,
+        runner: RunnerFn | None = None,
     ) -> None:
         if not _NOM_PROCESSEUR.match(processor):
             raise AdapterStepError(
@@ -122,6 +178,7 @@ class OcrdProcessor:
         self._parameters = dict(parameters or {})
         self._bin_dir = bin_dir
         self._timeout = timeout
+        self._runner = runner
 
     @property
     def name(self) -> str:
@@ -159,65 +216,33 @@ class OcrdProcessor:
 
     # ---------------------------------------------------------------- interne
 
-    def _exe(self, nom: str) -> str:
-        """Chemin de l'exécutable, refusé tôt s'il manque.
-
-        Un processeur absent doit se dire au plan, avec son nom — pas se
-        déguiser en « code de retour 127 » à la millième page.
-        """
-        if self._bin_dir:
-            chemin = Path(self._bin_dir) / nom
-            if not chemin.exists():
-                raise AdapterStepError(
-                    f"{self.name} : {nom!r} absent de {self._bin_dir!r}."
-                )
-            return str(chemin)
-        trouve = shutil.which(nom)
-        if trouve is None:
-            raise AdapterStepError(
-                f"{self.name} : {nom!r} introuvable dans le PATH. OCR-D est-il "
-                "installé (et son environnement actif) ?"
-            )
-        return trouve
-
-    def _lancer(self, argv: list[str], atelier: Path, delai: float) -> None:
-        logger.info("[ocrd] %s", " ".join(argv))
-        try:
-            # ``shell=False`` : aucun argument n'est réinterprété.
-            fini = subprocess.run(  # noqa: S603
-                argv, cwd=atelier, capture_output=True, timeout=delai, check=False
-            )
-        except subprocess.TimeoutExpired as exc:
-            raise AdapterStepError(
-                f"{self.name} : {argv[0]} n'a pas rendu la main en {delai:.0f}s."
-            ) from exc
-        if fini.returncode != 0:
-            detail = fini.stderr.decode("utf-8", "replace").strip()[-400:]
-            raise AdapterStepError(
-                f"{self.name} : {Path(argv[0]).name} a terminé en "
-                f"{fini.returncode} — {detail}"
-            )
+    def _executer(self, nom: str, args: list[str], atelier: Path, delai: float) -> None:
+        if self._runner is not None:
+            self._runner(nom, args, atelier, delai)
+            return
+        _lancer_sous_processus(self.name, self._bin_dir, nom, args, atelier, delai)
 
     def _traiter(self, image: Path, atelier: Path, context: RunContext) -> bytes:
         delai = max(1.0, context.deadline.clamp_to_remaining(self._timeout))
-        ocrd = self._exe("ocrd")
-        processeur = self._exe(self._processor)
 
-        self._lancer([ocrd, "workspace", "init"], atelier, delai)
-        self._lancer(
-            [ocrd, "workspace", "add", "-G", _GROUPE_ENTREE, "-i", "IMG_0001",
+        self._executer("ocrd", ["workspace", "init"], atelier, delai)
+        self._executer(
+            "ocrd",
+            ["workspace", "add", "-G", _GROUPE_ENTREE, "-i", "IMG_0001",
              "-g", "P_0001", "-m", mime_de(str(image)), str(image)],
             atelier, delai,
         )
 
-        argv = [processeur, "-I", _GROUPE_ENTREE, "-O", _GROUPE_SORTIE]
+        args = ["-I", _GROUPE_ENTREE, "-O", _GROUPE_SORTIE]
         if self._parameters:
+            # Trié : deux runs de même spec doivent écrire le même fichier —
+            # son empreinte entre dans le manifeste de reproductibilité.
             reglages = atelier / "parametres.json"
             reglages.write_text(
                 json.dumps(self._parameters, sort_keys=True), encoding="utf-8"
             )
-            argv += ["-p", str(reglages)]
-        self._lancer(argv, atelier, delai)
+            args += ["-p", str(reglages)]
+        self._executer(self._processor, args, atelier, delai)
 
         return self._recolter(atelier / _GROUPE_SORTIE)
 
@@ -243,4 +268,4 @@ class OcrdProcessor:
         return trouves[0].read_bytes()
 
 
-__all__ = ["OcrdProcessor", "mime_de"]
+__all__ = ["OcrdProcessor", "RunnerFn", "mime_de"]

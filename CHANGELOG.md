@@ -35,6 +35,14 @@ publier, et son moment, appartiennent au mainteneur.
 
 ### Corrigé
 
+- **Un chemin Windows dans une commande `cli_layout` est refusé, plus mangé.**
+  Le découpage est POSIX sur les trois systèmes — une spec est une donnée
+  reproductible, elle doit se lire partout de la même façon — et l'antislash y
+  est un caractère d'échappement : `C:\Outils\eynollah.exe` devenait
+  `C:Outilseynollah.exe` *en silence*, et l'outil paraissait introuvable sans
+  raison. La commande qui en contient un est maintenant refusée au plan, avec
+  la forme à écrire (barres obliques, guillemets pour une espace).
+
 - **Les deux écritures de coordonnées ALTO sont lues.** Le schéma ALTO v4 admet
   `"x1,y1 x2,y2"` *et* `"x1 y1 x2 y2"` ; cinoc refusait la seconde, et jetait
   donc en silence toute la géométrie des outils qui l'emploient — kraken entre

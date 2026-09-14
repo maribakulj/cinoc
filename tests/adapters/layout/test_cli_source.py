@@ -7,7 +7,7 @@ commande **sans shell**, et relire le XML **quel que soit son dialecte**.
 
 from __future__ import annotations
 
-import os
+import shlex
 import sys
 from pathlib import Path
 
@@ -66,6 +66,34 @@ def test_une_commande_vide_est_refusee() -> None:
         CliLayoutSource(label="x", command="   ")
 
 
+def test_un_antislash_dans_la_commande_est_refuse() -> None:
+    """Un chemin Windows collé tel quel : refusé **fort**, jamais mangé.
+
+    Le découpage est POSIX sur les trois systèmes — une spec est une donnée
+    reproductible, elle doit se lire partout pareil. Conséquence : l'antislash
+    y est un caractère d'échappement, et ``C:\\Outils\\eynollah.exe`` deviendrait
+    ``C:Outilseynollah.exe`` **en silence**. L'outil serait alors « introuvable »
+    sans que rien ne dise pourquoi.
+
+    C'est le même mode de défaillance que les coordonnées ALTO jetées sans bruit
+    (D-253), et il se traite pareil : refuser au plan, en disant quoi écrire.
+    """
+    with pytest.raises(AdapterStepError, match="antislash"):
+        CliLayoutSource(
+            label="x", command="C:\\Outils\\eynollah.exe -i {image} -o {out}"
+        )
+
+
+def test_le_meme_chemin_en_barres_obliques_est_accepte() -> None:
+    """La contrepartie du refus : la forme correcte doit marcher, et passer entière."""
+    argv = build_argv(
+        "C:/Outils/eynollah.exe -i {image} -o {out}", "C:/corpus/p.png", "C:/tmp/s"
+    )
+
+    assert argv[0] == "C:/Outils/eynollah.exe"
+    assert argv[2] == "C:/corpus/p.png"
+
+
 # --------------------------------------------------------------------------- #
 # Le format, pas l'outil
 # --------------------------------------------------------------------------- #
@@ -106,12 +134,24 @@ def test_le_vocabulaire_n_est_pas_declare() -> None:
 # --------------------------------------------------------------------------- #
 
 
+def _commande(*morceaux: Path) -> str:
+    """Les morceaux d'une commande, écrits comme une spec doit l'être.
+
+    Barres obliques et guillemets POSIX : sous Windows, ``sys.executable``
+    s'écrit ``C:\\...\\python.exe``, et le découpage — POSIX sur les trois
+    systèmes, par déterminisme — mangerait ses antislashs. Une spec Windows
+    valide s'écrit donc comme ici, et la brique refuse bruyamment l'autre forme
+    (cf. ``test_un_antislash_dans_la_commande_est_refuse``).
+    """
+    return " ".join(shlex.quote(m.as_posix()) for m in morceaux)
+
+
 def _executer(tmp_path: Path, script: str, image: Path) -> object:
     outil = tmp_path / "faux_outil.py"
     outil.write_text(script, encoding="utf-8")
     brique = CliLayoutSource(
         label="faux",
-        command=f"{sys.executable} {outil} {{image}} {{out}}",
+        command=f"{_commande(Path(sys.executable), outil)} {{image}} {{out}}",
     )
     artefact = Artifact(
         id="i",
@@ -201,18 +241,25 @@ def test_une_commande_introuvable_le_dit(tmp_path: Path) -> None:
         brique.execute({ArtifactType.IMAGE: artefact}, {}, contexte, RunControl())
 
 
-def test_le_chemin_de_l_image_est_rendu_absolu(tmp_path: Path) -> None:
+def test_le_chemin_de_l_image_est_rendu_absolu(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """**Le cas qui l'a imposé.** Rien ne promet que l'outil reste dans notre
     dossier : un processeur OCR-D fait ``cd`` dans son workspace, et une image
     nommée relativement devient introuvable. Le dossier de sortie est déjà
     absolu ; l'image doit l'être aussi.
+
+    On se place **dans** le dossier de l'image plutôt que d'en calculer le
+    chemin relatif : ``os.path.relpath`` lève entre deux disques, et la CI
+    Windows met bel et bien le dossier courant sur ``C:`` et ``tmp_path`` sur
+    ``D:``.
     """
     image = tmp_path / "p.png"
     image.write_bytes(b"\x89PNG")
-    relatif = os.path.relpath(image, Path.cwd())
+    monkeypatch.chdir(tmp_path)
 
-    assert Path(_absolu(relatif)).is_absolute()
-    assert Path(_absolu(relatif)) == image.resolve()
+    assert Path(_absolu("p.png")).is_absolute()
+    assert Path(_absolu("p.png")) == image.resolve()
 
 
 def test_un_uri_qui_n_est_pas_un_chemin_local_passe_inchange() -> None:

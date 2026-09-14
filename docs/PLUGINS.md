@@ -141,11 +141,36 @@ adapter_kwargs:
 L'outil y écrit **un** fichier `.xml` ; le dialecte est reconnu à son contenu,
 pas à son extension.
 
+#### Écrire les chemins : **barres obliques, sur les trois systèmes**
+
+La commande est découpée selon les règles POSIX **partout**, Windows compris.
+Ce n'est pas un oubli : une spec est une *donnée reproductible*, elle doit se
+lire à l'identique sur toutes les machines. Découper selon l'hôte ferait de la
+même spec deux commandes différentes.
+
+Conséquence : l'antislash est un caractère d'**échappement**, jamais un
+séparateur de chemin.
+
+```yaml
+command: "C:/Outils/eynollah.exe -i {image} -o {out}"    # ✅ Windows accepte
+command: "'C:/Program Files/x/seg.exe' -i {image}"       # ✅ espace → guillemets
+command: "C:\Outils\eynollah.exe -i {image}"             # ❌ refusé au plan
+```
+
+La dernière forme est **refusée à la construction**, et non corrigée en
+douce : sans ce refus, elle devenait `C:Outilseynollah.exe` en silence, et
+l'utilisateur lisait « commande introuvable » sans jamais savoir pourquoi.
+
 Les outils visés — eynollah, `kraken segment -bl`, les processeurs OCR-D,
 dhSegment — écrivent tous du PAGE-XML, et c'est à ce titre qu'ils sont
-branchables. **Aucun n'a été exécuté dans la suite de tests** : celle-ci vérifie
-le contrat (découpage, relecture des deux dialectes, refus) contre un faux outil.
-Le premier branchement réel reste à mesurer.
+branchables. **tesseract, kraken, eynollah et un processeur OCR-D ont été
+branchés pour de vrai** le 14/09/2026, et ce premier contact a trouvé deux
+défauts que la relecture du code n'avait pas vus (D-253, D-256).
+
+La suite de tests, elle, n'exécute **aucun** de ces outils, et c'est délibéré :
+elle vérifie le contrat — découpage, relecture des deux dialectes, refus —
+contre un faux outil, pour rester rapide et ne dépendre d'aucune installation.
+Reste à mesurer : *ce que vaut* chaque segmenteur, sur corpus à vérité terrain.
 
 ### Ce que la brique refuse, et pourquoi
 
@@ -154,6 +179,7 @@ Le premier branchement réel reste à mesurer.
 | **Aucun shell.** La commande est découpée (`shlex`) *avant* substitution | Un chemin contenant `; rm -rf` reste **un argument**. Substituer d'abord laisserait fabriquer une seconde commande. |
 | **Zéro ou plusieurs `.xml`** produits | En choisir un ferait dépendre le résultat de l'ordre du système de fichiers — l'invariant de déterminisme tombe. |
 | **Un XML sans aucune région** | Bien formé mais vide, il donnerait une page blanche : un CER de 1,0 **sans message**. C'est le pire mode de défaillance d'un banc d'essai. |
+| **Un antislash dans la commande** | Le découpage est POSIX partout (une spec se lit pareil sur toute machine), donc l'antislash y échappe : un chemin Windows collé tel quel serait mangé **en silence**. Refusé au plan, avec la forme à écrire. |
 | **Tout appel depuis le web** | Voir ci-dessous. |
 
 ### Pourquoi le web la refuse toujours
