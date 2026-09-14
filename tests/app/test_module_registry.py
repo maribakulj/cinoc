@@ -41,6 +41,7 @@ def test_kinds_listed() -> None:
         "mistral",
         "mistral_ocr",
         "ner",
+        "ocrd",
         "ollama",
         "openai",
         "page_assembler",

@@ -166,6 +166,46 @@ dépend pas du mode public. Le mode public borne une *exposition* ; ce verrou
 borne une *capacité*. « Instance privée » veut dire « les gens que je connais »,
 pas « les gens à qui je confie un shell ».
 
+## OCR-D : une brique à part, et pourquoi
+
+OCR-D ne rentre pas dans `cli_layout`, et c'est instructif. Ses processeurs ne
+voient **pas une image** : leur unité est un *workspace METS*, ils lisent un
+groupe de fichiers et en écrivent un autre. Les brancher par `cli_layout`
+demanderait d'enchaîner trois commandes — donc un script shell, hors du dépôt,
+sans test ni refus. Ça marche, et c'est du bricolage.
+
+La brique `ocrd` traduit ce contrat :
+
+```yaml
+adapter_name: ocrd:segment
+adapter_kwargs:
+  ocrd:segment:
+    label: segment
+    processor: ocrd-tesserocr-segment
+    parameters: {find_tables: true}
+    bin_dir: ~/outils/ocrd-env/bin   # facultatif : sinon le PATH
+```
+
+Le gain est le même qu'avec `cli_layout` — *une brique, une famille* : la
+centaine de processeurs OCR-D (binarisation, redressement, segmentation,
+reconnaissance) devient un paramètre.
+
+Portée assumée : **`IMAGE → LAYOUT`**. OCR-D enchaîne aussi PAGE → PAGE ;
+réinjecter un layout dans un workspace est un autre travail, qu'aucun
+consommateur ne demande aujourd'hui.
+
+> `ocrd-tesserocr-*` a besoin de `TESSDATA_PREFIX` dans l'environnement
+> (`/opt/homebrew/share/tessdata` sur macOS Homebrew). C'est une affaire
+> d'installation, pas de spec : la brique ne fabrique pas d'environnement.
+
+### La règle générale
+
+L'outil parle-t-il **déjà** PAGE ou ALTO, en une commande sur une image ?
+→ `cli_layout`, une ligne de YAML.
+Son contrat est-il **autre** (workspace, bibliothèque, format maison) ?
+→ un adaptateur, qui traduit ce contrat — et qui vit dans le dépôt, avec ses
+tests et ses refus.
+
 ### Quand écrire quand même un adaptateur
 
 - l'outil est une **bibliothèque Python**, pas une commande (pas de sous-processus

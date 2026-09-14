@@ -48,14 +48,9 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from cinoc.adapters.layout._base import layout_step_output
+from cinoc.adapters.layout._base import layout_step_output, read_layout
 from cinoc.domain.artifacts import Artifact, ArtifactType
-from cinoc.domain.errors import AdapterStepError, FormatError
-from cinoc.domain.layout import CanonicalLayout
-from cinoc.formats.alto.layout_map import alto_to_layout
-from cinoc.formats.alto.parser import parse_alto
-from cinoc.formats.pagexml import parse_pagexml
-from cinoc.formats.pagexml.layout_map import page_to_layout
+from cinoc.domain.errors import AdapterStepError
 from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
@@ -91,36 +86,19 @@ def build_argv(command: str, image: str, out: str) -> list[str]:
     return [j.replace(IMAGE_TOKEN, image).replace(OUT_TOKEN, out) for j in jetons]
 
 
-def read_layout(xml: bytes, source: str) -> CanonicalLayout:
-    """PAGE-XML ou ALTO → ``CanonicalLayout``, **reconnu au contenu**.
+def _absolu(uri: str) -> str:
+    """Chemin d'image rendu absolu avant d'être donné à l'outil.
 
-    Le format est déduit de la racine, pas de l'extension : les deux sortent en
-    ``.xml``, et se fier au nom ferait dépendre la lecture d'une convention que
-    l'outil n'a pas promise.
+    Un chemin relatif vaut par rapport au dossier courant — et rien ne promet
+    que l'outil y reste : un enrobage OCR-D fait ``cd`` dans son workspace
+    METS, et la page devient introuvable. Le dossier de sortie est déjà absolu
+    (il vient de ``TemporaryDirectory``) ; l'image doit l'être aussi.
+
+    On ne résout que ce qui existe : un URI qui n'est pas un chemin local passe
+    inchangé, à charge pour l'outil de savoir quoi en faire.
     """
-    tete = xml[:4096].lower()
-    est_page = b"pcgts" in tete or b"pagecontent" in tete
-    quoi = "PAGE" if est_page else "ALTO"
-    try:
-        if est_page:
-            layout = page_to_layout(parse_pagexml(xml))
-        else:
-            layout = alto_to_layout(parse_alto(xml))
-    except (ValueError, FormatError) as exc:
-        raise AdapterStepError(
-            f"cli_layout : {source} n'est pas un {quoi} lisible — {exc}"
-        ) from exc
-    # Un XML bien formé mais vide se lit sans erreur et rend zéro région. Le
-    # laisser passer donnerait une page blanche, donc un CER de 1,0 **sans
-    # message** — le pire mode de défaillance possible pour un banc d'essai, et
-    # un qui a déjà coûté une campagne entière. On refuse ici, bruyamment.
-    if not any(page.regions for page in layout.pages):
-        raise AdapterStepError(
-            f"cli_layout : {source} a rendu un {quoi} sans aucune région. "
-            "L'outil a-t-il vraiment traité la page (modèle chargé, format de "
-            "sortie attendu) ?"
-        )
-    return layout
+    chemin = Path(uri)
+    return str(chemin.resolve()) if chemin.exists() else uri
 
 
 class CliLayoutSource:
@@ -178,7 +156,7 @@ class CliLayoutSource:
         if context.workspace_uri is None:
             raise AdapterStepError(f"{self.name} : workspace requis.")
         with tempfile.TemporaryDirectory(prefix="cinoc-cli-") as sortie:
-            xml = self._lancer(image.uri, sortie, context)
+            xml = self._lancer(_absolu(image.uri), sortie, context)
         return layout_step_output(read_layout(xml, self.name), context, self.name)
 
     def _lancer(self, image: str, sortie: str, context: RunContext) -> bytes:
@@ -229,4 +207,4 @@ class CliLayoutSource:
         return trouves[0].read_bytes()
 
 
-__all__ = ["IMAGE_TOKEN", "OUT_TOKEN", "CliLayoutSource", "build_argv", "read_layout"]
+__all__ = ["IMAGE_TOKEN", "OUT_TOKEN", "CliLayoutSource", "build_argv"]

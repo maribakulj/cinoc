@@ -107,6 +107,7 @@ def roles() -> Mapping[str, Role]:
                 # lui nomme. Utile partout, défaut nulle part — et réservé à la
                 # CLI (``CLI_ONLY_KINDS``), donc jamais proposé par le web.
                 "cli_layout",
+                "ocrd",
             ),
         ),
         "alto_source": Role((IMAGE,), (LAYOUT,), ("alto_source",)),

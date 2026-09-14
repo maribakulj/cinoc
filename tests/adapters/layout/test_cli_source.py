@@ -12,11 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from cinoc.adapters.layout.cli_source import (
-    CliLayoutSource,
-    build_argv,
-    read_layout,
-)
+from cinoc.adapters.layout._base import read_layout
+from cinoc.adapters.layout.cli_source import CliLayoutSource, build_argv
 from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.errors import AdapterStepError
 from cinoc.pipeline.protocols import Module

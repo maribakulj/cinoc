@@ -57,12 +57,16 @@ PUBLIC_ENGINE_KINDS: frozenset[str] = frozenset({"precomputed", "tesseract"})
 #: règle : celui-là borne ce qu'une instance *exposée* offre, celui-ci borne ce
 #: qu'une spec *déposée* peut faire — sur n'importe quelle instance.
 #:
-#: ``cli_layout`` exécute une commande lue dans la spec. C'est sa raison d'être
-#: (brancher eynollah, kraken, OCR-D sans écrire de code) et c'est un vecteur
-#: d'exécution de code : accepter une telle spec par HTTP reviendrait à offrir un
-#: shell. « Instance privée » veut dire « les gens que je connais », pas « les
-#: gens à qui je confie un shell ».
-CLI_ONLY_KINDS: frozenset[str] = frozenset({"cli_layout"})
+#: ``cli_layout`` exécute une commande lue dans la spec ; ``ocrd`` exécute le
+#: processeur qu'elle nomme. C'est leur raison d'être — brancher eynollah,
+#: kraken ou OCR-D sans écrire de code — et c'est un vecteur d'exécution de
+#: code : accepter une telle spec par HTTP reviendrait à offrir un shell.
+#:
+#: Le nom d'un processeur OCR-D est contraint (``ocrd-…``), mais une contrainte
+#: de nom **n'est pas** une frontière de confiance ; celle-ci est ici.
+#: « Instance privée » veut dire « les gens que je connais », pas « les gens à
+#: qui je confie un shell ».
+CLI_ONLY_KINDS: frozenset[str] = frozenset({"cli_layout", "ocrd"})
 
 
 def _module_present(name: str) -> bool:

