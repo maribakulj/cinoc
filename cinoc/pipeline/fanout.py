@@ -163,7 +163,34 @@ def _fill_region(
     params: dict[str, ParamValue],
     cropper: RegionCropper | None,
 ) -> tuple[Region, ResourceUsage | None]:
+    """Remplit une région de ses lignes — **en descendant** dans ses enfants.
+
+    Un bloc composé (ALTO ``ComposedBlock``) porte ses lignes dans ses enfants, pas
+    à son niveau. L'océriser lui-même accrochait le texte au parent, que la
+    projection ne relit pas : elle lit ``leaf_regions()``. Le texte était donc
+    produit puis **jeté sans un avertissement**.
+
+    Le défaut a survécu parce que le corpus d'essai ne contenait aucun bloc
+    composé ; la presse réelle en est pleine. C'est la même incohérence que celle
+    documentée par ``LayoutPage.leaf_regions`` — des modules qui ne font pas le
+    même parcours — à l'autre bout de la chaîne.
+    """
     control.raise_if_cancelled()
+    if region.regions:
+        enfants: list[Region] = []
+        usage_total: ResourceUsage | None = None
+        for enfant in region.regions:
+            rempli, usage_enfant = _fill_region(
+                enfant, page, page_image, recognizer, context, control, params, cropper
+            )
+            enfants.append(rempli)
+            if usage_enfant is not None:
+                usage_total = (
+                    usage_enfant if usage_total is None
+                    else usage_total.merged_with(usage_enfant)
+                )
+        return region.model_copy(update={"regions": tuple(enfants)}), usage_total
+
     region_image = _region_image(region, page, page_image, context, cropper)
     if region_image is None:
         return region, None
