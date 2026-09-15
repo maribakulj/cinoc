@@ -80,8 +80,26 @@ def tesseract_binary_version(*, run: BinaryRunner = subprocess.run) -> str | Non
     return None
 
 
+def _config(*, oem: int, psm: int, dpi: int | None) -> str:
+    """Options de ligne de commande — ``--dpi`` seulement s'il est demandé.
+
+    **Pourquoi l'exposer.** Tesseract déduit la résolution de l'image quand elle
+    n'est pas donnée, et il s'appuie d'abord sur les métadonnées du fichier. Une
+    numérisation patrimoniale déclare volontiers 96 DPI alors qu'elle en fait 300 :
+    tesseract en conclut une page de plus d'un mètre de large et son analyse de
+    mise en page abandonne — « Empty page!! », zéro bloc, zéro mot, sans erreur.
+
+    Observé sur une page de presse de la BnF, 5121 × 7198 px déclarée à 96 DPI :
+    aucun mot à la volée, **6 987 mots** avec ``--dpi 300``. Le défaut reste
+    ``None`` — on ne force rien à qui ne demande rien.
+    """
+    options = f"--oem {oem} --psm {psm}"
+    return f"{options} --dpi {dpi}" if dpi is not None else options
+
+
 def _invoke_tesseract(  # pragma: no cover -- binaire requis (cf. marqueur 'live')
-    *, image_path: str, lang: str, psm: int, oem: int, timeout: float
+    *, image_path: str, lang: str, psm: int, oem: int, timeout: float,
+    dpi: int | None = None,
 ) -> str:
     """Lance tesseract et renvoie le texte. **Isolé → mockable** (CI sans binaire)."""
     try:
@@ -91,7 +109,7 @@ def _invoke_tesseract(  # pragma: no cover -- binaire requis (cf. marqueur 'live
             "tesseract : pytesseract non installé "
             "(pip install 'cinoc[tesseract]' + binaire tesseract)."
         ) from exc
-    config = f"--oem {oem} --psm {psm}"
+    config = _config(oem=oem, psm=psm, dpi=dpi)
     try:
         text = pytesseract.image_to_string(
             image_path, lang=lang, config=config, timeout=timeout
@@ -108,7 +126,8 @@ def _invoke_tesseract(  # pragma: no cover -- binaire requis (cf. marqueur 'live
 
 
 def invoke_tesseract_alto(  # pragma: no cover -- binaire requis ('live')
-    *, image_path: str, lang: str, psm: int, oem: int, timeout: float
+    *, image_path: str, lang: str, psm: int, oem: int, timeout: float,
+    dpi: int | None = None,
 ) -> bytes:
     """ALTO XML natif via ``image_to_alto_xml`` (géométrie + texte par mot).
 
@@ -125,7 +144,10 @@ def invoke_tesseract_alto(  # pragma: no cover -- binaire requis ('live')
         ) from exc
     try:
         xml = pytesseract.image_to_alto_xml(
-            image_path, lang=lang, config=f"--oem {oem} --psm {psm}", timeout=timeout
+            image_path,
+            lang=lang,
+            config=_config(oem=oem, psm=psm, dpi=dpi),
+            timeout=timeout,
         )
     except (
         pytesseract.TesseractNotFoundError,
@@ -140,7 +162,8 @@ def invoke_tesseract_alto(  # pragma: no cover -- binaire requis ('live')
 
 
 def _invoke_tesseract_confidences(  # pragma: no cover -- binaire requis ('live')
-    *, image_path: str, lang: str, psm: int, oem: int, timeout: float
+    *, image_path: str, lang: str, psm: int, oem: int, timeout: float,
+    dpi: int | None = None,
 ) -> list[ConfidenceToken]:
     """Confidences par mot via ``image_to_data`` (TSV natif, conf 0-100)."""
     import pytesseract  # type: ignore[import-not-found]
@@ -148,7 +171,7 @@ def _invoke_tesseract_confidences(  # pragma: no cover -- binaire requis ('live'
     data = pytesseract.image_to_data(
         image_path,
         lang=lang,
-        config=f"--psm {psm} --oem {oem}",
+        config=_config(oem=oem, psm=psm, dpi=dpi),
         timeout=timeout,
         output_type=pytesseract.Output.DICT,
     )
@@ -206,6 +229,7 @@ class TesseractAdapter:
         oem: int = 3,
         alto: bool = False,
         psm_by_class: str = "",
+        dpi: int | None = None,
     ) -> None:
         if not label or not all(c.isalnum() or c in "_-" for c in label):
             raise AdapterStepError(
@@ -221,11 +245,18 @@ class TesseractAdapter:
             raise AdapterStepError(f"TesseractAdapter : psm ∈ [0, 13], reçu {psm}.")
         if not 0 <= oem <= 3:
             raise AdapterStepError(f"TesseractAdapter : oem ∈ [0, 3], reçu {oem}.")
+        if dpi is not None and not 70 <= dpi <= 2400:
+            raise AdapterStepError(
+                f"TesseractAdapter : dpi ∈ [70, 2400], reçu {dpi}."
+            )
         self._psm_by_class = parse_psm_by_class(psm_by_class)
         self._label = label
         self._lang = lang
         self._psm = psm
         self._oem = oem
+        #: Résolution imposée à tesseract. ``None`` = il la déduit lui-même, ce qui
+        #: le trompe quand le fichier déclare une valeur fausse (cf. ``_config``).
+        self._dpi = dpi
         #: Émet en plus un artefact ``ALTO_XML`` (ré-import eScriptorium/Transkribus).
         self._alto = alto
 
@@ -298,6 +329,7 @@ class TesseractAdapter:
             lang=self._lang,
             psm=psm,
             oem=self._oem,
+            dpi=self._dpi,
             timeout=timeout,
         )
         output_path = workspace_artifact_path(
@@ -312,6 +344,7 @@ class TesseractAdapter:
                 lang=self._lang,
                 psm=psm,
                 oem=self._oem,
+                dpi=self._dpi,
                 timeout=timeout,
             )
         except (
@@ -358,6 +391,7 @@ class TesseractAdapter:
                 lang=self._lang,
                 psm=psm,
                 oem=self._oem,
+                dpi=self._dpi,
                 timeout=timeout,
             )
             alto_path = workspace_artifact_path(

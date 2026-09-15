@@ -339,3 +339,27 @@ def test_without_a_table_nothing_changes() -> None:
 
     module = TesseractAdapter(label="x", psm=6)
     assert module._psm_for({REGION_TYPE_PARAM: "advertisement"}) == 6
+
+
+def test_le_dpi_arrive_sur_la_ligne_de_commande() -> None:
+    """``--dpi`` n'apparaît que s'il est demandé, et le défaut ne change rien.
+
+    **Pourquoi l'option existe.** Tesseract déduit la résolution des métadonnées
+    du fichier. Une numérisation patrimoniale déclare volontiers 96 DPI alors
+    qu'elle en fait 300 : tesseract en conclut une page d'un mètre de large et son
+    analyse de mise en page rend « Empty page!! » — zéro bloc, sans erreur.
+    Mesuré sur une page de la BnF, 5121 × 7198 px : zéro mot à la volée,
+    6 987 mots avec ``--dpi 300``.
+    """
+    from cinoc.adapters.ocr.tesseract import _config
+
+    assert _config(oem=3, psm=6, dpi=None) == "--oem 3 --psm 6"
+    assert _config(oem=3, psm=6, dpi=300) == "--oem 3 --psm 6 --dpi 300"
+
+
+def test_un_dpi_absurde_est_refuse() -> None:
+    """Une valeur hors plage vient d'une faute de frappe, pas d'une intention."""
+    from cinoc.adapters.ocr.tesseract import TesseractAdapter
+
+    with pytest.raises(AdapterStepError, match="dpi"):
+        TesseractAdapter(label="t", dpi=5)
