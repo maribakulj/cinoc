@@ -329,3 +329,58 @@ def test_le_fanout_descend_dans_les_blocs_composes(tmp_path: Any) -> None:
     feuilles = [r for r in rempli.regions]
     assert [r.id for r in feuilles] == ["c1_r1", "c1_r2"]
     assert not rempli.lines, "le parent ne doit pas porter de lignes"
+
+
+def test_le_fanout_descend_dans_les_composes_imbriques(tmp_path: Any) -> None:
+    """La descente vaut à **toute profondeur**, pas seulement au premier niveau.
+
+    Le parseur ALTO annonce un ``ComposedBlock`` récursif : un composé peut en
+    contenir un autre. Une descente qui ne traiterait qu'un niveau laisserait les
+    feuilles profondes vides — le même texte perdu, une strate plus bas.
+    """
+    espion = _Espion()
+    page = LayoutPage(width=100, height=100, regions=())
+    arbre = Region(
+        id="n1",
+        region_type="composed",
+        geometry=Geometry(bbox=BBox(x=0, y=0, width=100, height=100)),
+        regions=(
+            Region(
+                id="n2",
+                region_type="composed",
+                geometry=Geometry(bbox=BBox(x=0, y=0, width=100, height=50)),
+                regions=(
+                    Region(
+                        id="f1",
+                        region_type="text",
+                        geometry=Geometry(bbox=BBox(x=0, y=0, width=100, height=25)),
+                    ),
+                    Region(
+                        id="f2",
+                        region_type="text",
+                        geometry=Geometry(bbox=BBox(x=0, y=25, width=100, height=25)),
+                    ),
+                ),
+            ),
+            Region(
+                id="f3",
+                region_type="text",
+                geometry=Geometry(bbox=BBox(x=0, y=50, width=100, height=50)),
+            ),
+        ),
+    )
+    image = Artifact(
+        id="i",
+        document_id="d",
+        type=ArtifactType.IMAGE,
+        uri=str(tmp_path / "p.png"),
+        content_hash="0" * 64,
+    )
+    rempli, _ = _fill_region(
+        arbre, page, image, espion, _contexte(tmp_path), RunControl(), {}, None
+    )
+    # Les trois feuilles ont été océrisées, à deux profondeurs différentes.
+    assert espion.vus == ["text", "text", "text"]
+    # Et aucun niveau intermédiaire ne retient de texte au passage.
+    assert not rempli.lines
+    assert not rempli.regions[0].lines
