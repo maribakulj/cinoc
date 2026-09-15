@@ -178,18 +178,14 @@ def _fill_region(
     control.raise_if_cancelled()
     if region.regions:
         enfants: list[Region] = []
-        usage_total: ResourceUsage | None = None
+        usage = ResourceUsage()
         for enfant in region.regions:
             rempli, usage_enfant = _fill_region(
                 enfant, page, page_image, recognizer, context, control, params, cropper
             )
             enfants.append(rempli)
-            if usage_enfant is not None:
-                usage_total = (
-                    usage_enfant if usage_total is None
-                    else usage_total.merged_with(usage_enfant)
-                )
-        return region.model_copy(update={"regions": tuple(enfants)}), usage_total
+            usage = usage.merged_with(usage_enfant)
+        return region.model_copy(update={"regions": tuple(enfants)}), usage
 
     region_image = _region_image(region, page, page_image, context, cropper)
     if region_image is None:

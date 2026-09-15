@@ -53,6 +53,17 @@ class ModuleRegistry:
         return module
 
 
+def _dpi_optionnel(kwargs: Mapping[str, ParamValue]) -> int | None:
+    """``dpi`` des kwargs, ou ``None`` — auquel cas tesseract décide seul.
+
+    Le défaut reste l'absence : imposer une valeur à tout le monde changerait
+    silencieusement des runs existants. Mais l'option devait exister, car sans
+    elle une numérisation aux métadonnées fausses rend une page blanche.
+    """
+    valeur = kwargs.get("dpi")
+    return int(valeur) if isinstance(valeur, (int, float)) else None
+
+
 def _build_precomputed(kwargs: Mapping[str, ParamValue]) -> Module:
     label = kwargs.get("source_label")
     if not isinstance(label, str):
@@ -170,17 +181,6 @@ def _build_tesseract(kwargs: Mapping[str, ParamValue]) -> Module:
         # qui mentent souvent sur les numérisations patrimoniales.
         dpi=_dpi_optionnel(kwargs),
     )
-
-
-def _dpi_optionnel(kwargs: Mapping[str, ParamValue]) -> int | None:
-    """``dpi`` des kwargs, ou ``None`` — auquel cas tesseract décide seul.
-
-    Le défaut reste l'absence : imposer une valeur à tout le monde changerait
-    silencieusement des runs existants. Mais l'option devait exister, car sans
-    elle une numérisation aux métadonnées fausses rend une page blanche.
-    """
-    valeur = kwargs.get("dpi")
-    return int(valeur) if isinstance(valeur, (int, float)) else None
 
 
 def _build_openai(kwargs: Mapping[str, ParamValue]) -> Module:
