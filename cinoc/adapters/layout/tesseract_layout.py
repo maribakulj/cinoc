@@ -51,7 +51,12 @@ class TesseractLayoutSegmenter:
     """``IMAGE → LAYOUT`` par l'analyse de page native de Tesseract."""
 
     def __init__(
-        self, *, lang: str = "fra", psm: int = DEFAULT_PSM, oem: int = 3
+        self,
+        *,
+        lang: str = "fra",
+        psm: int = DEFAULT_PSM,
+        oem: int = 3,
+        dpi: int | None = None,
     ) -> None:
         if not 0 <= psm <= 13:
             raise AdapterStepError(
@@ -61,9 +66,17 @@ class TesseractLayoutSegmenter:
             raise AdapterStepError(
                 f"TesseractLayoutSegmenter : oem ∈ [0, 3], reçu {oem}."
             )
+        if dpi is not None and not 70 <= dpi <= 2400:
+            raise AdapterStepError(
+                f"TesseractLayoutSegmenter : dpi ∈ [70, 2400], reçu {dpi}."
+            )
         self._lang = lang
         self._psm = psm
         self._oem = oem
+        #: Résolution imposée. Sans elle, tesseract croit les métadonnées du
+        #: fichier : une numérisation déclarée à 96 DPI lui fait conclure une page
+        #: d'un mètre de large, et son analyse de page rend « Empty page!! ».
+        self._dpi = dpi
 
     @property
     def name(self) -> str:
@@ -104,6 +117,7 @@ class TesseractLayoutSegmenter:
             lang=self._lang,
             psm=self._psm,
             oem=self._oem,
+            dpi=self._dpi,
             timeout=timeout,
         )
         return layout_step_output(self._to_layout(alto), context, self.name)
