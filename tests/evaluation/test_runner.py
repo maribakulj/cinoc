@@ -11,7 +11,7 @@ from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.documents import DocumentRef, GroundTruthRef
 from cinoc.domain.evaluation import EvaluationSpec, EvaluationView
-from cinoc.domain.pipeline import PipelineSpec
+from cinoc.domain.pipeline import PipelineSpec, PipelineStep
 from cinoc.domain.run import RunManifest
 from cinoc.evaluation.errors import EvaluationError
 from cinoc.evaluation.registry import MetricRegistry, register_default_metrics
@@ -194,6 +194,121 @@ def test_candidate_precedence_prefers_corrected(tmp_path: Path) -> None:
         manifest=_manifest(1),
     )
     assert result.pipelines[0].aggregate[0].value == 0.0  # CORRECTED choisi
+
+
+def test_candidate_is_the_terminal_step_not_the_richest_type(tmp_path: Path) -> None:
+    """Une correction **suivie** d'une remise en ordre : c'est la sortie finale
+    qui est notée, pas l'intermédiaire corrigé.
+
+    Défaut réel : un pipeline ``…→ correction VLM → ordre de lecture →
+    projection`` publie un ``CORRECTED_TEXT`` au milieu et finit sur un
+    ``RAW_TEXT``. La précédence par type notait le texte **d'avant** la remise en
+    ordre — mêmes mots, mauvaise séquence.
+    """
+    gt = _write(tmp_path / "d.gt.txt", "alpha beta")
+    corrigé = _write(tmp_path / "d.corr.txt", "beta alpha")  # mots justes, désordre
+    final = _write(tmp_path / "d.raw.txt", "alpha beta")  # CER 0 si choisi
+    corpus = CorpusSpec(name="c", documents=(_doc("d", gt),))
+    view = EvaluationView(
+        name="multi",
+        candidate_types=frozenset({ArtifactType.RAW_TEXT, ArtifactType.CORRECTED_TEXT}),
+        metric_names=("cer",),
+    )
+    pipeline = PipelineSpec(
+        name="eng",
+        initial_inputs=(ArtifactType.IMAGE,),
+        steps=(
+            PipelineStep(
+                id="corr",
+                kind="correction",
+                adapter_name="llm:x",
+                input_types=(ArtifactType.RAW_TEXT,),
+                output_types=(ArtifactType.CORRECTED_TEXT,),
+            ),
+            PipelineStep(
+                id="txt",
+                kind="projection",
+                adapter_name="layout_to_text:x",
+                input_types=(ArtifactType.LAYOUT,),
+                output_types=(ArtifactType.RAW_TEXT,),
+            ),
+        ),
+    )
+    outputs = {
+        "eng": {
+            "d": {
+                ArtifactType.CORRECTED_TEXT: Artifact(
+                    id="d:corr:corrected_text",
+                    document_id="d",
+                    type=ArtifactType.CORRECTED_TEXT,
+                    uri=str(corrigé),
+                    produced_by_step="corr",
+                ),
+                ArtifactType.RAW_TEXT: Artifact(
+                    id="d:txt:raw_text",
+                    document_id="d",
+                    type=ArtifactType.RAW_TEXT,
+                    uri=str(final),
+                    produced_by_step="txt",
+                ),
+            }
+        }
+    }
+    manifest = RunManifest(
+        run_id="r",
+        corpus_name="c",
+        n_documents=1,
+        pipeline_specs=(pipeline,),
+        code_version="1.0",
+        started_at=FIXED,
+        completed_at=FIXED,
+    )
+    result = evaluate_run(
+        corpus=corpus,
+        evaluation=EvaluationSpec(views=(view,)),
+        pipeline_outputs=outputs,
+        registry=_registry(),
+        manifest=manifest,
+    )
+    # L'étape terminale est ``txt`` : c'est son RAW_TEXT qui est noté.
+    assert result.pipelines[0].aggregate[0].value == 0.0
+
+
+def test_candidate_falls_back_on_type_when_step_unknown(tmp_path: Path) -> None:
+    """Sans ``produced_by_step`` exploitable (fan-out, entrées initiales), la
+    précédence par type reste le repli — c'est le cas que verrouille le test
+    ``test_candidate_precedence_prefers_corrected``, conservé tel quel."""
+    gt = _write(tmp_path / "d.gt.txt", "alpha")
+    raw = _write(tmp_path / "d.raw.txt", "beta")
+    corrected = _write(tmp_path / "d.corr.txt", "alpha")
+    corpus = CorpusSpec(name="c", documents=(_doc("d", gt),))
+    view = EvaluationView(
+        name="multi",
+        candidate_types=frozenset({ArtifactType.RAW_TEXT, ArtifactType.CORRECTED_TEXT}),
+        metric_names=("cer",),
+    )
+    # Étape déclarée au manifeste, mais artefacts sans étape : aucun n'est datable.
+    outputs = {
+        "eng": {
+            "d": {
+                ArtifactType.RAW_TEXT: _candidate("d", raw),
+                ArtifactType.CORRECTED_TEXT: Artifact(
+                    id="d:llm:corrected_text",
+                    document_id="d",
+                    type=ArtifactType.CORRECTED_TEXT,
+                    uri=str(corrected),
+                ),
+            }
+        }
+    }
+    result = evaluate_run(
+        corpus=corpus,
+        evaluation=EvaluationSpec(views=(view,)),
+        pipeline_outputs=outputs,
+        registry=_registry(),
+        manifest=_manifest(1),
+    )
+    assert result.pipelines[0].aggregate[0].value == 0.0
 
 
 def test_cross_engine_significance_written(tmp_path: Path) -> None:
