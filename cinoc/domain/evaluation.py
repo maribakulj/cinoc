@@ -101,11 +101,24 @@ class EvaluationView(BaseModel):
 
 
 class EvaluationSpec(BaseModel):
-    """Container de N ``EvaluationView`` qu'un benchmark applique."""
+    """Container de N ``EvaluationView`` qu'un benchmark applique.
+
+    ``analyses`` déclare les **analyses** voulues, par leur ``kind`` — un
+    registre les résout, comme ``metric_names`` pour les métriques. ``None``
+    (défaut) les produit toutes ; un tuple restreint ; ``()`` n'en produit
+    aucune et ne garde que les métriques déclarées.
+
+    Ce n'est pas un réglage de confort. Les analyses sont **beaucoup** plus
+    chères que les métriques : sur un banc de 10 pipelines × 12 pages, six
+    métriques déclarées coûtent 90 secondes, et les analyses qui les
+    accompagnaient, non demandées, en coûtaient des heures — une fois par vue
+    texte, donc deux fois sur les mêmes textes.
+    """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     views: tuple[EvaluationView, ...] = Field(default_factory=tuple)
+    analyses: tuple[str, ...] | None = None
 
 
 __all__ = ["MetricSpec", "EvaluationView", "EvaluationSpec"]

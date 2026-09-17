@@ -20,7 +20,7 @@ from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.documents import DocumentRef, GroundTruthRef
 from cinoc.domain.evaluation import EvaluationSpec, EvaluationView
 from cinoc.domain.run import RunManifest
-from cinoc.evaluation._view_collectors import ViewCollectors
+from cinoc.evaluation._view_collectors import COLLECTEURS, ViewCollectors
 from cinoc.evaluation.calibration import calibration_analysis
 from cinoc.evaluation.conformity import conformity_analysis
 from cinoc.evaluation.context import CrossEngineContext, DocContext
@@ -65,6 +65,30 @@ _Series = dict[str, dict[str, list[MetricScore]]]
 _TEXT_LIKE = frozenset({ArtifactType.RAW_TEXT, ArtifactType.CORRECTED_TEXT})
 
 
+#: Les ``kind`` d'analyse que ce runner sait produire. Une spec qui en nomme un
+#: autre est refusée **au chargement** plutôt que de rendre un résultat
+#: silencieusement amputé — même contrat que ``metric_names`` face au registre.
+ANALYSES_CONNUES: frozenset[str] = frozenset(COLLECTEURS.values()) | frozenset(
+    {"calibration", "correction", "decisions", "economics", "hipe", "inference"}
+)
+
+
+def _analyses_actives(evaluation: EvaluationSpec) -> frozenset[str] | None:
+    """``None`` = toutes (défaut) ; sinon l'ensemble déclaré, validé."""
+    if evaluation.analyses is None:
+        return None
+    voulues = frozenset(evaluation.analyses)
+    inconnues = sorted(voulues - ANALYSES_CONNUES)
+    if inconnues:
+        raise EvaluationError(
+            "analyses inconnues : "
+            + ", ".join(repr(k) for k in inconnues)
+            + f" — connues : {', '.join(sorted(ANALYSES_CONNUES))}."
+        )
+    return voulues
+
+
+
 def evaluate_run(
     *,
     corpus: CorpusSpec,
@@ -85,10 +109,11 @@ def evaluate_run(
     documents: list[RunDocumentResult] = []
     cross_engine: list[MetricScore] = []
     analyses: list[Analysis] = []
+    actives = _analyses_actives(evaluation)
 
     for view in evaluation.views:
         series: _Series = {name: {} for name in view.metric_names}
-        collectors = ViewCollectors(view)
+        collectors = ViewCollectors(view, actives)
         for pipeline_name in pipeline_order:
             for name in view.metric_names:
                 series[name][pipeline_name] = []
@@ -129,7 +154,8 @@ def evaluate_run(
                 )
             )
         cross_engine.extend(_cross_engine_scores(view, series, registry))
-        analyses.extend(_inference_analyses(view, series))
+        if actives is None or "inference" in actives:
+            analyses.extend(_inference_analyses(view, series))
         analyses.extend(
             collectors.build(
                 view.name,
@@ -139,27 +165,37 @@ def evaluate_run(
         )
         # Analyses **autonomes** (≠ collecteurs) : elles lisent corpus /
         # pipeline_outputs / usage directement, hors du cycle observe→build.
-        calibration = calibration_analysis(view.name, corpus, pipeline_outputs)
+        calibration = None
+        if actives is None or "calibration" in actives:
+            calibration = calibration_analysis(view.name, corpus, pipeline_outputs)
         if calibration is not None:
             analyses.append(calibration)
-        if "cer" in view.metric_names:
+        if "cer" in view.metric_names and (actives is None or "economics" in actives):
             economics = economics_analysis(
                 view.name, "cer", series["cer"], usage, manifest
             )
             if economics is not None:
                 analyses.append(economics)
-        correction = correction_analysis(view, corpus, pipeline_outputs)
+        correction = None
+        if actives is None or "correction" in actives:
+            correction = correction_analysis(view, corpus, pipeline_outputs)
         if correction is not None:
             analyses.append(correction)
         # Ce qu'un correcteur a **refusé** de changer : invisible dans le texte
         # de sortie, donc invisible partout ailleurs.
-        decisions = decisions_analysis(view.name, pipeline_outputs)
+        decisions = None
+        if actives is None or "decisions" in actives:
+            decisions = decisions_analysis(view.name, pipeline_outputs)
         if decisions is not None:
             analyses.append(decisions)
 
     # Post-passe cross-vues : la conformité HIPE lit les résultats des vues
     # raw/hipe/heritage déjà calculés (zéro re-scoring) — cf. ``conformity``.
-    conformity = conformity_analysis(evaluation.views, pipelines, documents)
+    conformity = (
+        conformity_analysis(evaluation.views, pipelines, documents)
+        if actives is None or "hipe" in actives
+        else None
+    )
     if conformity is not None:
         analyses.append(conformity)
 
