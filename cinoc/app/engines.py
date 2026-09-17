@@ -284,6 +284,39 @@ def preprocess_status(*, has_module: ModuleProbe = _module_present) -> EngineSta
     )
 
 
+
+def third_party_statuses(
+    *, enabled: bool = True, entry_points_loader: object | None = None
+) -> tuple[EngineStatus, ...]:
+    """Les modules **tiers** installés, et pourquoi l'un d'eux ne marche pas.
+
+    Le catalogue ne montrait que le socle, parce qu'il est écrit à la main. Un
+    module tiers correctement installé restait donc invisible — et un module
+    **cassé** l'était doublement, ``discover_plugins`` se contentant de le
+    journaliser. Or c'est exactement ce qu'un utilisateur doit pouvoir voir :
+    « j'ai installé le paquet, pourquoi ma spec dit-elle *kind inconnu* ? »
+
+    ``enabled=False`` (mode public) rend un tuple vide, comme la découverte :
+    on ne révèle pas ce qui tourne sur un serveur exposé.
+    """
+    if not enabled:
+        return ()
+    from cinoc.app.modules.discovery import inspect_plugins  # noqa: PLC0415
+
+    return tuple(
+        EngineStatus(
+            kind=report.name,
+            label=report.source,
+            available=report.ok,
+            detail=(
+                "module tiers, prêt"
+                if report.ok
+                else f"module tiers inutilisable : {report.reason}"
+            ),
+        )
+        for report in inspect_plugins(entry_points_loader)  # type: ignore[arg-type]
+    )
+
 def segmenter_statuses(
     *, has_module: ModuleProbe = _module_present
 ) -> tuple[EngineStatus, ...]:
