@@ -6,7 +6,8 @@ payload ``diagnostics`` (``evaluation.analysis``). Heuristiques **maison**
 (PLAN_PARITE §5.8b : valeurs de test dérivées à la main).
 
 - **Confusions** : caractères substitués appariés positionnellement dans les
-  segments ``replace`` d'un alignement ``difflib`` — top par pipeline.
+  segments ``replace`` d'un alignement ``difflib`` **à deux niveaux** (mots
+  puis caractères — cf. ``char_confusions``) — top par pipeline.
 - **Pires lignes** : lignes appariées par index, CER par ligne
   (Levenshtein/longueur de référence) — top corpus, extraits verbatim tronqués.
 - **Documents difficiles** : CER moyen par document sur les pipelines scorés.
@@ -14,6 +15,7 @@ payload ``diagnostics`` (``evaluation.analysis``). Heuristiques **maison**
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from difflib import SequenceMatcher
@@ -35,19 +37,54 @@ _TOP_CONFUSIONS = 10
 _TOP_LINES = 5
 _TOP_DOCUMENTS = 5
 _EXCERPT = 160
+#: Empan maximal, en caractères, où l'appariement caractère à
+#: caractère garde un sens (cf. ``char_confusions``).
+_EMPAN_MAX = 2000
+
+#: Découpe en mots — le blanc est séparateur, pas jeton : inclure les
+#: blancs remettrait un élément ultra-répétitif dans l'alignement.
+_MOTS = re.compile(r"\S+")
 
 
 def char_confusions(reference: str, hypothesis: str) -> Counter[tuple[str, str]]:
-    """Paires (attendu → produit) des segments substitués, appariées par position."""
+    """Paires (attendu → produit) des segments substitués, appariées par position.
+
+    L'alignement se fait **en deux temps** : sur les mots, puis sur les
+    caractères à l'intérieur des seuls empans substitués. Aligner directement
+    les caractères d'une page entière dégénère en quadratique — une page de
+    presse a ~40 000 caractères pour moins de 100 symboles distincts, donc
+    ``SequenceMatcher`` compare chaque « e » à tous les autres (mesuré : 32 s
+    contre 0,13 s, paires de tête inchangées). Les mots, eux, sont assez variés
+    pour que les blocs communs se trouvent vite.
+
+    ``autojunk`` reste désactivé aux deux niveaux : il écarte les éléments
+    présents dans plus de 1 % d'une séquence longue, ce qui sur des caractères
+    revient à tous les écarter — et produit des paires identitaires (``e``→``e``)
+    dénuées de sens.
+    """
     pairs: Counter[tuple[str, str]] = Counter()
-    matcher = SequenceMatcher(a=reference, b=hypothesis, autojunk=False)
-    for op, a0, a1, b0, b1 in matcher.get_opcodes():
+    ref_mots = _MOTS.findall(reference)
+    hyp_mots = _MOTS.findall(hypothesis)
+    mots = SequenceMatcher(a=ref_mots, b=hyp_mots, autojunk=False)
+    for op, a0, a1, b0, b1 in mots.get_opcodes():
         if op != "replace":
             continue
-        for expected, observed in zip(
-            reference[a0:a1], hypothesis[b0:b1], strict=False
-        ):
-            pairs[(expected, observed)] += 1
+        attendu = " ".join(ref_mots[a0:a1])
+        produit = " ".join(hyp_mots[b0:b1])
+        # Au-delà de cet empan, les deux côtés ne se correspondent plus (texte
+        # réordonné, pas texte mal lu) : apparier leurs caractères n'aurait
+        # aucun sens, et ferait réapparaître le coût quadratique.
+        if max(len(attendu), len(produit)) > _EMPAN_MAX:
+            continue
+        for sous_op, x0, x1, y0, y1 in SequenceMatcher(
+            a=attendu, b=produit, autojunk=False
+        ).get_opcodes():
+            if sous_op != "replace":
+                continue
+            for expected, observed in zip(
+                attendu[x0:x1], produit[y0:y1], strict=False
+            ):
+                pairs[(expected, observed)] += 1
     return pairs
 
 
