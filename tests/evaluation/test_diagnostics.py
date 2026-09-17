@@ -6,6 +6,9 @@ attendue est calculée sur papier, jamais générée en exécutant la source.
 
 from __future__ import annotations
 
+import time
+from collections import Counter
+
 import pytest
 
 from cinoc.evaluation.context import DocContext
@@ -81,6 +84,32 @@ def test_char_confusions_pairs_replaced_segment_positionally() -> None:
     # « rn » lu « m » n'est pas positionnel ; ici cas simple : e→o deux fois.
     pairs = char_confusions("le chevre", "lo chovre")
     assert pairs[("e", "o")] == 2
+
+
+def test_char_confusions_ignores_reordered_spans() -> None:
+    # Deux textes sans mot commun : rien ne se correspond, donc aucune paire.
+    # (Empan au-delà de ``_EMPAN_MAX`` : apparier ces caractères n'aurait pas
+    # de sens et ferait réapparaître le coût quadratique.)
+    gauche = " ".join(f"alpha{i}" for i in range(400))
+    droite = " ".join(f"zeta{i}" for i in range(400))
+    assert char_confusions(gauche, droite) == Counter()
+
+
+def test_char_confusions_tient_sur_une_page_entiere() -> None:
+    """Garde-fou de complexité : l'alignement est fait sur les mots, pas sur
+    les caractères. À granularité caractère, une page de presse (~40 000
+    caractères, <100 symboles distincts) prenait ~30 s ; ce test la borne.
+    """
+    mots = [f"mot{i:05d}" for i in range(6000)]
+    reference = " ".join(mots)
+    # Une césure typographique mal rendue, une fois sur dix.
+    hypothese = " ".join(m.replace("0", "O") if i % 10 == 0 else m
+                         for i, m in enumerate(mots))
+    assert len(reference) > 40_000
+    depart = time.perf_counter()
+    pairs = char_confusions(reference, hypothese)
+    assert time.perf_counter() - depart < 5.0
+    assert pairs[("0", "O")] > 0
 
 
 def test_line_cers_hand_computed() -> None:
