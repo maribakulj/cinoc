@@ -57,6 +57,15 @@ FILE_BUDGETS: dict[str, int] = {
     # grandit d'un graphe à la fois (axe 2). Budget re-basé au courant (703 LOC)
     # + ~15 %.
     "reports/svg.py": 810,
+    # Catalogue des briques (couche 6) : **un builder par ``kind``**, chacun
+    # court et indépendant — il traduit des ``adapter_kwargs`` en module et
+    # refuse ce qui manque. C'est une table, pas un algorithme : l'éclater par
+    # famille ajouterait de l'indirection sans rien rendre plus lisible, et
+    # CLAUDE.md §5.2 tranche dans ce sens (« un fichier cohérent plutôt qu'une
+    # floraison de petits modules éclatés »). Il grandit **par construction**
+    # d'une brique à la fois (axe 2) — ``cli_layout`` puis ``ocrd`` l'ont fait
+    # franchir le seuil. Budget re-basé au courant (613 LOC) + ~15 %.
+    "app/modules/registry.py": 705,
 }
 
 
