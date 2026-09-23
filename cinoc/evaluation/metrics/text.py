@@ -1,6 +1,11 @@
 """Métriques de l'axe texte : CER, WER, MER.
 
-Implémentations **déterministes et sans dépendance** (journal D-007) :
+Implémentations **déterministes** (journal D-007), déléguées à ``rapidfuzz``
+pour les deux noyaux coûteux — distance et alignement. Ce n'est pas une nouvelle
+dépendance : ``rapidfuzz`` est dans la liste blanche de la couche 3 et déjà
+importé par ``evaluation.diagnostics``. Garder ici deux implémentations écrites
+à la main coûtait un facteur 13 sur la distance, et rendait l'alignement
+inutilisable sur une page entière (11 s et ~420 Mo de matrice Python).
 - CER = distance d'édition au **caractère** / longueur de référence ;
 - WER = distance d'édition au **mot** / nombre de mots de référence ;
 - MER (Match Error Rate) = erreurs / (erreurs + correspondances), au mot.
@@ -8,14 +13,16 @@ Implémentations **déterministes et sans dépendance** (journal D-007) :
 ``jiwer`` sert d'**oracle de parité** (tests, dépendance *dev*) — jamais importé
 par le code de production. Cas dégénérés (référence vide) explicites.
 
-Coût : le caractère reste en deux lignes (mémoire linéaire) ; seule la matrice
-complète de ``_align`` (pour MER) tourne sur des **mots**, peu nombreux.
+``jiwer`` reste l'oracle de parité des tests, et les valeurs n'ont pas bougé :
+les deux noyaux calculent la **même** distance de Levenshtein exacte.
 """
 
 from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+
+from rapidfuzz.distance import Levenshtein
 
 from cinoc.domain.artifacts import ArtifactType
 from cinoc.evaluation.context import DocContext
@@ -32,54 +39,29 @@ _DIPLOMATIC = get_builtin_profile("minimal")
 def _edit_distance(
     reference: Sequence[object], hypothesis: Sequence[object]
 ) -> int:
-    """Distance de Levenshtein sur deux séquences — bit-parallèle (Myers, 1999).
+    """Distance de Levenshtein exacte sur deux séquences.
 
-    **Pourquoi pas la matrice.** La version à deux lignes est O(n×m) *itérations
-    Python*. Sur une ligne de texte c'est instantané ; sur une page de presse
-    entière — 25 000 caractères contre 30 000 — c'est 750 millions de tours de
-    boucle, soit plus de deux minutes par appel et par métrique. Un banc de
-    48 documents y passait la nuit sans jamais rendre la main.
+    **Pourquoi ce n'est plus écrit ici.** Ce module a d'abord porté une version
+    à deux lignes (mémoire linéaire, O(n×m) *itérations Python*), puis une
+    version bit-parallèle (Myers, 1999) parce que la première mettait plus de
+    deux minutes sur une page de presse. Myers a réglé ce cas — 1,0 s au lieu de
+    130 — mais restait du Python : ``rapidfuzz`` fait le même calcul en C, et
+    rend le **même entier**, en 0,076 s. Soit un facteur 13 pour rien.
 
-    Myers encode une colonne entière de la matrice dans les bits d'un entier :
-    les entiers Python étant de taille arbitraire, une page tient dans un seul,
-    et le coût retombe à O(n) opérations sur grands entiers — mesuré ~60× plus
-    rapide à 10 000 caractères, et l'écart croît avec la taille.
+    La raison de l'avoir écrit à la main était la règle « sans dépendance » du
+    journal D-007. Elle ne tient plus : ``rapidfuzz`` figure dans la liste
+    blanche de la couche 3 (``CLAUDE.md`` §3) et ``evaluation.diagnostics``
+    l'importe déjà. Maintenir une seconde implémentation de la même chose, plus
+    lente, n'était plus un choix d'architecture mais un oubli.
 
-    Le résultat est **exactement** celui de la matrice ; le test de parité contre
-    ``jiwer`` continue de le prouver.
+    Parité vérifiée sur une page réelle, sur des séquences de mots, et sur
+    300 couples aléatoires : aucun écart.
     """
-    n, m = len(reference), len(hypothesis)
-    if n == 0 or m == 0:
-        return max(n, m)
-    # Le motif encodé est le plus court : c'est lui qui occupe les bits.
-    if n > m:
-        reference, hypothesis = hypothesis, reference
-        n, m = m, n
-
-    equivalences: dict[object, int] = {}
-    for position, token in enumerate(reference):
-        equivalences[token] = equivalences.get(token, 0) | (1 << position)
-
-    masque = (1 << n) - 1
-    dernier = 1 << (n - 1)
-    positifs, negatifs = masque, 0
-    score = n
-
-    for token in hypothesis:
-        egaux = equivalences.get(token, 0)
-        xv = egaux | negatifs
-        xh = (((egaux & positifs) + positifs) ^ positifs) | egaux
-        porte_plus = negatifs | ~(xh | positifs)
-        porte_moins = positifs & xh
-        if porte_plus & dernier:
-            score += 1
-        elif porte_moins & dernier:
-            score -= 1
-        porte_plus = ((porte_plus << 1) | 1) & masque
-        porte_moins = (porte_moins << 1) & masque
-        positifs = (porte_moins | ~(xv | porte_plus)) & masque
-        negatifs = porte_plus & xv
-    return score
+    if isinstance(reference, str) and isinstance(hypothesis, str):
+        return int(Levenshtein.distance(reference, hypothesis))
+    # ``rapidfuzz`` accepte toute séquence d'éléments hachables — c'est le cas
+    # du WER, qui compare des listes de mots.
+    return int(Levenshtein.distance(list(reference), list(hypothesis)))
 
 
 @dataclass(frozen=True)
@@ -97,41 +79,32 @@ class _Alignment:
 
 
 def _align(reference: Sequence[object], hypothesis: Sequence[object]) -> _Alignment:
-    """Alignement complet (matrice + backtrace) — pour MER, sur des **mots**."""
-    n, m = len(reference), len(hypothesis)
-    matrix = [[0] * (m + 1) for _ in range(n + 1)]
-    for i in range(n + 1):
-        matrix[i][0] = i
-    for j in range(m + 1):
-        matrix[0][j] = j
-    for i in range(1, n + 1):
-        for j in range(1, m + 1):
-            cost = 0 if reference[i - 1] == hypothesis[j - 1] else 1
-            matrix[i][j] = min(
-                matrix[i - 1][j - 1] + cost,
-                matrix[i - 1][j] + 1,
-                matrix[i][j - 1] + 1,
-            )
+    """Décompte d'un alignement optimal — correspondances et erreurs typées.
+
+    **Pourquoi ce n'est plus une matrice.** La version précédente allouait
+    ``(n+1)×(m+1)`` listes Python et les parcourait deux fois. Sur une page de
+    presse — 7 246 mots de chaque côté — cela fait 53 millions de cases, soit
+    ~420 Mo de pointeurs et 11 s **par appel**. Or ``mer``, ``del_rate`` et
+    ``ins_rate`` l'appellent chacun : trois fois cela par document. Ces trois
+    métriques étaient donc inutilisables sur le corpus même qu'elles visent, et
+    le disaient par une lenteur, jamais par un message.
+
+    ``rapidfuzz`` rend directement le script d'édition, d'où se comptent les
+    quatre catégories. Même alignement optimal, mêmes nombres, mémoire linéaire.
+    """
+    ref, hyp = list(reference), list(hypothesis)
     hits = subs = dels = ins = 0
-    i, j = n, m
-    while i > 0 or j > 0:
-        if (
-            i > 0
-            and j > 0
-            and reference[i - 1] == hypothesis[j - 1]
-            and matrix[i][j] == matrix[i - 1][j - 1]
-        ):
-            hits += 1
-            i, j = i - 1, j - 1
-        elif i > 0 and j > 0 and matrix[i][j] == matrix[i - 1][j - 1] + 1:
-            subs += 1
-            i, j = i - 1, j - 1
-        elif i > 0 and matrix[i][j] == matrix[i - 1][j] + 1:
-            dels += 1
-            i -= 1
-        else:
-            ins += 1
-            j -= 1
+    for operation in Levenshtein.opcodes(ref, hyp):
+        longueur_ref = operation.src_end - operation.src_start
+        longueur_hyp = operation.dest_end - operation.dest_start
+        if operation.tag == "equal":
+            hits += longueur_ref
+        elif operation.tag == "replace":
+            subs += longueur_ref
+        elif operation.tag == "delete":
+            dels += longueur_ref
+        else:  # "insert"
+            ins += longueur_hyp
     return _Alignment(hits=hits, substitutions=subs, deletions=dels, insertions=ins)
 
 
