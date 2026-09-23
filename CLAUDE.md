@@ -29,20 +29,26 @@ avant d'écrire la moindre ligne.**
 - **Le plan qu'exécutent les sessions est [`PLAN_FIN_MIGRATION.md`](PLAN_FIN_MIGRATION.md)**
   (P0→P5), pas les axes `T#`/`S#` : ceux-ci décrivent comment on est arrivé là.
   **Étapes 1→4 + P0→P3 livrées.**
-- **Prochaine étape = P5b** — garder ce qu'un run produit (le workspace est
-  aujourd'hui effacé à la sortie), puis calculer une analyse au clic dans la
-  saveur servie. **P5a est close** : douze items fusionnés, le treizième fermé
-  sur sa mesure (3,7 % réels contre 38 % annoncés). Les défauts qui produisaient
-  de faux classements sont corrigés, donc **le blocage du tag est levé**. Vient
-  ensuite **P5** (release, puis gel de Picarones — ce dernier différé à la
-  demande de l'utilisateur). Le seul reste de **P4** est la *saveur servie*, que
-  le plan déclare pouvoir suivre la 1.0. Aucun tag `git` n'existe encore : la
-  version est le repli `setuptools_scm`.
+- **Prochaine étape = P5c** — *joignabilité* : toute route déclarée est
+  atteignable depuis la page, ou le dit. Née d'un audit des routes de l'app :
+  celles des **recettes** ont zéro appel dans le front alors que le garde-fou de
+  parité les donne vertes — il vérifie route ⇄ CLI, pas route ⇄ page. La phase
+  ferme d'abord la **classe** (troisième clause du garde-fou), puis les cas.
+  **P5a est close** : douze items fusionnés, le treizième fermé sur sa mesure
+  (3,7 % réels contre 38 % annoncés) ; les défauts qui produisaient de faux
+  classements sont corrigés, donc **le blocage du tag est levé**. **P5b** —
+  calcul d'une analyse à la demande — reste **suspendue** à un arbitrage de
+  produit non rendu, d'où l'ordre P5c puis P5b. Vient ensuite **P5** (release,
+  puis gel de Picarones — ce dernier différé à la demande de l'utilisateur).
+  Ni P5b ni P5c ne bloquent le tag. Aucun tag `git` n'existe encore : la version
+  est le repli `setuptools_scm`.
 - **Un axe hors numérotation P#, livré en août 2026 : la post-correction
   structurée** (`ALTO → ALTO` via `saknussemm`, commande `cinoc correct`).
-  Il est **complet côté bibliothèque et CLI**, et **absent de l'app web** — c'est
-  un arbitrage à rendre avant la 1.0, pas un oubli. Voir le roll-up §« Axe
-  correction structurée ».
+  L'arbitrage qu'il portait **est rendu** : il a sa surface web depuis D-229
+  (`POST /api/runs/correction` + section au composeur). Ce paragraphe a annoncé
+  « absent de l'app web » bien après la livraison — c'est l'exemplaire le plus
+  net du statut recopié qui pourrit, et dans le sens rassurant. Voir le roll-up
+  §« Axe correction structurée ».
 - **Garde-fous d'archi actifs** : `tests/architecture/` —
   `layer_dependencies`, `no_legacy_imports`, `no_side_effect_imports`,
   `file_budgets`, `no_broad_except`, `single_version_source`, `status_freshness`.
@@ -331,9 +337,9 @@ couche 3), DTO web (transport → couche 8).
 4. Workflows CLI pré-câblés (`diagnose`/`economics`/`edition`). → **pas de
    *lentille d'analyse* en commande** : une commande qui fige *une façon de lire
    les résultats* est interdite ; le rapport porte toutes les lectures.
-   **Amendé (D-224)** — la règle disait « seulement
+   **Amendé (D-224, étendu D-257)** — la règle disait « seulement
    `run`/`report`/`compare`/`demo`/`serve` », et ce compte a été lu comme un
-   plafond de commandes alors qu'il visait les lentilles. Deux clauses la
+   plafond de commandes alors qu'il visait les lentilles. Trois clauses la
    remplacent :
    - **Une *capacité* offerte par le web l'est aussi par la CLI.** Une capacité
      (importer un corpus, connaître les moteurs disponibles, exporter un ALTO)
@@ -346,6 +352,15 @@ couche 3), DTO web (transport → couche 8).
      déjà. S'il manque quelque chose en `app`, on l'y met et le web l'utilise
      aussi — jamais une seconde implémentation côté CLI. C'est la clause
      anti-doublon ; elle prime sur le confort d'écrire vite.
+   - **Une route déclarée est atteignable depuis la page, ou elle le dit.**
+     Les deux clauses ci-dessus regardent route ⇄ CLI ; aucune ne regardait
+     route ⇄ page, et une capacité entière — les **recettes** — est passée par
+     ce trou : livrée en `app`, au routeur, en CLI, testée, et jamais appelée
+     par le front. Toute route `/api/*` est donc soit appelée par la page, soit
+     déclarée `front-absent: <raison>`, soit une dette datée. Symétriquement,
+     une capacité de couche `app` sans **aucune** des deux faces n'est pas dans
+     le produit : elle en sort, ou elle en reçoit une. Garde-fou à écrire —
+     c'est l'item 1 de **P5c**.
    Regrouper reste la règle : `corpus`/`list` (capacités) plutôt qu'un verbe par
    source ou par catalogue.
 5. Sécurité web éclatée en 7 modules `security_*`. → un package `security/`.

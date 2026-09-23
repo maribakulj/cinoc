@@ -61,7 +61,9 @@ Seules **les strates** manquaient d'un champ ; c'est l'objet de la Phase 0.
 | **P3 — Dataset de référence curé** (le neuf, **UN seul**) | spec de standardisation (alignée P0) · **un** corpus libre de droits, GT riche (texte + layout + entités) + métadonnée strate + **IIIF statique** (manifestes + vignettes) · importeur (SHA → `RunManifest`). **Preuve que la chaîne tient et qu'elle est extensible** ; d'autres datasets = incrémental post-v1. | P0 ; conception ⇄ P2 (schéma GT) | **neuf** |
 | **P4 — Saveurs & échelle** | saveur **réfs IIIF** (URLs du dataset P3) · saveur **servie** (app web : galerie paginée, images à la demande, échelle 5000). *(dossier déjà en P1.)* | P1, P3 | partiel neuf |
 | **P5a — Dette révélée par l'usage** | sept défauts trouvés par le premier banc de presse multi-colonnes ; onze PR ordonnées en quatre groupes. Une seule brique neuve : l'appariement géométrique des régions, qui débloque l'OLR inter-systèmes. | P2 (métriques layout) | correctif |
-| **P5 — Release 1.0 + gel Picarones** | checklist · tag · README/CHANGELOG · gel. | tout, **dont P5a** | — |
+| **P5b — Persistance et calcul à la demande** | garder ce qu'un run a produit (fait), puis calculer une analyse au clic dans la saveur servie. **Suspendue** à un arbitrage de produit : le manifeste porte-t-il la liste des documents, ou le serveur retient-il l'association run ⇄ spec. | P5a | neuf |
+| **P5c — Joignabilité** | ce qui est construit doit être atteignable. Une capacité entière — les recettes — livrée en `app`, en routeur, en CLI, testée… et jamais appelée par la page. Le garde-fou de parité était vert : il ne regarde pas dans ce sens. La phase ferme la **classe** avant d'en réparer les cas. | P5a | correctif + surface |
+| **P5 — Release 1.0 + gel Picarones** | checklist · tag · README/CHANGELOG · gel. | tout, **dont P5a** ; P5b et P5c ne bloquent pas le tag | — |
 
 **Intégration métriques ⇄ dataset** (le point clé) : P2 et P3 se renforcent. Le
 dataset **donne aux métriques leur vérité-terrain** (layout→région/structure ;
@@ -371,6 +373,11 @@ exécutée.
 > coup**, sans relancer un banc entier ? La réponse actuelle — relancer avec
 > `--analyses toutes`, la reprise rendant l'exécution gratuite — fonctionne mais
 > reste grossière : tout ou rien, et en ligne de commande.
+>
+> **Suspendue, et doublée par P5c.** L'obstacle décrit plus bas est un arbitrage
+> de produit non rendu, pas un développement en attente. Tant qu'il ne l'est
+> pas, **P5c passe devant** : elle ne demande aucune décision de ce genre et
+> rend joignable du code déjà écrit.
 
 | # | Contenu | Dépend de |
 |---|---|---|
@@ -409,6 +416,103 @@ C'est le troisième item de suite dont la mesure préalable change la nature —
 après l'item 11 (fermé à 3,7 % au lieu de 38 %) et l'item 13 (une ligne de
 décision produit valant mieux que trois jours d'optimisation). **Chercher avant
 d'écrire a évité un développement entier.**
+
+---
+
+## Étape 4quater / **P5c** — Joignabilité : ce qui est construit doit être atteignable
+
+> **Pourquoi cette phase existe.** Un audit des trente et une routes de l'app a
+> trouvé une capacité complète — les **recettes** — livrée en couche `app`,
+> livrée au routeur, livrée en CLI, testée, documentée… et **jamais appelée par
+> la page**. Le garde-fou de parité était vert, et à bon droit : il vérifie
+> route ⇄ commande CLI, et rien ne vérifiait route ⇄ page. Ce n'est pas un oubli
+> isolé : c'est une **classe** de défaut, que cette phase ferme avant d'en
+> réparer les cas.
+
+### Ce que l'audit a mesuré
+
+| Route | Statut au garde-fou | Appels depuis la page |
+|---|---|---|
+| `GET /api/recipes` | `cli:list` ✅ | **0** |
+| `POST /api/runs/recipe` | `cli:run` ✅ | **0** |
+| `POST /api/runs/spec` | `cli:run` ✅ | **0** |
+
+Pour comparaison, les routes réellement branchées : `/api/runs` (7 occurrences),
+`/api/models/` (3), `/api/corpus` (3), `/api/runs/config` (2), puis
+`/api/normalization/preview`, `/api/runs/correction`, `/api/segmentation/run` et
+`/api/segmentation/preview` (une chacune). Le front construisant certaines URL
+par concaténation, l'inventaire des `fetch()` a été relu un par un : aucun ne
+vise une recette.
+
+**Un second cas, d'une autre nature.** `standardize_corpus`
+(`app/dataset_standardize.py`, D-202) — le producteur de dataset curé, sept
+tests, vérifié sur dix pages réelles du Dresdner Hofdiarium — n'a **ni commande
+CLI ni route web**. Il est seul dans ce cas parmi les 84 fonctions publiques de
+`app/`. D-205 le disait sans le nommer : la preuve de bout en bout a tourné par
+un « script de preuve (scratchpad, non committé) ». Le garde-fou ne peut pas le
+voir non plus — il n'audite que ce qui possède déjà **une** des deux faces.
+
+**Deux fausses pistes écartées en vérifiant.** Les cinq importeurs de corpus
+sont joignables : la page les câble par `data-import-source`, pas par
+`data-source`. Et dix des onze fonctions `app/` sans appelant externe sont
+appelées **à l'intérieur de leur propre module** — un premier scan qui excluait
+le fichier de définition les avait fait passer pour orphelines.
+
+### Ce que cela coûte à l'utilisateur
+
+Un utilisateur du web dispose de **quatre formes** de pipeline ; le graphe en
+admet des centaines, et la CLI les atteint toutes. Les recettes étaient
+précisément la **troisième voie** conçue par D-239 contre ce déséquilibre —
+« une forme éprouvée, nommée par son intention, dont l'utilisateur ne remplit
+que les briques ». Elle existe, elle est correcte, elle n'a jamais été offerte.
+
+Conséquence concrète, vécue au premier banc de presse ancienne : le défaut de
+page blanche se contournait par `--dpi 300`, et **aucun réglage d'adapter n'est
+atteignable depuis le web** — ni `dpi`, ni `psm`, ni `timeout`, ni `oem`.
+`RecipeRequest` accepte `choices` (quelle brique pour quelle étape) mais pas
+`params`. Un utilisateur du web qui rencontre ce défaut n'a donc aucun recours,
+alors même que le correctif tient en un entier.
+
+### L'enchaînement, dans l'ordre de fusion
+
+| # | Contenu | Dépend de |
+|---|---|---|
+| **1** | **La troisième clause du garde-fou de parité.** Toute route `/api/*` est soit appelée par le front, soit déclarée `front-absent: <raison>`, soit une `dette:<id>` avec son échéance — exactement la forme des deux clauses existantes. Écrite **en premier** parce qu'elle transforme le reste de la phase en CI rouge plutôt qu'en bonnes intentions : les trois routes de recette rougissent aussitôt et s'inscrivent en dettes datées. | — |
+| **2** | **Brancher les recettes dans la page.** `GET /api/recipes` peuple un catalogue (titre + description, déjà bilingues) ; lancer appelle `POST /api/runs/recipe` avec les briques choisies. Le lanceur, le suivi SSE et l'affichage du rapport existent — c'est le chemin du bouton « lancer » actuel. Ferme deux des trois dettes. | 1 |
+| **3** | **Ouvrir `params` à la requête de recette.** `plan_from_recipe` accepte déjà `params` ; seule la frontière HTTP les refuse. Rend `dpi`/`psm`/`timeout` atteignables sans inventer de surface : un réglage par étape, validé par le rôle. | 2 |
+| **4** | **Trancher la porte « spec complète ».** `POST /api/runs/spec` est documentée comme « la porte qui donne au web l'intégralité du graphe sans une case de plus ». Soit on lui donne une zone de dépôt (un fichier YAML/JSON glissé, le corpus restant celui du serveur), soit on acte qu'elle est réservée aux clients programmatiques et on l'inscrit `front-absent`. Les deux sont défendables ; ce qui ne l'est pas, c'est le silence. Ferme la troisième dette. | 1 |
+| **5** | **Les recettes manquantes — de la donnée, pas du code.** Cinq recettes existent (`ocr_simple`, `ocr_puis_llm`, `alto_corrige`, `presse_ancienne`, `vote_trois_moteurs`). Manquent au moins la chaîne de segmentation → reconnaissance par région → projection telle que la presse ancienne la demande réellement, et une forme avec préprocessing. Ajouter une recette est un fichier YAML validé au chargement. | 3 |
+| **6** | **`standardize_corpus` : une face ou l'autre.** Soit une sous-commande `cinoc corpus standardize` (et son pendant web, que la clause de parité imposera), soit l'inscription explicite qu'il s'agit d'un producteur interne au dépôt, hors produit. Le tenir livré-mais-injoignable est le seul état à exclure. | 1 |
+| **7** | **Le composeur contraint.** Dernier parce qu'il n'est que l'éditeur de ce que 2→5 rendent réel. `roles()` porte déjà la signature typée de chaque rôle : à partir d'un ensemble de types disponibles, les rôles proposables sont ceux dont les `entrees` y sont contenues. L'UI devient une liste d'étapes et un menu **qui ne contient que ce qui peut se brancher** — pas un canevas de nœuds, où rien n'empêche de relier une sortie texte à une entrée image. Sa sortie naturelle est un YAML de recette : de la donnée, versionnable, relançable en CLI, qui alimente le catalogue au lieu de mourir dans un formulaire. | 5 |
+
+### Pourquoi P5c passe avant P5b
+
+P5b est **suspendue à un arbitrage de produit** non rendu : pour recalculer une
+analyse, il faut retrouver les unités d'un run, donc soit inscrire la liste des
+documents au manifeste — un `RunResult` devient autosuffisant, au prix de
+chemins locaux dans un fichier destiné au partage — soit faire retenir
+l'association run ⇄ spec au serveur, plus léger mais inopérant dès que le
+rapport voyage. P5c ne dépend d'aucune décision de ce genre : son item 1 tient
+en une dizaine de lignes dans un fichier qui fait déjà ce travail dans les deux
+autres sens, et ses items 2 et 3 branchent du code déjà écrit et déjà testé.
+**Rendre joignable ce qui existe passe avant construire ce qui n'existe pas.**
+
+### Ce que P5c ne contient pas
+
+Aucune brique de pipeline, aucune métrique, aucune section de rapport. Une seule
+surface nouvelle — le composeur de l'item 7 — et elle n'ajoute aucune capacité :
+elle rend atteignable la capacité que les rôles portent déjà. Le reste est du
+câblage et un garde-fou.
+
+### Ce que l'audit a corrigé au passage
+
+Deux endroits affirmaient que la post-correction structurée n'a pas de surface
+web : `CLAUDE.md` §0 et la ligne « couche 8 » du roll-up. C'est faux depuis
+D-229 — le bouton `correct-launch` existe, `benchmark.js` appelle
+`/api/runs/correction`, et la checklist de ce plan le coche. Les deux sont
+réconciliés dans le même commit que cette phase. La leçon rejoint celle de la
+checklist « 1.0 prête » : un statut recopié pourrit, et celui-ci a pourri dans
+le sens rassurant — il annonçait un manque là où il y avait une livraison.
 
 ---
 
@@ -462,7 +566,8 @@ d'écrire a évité un développement entier.**
 - [x] **Parité web ⇄ CLI ✅ (D-224→D-227)** : toute *capacité* du web l'est aussi en ligne de commande — acquisition de corpus (`cinoc corpus`), introspection (`cinoc list`), validation à blanc, export ALTO, segmentation seule. Les 26 routes sont couvertes ou justifiées `transport`, verrouillé par `tests/guardrails/test_web_cli_parity.py` ; `CLAUDE.md` §8.4 amendé en conséquence. **`examples/config.yaml`** livré, exécutable sans moteur.
 - [x] **Arbitrage rendu ✅ (D-229)** : la correction structurée est **livrée au web** (`POST /api/runs/correction` + section au composeur), et non actée comme outil de ligne de commande — le gel de Picarones ferme la fenêtre, et une capacité qu'on ne peut lancer que par un terminal n'est pas dans le produit. Le lanceur **refuse** un corpus dont la vérité terrain est extraite de son propre ALTO (zéro tautologique). `README` à jour.
 - [x] **P5a — dette révélée par l'usage réel ✅** : 12 items fusionnés (#127→#133, #135→#139) ; l'item 13 — la déduplication entre vues — **fermé sur sa mesure** : 3,7 % réels contre 38 % annoncés, pour une complexité ajoutée au runner. Les cinq défauts qui faussaient des résultats sont corrigés. **Le blocage du tag est levé.**
-- [ ] **P5b — persistance et calcul à la demande** : garder ce qu'un run a produit, puis calculer une analyse au clic dans la saveur servie. Né de #139. **Ne bloque pas le tag.**
+- [ ] **P5c — joignabilité** : toute route déclarée est atteignable depuis la page, ou le dit. Né d'un audit des 31 routes — trois d'entre elles, celles des **recettes**, ont zéro appel dans le front alors que le garde-fou de parité les donne vertes. Ferme la classe (troisième clause du garde-fou), puis les cas : recettes branchées, `params` ouverts, porte « spec complète » tranchée, `standardize_corpus` doté d'une face, composeur contraint. **Ne bloque pas le tag ; passe avant P5b**, qui est suspendue à un arbitrage.
+- [ ] **P5b — persistance et calcul à la demande** : garder ce qu'un run a produit (**fait**, `RunManifest.artifacts_dir`), puis calculer une analyse au clic dans la saveur servie. Né de #139. **Ne bloque pas le tag** — et reste **suspendue** tant que l'arbitrage manifeste-porte-les-documents ⇄ serveur-retient-la-spec n'est pas rendu.
 - [ ] **Tag `v1.0.0`** — *à poser par le mainteneur, quand il le décide*. Le blocage posé par P5a est **levé** : les défauts qui produisaient de faux classements sont corrigés et fusionnés. Un tag posé le 2026-09-10 l'a été **sans son accord** et a été supprimé (D-232) : le dépôt ne porte aucun tag, la version reste le repli `setuptools_scm`. Le reste de la checklist étant vert, la 1.0 est **prête techniquement** — publier reste une décision, pas une étape.
 - [ ] Gel de Picarones (5b) — **différé à la demande de l'utilisateur**, hors du chemin de la 1.0. Rien n'en dépend : le périmètre gardé est **entièrement** dans Cinoc, c'est la condition que le gel attendait.
 
