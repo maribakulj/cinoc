@@ -29,10 +29,14 @@ avant d'écrire la moindre ligne.**
 - **Le plan qu'exécutent les sessions est [`PLAN_FIN_MIGRATION.md`](PLAN_FIN_MIGRATION.md)**
   (P0→P5), pas les axes `T#`/`S#` : ceux-ci décrivent comment on est arrivé là.
   **Étapes 1→4 + P0→P3 livrées.**
-- **Prochaine étape = P5** (release `1.0.0` puis gel de Picarones). Le seul reste
-  de **P4** est la *saveur servie* (galerie paginée à l'échelle de milliers de
-  pages) que le plan lui-même déclare pouvoir suivre la 1.0. Aucun tag `git`
-  n'existe encore : la version est le repli `setuptools_scm`.
+- **Prochaine étape = P5a** — la dette que le premier banc de presse ancienne
+  multi-colonnes a révélée. Sept défauts, dont cinq faussent des résultats ;
+  onze PR ordonnées dans `PLAN_FIN_MIGRATION.md`. **Elle bloque le tag `v1.0.0`** :
+  la checklist « 1.0 prête » avait verdi sur des corpus à un bloc de texte par
+  page, et ne pouvait donc pas voir ces défauts-là. Vient ensuite **P5**
+  (release puis gel de Picarones). Le seul reste de **P4** est la *saveur
+  servie*, que le plan déclare pouvoir suivre la 1.0. Aucun tag `git` n'existe
+  encore : la version est le repli `setuptools_scm`.
 - **Un axe hors numérotation P#, livré en août 2026 : la post-correction
   structurée** (`ALTO → ALTO` via `saknussemm`, commande `cinoc correct`).
   Il est **complet côté bibliothèque et CLI**, et **absent de l'app web** — c'est
