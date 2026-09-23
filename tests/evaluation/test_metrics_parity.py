@@ -66,3 +66,41 @@ def test_la_distance_tient_sur_une_page_entiere() -> None:
     # une suppression en tête, une substitution en queue
     autre = base[1:-1] + "Z"
     assert _edit_distance(base, autre) == 2
+
+
+def test_l_alignement_tient_sur_une_page_entiere() -> None:
+    """Garde-fou de complexité pour ``mer``/``del_rate``/``ins_rate``.
+
+    L'alignement passait par une matrice ``(n+1)×(m+1)`` de listes Python. Sur
+    une page de presse — ~7 000 mots de chaque côté — cela fait 53 millions de
+    cases, soit ~420 Mo de pointeurs et 11 s **par appel**, et les trois
+    métriques l'appellent chacune. Elles étaient donc inutilisables sur le
+    corpus même qu'elles visent, sans que rien ne le dise.
+    """
+    import time
+
+    from cinoc.evaluation.metrics.text import mer
+
+    mots = [f"mot{i:05d}" for i in range(7000)]
+    reference = " ".join(mots)
+    hypothese = " ".join(
+        m.replace("0", "O") if i % 10 == 0 else m for i, m in enumerate(mots)
+    )
+    depart = time.perf_counter()
+    observation = mer.fn(_ctx(reference, hypothese))
+    assert time.perf_counter() - depart < 5.0
+    assert observation is not None
+    assert 0.0 < observation.value < 1.0
+
+
+def test_les_quatre_categories_somment_a_la_reference() -> None:
+    """Invariant d'un alignement : ``hits + subs + dels`` couvre la référence,
+    et ``hits + subs + ins`` couvre l'hypothèse. Un décompte qui dérive se voit
+    ici avant de fausser MER."""
+    from cinoc.evaluation.metrics.text import _align
+
+    reference = "le chat noir dort".split()
+    hypothese = "le chien noir court vite".split()
+    a = _align(reference, hypothese)
+    assert a.hits + a.substitutions + a.deletions == len(reference)
+    assert a.hits + a.substitutions + a.insertions == len(hypothese)
