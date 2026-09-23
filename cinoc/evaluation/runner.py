@@ -306,7 +306,12 @@ def _candidate_for(
         if a.produced_by_step is not None and a.produced_by_step in step_ranks
     ]
     if datés:
-        return max(datés)[3]
+        # Trier sur les trois premiers champs seulement : le quatrième est un
+        # ``Artifact``, qui n'a pas d'ordre. Ils ne peuvent pas s'égaliser
+        # aujourd'hui (``outputs`` est indexé par type, donc ``t.value`` est
+        # unique) — mais c'est un invariant implicite, et le laisser décider
+        # ferait lever un ``TypeError`` obscur le jour où il cesse de tenir.
+        return max(datés, key=lambda entrée: entrée[:3])[3]
 
     ordered = [t for t in _CANDIDATE_PRECEDENCE if t in candidate_types]
     ordered.extend(
