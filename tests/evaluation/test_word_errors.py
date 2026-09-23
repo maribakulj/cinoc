@@ -202,7 +202,7 @@ def test_word_errors_present_through_evaluate_run(tmp_path: Path) -> None:
     }
     result = evaluate_run(
         corpus=corpus,
-        evaluation=EvaluationSpec(views=(_TEXT_VIEW,)),
+        evaluation=EvaluationSpec(views=(_TEXT_VIEW,), analyses="toutes"),
         pipeline_outputs=outputs,
         registry=_registry(),
         manifest=_manifest(("a", "b")),
@@ -223,7 +223,7 @@ def test_word_errors_absent_with_single_pipeline(tmp_path: Path) -> None:
     outputs = {"a": {"d1": {ArtifactType.RAW_TEXT: _candidate("d1", a)}}}
     result = evaluate_run(
         corpus=corpus,
-        evaluation=EvaluationSpec(views=(_TEXT_VIEW,)),
+        evaluation=EvaluationSpec(views=(_TEXT_VIEW,), analyses="toutes"),
         pipeline_outputs=outputs,
         registry=_registry(),
         manifest=_manifest(("a",)),

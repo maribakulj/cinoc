@@ -628,6 +628,7 @@ def plan_benchmark_run(
     char_exclude: str | None = None,
     archaic_list: str | None = None,
     metric_profile: str | None = None,
+    detailed_analyses: bool = False,
 ) -> Callable[[Path], RunSpec]:
     """Builder de spec d'un **benchmark** : N concurrents → un ``RunSpec``.
 
@@ -681,7 +682,10 @@ def plan_benchmark_run(
                 corpus, normalization, char_exclude,
                 with_hcpr=archaic_list is not None,
                 base_metrics=base_metrics,
-            )
+            ),
+            # Mode rapide par défaut, ici comme en ligne de commande : le
+            # lanceur web ne doit pas offrir un défaut différent (D-224).
+            analyses="toutes" if detailed_analyses else None,
         ),
         adapter_kwargs=adapter_kwargs,
         run_id=run_id,

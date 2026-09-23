@@ -73,6 +73,10 @@ class LaunchRequest(BaseModel):
     #: Nom d'un profil de métriques (``standard``/``essentiel``/``philologie``) :
     #: choisit les colonnes de classement de la vue ``text``. Inconnu → 422 (plan).
     metric_profile: str | None = Field(default=None, max_length=64)
+    #: Mode **détaillé** : produit les analyses en plus des métriques. Faux par
+    #: défaut, comme en ligne de commande — les analyses pèsent 98 % du temps
+    #: d'évaluation et personne ne les demandait.
+    detailed_analyses: bool = False
 
 
 class RecipeRequest(BaseModel):
@@ -299,6 +303,7 @@ def build_runs_router(
                 normalization=req.normalization,
                 char_exclude=req.char_exclude,
                 metric_profile=req.metric_profile,
+                detailed_analyses=req.detailed_analyses,
             )
         except RunPlanningError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc

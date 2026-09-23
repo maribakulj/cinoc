@@ -209,6 +209,14 @@ def build_parser() -> argparse.ArgumentParser:
         "l'identique y sont rechargés au lieu d'être ré-exécutés.",
     )
     run_cmd.add_argument(
+        "--analyses",
+        default=None,
+        help="Analyses détaillées : 'toutes', ou une liste séparée par des "
+        "virgules ('diagnostics,word_errors'). Par défaut le run est en mode "
+        "rapide — seules les métriques déclarées par les vues sont calculées. "
+        "Prime sur ce que dit la spec.",
+    )
+    run_cmd.add_argument(
         "--csv",
         default=None,
         dest="csv_output",

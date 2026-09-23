@@ -130,7 +130,7 @@ def _run(tmp_path: Path, gt_text: str, hyp_text: str) -> object:
     )
     return evaluate_run(
         corpus=corpus,
-        evaluation=EvaluationSpec(views=(view,)),
+        evaluation=EvaluationSpec(views=(view,), analyses="toutes"),
         pipeline_outputs=outputs,
         registry=registry,
         manifest=manifest,

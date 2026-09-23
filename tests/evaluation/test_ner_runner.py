@@ -99,7 +99,7 @@ def test_ner_f1_and_payload_through_evaluate_run(tmp_path: Path) -> None:
     }
     result = evaluate_run(
         corpus=corpus,
-        evaluation=EvaluationSpec(views=(ENTITIES_VIEW,)),
+        evaluation=EvaluationSpec(views=(ENTITIES_VIEW,), analyses="toutes"),
         pipeline_outputs=outputs,
         registry=_registry(),
         manifest=_manifest(),

@@ -81,7 +81,7 @@ def test_aggregate_and_per_document(tmp_path: Path) -> None:
     }
     result = evaluate_run(
         corpus=corpus,
-        evaluation=EvaluationSpec(views=(TEXT_VIEW,)),
+        evaluation=EvaluationSpec(views=(TEXT_VIEW,), analyses="toutes"),
         pipeline_outputs=outputs,
         registry=_registry(),
         manifest=_manifest(2),
@@ -105,7 +105,7 @@ def test_missing_ground_truth_is_not_applicable(tmp_path: Path) -> None:
     outputs = {"eng": {"doc1": {ArtifactType.RAW_TEXT: _candidate("doc1", hyp1)}}}
     result = evaluate_run(
         corpus=corpus,
-        evaluation=EvaluationSpec(views=(TEXT_VIEW,)),
+        evaluation=EvaluationSpec(views=(TEXT_VIEW,), analyses="toutes"),
         pipeline_outputs=outputs,
         registry=_registry(),
         manifest=_manifest(1),
@@ -130,7 +130,7 @@ def test_normalization_profile_neutralises_case(tmp_path: Path) -> None:
     outputs = {"eng": {"doc1": {ArtifactType.RAW_TEXT: _candidate("doc1", hyp)}}}
     result = evaluate_run(
         corpus=corpus,
-        evaluation=EvaluationSpec(views=(view,)),
+        evaluation=EvaluationSpec(views=(view,), analyses="toutes"),
         pipeline_outputs=outputs,
         registry=_registry(),
         manifest=_manifest(1),
@@ -152,7 +152,7 @@ def test_unknown_normalization_profile_raises(tmp_path: Path) -> None:
     with pytest.raises(EvaluationError):
         evaluate_run(
             corpus=corpus,
-            evaluation=EvaluationSpec(views=(view,)),
+            evaluation=EvaluationSpec(views=(view,), analyses="toutes"),
             pipeline_outputs=outputs,
             registry=_registry(),
             manifest=_manifest(1),
@@ -188,7 +188,7 @@ def test_candidate_precedence_prefers_corrected(tmp_path: Path) -> None:
     }
     result = evaluate_run(
         corpus=corpus,
-        evaluation=EvaluationSpec(views=(view,)),
+        evaluation=EvaluationSpec(views=(view,), analyses="toutes"),
         pipeline_outputs=outputs,
         registry=_registry(),
         manifest=_manifest(1),
@@ -265,7 +265,7 @@ def test_candidate_is_the_terminal_step_not_the_richest_type(tmp_path: Path) -> 
     )
     result = evaluate_run(
         corpus=corpus,
-        evaluation=EvaluationSpec(views=(view,)),
+        evaluation=EvaluationSpec(views=(view,), analyses="toutes"),
         pipeline_outputs=outputs,
         registry=_registry(),
         manifest=manifest,
@@ -303,7 +303,7 @@ def test_candidate_falls_back_on_type_when_step_unknown(tmp_path: Path) -> None:
     }
     result = evaluate_run(
         corpus=corpus,
-        evaluation=EvaluationSpec(views=(view,)),
+        evaluation=EvaluationSpec(views=(view,), analyses="toutes"),
         pipeline_outputs=outputs,
         registry=_registry(),
         manifest=_manifest(1),
@@ -344,7 +344,7 @@ def test_cross_engine_significance_written(tmp_path: Path) -> None:
     }
     result = evaluate_run(
         corpus=corpus,
-        evaluation=EvaluationSpec(views=(TEXT_VIEW,)),
+        evaluation=EvaluationSpec(views=(TEXT_VIEW,), analyses="toutes"),
         pipeline_outputs=outputs,
         registry=_registry(),
         manifest=manifest,
@@ -389,7 +389,7 @@ def test_inference_analyses_through_evaluate_run(tmp_path: Path) -> None:
     )
     result = evaluate_run(
         corpus=corpus,
-        evaluation=EvaluationSpec(views=(TEXT_VIEW,)),
+        evaluation=EvaluationSpec(views=(TEXT_VIEW,), analyses="toutes"),
         pipeline_outputs=outputs,
         registry=_registry(),
         manifest=manifest,

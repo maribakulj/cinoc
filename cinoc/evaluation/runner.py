@@ -74,10 +74,20 @@ ANALYSES_CONNUES: frozenset[str] = frozenset(COLLECTEURS.values()) | frozenset(
 )
 
 
+#: Valeur de spec réclamant le **mode détaillé** — toutes les analyses.
+TOUTES_LES_ANALYSES = "toutes"
+
+
 def _analyses_actives(evaluation: EvaluationSpec) -> frozenset[str] | None:
-    """``None`` = toutes (défaut) ; sinon l'ensemble déclaré, validé."""
-    if evaluation.analyses is None:
+    """``None`` = l'ensemble demandé ; ``None`` retourné = toutes.
+
+    Le **défaut est le mode rapide** : une spec qui ne dit rien ne paie que ses
+    métriques. ``"toutes"`` réclame le mode détaillé, entier.
+    """
+    if evaluation.analyses == TOUTES_LES_ANALYSES:
         return None
+    if evaluation.analyses is None:
+        return frozenset()
     voulues = frozenset(evaluation.analyses)
     inconnues = sorted(voulues - ANALYSES_CONNUES)
     if inconnues:

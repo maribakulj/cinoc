@@ -21,6 +21,7 @@ from cinoc.app import (
     resolve_code_version,
 )
 from cinoc.app import run as run_orchestrator
+from cinoc.app.analyses_demandees import appliquer_analyses
 from cinoc.app.demo import demo_run_spec, write_demo_corpus
 from cinoc.app.modules import (
     ModuleRegistry,
@@ -210,6 +211,7 @@ def _run_config(
     repeat: int = 1,
     check: bool = False,
     alto_dir: str | None = None,
+    analyses: str | None = None,
 ) -> int:
     if repeat > 1 and resume_dir:
         raise CinocError(
@@ -220,6 +222,9 @@ def _run_config(
     register_default_modules(registry)
     discover_plugins(registry, enabled=True)  # CLI local : code de confiance
     spec = load_run_spec(config_path)
+    # L'option de lancement prime sur la spec : répondre à une question
+    # ponctuelle ne doit pas demander d'éditer un fichier partagé.
+    spec = appliquer_analyses(spec, analyses)
     if check:
         # Valider **sans exécuter** : le chargement a déjà refusé une spec
         # invalide (Pydantic + chemins sécurisés) ; reste à montrer ce qui
@@ -452,6 +457,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.repeat,
                 args.check,
                 args.alto_dir,
+                args.analyses,
             )
         if args.command == "correct":
             return run_correction(

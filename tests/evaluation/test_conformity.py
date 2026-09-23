@@ -92,7 +92,7 @@ def _run(tmp_path: Path, views: tuple[EvaluationView, ...]):
     register_default_metrics(registry)
     return evaluate_run(
         corpus=corpus,
-        evaluation=EvaluationSpec(views=views),
+        evaluation=EvaluationSpec(views=views, analyses="toutes"),
         pipeline_outputs=outputs,
         registry=registry,
         manifest=_manifest(2),

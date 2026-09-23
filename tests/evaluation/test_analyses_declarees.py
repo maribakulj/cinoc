@@ -26,7 +26,7 @@ from cinoc.evaluation.runner import ANALYSES_CONNUES, evaluate_run
 FIXED = datetime(2026, 1, 1, tzinfo=UTC)
 
 
-def _run(tmp_path: Path, analyses: tuple[str, ...] | None):
+def _run(tmp_path: Path, analyses: tuple[str, ...] | str | None):
     gt = tmp_path / "d.gt.txt"
     gt.write_text("alpha beta gamma", encoding="utf-8")
     hyp = tmp_path / "d.raw.txt"
@@ -80,9 +80,22 @@ def _run(tmp_path: Path, analyses: tuple[str, ...] | None):
     )
 
 
-def test_defaut_inchange_toutes_les_analyses(tmp_path: Path) -> None:
-    """``None`` reste le défaut : aucune sortie existante ne change."""
-    assert len(_run(tmp_path, None).analyses) > 0
+def test_le_defaut_est_le_mode_rapide(tmp_path: Path) -> None:
+    """Ne rien dire ne coûte que les métriques déclarées.
+
+    Ce test affirmait l'inverse — le défaut produisait **toutes** les analyses.
+    Mesuré sur trente unités déjà exécutées : 13 secondes de métriques contre
+    15 minutes d'analyses que personne n'avait demandées, et un rapport de
+    plusieurs dizaines de méga-octets devenu illisible.
+    """
+    resultat = _run(tmp_path, None)
+    assert resultat.analyses == ()
+    assert resultat.pipelines[0].aggregate[0].metric == "cer"
+
+
+def test_le_mode_detaille_se_reclame(tmp_path: Path) -> None:
+    """Et il reste **entier** : c'est un choix, pas une version dégradée."""
+    assert len(_run(tmp_path, "toutes").analyses) > 0
 
 
 def test_tuple_vide_ne_produit_aucune_analyse(tmp_path: Path) -> None:
