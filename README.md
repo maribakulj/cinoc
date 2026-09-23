@@ -217,6 +217,31 @@ It needs **no engine and no network**: it replays frozen outputs through `precom
 
 Two flags worth knowing. `--check` validates the file and prints what would run without executing it — a benchmark spec commits billed API calls and hours of compute, so reading it first is not a luxury. `--alto-dir` keeps the ALTO a run produced: without it, an ALTO your spec asked for dies with the temporary workspace.
 
+### Scoring OCR that Cinoc did not produce
+
+`precomputed` is not only a fixture device. It reads `<page>.<label>.txt` sitting
+next to the image, which means **any** transcription can enter the bench: a
+home-grown script, a commercial service, a colleague's export, or your own run
+from last year.
+
+```yaml
+pipelines:
+  - name: MyOtherTool
+    steps:
+      - {id: txt, kind: recognition, adapter_name: "precomputed:mytool",
+         input_types: [image], output_types: [raw_text]}
+adapter_kwargs:
+  "precomputed:mytool": {source_label: mytool}
+```
+
+Drop `page.mytool.txt` beside `page.jpg`, point the corpus at the folder, and
+the whole scoring apparatus applies — same metrics, same normalisation, same
+report, side by side with engines Cinoc runs itself.
+
+No engine, no network, no adapter to write. It is the cheapest way to answer
+*« is the thing I already use any good? »*, and it is also how you compare a new
+pipeline against a frozen baseline without re-running it.
+
 `cinoc hybrid --segment-only` stops after segmentation and writes one `<doc>.layout.json` per page — exactly what `precomputed_layout` reads back, so you can segment once and then compare several recognisers on the same layout.
 
 ### Getting a corpus

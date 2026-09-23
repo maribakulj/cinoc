@@ -375,7 +375,25 @@ exécutée.
 | # | Contenu | Dépend de |
 |---|---|---|
 | **1** ✅ | **Garder ce qu'un run a produit** — *résolu en le cherchant, pas en le construisant*. Le mécanisme existait : `ResumeStore.save` **copie** les fichiers et réécrit leur chemin, donc les sorties survivent au workspace. Vérifié sur le banc de presse : 30 unités sur 30 retrouvées, textes compris, des heures après. Il ne manquait que la **trace** — le manifeste ignorait où elles étaient conservées, donc un `RunResult` ne pouvait pas retrouver ce qu'il avait produit. `RunManifest.artifacts_dir` comble ça. | — |
+| **1bis** | **Une saveur « textes à côté ».** Idée de l'utilisateur, mesurée : `document_texts` pèse **52 %** d'un résultat détaillé (1,94 Mo sur 3,71), les métriques **1,3 %**. Sortir les textes en fichiers voisins, selon la convention que `precomputed` lit déjà, rendrait un rapport **capable de recalculer seul** — sans cache de reprise ni spec d'origine. **Son argument n'est plus le poids** : depuis le mode rapide, le résultat tombe à 0,08 Mo et le rapport à 3,8 Mo, presque entièrement des images. Ce qu'elle apporte est le cas de *celui qui reçoit* le rapport, pas de celui qui l'a lancé. **Idée consignée, pas engagée.** | — |
 | **2** | **Calculer une analyse à la demande, dans la saveur servie.** Un clic sur une section absente la produit, avec le vrai code — pas une réimplémentation en JavaScript, qui divergerait et violerait « tous les nombres sont une fonction auditable des données d'entrée ». L'aperçu de segmentation est le précédent. | 1 |
+
+**Obstacle trouvé en vérifiant la faisabilité (passage 3 de la boucle).** Le
+recalcul lui-même est bon marché — **9,8 s pour une analyse**, contre 493 s pour
+les trente-quatre, artefacts rechargés en 0,2 s. Mais un `RunResult` **ne peut
+pas retrouver ses propres unités** : leur empreinte dépend du document, et le
+manifeste porte le nom du corpus et son compte, **pas la liste**. Le recalcul
+exige donc la spec d'origine, qu'un rapport n'a pas.
+
+Deux façons de lever ça, et c'est un arbitrage de produit : faire porter la
+liste des documents au manifeste — un `RunResult` reste alors **autosuffisant**,
+au prix de chemins locaux inscrits dans un fichier destiné au partage — ou faire
+retenir l'association run ⇄ spec au serveur, plus léger mais inopérant dès que
+le rapport voyage. L'item **1bis** ci-dessus contourne les deux.
+
+Et le garde-fou de parité interdit de livrer la moitié : toute commande CLI doit
+déclarer son pendant web. Livrer `cinoc analyse` seul ferait rougir la CI — ce
+qui est exactement son office.
 
 **Ce que ça ne sera pas.** Le rapport **autonome** ne calcule rien : un fichier
 seul n'a ni code ni données, et y embarquer les textes de toutes les pages le
