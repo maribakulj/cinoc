@@ -47,10 +47,11 @@ PipelineOutputs = Mapping[str, Mapping[str, Mapping[ArtifactType, Artifact]]]
 #: Signature d'entrée d'une métrique : ``(type_référence, type_hypothèse)``.
 _Signature = tuple[ArtifactType, ArtifactType]
 
-#: Précédence **explicite** de sélection du candidat quand une vue déclare
-#: plusieurs ``candidate_types`` : du plus **aval** (corrigé) au plus brut — on
-#: évalue la sortie la plus aboutie du pipeline. Jamais l'ordre alphabétique des
-#: valeurs d'enum (qui ne coïncide avec l'intention que par hasard).
+#: Précédence de **repli**, quand l'étape productrice est inconnue : du plus
+#: aval (corrigé) au plus brut. Elle ne vaut que comme approximation — c'est
+#: l'ordre des étapes du pipeline qui fait foi (cf. ``_candidate_for``). Jamais
+#: l'ordre alphabétique des valeurs d'enum (qui ne coïncide avec l'intention
+#: que par hasard).
 _CANDIDATE_PRECEDENCE: tuple[ArtifactType, ...] = (
     ArtifactType.CORRECTED_TEXT,
     ArtifactType.RAW_TEXT,
@@ -92,9 +93,14 @@ def evaluate_run(
         for pipeline_name in pipeline_order:
             for name in view.metric_names:
                 series[name][pipeline_name] = []
+            step_ranks = _step_ranks(manifest, pipeline_name)
             for document in corpus.documents:
                 candidate = _candidate_for(
-                    pipeline_outputs, pipeline_name, document.id, view.candidate_types
+                    pipeline_outputs,
+                    pipeline_name,
+                    document.id,
+                    view.candidate_types,
+                    step_ranks,
                 )
                 scores, text_context, entity_context = _score_document(
                     view, document, candidate, registry
@@ -250,16 +256,63 @@ def _cross_engine_scores(
     return scores
 
 
+def _step_ranks(manifest: RunManifest, pipeline_name: str) -> Mapping[str, int]:
+    """``{id d'étape: rang}`` du pipeline — vide s'il n'est pas au manifeste."""
+    for spec in manifest.pipeline_specs:
+        if spec.name == pipeline_name:
+            return {step.id: rank for rank, step in enumerate(spec.steps)}
+    return {}
+
+
 def _candidate_for(
     pipeline_outputs: PipelineOutputs,
     pipeline_name: str,
     document_id: str,
     candidate_types: frozenset[ArtifactType],
+    step_ranks: Mapping[str, int],
 ) -> Artifact | None:
+    """L'artefact à noter : la sortie de l'étape la plus **aval** du pipeline.
+
+    Choisir par *type* d'artefact note un intermédiaire dès qu'une étape en aval
+    reproduit un type plus « brut ». Cas réel : ``segmentation → OCR par région
+    → correction VLM → ordre de lecture → projection`` publie un
+    ``CORRECTED_TEXT`` au milieu et finit sur un ``RAW_TEXT`` ; la précédence par
+    type notait le texte corrigé, donc **avant** l'ordre de lecture — mêmes mots,
+    mauvaise séquence, et un CER de 0,8842 au lieu de 0,8079.
+
+    L'ordre des étapes du pipeline tranche sans ambiguïté, et ``produced_by_step``
+    le rattache à l'artefact. La précédence par type ne sert plus que de repli,
+    pour les artefacts dont l'étape est inconnue — ceux du fan-out, qui la
+    laissent à ``None``, et les entrées initiales.
+    """
     by_document: Mapping[str, Mapping[ArtifactType, Artifact]] = (
         pipeline_outputs.get(pipeline_name, {})
     )
     outputs: Mapping[ArtifactType, Artifact] = by_document.get(document_id, {})
+    présents = [(t, a) for t, a in outputs.items() if t in candidate_types]
+    if not présents:
+        return None
+
+    #: Départage deux artefacts d'une **même** étape (un module peut en publier
+    #: plusieurs) : on retombe alors sur la précédence par type.
+    def rang_de_type(artifact_type: ArtifactType) -> int:
+        if artifact_type in _CANDIDATE_PRECEDENCE:
+            return _CANDIDATE_PRECEDENCE.index(artifact_type)
+        return len(_CANDIDATE_PRECEDENCE)
+
+    datés = [
+        (step_ranks[a.produced_by_step], -rang_de_type(t), t.value, a)
+        for t, a in présents
+        if a.produced_by_step is not None and a.produced_by_step in step_ranks
+    ]
+    if datés:
+        # Trier sur les trois premiers champs seulement : le quatrième est un
+        # ``Artifact``, qui n'a pas d'ordre. Ils ne peuvent pas s'égaliser
+        # aujourd'hui (``outputs`` est indexé par type, donc ``t.value`` est
+        # unique) — mais c'est un invariant implicite, et le laisser décider
+        # ferait lever un ``TypeError`` obscur le jour où il cesse de tenir.
+        return max(datés, key=lambda entrée: entrée[:3])[3]
+
     ordered = [t for t in _CANDIDATE_PRECEDENCE if t in candidate_types]
     ordered.extend(
         sorted(
