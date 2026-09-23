@@ -222,32 +222,49 @@ Quatre groupes. À l'intérieur d'un groupe, les PR sont indépendantes ; entre
 groupes, l'ordre compte — corriger les chiffres avant d'en corriger le coût,
 et le coût avant d'ouvrir la surface d'extension.
 
-| # | PR | Ce qu'elle corrige | Effet mesuré |
-|---|---|---|---|
-| **G1** | | **Ce qui fausse des résultats** | |
-| 1 | #129 | deux régions pour la même aire, fan-out qui ne descendait pas dans les blocs composés, DPI que Tesseract devinait, distance d'édition quadratique | CER 1,009 → plausible ; une page entière mesurable |
-| 2 | #131 | le candidat noté était choisi par *type* d'artefact, donc un intermédiaire dès qu'une étape suit la correction | CER 0,884 → 0,808 sur une chaîne du banc |
-| 3 | #130 | confusions de caractères alignées à la mauvaise granularité (quadratique en longueur de page) | ×258 ; évaluation 11 h → 35 min |
-| **G2** | | **Ce que coûte une évaluation** | |
-| 4 | #132 | les analyses ignoraient `metric_names` : 34 produites pour 6 demandées, deux fois sur les mêmes textes | ×21,8 (518 s → 24 s pour 30 unités) |
-| **G3** | | **Le point d'extension** | |
-| 5 | #127 | un segmenteur ne disait pas ce qu'il sait détecter | — |
-| 6 | #128 | brancher un segmenteur exigeait d'écrire du Python | — |
-| 7 | #133 | écrire un module tiers obligeait à importer des modules privés ; un module installé était invisible | vérifié sur un module tiers réel |
-| 7bis | #133 | `test_default_loader_runs_clean` affirme que la découverte rend `()` : il ne vérifiait le câblage qu'**en l'absence** de ce qu'il câble, et tombe dès qu'un module tiers est installé | à corriger **dans** #133 |
-| **G4** | | **Écrit à partir de là** (rien n'existe encore) | |
-| 8 | — | **apparier les régions par géométrie, pas par identifiant** | débloque l'OLR inter-systèmes |
-| 9 | — | `code_version` dépendante du répertoire courant | reproductibilité |
-| 10 | — | `timeout` de Tesseract non réglable depuis la spec | une unité perdue sans recours |
-| 11 | — | deux vues texte observent deux fois les mêmes textes | facteur 2 restant |
+| # | PR | Ce qu'elle corrige | Effet mesuré | état |
+|---|---|---|---|---|
+| **G1** | | **Ce qui fausse des résultats** | | |
+| 1 | #129 | deux régions pour la même aire, fan-out qui ne descendait pas dans les blocs composés, DPI que Tesseract devinait, distance d'édition quadratique | CER 1,009 → plausible | ✅ |
+| 2 | #131 | le candidat noté était choisi par *type* d'artefact, donc un intermédiaire dès qu'une étape suit la correction | CER 0,884 → 0,808 | ✅ |
+| 3 | #130 | confusions de caractères alignées à la mauvaise granularité | ×258 | ✅ |
+| **G2** | | **Ce que coûte une évaluation** | | |
+| 4 | #132 | les analyses ignoraient `metric_names` : 34 produites pour 6 demandées | ×21,8 | ✅ |
+| **G3** | | **Le point d'extension** | | |
+| 5 | #127 | un segmenteur ne disait pas ce qu'il sait détecter | — | ✅ |
+| 6 | #128 | brancher un segmenteur exigeait d'écrire du Python | — | ✅ |
+| 7 | #133 | modules privés imposés à un module tiers ; module installé invisible — **web et CLI** | vérifié sur un module tiers réel | ✅ |
+| **G4** | | **Écrit à partir de là** | | |
+| 8 | #135 | apparier les régions par géométrie, pas par identifiant | débloque l'OLR inter-systèmes | ✅ |
+| 9 | #136 | `code_version` dépendante du répertoire courant | reproductibilité §12 | ✅ |
+| 10 | #137 | `timeout` de Tesseract non réglable depuis la spec | une unité perdue sans recours | ✅ |
+| 11 | — | deux vues texte observent deux fois les mêmes textes | **38 %** du mode détaillé | **reste** |
+| **hors plan** | | **Né d'une décision produit en cours de route** | | |
+| 12 | #138 | distance et alignement écrits à la main, là où `rapidfuzz` est déjà une dépendance | ×13 ; `mer` de 11 s à 0,009 s | ✅ |
+| 13 | #139 | **le banc est rapide par défaut**, le détail se réclame | 916 s → **29 s** | ✅ |
 
-**Condition de fusion de #133** : elle ne câble que la CLI. `interfaces/web/app.py`
-appelle `engine_statuses()` et `segmenter_statuses()`, jamais
-`third_party_statuses()` — un module tiers resterait invisible dans le web. C'est
-une rupture de la parité web ⇄ CLI (D-224) que `test_web_cli_parity.py` n'a pas
-relevée : **compléter le web et le garde-fou avant de fusionner**.
+**Ce que la mesure a corrigé dans ce plan.** L'item 11 était annoncé « facteur 2 ».
+Mesuré trois fois, il a donné 17 %, puis 43 %, puis 38 % — un chiffre qui bouge
+ainsi n'est pas un arbitrage, c'est le signe qu'on regarde le mauvais poste. Le
+vrai coût était ailleurs, et c'est l'item 12 qui l'a trouvé. **Mesurer avant
+d'écrire a changé deux fois ce qu'il fallait écrire** ; c'est la leçon
+méthodologique de cette phase, et elle vaut plus que les correctifs eux-mêmes.
 
-### G4-8 — Apparier les régions par géométrie (la plus utile des quatre)
+**L'item 13 n'était dans aucun plan.** Il est né d'une question simple posée en
+cours de route — *pourquoi produire par défaut ce que personne ne demande ?* —
+et il rend à lui seul un facteur 31 sur le cas courant, soit davantage que les
+optimisations qu'on envisageait à sa place. Une décision de produit a battu
+trois jours d'optimisation.
+
+**Ce que la revue de #133 a trouvé, et qui est corrigé dedans.** Elle ne câblait
+que la CLI : le web ignorait `third_party_statuses`, ce qui rompait la parité
+D-224 sans que `test_web_cli_parity` le voie — la capacité étant neuve des deux
+côtés, aucune route n'était en défaut. Et `test_default_loader_runs_clean`
+affirmait que la découverte rend `()` : il ne vérifiait donc le câblage qu'**en
+l'absence** de ce qu'il câble, et tombait dès qu'un module tiers était réellement
+installé. Les deux sont réglés dans la PR.
+
+### G4-8 — Apparier les régions par géométrie ✅ (#135)
 
 Six métriques de structure existent — `region_detection`, `region_cer`,
 `line_identity_cer`, `line_identity_coverage`, `reading_order_tau`,
@@ -278,13 +295,69 @@ l'ordre de lecture, il a fallu se rabattre sur le CER pleine page, qui le mesure
 de travers — et qui a fait conclure, à tort, qu'une chaîne de référence perdait
 contre Tesseract seul.
 
+### Ce qui reste dans P5a
+
+**Un seul item : la déduplication entre vues (11).** Un banc à deux vues texte
+observe deux fois les mêmes textes. Mutualiser est **rigoureusement sans perte** —
+mêmes entrées, mêmes sorties — et vaut 38 % du mode détaillé. Difficulté connue :
+`document_texts` consomme le CER de *sa* vue, il ne peut donc pas être partagé
+tel quel ; les douze autres collecteurs, si.
+
+Ce n'est plus urgent depuis l'item 13 — le mode rapide ne paie aucune analyse —
+mais ça reste la seule optimisation du mode détaillé qui ne change aucun chiffre.
+Les autres pistes (remplacer `difflib`) modifieraient les diagnostics eux-mêmes :
+vérifié, `rapidfuzz` rend 7 598 substitutions là où `difflib` en rend 658, parce
+que l'un apparie de force et l'autre cherche des blocs communs. Pour une
+*distance* les deux sont équivalents ; pour une *carte d'erreurs*, non.
+
+### Deux réserves ouvertes, constatées en revue
+
+Ni l'une ni l'autre ne bloque, les deux méritent d'être écrites plutôt que
+retenues.
+
+**Un module tiers peut exécuter n'importe quoi, et n'est pas dans
+`CLI_ONLY_KINDS`.** Cette liste protège `cli_layout` et `ocrd` d'un lancement par
+HTTP. Un plugin installé, lui, passe — sur une instance privée, le web pourrait
+le lancer. Installer un plugin est déjà une décision de confiance de
+l'exploitant, d'où l'absence d'urgence ; mais la frontière mérite d'être
+explicite plutôt qu'implicite.
+
+**Le contrôle de cohérence ne voit pas les modules tiers.** `declared_labels`
+interroge le registre du socle : un segmenteur tiers ne déclarant pas ses
+classes, son vocabulaire est inconnu et le contrôle passe. Correct par défaut
+(on ne refuse que ce qu'on peut réfuter), mais un module tiers **qui** déclare
+`LABELS` ne serait pas vérifié non plus.
+
 ### Ce que P5a ne contient pas
 
-Ni feature, ni surface nouvelle. Une seule brique neuve y est tolérée, G4-8, et
-elle ne fait que rendre exploitable ce qui existe. Tout le reste est du
-correctif. Les modules tiers eux-mêmes vivent **hors du dépôt** — c'est le
-contrat du point d'extension, et la chaîne NDNP de la Library of Congress en est
-la preuve exécutée.
+Ni feature, ni surface nouvelle — à l'exception assumée de l'item 13, qui est une
+décision de produit et non un correctif. Les modules tiers eux-mêmes vivent
+**hors du dépôt** ; la chaîne NDNP de la Library of Congress en est la preuve
+exécutée.
+
+---
+
+## Étape 4ter / **P5b** — Ce que le mode rapide appelle ensuite
+
+> **Pourquoi cette phase existe.** L'item 13 a posé une question qu'il ne résout
+> pas : si le détail ne se produit plus par défaut, comment l'obtenir **après
+> coup**, sans relancer un banc entier ? La réponse actuelle — relancer avec
+> `--analyses toutes`, la reprise rendant l'exécution gratuite — fonctionne mais
+> reste grossière : tout ou rien, et en ligne de commande.
+
+| # | Contenu | Dépend de |
+|---|---|---|
+| **1** | **Garder ce qu'un run a produit.** Le workspace est aujourd'hui un dossier temporaire **effacé à la sortie** : relire ce qu'un moteur a écrit sur une page est impossible une fois le run fini, et l'a été plusieurs fois au cours du banc de presse. Le cache de reprise les garde, mais seulement s'il a été demandé. **Valeur propre**, indépendante de la suite. | — |
+| **2** | **Calculer une analyse à la demande, dans la saveur servie.** Un clic sur une section absente la produit, avec le vrai code — pas une réimplémentation en JavaScript, qui divergerait et violerait « tous les nombres sont une fonction auditable des données d'entrée ». L'aperçu de segmentation est le précédent. | 1 |
+
+**Ce que ça ne sera pas.** Le rapport **autonome** ne calcule rien : un fichier
+seul n'a ni code ni données, et y embarquer les textes de toutes les pages le
+ferait peser des centaines de méga-octets. La fonctionnalité appartient à la
+saveur servie, et c'est une limite de conception assumée, pas un manque.
+
+**Inconnue à lever avant de s'engager** : le cache de reprise permet-il de
+retrouver les textes d'une unité ? S'il ne garde que des chemins vers un
+workspace disparu, l'item 1 est un prérequis strict et non une commodité.
 
 ---
 
@@ -337,8 +410,9 @@ la preuve exécutée.
 - [x] `README`/`CHANGELOG`/`pricing.json` à jour, roll-up réconcilié : **README ✅** · **CHANGELOG ✅** (section `[1.0.0]` datée) · **roll-up ✅** (D-223, puis au fil des D-entries) · **`pricing.json` vérifié au tag ✅** — `last_updated` 2026-06-10, `valid_until` 2026-12-01, donc **valide au 2026-09-10** ; le rapport avertit de lui-même au-delà de cette date.
 - [x] **Parité web ⇄ CLI ✅ (D-224→D-227)** : toute *capacité* du web l'est aussi en ligne de commande — acquisition de corpus (`cinoc corpus`), introspection (`cinoc list`), validation à blanc, export ALTO, segmentation seule. Les 26 routes sont couvertes ou justifiées `transport`, verrouillé par `tests/guardrails/test_web_cli_parity.py` ; `CLAUDE.md` §8.4 amendé en conséquence. **`examples/config.yaml`** livré, exécutable sans moteur.
 - [x] **Arbitrage rendu ✅ (D-229)** : la correction structurée est **livrée au web** (`POST /api/runs/correction` + section au composeur), et non actée comme outil de ligne de commande — le gel de Picarones ferme la fenêtre, et une capacité qu'on ne peut lancer que par un terminal n'est pas dans le produit. Le lanceur **refuse** un corpus dont la vérité terrain est extraite de son propre ALTO (zéro tautologique). `README` à jour.
-- [ ] **P5a — dette révélée par l'usage réel** : sept défauts trouvés en faisant tourner le premier banc de presse multi-colonnes, dont cinq faussent des résultats. Onze PR, l'enchaînement est décrit plus haut. **Bloque le tag** : publier une 1.0 qui rend de faux classements est pire que ne pas la publier.
-- [ ] **Tag `v1.0.0`** — *à poser par le mainteneur, quand il le décide*, **et une fois P5a fusionnée**. Un tag posé le 2026-09-10 l'a été **sans son accord** et a été supprimé (D-232) : le dépôt ne porte aucun tag, la version reste le repli `setuptools_scm`. Le reste de la checklist étant vert, la 1.0 est **prête techniquement** — publier reste une décision, pas une étape.
+- [ ] **P5a — dette révélée par l'usage réel** : **12 items sur 13 fusionnés** (#127→#133, #135→#139). Reste la déduplication entre vues — sans perte, 38 % du mode détaillé, sans urgence depuis que le mode rapide est le défaut. **Ne bloque plus le tag** : les cinq défauts qui faussaient des résultats sont corrigés ; ce qui reste est une optimisation, pas une justesse.
+- [ ] **P5b — persistance et calcul à la demande** : garder ce qu'un run a produit, puis calculer une analyse au clic dans la saveur servie. Né de #139. **Ne bloque pas le tag.**
+- [ ] **Tag `v1.0.0`** — *à poser par le mainteneur, quand il le décide*. Le blocage posé par P5a est **levé** : les défauts qui produisaient de faux classements sont corrigés et fusionnés. Un tag posé le 2026-09-10 l'a été **sans son accord** et a été supprimé (D-232) : le dépôt ne porte aucun tag, la version reste le repli `setuptools_scm`. Le reste de la checklist étant vert, la 1.0 est **prête techniquement** — publier reste une décision, pas une étape.
 - [ ] Gel de Picarones (5b) — **différé à la demande de l'utilisateur**, hors du chemin de la 1.0. Rien n'en dépend : le périmètre gardé est **entièrement** dans Cinoc, c'est la condition que le gel attendait.
 
 ---
