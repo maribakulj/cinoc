@@ -363,3 +363,45 @@ def test_un_dpi_absurde_est_refuse() -> None:
 
     with pytest.raises(AdapterStepError, match="dpi"):
         TesseractAdapter(label="t", dpi=5)
+
+
+def test_le_timeout_est_reglable_depuis_la_spec() -> None:
+    """Une page de 37 Mpx dépasse les 120 s et se perdait **sans recours** :
+    aucun réglage de spec ne permettait de la rattraper."""
+    from cinoc.adapters.ocr.tesseract import DEFAULT_TIMEOUT, TesseractAdapter
+
+    assert TesseractAdapter(label="x")._timeout == DEFAULT_TIMEOUT
+    assert TesseractAdapter(label="x", timeout=900)._timeout == 900
+
+
+def test_le_timeout_est_borne() -> None:
+    """Zéro et négatif n'ont pas de sens ; au-delà du plafond, le délai ne
+    protège plus de rien — la deadline du run borne déjà l'étape."""
+    from cinoc.adapters.ocr.tesseract import TesseractAdapter
+
+    for invalide in (0, -1, 3601):
+        with pytest.raises(AdapterStepError, match="timeout"):
+            TesseractAdapter(label="x", timeout=invalide)
+
+
+def test_le_timeout_du_segmenteur_est_reglable_et_borne() -> None:
+    from cinoc.adapters.layout.tesseract_layout import (
+        DEFAULT_TIMEOUT,
+        TesseractLayoutSegmenter,
+    )
+
+    assert TesseractLayoutSegmenter()._timeout == DEFAULT_TIMEOUT
+    assert TesseractLayoutSegmenter(timeout=900)._timeout == 900
+    with pytest.raises(AdapterStepError, match="timeout"):
+        TesseractLayoutSegmenter(timeout=0)
+
+
+def test_la_deadline_reste_l_autorite() -> None:
+    """Le réglage est un **plafond par étape**, pas une permission : un run qui
+    n'a plus que 5 s devant lui ne laisse pas 900 s à une étape."""
+    from cinoc.domain.deadline import Deadline
+
+    deadline = Deadline.in_seconds(5.0)
+    assert deadline.clamp_to_remaining(900.0) <= 5.0
+    # Infinie : le réglage de l'étape s'applique tel quel.
+    assert Deadline(None).clamp_to_remaining(900.0) == 900.0
