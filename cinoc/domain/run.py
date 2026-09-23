@@ -47,6 +47,15 @@ class RunManifest(BaseModel):
     dependencies_lock / system_binaries_lock:
         Snapshots ``{paquet: version}`` et ``{binaire: version}`` —
         indispensables à la reproductibilité.
+    artifacts_dir:
+        Dossier où les artefacts produits ont été **conservés** — le cache de
+        reprise, quand un a été demandé. ``None`` sinon : le workspace d'un run
+        est un dossier temporaire **effacé à la sortie**, et sans cette trace un
+        ``RunResult`` ne peut pas retrouver ce qu'il a lui-même produit.
+
+        Ce n'est pas qu'une commodité de reprise : c'est la seule façon de
+        relire ce qu'un moteur a écrit sur une page une fois le run fini, et le
+        préalable à toute analyse recalculée après coup.
     module_versions:
         ``{adapter_name: module.version}`` — version déclarée de chaque
         module exécuté (R-2). La version *binaire* d'un moteur externe
@@ -68,6 +77,7 @@ class RunManifest(BaseModel):
     system_binaries_lock: dict[str, str] = Field(default_factory=dict)
     module_versions: dict[str, str] = Field(default_factory=dict)
     metadata: dict[str, str] = Field(default_factory=dict)
+    artifacts_dir: str | None = Field(default=None, max_length=4096)
 
     @property
     def duration_seconds(self) -> float:

@@ -77,6 +77,18 @@ class ResumeStore:
         self._base = base_dir
         self._base.mkdir(parents=True, exist_ok=True)
 
+    @property
+    def base_dir(self) -> Path:
+        """Où les artefacts sont **conservés**.
+
+        Ce cache porte deux rôles pour un seul mécanisme : éviter de
+        ré-exécuter, et — parce que ``save`` **copie** les fichiers et réécrit
+        leur chemin — garder les sorties au-delà du workspace, qui est
+        temporaire et effacé à la sortie. Le second rôle n'était nommé nulle
+        part ; le manifeste l'enregistre désormais.
+        """
+        return self._base
+
     def load(
         self, key: str
     ) -> tuple[dict[ArtifactType, Artifact], ResourceUsage] | None:
