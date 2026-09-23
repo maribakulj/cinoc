@@ -218,6 +218,7 @@ def _benchmark_body(
             Jinja2Templates(directory=_TEMPLATES_DIR),
             statuses=lambda: (),
             segmenters=lambda: (status,),
+            third_party=lambda: (),
             history_store=HistoryStore(tmp_path / "h.db"),
             corpus_store=corpus_store,
         )

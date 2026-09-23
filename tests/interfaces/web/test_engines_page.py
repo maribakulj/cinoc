@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from cinoc.interfaces.web.app import create_app
@@ -49,3 +50,45 @@ def test_engines_page_english(tmp_path: Path) -> None:
     body = _client(tmp_path).get("/engines?lang=en").text
     assert "Engines" in body
     assert "available" in body or "unavailable" in body
+
+
+def test_engines_page_montre_les_modules_tiers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Parité avec ``cinoc list engines`` (D-224).
+
+    Un module tiers installé était visible en ligne de commande et **invisible**
+    dans le web : la même capacité, rendue par un seul des deux transports.
+    """
+    import cinoc.interfaces.web.app as web_app
+    from cinoc.app.engines import EngineStatus
+
+    faux = (
+        EngineStatus(
+            kind="mon_seg",
+            label="paquet.module:build",
+            available=True,
+            detail="module tiers, prêt",
+        ),
+        EngineStatus(
+            kind="casse",
+            label="paquet.autre:build",
+            available=False,
+            detail="module tiers inutilisable : No module named 'torch'",
+        ),
+    )
+    # Patcher **là où le nom est lu** : ``app.py`` l'importe directement, donc
+    # remplacer l'attribut du module d'origine n'aurait aucun effet.
+    monkeypatch.setattr(web_app, "third_party_statuses", lambda **_: faux)
+    body = _client(tmp_path).get("/engines").text
+    assert "mon_seg" in body
+    assert "paquet.module:build" in body
+    # La cause d'un module cassé se lit dans la page, pas seulement au journal.
+    assert "No module named" in body and "torch" in body
+
+
+def test_mode_public_ne_revele_aucun_module_tiers(tmp_path: Path) -> None:
+    """Même règle fail-closed que la découverte : on ne dit pas à un visiteur
+    quel code tourne sur le serveur."""
+    body = _client(tmp_path, public_mode=True).get("/engines").text
+    assert "Modules tiers" not in body
