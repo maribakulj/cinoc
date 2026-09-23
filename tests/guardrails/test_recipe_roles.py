@@ -34,6 +34,13 @@ _SAC: dict[str, Any] = {
     "producer": "rules",
     "ocr_sidecar": "",
     "strategy": "columns",
+    # ``cli_layout`` exige une commande, et il a raison : une brique dont tout
+    # le contenu est la commande ne doit pas pouvoir se construire vide. Le sac
+    # en fournit une inoffensive — on lit une signature, on n'exécute rien.
+    "command": "outil {image} {out}",
+    # ``ocrd`` exige un nom de processeur, et le contraint à ``ocrd-…`` : le sac
+    # en fournit un plausible. On lit une signature, on n'exécute rien.
+    "processor": "ocrd-tesserocr-segment",
 }
 
 

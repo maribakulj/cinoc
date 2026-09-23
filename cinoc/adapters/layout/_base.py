@@ -18,8 +18,12 @@ from dataclasses import dataclass
 
 from cinoc.adapters._workspace import workspace_artifact_path
 from cinoc.domain.artifacts import Artifact, ArtifactType, compute_content_hash
-from cinoc.domain.errors import AdapterStepError
+from cinoc.domain.errors import AdapterStepError, FormatError
 from cinoc.domain.layout import BBox, CanonicalLayout, Geometry, LayoutPage, Region
+from cinoc.formats.alto.layout_map import alto_to_layout
+from cinoc.formats.alto.parser import parse_alto
+from cinoc.formats.pagexml import parse_pagexml
+from cinoc.formats.pagexml.layout_map import page_to_layout
 from cinoc.pipeline.types import RunContext, StepOutput
 
 
@@ -123,6 +127,38 @@ def to_canonical_layout(
     return CanonicalLayout(pages=(page,))
 
 
+def read_layout(xml: bytes, source: str) -> CanonicalLayout:
+    """PAGE-XML ou ALTO → ``CanonicalLayout``, **reconnu au contenu**.
+
+    Le format est déduit de la racine, pas de l'extension : les deux sortent en
+    ``.xml``, et se fier au nom ferait dépendre la lecture d'une convention que
+    l'outil n'a pas promise.
+    """
+    tete = xml[:4096].lower()
+    est_page = b"pcgts" in tete or b"pagecontent" in tete
+    quoi = "PAGE" if est_page else "ALTO"
+    try:
+        if est_page:
+            layout = page_to_layout(parse_pagexml(xml))
+        else:
+            layout = alto_to_layout(parse_alto(xml))
+    except (ValueError, FormatError) as exc:
+        raise AdapterStepError(
+            f"{source} : le XML produit n'est pas un {quoi} lisible — {exc}"
+        ) from exc
+    # Un XML bien formé mais vide se lit sans erreur et rend zéro région. Le
+    # laisser passer donnerait une page blanche, donc un CER de 1,0 **sans
+    # message** — le pire mode de défaillance possible pour un banc d'essai, et
+    # un qui a déjà coûté une campagne entière. On refuse ici, bruyamment.
+    if not any(page.regions for page in layout.pages):
+        raise AdapterStepError(
+            f"{source} : le {quoi} produit ne porte aucune région. "
+            "L'outil a-t-il vraiment traité la page (modèle chargé, format de "
+            "sortie attendu) ?"
+        )
+    return layout
+
+
 def layout_step_output(
     layout: CanonicalLayout, context: RunContext, name: str
 ) -> StepOutput:
@@ -153,5 +189,6 @@ __all__ = [
     "DetectorFn",
     "LayoutDetection",
     "layout_step_output",
+    "read_layout",
     "to_canonical_layout",
 ]

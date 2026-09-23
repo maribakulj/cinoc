@@ -103,6 +103,11 @@ def roles() -> Mapping[str, Role]:
                 "doclayout_yolo",
                 "pp_doclayout",
                 "remote_segmenter",
+                # Dernier : il ne segmente rien lui-même, il *branche* ce qu'on
+                # lui nomme. Utile partout, défaut nulle part — et réservé à la
+                # CLI (``CLI_ONLY_KINDS``), donc jamais proposé par le web.
+                "cli_layout",
+                "ocrd",
             ),
         ),
         "alto_source": Role((IMAGE,), (LAYOUT,), ("alto_source",)),
