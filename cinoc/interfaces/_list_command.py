@@ -29,6 +29,7 @@ from cinoc.app.engines import (
     normalization_profiles,
     preprocess_status,
     segmenter_statuses,
+    third_party_statuses,
 )
 from cinoc.app.models import provider_models
 from cinoc.app.normalization_preview import preview_normalization
@@ -51,6 +52,12 @@ def run_list_engines(args: argparse.Namespace) -> int:
         "Pré- et post-traitement (briques, pas des moteurs)",
         (preprocess_status(), correction_status(), ner_status()),
     )
+    # Les modules tiers ne sont pas dans le catalogue écrit à la main : ils sont
+    # **découverts**. Les taire rendait un plugin installé indiscernable d'un
+    # plugin absent.
+    tiers = third_party_statuses()
+    if tiers:
+        _print_statuses("Modules tiers (entry-points cinoc.modules)", tiers)
     print(
         "\n✓ = utilisable ici et maintenant. Un moteur listé mais indisponible "
         "n'est pas une erreur : il dit ce qui lui manque (extra, binaire, clé)."

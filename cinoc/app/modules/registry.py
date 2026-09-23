@@ -53,6 +53,17 @@ class ModuleRegistry:
         return module
 
 
+def _dpi_optionnel(kwargs: Mapping[str, ParamValue]) -> int | None:
+    """``dpi`` des kwargs, ou ``None`` — auquel cas tesseract décide seul.
+
+    Le défaut reste l'absence : imposer une valeur à tout le monde changerait
+    silencieusement des runs existants. Mais l'option devait exister, car sans
+    elle une numérisation aux métadonnées fausses rend une page blanche.
+    """
+    valeur = kwargs.get("dpi")
+    return int(valeur) if isinstance(valeur, (int, float)) else None
+
+
 def _build_precomputed(kwargs: Mapping[str, ParamValue]) -> Module:
     label = kwargs.get("source_label")
     if not isinstance(label, str):
@@ -166,6 +177,9 @@ def _build_tesseract(kwargs: Mapping[str, ParamValue]) -> Module:
         # Table « classe de région → psm » (NDNP bascule 6 ↔ 3 selon la classe).
         # Vide = un seul réglage, le comportement historique.
         psm_by_class=str(kwargs.get("psm_by_class", "")),
+        # Résolution imposée. Absente, tesseract croit les métadonnées du fichier,
+        # qui mentent souvent sur les numérisations patrimoniales.
+        dpi=_dpi_optionnel(kwargs),
     )
 
 
@@ -456,6 +470,7 @@ def _build_tesseract_layout(kwargs: Mapping[str, ParamValue]) -> Module:
         lang=str(kwargs.get("lang", "fra")),
         psm=int(psm) if isinstance(psm, (int, float)) else DEFAULT_PSM,
         oem=int(oem) if isinstance(oem, (int, float)) else 3,
+        dpi=_dpi_optionnel(kwargs),
     )
 
 

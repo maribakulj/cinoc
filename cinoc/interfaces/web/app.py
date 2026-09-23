@@ -43,6 +43,7 @@ from cinoc.app.engines import (
     engine_statuses,
     ner_status,
     segmenter_statuses,
+    third_party_statuses,
 )
 from cinoc.app.jobs import JobRunner
 from cinoc.app.modules import (
@@ -247,6 +248,12 @@ def create_app(
     def segmenter_status_provider() -> tuple[EngineStatus, ...]:
         return segmenter_statuses()
 
+    # Modules tiers découverts par entry-points. **Jamais en mode public** :
+    # même règle que la découverte elle-même (fail-closed), on ne dit pas à un
+    # visiteur quel code tourne sur le serveur.
+    def third_party_status_provider() -> tuple[EngineStatus, ...]:
+        return third_party_statuses(enabled=not is_public)
+
     # Étape NER (extra [ner], spaCy) : catégorie distincte (post-traitement, pas
     # un moteur). Alimente le gate du lanceur et la case « NER » du composeur.
     def ner_status_provider() -> EngineStatus:
@@ -265,6 +272,7 @@ def create_app(
             statuses=engine_status_provider,
             segmenters=segmenter_status_provider,
             ner=ner_status_provider,
+            third_party=third_party_status_provider,
             history_store=history_store,
             corpus_store=corpus_store,
             curated_author=resolve_curated_author(),

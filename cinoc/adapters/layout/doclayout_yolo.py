@@ -25,6 +25,8 @@ l'ordre dans lequel le détecteur rend ses boîtes.
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 from cinoc.adapters.layout._base import (
     DetectedRegion,
     DetectorFn,
@@ -141,6 +143,25 @@ def _detect_with_yolo(  # pragma: no cover -- SDK + poids requis (test 'live')
 
 class DocLayoutYoloSegmenter:
     """Segmenteur DocLayout-YOLO : ``IMAGE → LAYOUT`` (régions sans lignes)."""
+
+    #: Étiquettes que ce modèle **sait** poser, lues sur les poids publiés.
+    #:
+    #: Les déclarer sert à valider : une table « classe → réglage » écrite pour
+    #: un autre détecteur ne matcherait rien et se tairait. C'est arrivé — une
+    #: table ``plain text:6,title:6`` appliquée au modèle American Stories, dont
+    #: les classes sont ``article``/``author``, serait passée sans un mot et
+    #: chaque région serait retombée sur le réglage par défaut.
+    LABELS: ClassVar[frozenset[str]] = frozenset({
+        "abandon", "figure", "figure_caption", "formula_caption",
+        "isolate_formula", "plain text", "table", "table_caption",
+        "table_footnote", "title",
+    })
+
+    #: Corpus d'entraînement, en clair. **DocStructBench ne contient aucun
+    #: journal** : articles académiques, manuels scolaires, rapports de marché,
+    #: documents financiers. Le dire évite de le découvrir après coup — le CER
+    #: a doublé sur de la presse ancienne, et rien ne prévenait.
+    DOMAIN: ClassVar[str] = "documents de bureau (DocStructBench — sans presse)"
 
     def __init__(
         self,

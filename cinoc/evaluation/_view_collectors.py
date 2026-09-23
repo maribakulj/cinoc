@@ -10,6 +10,11 @@ aval, l'ordre d'ajout est sans effet).
 Les analyses **autonomes** (calibration, économie, correction, conformité) ne
 sont pas des collecteurs (elles lisent ``corpus``/``pipeline_outputs``/``usage``
 directement) et restent dans ``evaluate_run``.
+
+``actives`` restreint ce qui est **observé**, pas seulement ce qui est rendu :
+c'est l'observation qui coûte. Un collecteur éteint ne voit aucun document,
+donc ne bâtit rien — le filtre sur ``build`` n'est qu'une ceinture, gratuite
+puisque rien n'a été accumulé.
 """
 
 from __future__ import annotations
@@ -33,6 +38,27 @@ from cinoc.evaluation.taxonomy import TaxonomyCollector
 from cinoc.evaluation.textual_fidelity import TextualFidelityCollector
 from cinoc.evaluation.word_errors import WordErrorCollector
 
+#: ``attribut du collecteur -> kind de l'analyse qu'il produit``. C'est cette
+#: table qui rend les analyses **déclarables** : sans elle, ``EvaluationSpec.
+#: analyses`` ne saurait pas quoi éteindre. Elle est confrontée aux ``kind``
+#: réellement produits par ``tests/evaluation/test_analyses_declarees.py`` —
+#: une table qui dérive rendrait une analyse silencieusement inextinguible.
+COLLECTEURS: Mapping[str, str] = {
+    "diagnostics": "diagnostics",
+    "taxonomy": "taxonomy",
+    "doc_hallucination": "document_hallucination",
+    "doc_texts": "document_texts",
+    "structured": "structured_data",
+    "markers": "philology",
+    "roman": "roman",
+    "textual_fidelity": "textual_fidelity",
+    "inter_engine": "inter_engine",
+    "word_errors": "word_errors",
+    "entities": "ner",
+    "lines": "lines",
+    "doc_lines": "document_lines",
+}
+
 
 class ViewCollectors:
     """Les collecteurs stateful d'**une** vue : instancier → observer → bâtir.
@@ -42,7 +68,11 @@ class ViewCollectors:
     ``build`` rend les payloads d'analyse non vides de la vue.
     """
 
-    def __init__(self, view: EvaluationView) -> None:
+    def __init__(
+        self, view: EvaluationView, actives: frozenset[str] | None = None
+    ) -> None:
+        #: ``None`` = toutes (défaut historique). Sinon, les ``kind`` voulus.
+        self._actives = actives
         self.diagnostics = DiagnosticsCollector()
         self.taxonomy = TaxonomyCollector()
         self.doc_hallucination = DocumentHallucinationCollector()
@@ -60,6 +90,10 @@ class ViewCollectors:
         self.lines = LinesCollector(enabled=preserves_newlines)
         self.doc_lines = DocumentLinesCollector(enabled=preserves_newlines)
 
+    def _actif(self, attribut: str) -> bool:
+        """Ce collecteur est-il demandé ? ``None`` = tous le sont."""
+        return self._actives is None or COLLECTEURS[attribut] in self._actives
+
     def observe(
         self,
         pipeline_name: str,
@@ -74,28 +108,41 @@ class ViewCollectors:
             and isinstance(entity_context.reference, EntitySet)
             and isinstance(entity_context.hypothesis, EntitySet)
         ):
-            self.entities.observe(
-                pipeline_name,
-                entity_context.reference,
-                entity_context.hypothesis,
-            )
+            if self._actif("entities"):
+                self.entities.observe(
+                    pipeline_name,
+                    entity_context.reference,
+                    entity_context.hypothesis,
+                )
         if text_context is None:
             return
         ref = str(text_context.reference)
         hyp = str(text_context.hypothesis)
-        self.diagnostics.observe(pipeline_name, document_id, ref, hyp)
-        self.taxonomy.observe(pipeline_name, ref, hyp)
-        self.doc_hallucination.observe(pipeline_name, document_id, ref, hyp)
-        self.structured.observe(pipeline_name, ref, hyp)
-        self.markers.observe(pipeline_name, ref, hyp)
-        self.roman.observe(pipeline_name, ref, hyp)
-        self.lines.observe(pipeline_name, ref, hyp)
-        self.doc_lines.observe(pipeline_name, document_id, ref, hyp)
-        self.textual_fidelity.observe(pipeline_name, document_id, ref, hyp)
-        self.inter_engine.observe(pipeline_name, document_id, ref, hyp)
-        self.word_errors.observe(pipeline_name, document_id, ref, hyp)
-        cer = next((s.value for s in scores if s.metric == "cer"), None)
-        self.doc_texts.observe(pipeline_name, document_id, ref, hyp, cer)
+        if self._actif("diagnostics"):
+            self.diagnostics.observe(pipeline_name, document_id, ref, hyp)
+        if self._actif("taxonomy"):
+            self.taxonomy.observe(pipeline_name, ref, hyp)
+        if self._actif("doc_hallucination"):
+            self.doc_hallucination.observe(pipeline_name, document_id, ref, hyp)
+        if self._actif("structured"):
+            self.structured.observe(pipeline_name, ref, hyp)
+        if self._actif("markers"):
+            self.markers.observe(pipeline_name, ref, hyp)
+        if self._actif("roman"):
+            self.roman.observe(pipeline_name, ref, hyp)
+        if self._actif("lines"):
+            self.lines.observe(pipeline_name, ref, hyp)
+        if self._actif("doc_lines"):
+            self.doc_lines.observe(pipeline_name, document_id, ref, hyp)
+        if self._actif("textual_fidelity"):
+            self.textual_fidelity.observe(pipeline_name, document_id, ref, hyp)
+        if self._actif("inter_engine"):
+            self.inter_engine.observe(pipeline_name, document_id, ref, hyp)
+        if self._actif("word_errors"):
+            self.word_errors.observe(pipeline_name, document_id, ref, hyp)
+        if self._actif("doc_texts"):
+            cer = next((s.value for s in scores if s.metric == "cer"), None)
+            self.doc_texts.observe(pipeline_name, document_id, ref, hyp, cer)
 
     def build(
         self,
@@ -127,7 +174,12 @@ class ViewCollectors:
             self.entities.build(view_name),
             self.doc_texts.build(view_name),
         ]
-        out.extend(analysis for analysis in candidates if analysis is not None)
+        out.extend(
+            analysis
+            for analysis in candidates
+            if analysis is not None
+            and (self._actives is None or analysis.payload.kind in self._actives)
+        )
         return out
 
 

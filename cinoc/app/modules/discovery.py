@@ -12,6 +12,10 @@ comme le socle (``register_default_modules``), même ``Module`` Protocol, seule 
 source diffère. Un YOLO de segmentation se branche ainsi **sans forker** : c'est
 un ``Module`` ``IMAGE → LAYOUT`` que le fan-out consomme comme les autres.
 
+``inspect_plugins`` est la même mécanique sans effet de bord : elle sert au
+catalogue (``cinoc list engines``), qui doit montrer les modules tiers — et
+surtout ceux qui **échouent**, jusqu'ici invisibles hors du journal.
+
 **Sécurité** : le code tiers s'exécute **in-process**. En **mode public** la
 découverte est **désactivée (fail-closed)** — jamais de chargement de code
 arbitraire sur un serveur exposé. Un plugin défectueux est **journalisé et
@@ -22,9 +26,10 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable, Iterable
+from dataclasses import dataclass
 from typing import Protocol
 
-from cinoc.app.modules.registry import ModuleRegistry
+from cinoc.app.modules.registry import ModuleBuilder, ModuleRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +56,61 @@ def _default_entry_points() -> Iterable[_EntryPoint]:
     return entry_points(group=ENTRY_POINT_GROUP)
 
 
+@dataclass(frozen=True)
+class PluginReport:
+    """Ce qu'un entry-point tiers a donné : son builder, ou la raison du refus.
+
+    ``builder`` et ``reason`` sont exclusifs. La **raison** existe pour être
+    montrée : un plugin installé mais inutilisable est le cas qu'un utilisateur
+    doit pouvoir diagnostiquer sans lire un journal.
+    """
+
+    name: str
+    source: str
+    builder: ModuleBuilder | None = None
+    reason: str | None = None
+
+    @property
+    def ok(self) -> bool:
+        return self.builder is not None
+
+
+def inspect_plugins(
+    entry_points_loader: EntryPointsLoader | None = None,
+) -> tuple[PluginReport, ...]:
+    """Charge chaque entry-point du groupe et dit ce qu'il a donné.
+
+    Séparé de l'enregistrement pour que le **catalogue** (``cinoc list
+    engines``) montre les modules tiers sans avoir à en enregistrer, et surtout
+    pour qu'il montre ceux qui **échouent** — invisibles jusqu'ici, puisque
+    ``discover_plugins`` se contente de les journaliser.
+    """
+    loader = entry_points_loader or _default_entry_points
+    reports: list[PluginReport] = []
+    for entry_point in loader():
+        source = getattr(entry_point, "value", "?")
+        try:
+            builder = entry_point.load()
+        except Exception as exc:  # le code tiers peut lever n'importe quoi
+            reports.append(
+                PluginReport(name=entry_point.name, source=source, reason=str(exc))
+            )
+            continue
+        if not callable(builder):
+            reports.append(
+                PluginReport(
+                    name=entry_point.name,
+                    source=source,
+                    reason=f"{type(builder).__name__} n'est pas un builder appelable",
+                )
+            )
+            continue
+        reports.append(
+            PluginReport(name=entry_point.name, source=source, builder=builder)
+        )
+    return tuple(reports)
+
+
 def discover_plugins(
     registry: ModuleRegistry,
     *,
@@ -66,29 +126,23 @@ def discover_plugins(
     if not enabled:
         logger.info("[plugins] découverte désactivée (mode public, fail-closed)")
         return ()
-    loader = entry_points_loader or _default_entry_points
     discovered: list[str] = []
-    for entry_point in loader():
-        try:
-            builder = entry_point.load()
-        except Exception as exc:  # le code tiers peut lever n'importe quoi
+    for report in inspect_plugins(entry_points_loader):
+        if report.builder is None:
             logger.warning(
-                "[plugins] entry-point %r : chargement échoué, ignoré : %s",
-                entry_point.name,
-                exc,
+                "[plugins] entry-point %r ignoré : %s", report.name, report.reason
             )
             continue
-        if not callable(builder):
-            logger.warning(
-                "[plugins] entry-point %r : %r n'est pas un builder appelable, ignoré",
-                entry_point.name,
-                type(builder).__name__,
-            )
-            continue
-        registry.register_builder(entry_point.name, builder)
-        discovered.append(entry_point.name)
-        logger.info("[plugins] module tiers enregistré : %r", entry_point.name)
+        registry.register_builder(report.name, report.builder)
+        discovered.append(report.name)
+        logger.info("[plugins] module tiers enregistré : %r", report.name)
     return tuple(discovered)
 
 
-__all__ = ["ENTRY_POINT_GROUP", "EntryPointsLoader", "discover_plugins"]
+__all__ = [
+    "ENTRY_POINT_GROUP",
+    "EntryPointsLoader",
+    "PluginReport",
+    "discover_plugins",
+    "inspect_plugins",
+]

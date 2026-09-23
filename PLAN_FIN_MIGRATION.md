@@ -60,7 +60,8 @@ Seules **les strates** manquaient d'un champ ; c'est l'objet de la Phase 0.
 | **P2 — Métriques** (ex-étape 4) | 4a-4c (texte/philologie) · 4d (robustesse/image — **besoin réfs image P0**) · 4e (inter-moteurs/lignes) · 4f (NER) + métriques layout/région. *Parallélisable après P0.* | P0 | parité |
 | **P3 — Dataset de référence curé** (le neuf, **UN seul**) | spec de standardisation (alignée P0) · **un** corpus libre de droits, GT riche (texte + layout + entités) + métadonnée strate + **IIIF statique** (manifestes + vignettes) · importeur (SHA → `RunManifest`). **Preuve que la chaîne tient et qu'elle est extensible** ; d'autres datasets = incrémental post-v1. | P0 ; conception ⇄ P2 (schéma GT) | **neuf** |
 | **P4 — Saveurs & échelle** | saveur **réfs IIIF** (URLs du dataset P3) · saveur **servie** (app web : galerie paginée, images à la demande, échelle 5000). *(dossier déjà en P1.)* | P1, P3 | partiel neuf |
-| **P5 — Release 1.0 + gel Picarones** | checklist · tag · README/CHANGELOG · gel. | tout | — |
+| **P5a — Dette révélée par l'usage** | sept défauts trouvés par le premier banc de presse multi-colonnes ; onze PR ordonnées en quatre groupes. Une seule brique neuve : l'appariement géométrique des régions, qui débloque l'OLR inter-systèmes. | P2 (métriques layout) | correctif |
+| **P5 — Release 1.0 + gel Picarones** | checklist · tag · README/CHANGELOG · gel. | tout, **dont P5a** | — |
 
 **Intégration métriques ⇄ dataset** (le point clé) : P2 et P3 se renforcent. Le
 dataset **donne aux métriques leur vérité-terrain** (layout→région/structure ;
@@ -198,6 +199,95 @@ défauts.
 
 ---
 
+## Étape 4bis / **P5a** — La dette que l'usage réel a révélée (bloque le tag)
+
+> **Pourquoi cette phase n'existait pas.** La checklist « 1.0 prête » est passée
+> au vert le 2026-09-09. Elle a été vérifiée sur les corpus du dépôt : un bloc de
+> texte par page, quelques milliers de caractères. **Aucun banc n'avait encore
+> tourné sur de la presse ancienne multi-colonnes** — 40 000 caractères par page,
+> six colonnes, des centaines de régions. Le premier l'a fait en septembre, et il
+> a trouvé sept défauts. Cinq faussent des résultats ou les rendent illisibles.
+>
+> Publier la 1.0 avec eux, ce n'est pas publier un outil incomplet : c'est
+> publier des **classements faux**. D'où le blocage explicite du tag.
+>
+> **Ce que la phase dit de la méthode, au passage.** Ces défauts n'étaient pas
+> détectables par relecture : ils exigeaient un corpus dont la *forme* diffère de
+> celle des fixtures. C'est l'argument, a posteriori, du dataset curé de P3 — et
+> la raison d'en vouloir un **second**, de genre différent.
+
+### L'enchaînement, dans l'ordre de fusion
+
+Quatre groupes. À l'intérieur d'un groupe, les PR sont indépendantes ; entre
+groupes, l'ordre compte — corriger les chiffres avant d'en corriger le coût,
+et le coût avant d'ouvrir la surface d'extension.
+
+| # | PR | Ce qu'elle corrige | Effet mesuré |
+|---|---|---|---|
+| **G1** | | **Ce qui fausse des résultats** | |
+| 1 | #129 | deux régions pour la même aire, fan-out qui ne descendait pas dans les blocs composés, DPI que Tesseract devinait, distance d'édition quadratique | CER 1,009 → plausible ; une page entière mesurable |
+| 2 | #131 | le candidat noté était choisi par *type* d'artefact, donc un intermédiaire dès qu'une étape suit la correction | CER 0,884 → 0,808 sur une chaîne du banc |
+| 3 | #130 | confusions de caractères alignées à la mauvaise granularité (quadratique en longueur de page) | ×258 ; évaluation 11 h → 35 min |
+| **G2** | | **Ce que coûte une évaluation** | |
+| 4 | #132 | les analyses ignoraient `metric_names` : 34 produites pour 6 demandées, deux fois sur les mêmes textes | ×21,8 (518 s → 24 s pour 30 unités) |
+| **G3** | | **Le point d'extension** | |
+| 5 | #127 | un segmenteur ne disait pas ce qu'il sait détecter | — |
+| 6 | #128 | brancher un segmenteur exigeait d'écrire du Python | — |
+| 7 | #133 | écrire un module tiers obligeait à importer des modules privés ; un module installé était invisible | vérifié sur un module tiers réel |
+| 7bis | #133 | `test_default_loader_runs_clean` affirme que la découverte rend `()` : il ne vérifiait le câblage qu'**en l'absence** de ce qu'il câble, et tombe dès qu'un module tiers est installé | à corriger **dans** #133 |
+| **G4** | | **Écrit à partir de là** (rien n'existe encore) | |
+| 8 | — | **apparier les régions par géométrie, pas par identifiant** | débloque l'OLR inter-systèmes |
+| 9 | — | `code_version` dépendante du répertoire courant | reproductibilité |
+| 10 | — | `timeout` de Tesseract non réglable depuis la spec | une unité perdue sans recours |
+| 11 | — | deux vues texte observent deux fois les mêmes textes | facteur 2 restant |
+
+**Condition de fusion de #133** : elle ne câble que la CLI. `interfaces/web/app.py`
+appelle `engine_statuses()` et `segmenter_statuses()`, jamais
+`third_party_statuses()` — un module tiers resterait invisible dans le web. C'est
+une rupture de la parité web ⇄ CLI (D-224) que `test_web_cli_parity.py` n'a pas
+relevée : **compléter le web et le garde-fou avant de fusionner**.
+
+### G4-8 — Apparier les régions par géométrie (la plus utile des quatre)
+
+Six métriques de structure existent — `region_detection`, `region_cer`,
+`line_identity_cer`, `line_identity_coverage`, `reading_order_tau`,
+`reading_order_coverage` — et la vérité terrain se lit en ALTO, en PAGE-XML ou en
+JSON natif. Sur le papier, cinoc sait donc déjà noter une OLR.
+
+En pratique, **une seule de ces six marche entre deux systèmes différents.** Les
+cinq autres apparient les blocs **par identifiant**, or les identifiants de la
+BnF (`r_10_1`) ne seront jamais ceux d'un détecteur (`r1`, `block_0`). Mesuré, en
+prenant une vérité terrain et en la re-numérotant — géométrie et texte
+rigoureusement identiques :
+
+| | mêmes identifiants | identifiants d'un autre système |
+|---|---|---|
+| `region_detection` | 1,000 | **1,000** ✓ |
+| `region_cer` | 0,000 | **1,000** ⚠ |
+| `reading_order_tau` | 0,000 | **None** |
+| `reading_order_coverage` | 1,000 | **0,000** |
+
+`region_cer` est le cas grave : il annonce **1,000**, le pire score possible, pour
+une transcription **parfaite**. Ce n'est pas « non applicable », c'est un faux
+négatif silencieux — un banc classerait dernier un système irréprochable.
+
+`region_detection` sait déjà apparier par IoU de boîte. **Réutiliser cet
+appariement** pour les quatre autres les rend utilisables entre systèmes, sans
+rien inventer. C'est ce qui manquait au banc de presse : faute de pouvoir mesurer
+l'ordre de lecture, il a fallu se rabattre sur le CER pleine page, qui le mesure
+de travers — et qui a fait conclure, à tort, qu'une chaîne de référence perdait
+contre Tesseract seul.
+
+### Ce que P5a ne contient pas
+
+Ni feature, ni surface nouvelle. Une seule brique neuve y est tolérée, G4-8, et
+elle ne fait que rendre exploitable ce qui existe. Tout le reste est du
+correctif. Les modules tiers eux-mêmes vivent **hors du dépôt** — c'est le
+contrat du point d'extension, et la chaîne NDNP de la Library of Congress en est
+la preuve exécutée.
+
+---
+
 ## Étape 5 — Release `1.0.0` puis gel de Picarones
 
 | Sous-étape | Contenu |
@@ -214,6 +304,13 @@ défauts.
 > réduit à la *saveur servie*, que ce plan déclare lui-même pouvoir suivre la 1.0.
 > **Aucun tag `git` n'existe** : la version est le repli `setuptools_scm`, donc la
 > 1.0 n'a jamais été publiée.
+>
+> **Révision 2026-09-23 — cet encadré a verdi trop tôt.** Il a été vérifié sur
+> les corpus du dépôt, tous à un bloc de texte par page. Le premier banc de
+> presse ancienne multi-colonnes a trouvé **sept défauts**, dont cinq faussent
+> des résultats. Ils forment **P5a**, qui s'intercale ici et bloque le tag. La
+> leçon n'est pas « la checklist était mal faite » : c'est qu'une checklist ne
+> vaut que ce que vaut la **forme** des données sur lesquelles on la coche.
 >
 > **Hors numérotation P#, livré en août 2026** : l'**axe correction structurée**
 > (`ALTO → ALTO`, `cinoc correct`) — inventorié au roll-up de
@@ -240,7 +337,8 @@ défauts.
 - [x] `README`/`CHANGELOG`/`pricing.json` à jour, roll-up réconcilié : **README ✅** · **CHANGELOG ✅** (section `[1.0.0]` datée) · **roll-up ✅** (D-223, puis au fil des D-entries) · **`pricing.json` vérifié au tag ✅** — `last_updated` 2026-06-10, `valid_until` 2026-12-01, donc **valide au 2026-09-10** ; le rapport avertit de lui-même au-delà de cette date.
 - [x] **Parité web ⇄ CLI ✅ (D-224→D-227)** : toute *capacité* du web l'est aussi en ligne de commande — acquisition de corpus (`cinoc corpus`), introspection (`cinoc list`), validation à blanc, export ALTO, segmentation seule. Les 26 routes sont couvertes ou justifiées `transport`, verrouillé par `tests/guardrails/test_web_cli_parity.py` ; `CLAUDE.md` §8.4 amendé en conséquence. **`examples/config.yaml`** livré, exécutable sans moteur.
 - [x] **Arbitrage rendu ✅ (D-229)** : la correction structurée est **livrée au web** (`POST /api/runs/correction` + section au composeur), et non actée comme outil de ligne de commande — le gel de Picarones ferme la fenêtre, et une capacité qu'on ne peut lancer que par un terminal n'est pas dans le produit. Le lanceur **refuse** un corpus dont la vérité terrain est extraite de son propre ALTO (zéro tautologique). `README` à jour.
-- [ ] **Tag `v1.0.0`** — *à poser par le mainteneur, quand il le décide*. Un tag posé le 2026-09-10 l'a été **sans son accord** et a été supprimé (D-232) : le dépôt ne porte aucun tag, la version reste le repli `setuptools_scm`. Le reste de la checklist étant vert, la 1.0 est **prête techniquement** — publier reste une décision, pas une étape.
+- [ ] **P5a — dette révélée par l'usage réel** : sept défauts trouvés en faisant tourner le premier banc de presse multi-colonnes, dont cinq faussent des résultats. Onze PR, l'enchaînement est décrit plus haut. **Bloque le tag** : publier une 1.0 qui rend de faux classements est pire que ne pas la publier.
+- [ ] **Tag `v1.0.0`** — *à poser par le mainteneur, quand il le décide*, **et une fois P5a fusionnée**. Un tag posé le 2026-09-10 l'a été **sans son accord** et a été supprimé (D-232) : le dépôt ne porte aucun tag, la version reste le repli `setuptools_scm`. Le reste de la checklist étant vert, la 1.0 est **prête techniquement** — publier reste une décision, pas une étape.
 - [ ] Gel de Picarones (5b) — **différé à la demande de l'utilisateur**, hors du chemin de la 1.0. Rien n'en dépend : le périmètre gardé est **entièrement** dans Cinoc, c'est la condition que le gel attendait.
 
 ---

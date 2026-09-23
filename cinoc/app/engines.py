@@ -301,6 +301,39 @@ def preprocess_status(*, has_module: ModuleProbe = _module_present) -> EngineSta
     )
 
 
+
+def third_party_statuses(
+    *, enabled: bool = True, entry_points_loader: object | None = None
+) -> tuple[EngineStatus, ...]:
+    """Les modules **tiers** installés, et pourquoi l'un d'eux ne marche pas.
+
+    Le catalogue ne montrait que le socle, parce qu'il est écrit à la main. Un
+    module tiers correctement installé restait donc invisible — et un module
+    **cassé** l'était doublement, ``discover_plugins`` se contentant de le
+    journaliser. Or c'est exactement ce qu'un utilisateur doit pouvoir voir :
+    « j'ai installé le paquet, pourquoi ma spec dit-elle *kind inconnu* ? »
+
+    ``enabled=False`` (mode public) rend un tuple vide, comme la découverte :
+    on ne révèle pas ce qui tourne sur un serveur exposé.
+    """
+    if not enabled:
+        return ()
+    from cinoc.app.modules.discovery import inspect_plugins  # noqa: PLC0415
+
+    return tuple(
+        EngineStatus(
+            kind=report.name,
+            label=report.source,
+            available=report.ok,
+            detail=(
+                "module tiers, prêt"
+                if report.ok
+                else f"module tiers inutilisable : {report.reason}"
+            ),
+        )
+        for report in inspect_plugins(entry_points_loader)  # type: ignore[arg-type]
+    )
+
 def segmenter_statuses(
     *, has_module: ModuleProbe = _module_present
 ) -> tuple[EngineStatus, ...]:
@@ -335,11 +368,16 @@ def segmenter_statuses(
     else:
         paddle_detail, paddle_ok = "PaddleX non installé (extra [segment])", False
     if has_module("pytesseract"):
-        tess_detail, tess_ok = "prêt (analyse de page native)", True
+        tess_detail = "prêt — générique, sans classe sémantique"
+        tess_ok = True
     else:
         tess_detail, tess_ok = "pytesseract non installé (extra [tesseract])", False
     if has_module("doclayout_yolo"):
-        yolo_detail, yolo_ok = "prêt (poids tirés du Hub au 1er run)", True
+        # Le **domaine** est dans le détail, pas dans un commentaire : c'est
+        # l'information qui manquait quand un détecteur de rapports financiers a
+        # été branché sur de la presse ancienne, doublant le CER sans un mot.
+        yolo_detail = "prêt — documents de bureau (DocStructBench, sans presse)"
+        yolo_ok = True
     else:
         yolo_detail, yolo_ok = "DocLayout-YOLO non installé (extra [yolo])", False
     if has_module("httpx"):

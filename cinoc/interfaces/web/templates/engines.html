@@ -48,4 +48,39 @@
     </div>
   </div>
 </section>
+{% if third_party %}
+<section class="sec">
+  <div class="sec-head">
+    <div class="sec-copy">
+      <div class="sec-title">{{ t.third_party_title }}</div>
+      <div class="sec-sub">{{ t.third_party_desc }}</div>
+    </div>
+  </div>
+  <div class="sec-body">
+    <div class="table-wrap">
+      <table class="engines">
+        <thead>
+          <tr>
+            <th>{{ t.engines_col_engine }}</th>
+            <th>{{ t.engines_col_status }}</th>
+            <th>{{ t.engines_col_detail }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for e in third_party %}
+          <tr>
+            <td class="eng-name">{{ e.kind }} <span class="eng-kind">{{ e.label }}</span></td>
+            <td>
+              <span class="dot {{ 'on' if e.available else 'off' }}"></span>
+              {{ t.engine_available if e.available else t.engine_unavailable }}
+            </td>
+            <td class="eng-detail">{{ e.detail }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+{% endif %}
 {% endblock %}

@@ -52,6 +52,8 @@ from cinoc.app.recipes import (
     spec_for_corpus,
 )
 from cinoc.app.run_planning import Competitor, RunPlanningError, plan_benchmark_run
+from cinoc.app.spec_coherence import SpecCoherenceError
+from cinoc.app.spec_coherence import check as coherence_check
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.errors import CinocError
 from cinoc.domain.run_spec import RunSpec
@@ -331,8 +333,18 @@ def build_runs_router(
         """
         # **Avant tout le reste.** Une brique qui exécute une commande lue dans
         # la spec ne doit jamais être atteignable par HTTP — sur une instance
-        # publique comme privée. C'est un refus inconditionnel, pas un réglage.
+        # publique comme privée. C'est un refus inconditionnel, pas un réglage,
+        # et il passe avant les contrôles de cohérence : refuser un montage
+        # incohérent serait déjà en avoir accepté l'exécution comme principe.
         _refuser_cli(referenced_kinds(spec))
+        # Puis la cohérence du montage : une spec peut être typée juste et
+        # décrire un assemblage qui ne fera pas ce qu'il annonce. Refusée en
+        # 422, comme une brique inconnue — c'est la même famille d'erreur, et
+        # elle se constate au même moment.
+        try:
+            coherence_check(spec)
+        except SpecCoherenceError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
         sts = statuses()
         registre = ModuleRegistry()
         register_default_modules(registre)

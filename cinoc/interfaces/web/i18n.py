@@ -176,6 +176,10 @@ _STRINGS: dict[str, dict[str, str]] = {
         # Page « Moteurs »
         "engines_eyebrow": "Vitrine · moteurs",
         "engines_title": "Moteurs",
+        "third_party_title": "Modules tiers",
+        "third_party_desc": "Briques découvertes par entry-points "
+        "(cinoc.modules), installées hors du dépôt. Un module qui ne se "
+        "charge pas dit pourquoi.",
         "engines_desc": "Disponibilité runtime des moteurs du socle : binaire, SDK, "
         "clé d'API. Un moteur cloud est prêt dès que son SDK et sa clé sont là.",
         "stat_ready": "prêts",
@@ -420,6 +424,10 @@ _STRINGS: dict[str, dict[str, str]] = {
         "sys_open": "System · details",
         "engines_eyebrow": "Showcase · engines",
         "engines_title": "Engines",
+        "third_party_title": "Third-party modules",
+        "third_party_desc": "Bricks discovered through entry-points "
+        "(cinoc.modules), installed outside this repository. A module that "
+        "fails to load says why.",
         "engines_desc": "Runtime availability of the built-in engines: binary, SDK, "
         "API key. A cloud engine is ready as soon as its SDK and key are present.",
         "stat_ready": "ready",

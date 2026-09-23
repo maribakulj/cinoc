@@ -27,6 +27,10 @@ publier, et son moment, appartiennent au mainteneur.
   de spec** au lieu d'un adaptateur. L'interface n'est pas l'outil, c'est le
   format. Réservée à la ligne de commande — elle exécute une commande décrite
   par la spec, et le lanceur web la refuse toujours, instance privée comprise.
+- **Les segmenteurs déclarent ce qu'ils savent détecter** — leurs classes et le
+  corpus sur lequel ils ont été entraînés, visible dans `cinoc list engines`.
+  Une table « classe → réglage » qui ne parle pas la langue de son segmenteur
+  est désormais refusée avant le run, au lieu d'être ignorée en silence.
 
 - **Le rapport montre ce qu'il y a dans chaque chaîne.** Section « Composition
   des chaînes » : les étapes réellement exécutées, la forme du graphe, le

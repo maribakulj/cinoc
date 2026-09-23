@@ -176,7 +176,14 @@ def _print_plan(spec: RunSpec) -> int:
 
     Une spec de benchmark engage des appels facturés et des heures de calcul ;
     pouvoir la relire avant de la lancer n'est pas un confort.
+
+    La cohérence est contrôlée **ici aussi**, et pas seulement au run : une spec
+    dont le montage ne ferait pas ce qu'il annonce doit être refusée avant le
+    premier appel facturé, pas après.
     """
+    from cinoc.app.spec_coherence import check  # noqa: PLC0415
+
+    check(spec)
     print(f"Corpus     : {spec.corpus.name} — {len(spec.corpus.documents)} document(s)")
     print(f"Pipelines  : {len(spec.pipelines)}")
     for pipeline in spec.pipelines:
@@ -218,6 +225,11 @@ def _run_config(
         # invalide (Pydantic + chemins sécurisés) ; reste à montrer ce qui
         # serait lancé, pour qu'on le lise avant de payer des appels d'API.
         return _print_plan(spec)
+    # Même contrôle hors ``--check`` : un run lancé sans relecture ne doit pas
+    # échapper à ce qu'une relecture aurait refusé.
+    from cinoc.app.spec_coherence import check as _coherent  # noqa: PLC0415
+
+    _coherent(spec)
     resume_store = ResumeStore(Path(resume_dir)) if resume_dir else None
     # Export HIPE = sink d'artefacts (les textes sont lus avant le nettoyage du
     # workspace) — le format JSONL porte les textes, pas les scores.

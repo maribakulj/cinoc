@@ -75,6 +75,7 @@ def _client(
             templates,
             statuses=lambda: (),
             segmenters=lambda: (),
+            third_party=lambda: (),
             history_store=HistoryStore(tmp_path / "h.db"),
             corpus_store=corpus_store,
             curated_author=curated_author,
@@ -109,6 +110,7 @@ def test_library_caches_catalogue_across_loads(
             templates,
             statuses=lambda: (),
             segmenters=lambda: (),
+            third_party=lambda: (),
             history_store=HistoryStore(tmp_path / "h.db"),
         )
     )

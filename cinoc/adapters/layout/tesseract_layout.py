@@ -26,6 +26,8 @@ redemander bloc par bloc paierait deux fois la même lecture.
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 from cinoc.adapters.layout._base import layout_step_output
 from cinoc.adapters.ocr.tesseract import invoke_tesseract_alto
 from cinoc.domain.artifacts import Artifact, ArtifactType
@@ -50,8 +52,23 @@ _DEFAULT_TIMEOUT = 300.0
 class TesseractLayoutSegmenter:
     """``IMAGE → LAYOUT`` par l'analyse de page native de Tesseract."""
 
+    #: **Vide, et ce n'est pas un oubli.** Tesseract découpe la page en blocs
+    #: mais ne leur donne aucune classe sémantique : il ne dit pas « ceci est un
+    #: article », il dit « ceci est un bloc de texte ». Un vocabulaire vide
+    #: signifie donc « aucune classe à laquelle accrocher un réglage », et une
+    #: table « classe → réglage » posée sur lui est une erreur de conception, pas
+    #: une faute de frappe.
+    LABELS: ClassVar[frozenset[str]] = frozenset()
+
+    DOMAIN: ClassVar[str] = "générique (analyse de page, sans classe sémantique)"
+
     def __init__(
-        self, *, lang: str = "fra", psm: int = DEFAULT_PSM, oem: int = 3
+        self,
+        *,
+        lang: str = "fra",
+        psm: int = DEFAULT_PSM,
+        oem: int = 3,
+        dpi: int | None = None,
     ) -> None:
         if not 0 <= psm <= 13:
             raise AdapterStepError(
@@ -61,9 +78,17 @@ class TesseractLayoutSegmenter:
             raise AdapterStepError(
                 f"TesseractLayoutSegmenter : oem ∈ [0, 3], reçu {oem}."
             )
+        if dpi is not None and not 70 <= dpi <= 2400:
+            raise AdapterStepError(
+                f"TesseractLayoutSegmenter : dpi ∈ [70, 2400], reçu {dpi}."
+            )
         self._lang = lang
         self._psm = psm
         self._oem = oem
+        #: Résolution imposée. Sans elle, tesseract croit les métadonnées du
+        #: fichier : une numérisation déclarée à 96 DPI lui fait conclure une page
+        #: d'un mètre de large, et son analyse de page rend « Empty page!! ».
+        self._dpi = dpi
 
     @property
     def name(self) -> str:
@@ -104,6 +129,7 @@ class TesseractLayoutSegmenter:
             lang=self._lang,
             psm=self._psm,
             oem=self._oem,
+            dpi=self._dpi,
             timeout=timeout,
         )
         return layout_step_output(self._to_layout(alto), context, self.name)

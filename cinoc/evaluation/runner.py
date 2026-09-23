@@ -20,7 +20,7 @@ from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.documents import DocumentRef, GroundTruthRef
 from cinoc.domain.evaluation import EvaluationSpec, EvaluationView
 from cinoc.domain.run import RunManifest
-from cinoc.evaluation._view_collectors import ViewCollectors
+from cinoc.evaluation._view_collectors import COLLECTEURS, ViewCollectors
 from cinoc.evaluation.calibration import calibration_analysis
 from cinoc.evaluation.conformity import conformity_analysis
 from cinoc.evaluation.context import CrossEngineContext, DocContext
@@ -47,10 +47,11 @@ PipelineOutputs = Mapping[str, Mapping[str, Mapping[ArtifactType, Artifact]]]
 #: Signature d'entrée d'une métrique : ``(type_référence, type_hypothèse)``.
 _Signature = tuple[ArtifactType, ArtifactType]
 
-#: Précédence **explicite** de sélection du candidat quand une vue déclare
-#: plusieurs ``candidate_types`` : du plus **aval** (corrigé) au plus brut — on
-#: évalue la sortie la plus aboutie du pipeline. Jamais l'ordre alphabétique des
-#: valeurs d'enum (qui ne coïncide avec l'intention que par hasard).
+#: Précédence de **repli**, quand l'étape productrice est inconnue : du plus
+#: aval (corrigé) au plus brut. Elle ne vaut que comme approximation — c'est
+#: l'ordre des étapes du pipeline qui fait foi (cf. ``_candidate_for``). Jamais
+#: l'ordre alphabétique des valeurs d'enum (qui ne coïncide avec l'intention
+#: que par hasard).
 _CANDIDATE_PRECEDENCE: tuple[ArtifactType, ...] = (
     ArtifactType.CORRECTED_TEXT,
     ArtifactType.RAW_TEXT,
@@ -63,6 +64,30 @@ _Series = dict[str, dict[str, list[MetricScore]]]
 #: Un candidat ``CORRECTED_TEXT`` est donc noté par une métrique ``RAW_TEXT`` sans
 #: projection (les post-corrections LLM passent telles quelles).
 _TEXT_LIKE = frozenset({ArtifactType.RAW_TEXT, ArtifactType.CORRECTED_TEXT})
+
+
+#: Les ``kind`` d'analyse que ce runner sait produire. Une spec qui en nomme un
+#: autre est refusée **au chargement** plutôt que de rendre un résultat
+#: silencieusement amputé — même contrat que ``metric_names`` face au registre.
+ANALYSES_CONNUES: frozenset[str] = frozenset(COLLECTEURS.values()) | frozenset(
+    {"calibration", "correction", "decisions", "economics", "hipe", "inference"}
+)
+
+
+def _analyses_actives(evaluation: EvaluationSpec) -> frozenset[str] | None:
+    """``None`` = toutes (défaut) ; sinon l'ensemble déclaré, validé."""
+    if evaluation.analyses is None:
+        return None
+    voulues = frozenset(evaluation.analyses)
+    inconnues = sorted(voulues - ANALYSES_CONNUES)
+    if inconnues:
+        raise EvaluationError(
+            "analyses inconnues : "
+            + ", ".join(repr(k) for k in inconnues)
+            + f" — connues : {', '.join(sorted(ANALYSES_CONNUES))}."
+        )
+    return voulues
+
 
 
 def evaluate_run(
@@ -85,16 +110,22 @@ def evaluate_run(
     documents: list[RunDocumentResult] = []
     cross_engine: list[MetricScore] = []
     analyses: list[Analysis] = []
+    actives = _analyses_actives(evaluation)
 
     for view in evaluation.views:
         series: _Series = {name: {} for name in view.metric_names}
-        collectors = ViewCollectors(view)
+        collectors = ViewCollectors(view, actives)
         for pipeline_name in pipeline_order:
             for name in view.metric_names:
                 series[name][pipeline_name] = []
+            step_ranks = _step_ranks(manifest, pipeline_name)
             for document in corpus.documents:
                 candidate = _candidate_for(
-                    pipeline_outputs, pipeline_name, document.id, view.candidate_types
+                    pipeline_outputs,
+                    pipeline_name,
+                    document.id,
+                    view.candidate_types,
+                    step_ranks,
                 )
                 scores, text_context, entity_context = _score_document(
                     view, document, candidate, registry
@@ -129,7 +160,8 @@ def evaluate_run(
                 )
             )
         cross_engine.extend(_cross_engine_scores(view, series, registry))
-        analyses.extend(_inference_analyses(view, series))
+        if actives is None or "inference" in actives:
+            analyses.extend(_inference_analyses(view, series))
         analyses.extend(
             collectors.build(
                 view.name,
@@ -139,27 +171,37 @@ def evaluate_run(
         )
         # Analyses **autonomes** (≠ collecteurs) : elles lisent corpus /
         # pipeline_outputs / usage directement, hors du cycle observe→build.
-        calibration = calibration_analysis(view.name, corpus, pipeline_outputs)
+        calibration = None
+        if actives is None or "calibration" in actives:
+            calibration = calibration_analysis(view.name, corpus, pipeline_outputs)
         if calibration is not None:
             analyses.append(calibration)
-        if "cer" in view.metric_names:
+        if "cer" in view.metric_names and (actives is None or "economics" in actives):
             economics = economics_analysis(
                 view.name, "cer", series["cer"], usage, manifest
             )
             if economics is not None:
                 analyses.append(economics)
-        correction = correction_analysis(view, corpus, pipeline_outputs)
+        correction = None
+        if actives is None or "correction" in actives:
+            correction = correction_analysis(view, corpus, pipeline_outputs)
         if correction is not None:
             analyses.append(correction)
         # Ce qu'un correcteur a **refusé** de changer : invisible dans le texte
         # de sortie, donc invisible partout ailleurs.
-        decisions = decisions_analysis(view.name, pipeline_outputs)
+        decisions = None
+        if actives is None or "decisions" in actives:
+            decisions = decisions_analysis(view.name, pipeline_outputs)
         if decisions is not None:
             analyses.append(decisions)
 
     # Post-passe cross-vues : la conformité HIPE lit les résultats des vues
     # raw/hipe/heritage déjà calculés (zéro re-scoring) — cf. ``conformity``.
-    conformity = conformity_analysis(evaluation.views, pipelines, documents)
+    conformity = (
+        conformity_analysis(evaluation.views, pipelines, documents)
+        if actives is None or "hipe" in actives
+        else None
+    )
     if conformity is not None:
         analyses.append(conformity)
 
@@ -250,16 +292,63 @@ def _cross_engine_scores(
     return scores
 
 
+def _step_ranks(manifest: RunManifest, pipeline_name: str) -> Mapping[str, int]:
+    """``{id d'étape: rang}`` du pipeline — vide s'il n'est pas au manifeste."""
+    for spec in manifest.pipeline_specs:
+        if spec.name == pipeline_name:
+            return {step.id: rank for rank, step in enumerate(spec.steps)}
+    return {}
+
+
 def _candidate_for(
     pipeline_outputs: PipelineOutputs,
     pipeline_name: str,
     document_id: str,
     candidate_types: frozenset[ArtifactType],
+    step_ranks: Mapping[str, int],
 ) -> Artifact | None:
+    """L'artefact à noter : la sortie de l'étape la plus **aval** du pipeline.
+
+    Choisir par *type* d'artefact note un intermédiaire dès qu'une étape en aval
+    reproduit un type plus « brut ». Cas réel : ``segmentation → OCR par région
+    → correction VLM → ordre de lecture → projection`` publie un
+    ``CORRECTED_TEXT`` au milieu et finit sur un ``RAW_TEXT`` ; la précédence par
+    type notait le texte corrigé, donc **avant** l'ordre de lecture — mêmes mots,
+    mauvaise séquence, et un CER de 0,8842 au lieu de 0,8079.
+
+    L'ordre des étapes du pipeline tranche sans ambiguïté, et ``produced_by_step``
+    le rattache à l'artefact. La précédence par type ne sert plus que de repli,
+    pour les artefacts dont l'étape est inconnue — ceux du fan-out, qui la
+    laissent à ``None``, et les entrées initiales.
+    """
     by_document: Mapping[str, Mapping[ArtifactType, Artifact]] = (
         pipeline_outputs.get(pipeline_name, {})
     )
     outputs: Mapping[ArtifactType, Artifact] = by_document.get(document_id, {})
+    présents = [(t, a) for t, a in outputs.items() if t in candidate_types]
+    if not présents:
+        return None
+
+    #: Départage deux artefacts d'une **même** étape (un module peut en publier
+    #: plusieurs) : on retombe alors sur la précédence par type.
+    def rang_de_type(artifact_type: ArtifactType) -> int:
+        if artifact_type in _CANDIDATE_PRECEDENCE:
+            return _CANDIDATE_PRECEDENCE.index(artifact_type)
+        return len(_CANDIDATE_PRECEDENCE)
+
+    datés = [
+        (step_ranks[a.produced_by_step], -rang_de_type(t), t.value, a)
+        for t, a in présents
+        if a.produced_by_step is not None and a.produced_by_step in step_ranks
+    ]
+    if datés:
+        # Trier sur les trois premiers champs seulement : le quatrième est un
+        # ``Artifact``, qui n'a pas d'ordre. Ils ne peuvent pas s'égaliser
+        # aujourd'hui (``outputs`` est indexé par type, donc ``t.value`` est
+        # unique) — mais c'est un invariant implicite, et le laisser décider
+        # ferait lever un ``TypeError`` obscur le jour où il cesse de tenir.
+        return max(datés, key=lambda entrée: entrée[:3])[3]
+
     ordered = [t for t in _CANDIDATE_PRECEDENCE if t in candidate_types]
     ordered.extend(
         sorted(
