@@ -238,7 +238,7 @@ et le coût avant d'ouvrir la surface d'extension.
 | 8 | #135 | apparier les régions par géométrie, pas par identifiant | débloque l'OLR inter-systèmes | ✅ |
 | 9 | #136 | `code_version` dépendante du répertoire courant | reproductibilité §12 | ✅ |
 | 10 | #137 | `timeout` de Tesseract non réglable depuis la spec | une unité perdue sans recours | ✅ |
-| 11 | — | deux vues texte observent deux fois les mêmes textes | **38 %** du mode détaillé | **reste** |
+| 11 | — | deux vues texte observent deux fois les mêmes textes | **3,7 %** mesuré (38 % annoncé) | **fermé, non retenu** |
 | **hors plan** | | **Né d'une décision produit en cours de route** | | |
 | 12 | #138 | distance et alignement écrits à la main, là où `rapidfuzz` est déjà une dépendance | ×13 ; `mer` de 11 s à 0,009 s | ✅ |
 | 13 | #139 | **le banc est rapide par défaut**, le détail se réclame | 916 s → **29 s** | ✅ |
@@ -295,20 +295,47 @@ l'ordre de lecture, il a fallu se rabattre sur le CER pleine page, qui le mesure
 de travers — et qui a fait conclure, à tort, qu'une chaîne de référence perdait
 contre Tesseract seul.
 
-### Ce qui reste dans P5a
+### Item 11 — fermé sans être retenu, et ce qu'il a appris
 
-**Un seul item : la déduplication entre vues (11).** Un banc à deux vues texte
-observe deux fois les mêmes textes. Mutualiser est **rigoureusement sans perte** —
-mêmes entrées, mêmes sorties — et vaut 38 % du mode détaillé. Difficulté connue :
-`document_texts` consomme le CER de *sa* vue, il ne peut donc pas être partagé
-tel quel ; les douze autres collecteurs, si.
+**Écrit, testé, vérifié sans perte — puis écarté sur sa mesure.** Le correctif
+existait : les treize collecteurs rendus indifférents aux métriques de leur vue
+(le CER de ``document_texts`` déplacé de l'observation vers la construction, où
+il ne sert qu'à ordonner), puis les vues regroupées par signature de texte. Gate
+complet vert, et les deux ``RunResult`` produits avec et sans le correctif sont
+**rigoureusement identiques**.
 
-Ce n'est plus urgent depuis l'item 13 — le mode rapide ne paie aucune analyse —
-mais ça reste la seule optimisation du mode détaillé qui ne change aucun chiffre.
-Les autres pistes (remplacer `difflib`) modifieraient les diagnostics eux-mêmes :
-vérifié, `rapidfuzz` rend 7 598 substitutions là où `difflib` en rend 658, parce
-que l'un apparie de force et l'autre cherche des blocs communs. Pour une
-*distance* les deux sont équivalents ; pour une *carte d'erreurs*, non.
+| | 30 unités, mode détaillé |
+|---|---|
+| sans le correctif | 512,9 s |
+| avec | 493,8 s |
+
+**3,7 %.** Le plan annonçait 38 %. Pour une logique de regroupement ajoutée au
+runner et l'interface d'un collecteur modifiée, l'échange n'est pas bon
+(``CLAUDE.md`` §5 : une feature s'ajoute *dans un budget*).
+
+**Et l'écart désigne le vrai coût.** Retirer une observation sur deux fait gagner
+19 s : les **deux** passes d'observation pèsent donc 38 s sur 512, soit **7 %**.
+Les 92 % restants sont dans l'**assemblage** des analyses, pas dans l'observation
+par unité.
+
+**Pourquoi trois mesures successives s'étaient trompées.** Elles portaient sur
+quatre pipelines ; le banc réel en a dix. Or plusieurs analyses comparent les
+pipelines **deux à deux** — 6 paires à quatre pipelines, **45** à dix, **66** à
+douze. Ce poste croît au **carré** du nombre de moteurs et écrase tout le reste
+dès qu'on en compare plus d'une poignée. Un profil sur un échantillon réduit ne
+pouvait structurellement pas le voir : *réduire le corpus pour profiler est sûr,
+réduire le nombre de concurrents ne l'est pas*.
+
+### Le vrai poste du mode détaillé — constat, pas item
+
+Les analyses par **paires de pipelines** sont quadratiques. C'est là qu'il
+faudrait chercher si le mode détaillé devenait un usage courant sur de grands
+bancs.
+
+Ce n'est **pas** inscrit comme travail à faire : depuis que le mode rapide est le
+défaut (item 13), le mode détaillé est une demande explicite et ponctuelle. Écrire
+l'optimisation maintenant serait spéculatif — la règle « pas de consommateur =
+supprimé » vaut aussi pour la performance.
 
 ### Deux réserves ouvertes, constatées en revue
 
@@ -410,7 +437,7 @@ workspace disparu, l'item 1 est un prérequis strict et non une commodité.
 - [x] `README`/`CHANGELOG`/`pricing.json` à jour, roll-up réconcilié : **README ✅** · **CHANGELOG ✅** (section `[1.0.0]` datée) · **roll-up ✅** (D-223, puis au fil des D-entries) · **`pricing.json` vérifié au tag ✅** — `last_updated` 2026-06-10, `valid_until` 2026-12-01, donc **valide au 2026-09-10** ; le rapport avertit de lui-même au-delà de cette date.
 - [x] **Parité web ⇄ CLI ✅ (D-224→D-227)** : toute *capacité* du web l'est aussi en ligne de commande — acquisition de corpus (`cinoc corpus`), introspection (`cinoc list`), validation à blanc, export ALTO, segmentation seule. Les 26 routes sont couvertes ou justifiées `transport`, verrouillé par `tests/guardrails/test_web_cli_parity.py` ; `CLAUDE.md` §8.4 amendé en conséquence. **`examples/config.yaml`** livré, exécutable sans moteur.
 - [x] **Arbitrage rendu ✅ (D-229)** : la correction structurée est **livrée au web** (`POST /api/runs/correction` + section au composeur), et non actée comme outil de ligne de commande — le gel de Picarones ferme la fenêtre, et une capacité qu'on ne peut lancer que par un terminal n'est pas dans le produit. Le lanceur **refuse** un corpus dont la vérité terrain est extraite de son propre ALTO (zéro tautologique). `README` à jour.
-- [ ] **P5a — dette révélée par l'usage réel** : **12 items sur 13 fusionnés** (#127→#133, #135→#139). Reste la déduplication entre vues — sans perte, 38 % du mode détaillé, sans urgence depuis que le mode rapide est le défaut. **Ne bloque plus le tag** : les cinq défauts qui faussaient des résultats sont corrigés ; ce qui reste est une optimisation, pas une justesse.
+- [x] **P5a — dette révélée par l'usage réel ✅** : 12 items fusionnés (#127→#133, #135→#139) ; l'item 13 — la déduplication entre vues — **fermé sur sa mesure** : 3,7 % réels contre 38 % annoncés, pour une complexité ajoutée au runner. Les cinq défauts qui faussaient des résultats sont corrigés. **Le blocage du tag est levé.**
 - [ ] **P5b — persistance et calcul à la demande** : garder ce qu'un run a produit, puis calculer une analyse au clic dans la saveur servie. Né de #139. **Ne bloque pas le tag.**
 - [ ] **Tag `v1.0.0`** — *à poser par le mainteneur, quand il le décide*. Le blocage posé par P5a est **levé** : les défauts qui produisaient de faux classements sont corrigés et fusionnés. Un tag posé le 2026-09-10 l'a été **sans son accord** et a été supprimé (D-232) : le dépôt ne porte aucun tag, la version reste le repli `setuptools_scm`. Le reste de la checklist étant vert, la 1.0 est **prête techniquement** — publier reste une décision, pas une étape.
 - [ ] Gel de Picarones (5b) — **différé à la demande de l'utilisateur**, hors du chemin de la 1.0. Rien n'en dépend : le périmètre gardé est **entièrement** dans Cinoc, c'est la condition que le gel attendait.

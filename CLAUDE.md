@@ -29,12 +29,12 @@ avant d'écrire la moindre ligne.**
 - **Le plan qu'exécutent les sessions est [`PLAN_FIN_MIGRATION.md`](PLAN_FIN_MIGRATION.md)**
   (P0→P5), pas les axes `T#`/`S#` : ceux-ci décrivent comment on est arrivé là.
   **Étapes 1→4 + P0→P3 livrées.**
-- **Prochaine étape = P5a**, dont il ne reste qu'un item : la déduplication des
-  observations entre vues identiques (sans perte, 38 % du mode détaillé). Les
-  douze autres sont fusionnés — les cinq défauts qui faussaient des résultats
-  sont corrigés, donc **le blocage du tag est levé**. Vient ensuite **P5b**
-  (garder ce qu'un run produit, puis calculer une analyse au clic dans la saveur
-  servie), puis **P5** (release, puis gel de Picarones — ce dernier différé à la
+- **Prochaine étape = P5b** — garder ce qu'un run produit (le workspace est
+  aujourd'hui effacé à la sortie), puis calculer une analyse au clic dans la
+  saveur servie. **P5a est close** : douze items fusionnés, le treizième fermé
+  sur sa mesure (3,7 % réels contre 38 % annoncés). Les défauts qui produisaient
+  de faux classements sont corrigés, donc **le blocage du tag est levé**. Vient
+  ensuite **P5** (release, puis gel de Picarones — ce dernier différé à la
   demande de l'utilisateur). Le seul reste de **P4** est la *saveur servie*, que
   le plan déclare pouvoir suivre la 1.0. Aucun tag `git` n'existe encore : la
   version est le repli `setuptools_scm`.
