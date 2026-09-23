@@ -15,6 +15,8 @@ commune, et le rapport explicite ce que la vue ignore.
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from cinoc.domain.artifacts import ArtifactType
@@ -104,21 +106,34 @@ class EvaluationSpec(BaseModel):
     """Container de N ``EvaluationView`` qu'un benchmark applique.
 
     ``analyses`` déclare les **analyses** voulues, par leur ``kind`` — un
-    registre les résout, comme ``metric_names`` pour les métriques. ``None``
-    (défaut) les produit toutes ; un tuple restreint ; ``()`` n'en produit
-    aucune et ne garde que les métriques déclarées.
+    registre les résout, comme ``metric_names`` pour les métriques.
 
-    Ce n'est pas un réglage de confort. Les analyses sont **beaucoup** plus
-    chères que les métriques : sur un banc de 10 pipelines × 12 pages, six
-    métriques déclarées coûtent 90 secondes, et les analyses qui les
-    accompagnaient, non demandées, en coûtaient des heures — une fois par vue
-    texte, donc deux fois sur les mêmes textes.
+    ===================  ==========================================
+    valeur               effet
+    ===================  ==========================================
+    ``None`` (défaut)    **mode rapide** : aucune analyse, seules
+                         les métriques déclarées sont calculées
+    ``"toutes"``         mode détaillé : toutes les analyses
+    ``("diagnostics",)`` seulement celles nommées
+    ``()``               aucune (identique au défaut, explicite)
+    ===================  ==========================================
+
+    **Pourquoi le défaut est le mode rapide.** Une spec qui déclare six
+    métriques faisait produire **trente-quatre analyses**, et celles-ci
+    pesaient 98,6 % du temps : 13 secondes de métriques contre 15 minutes
+    d'analyses, sur trente unités déjà exécutées. Produire par défaut ce que
+    personne n'a demandé, puis offrir le moyen de l'éteindre, est l'ordre
+    inverse du bon — d'autant que le rapport qui en résulte pèse des dizaines
+    de méga-octets et devient illisible.
+
+    Le mode détaillé reste **entier** : c'est un choix au lancement, pas une
+    version dégradée.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     views: tuple[EvaluationView, ...] = Field(default_factory=tuple)
-    analyses: tuple[str, ...] | None = None
+    analyses: tuple[str, ...] | Literal["toutes"] | None = None
 
 
 __all__ = ["MetricSpec", "EvaluationView", "EvaluationSpec"]

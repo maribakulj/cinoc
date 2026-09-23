@@ -16,6 +16,15 @@ publier, et son moment, appartiennent au mainteneur.
 
 ### Ajouté
 
+- **Le banc est rapide par défaut.** Une spec qui déclare six métriques en
+  faisait produire trente-quatre analyses, lesquelles pesaient 98 % du temps
+  d'évaluation — 13 secondes de métriques contre 15 minutes d'analyses que
+  personne n'avait demandées, et un rapport de plusieurs dizaines de
+  méga-octets. Le défaut devient le **mode rapide** : seules les métriques
+  déclarées. Le **mode détaillé** reste entier et se réclame, dans la spec
+  (`analyses: "toutes"`) ou au lancement — `cinoc run --analyses toutes`, case
+  correspondante au lanceur web. Mesuré : 29 s contre 616 s sur trente unités.
+
 - **Brancher un processeur OCR-D.** La brique `ocrd` fabrique le workspace
   METS que ces outils attendent, lance le processeur nommé et relit son
   PAGE-XML — la centaine de processeurs OCR-D devient un paramètre de spec.

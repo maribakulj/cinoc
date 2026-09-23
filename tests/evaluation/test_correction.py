@@ -239,7 +239,7 @@ def test_through_evaluate_run(tmp_path: Path) -> None:
     )
     result = evaluate_run(
         corpus=corpus,
-        evaluation=EvaluationSpec(views=(VIEW,)),
+        evaluation=EvaluationSpec(views=(VIEW,), analyses="toutes"),
         pipeline_outputs=outputs,
         registry=registry,
         manifest=manifest,
