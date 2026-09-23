@@ -347,7 +347,7 @@ exécutée.
 
 | # | Contenu | Dépend de |
 |---|---|---|
-| **1** | **Garder ce qu'un run a produit.** Le workspace est aujourd'hui un dossier temporaire **effacé à la sortie** : relire ce qu'un moteur a écrit sur une page est impossible une fois le run fini, et l'a été plusieurs fois au cours du banc de presse. Le cache de reprise les garde, mais seulement s'il a été demandé. **Valeur propre**, indépendante de la suite. | — |
+| **1** ✅ | **Garder ce qu'un run a produit** — *résolu en le cherchant, pas en le construisant*. Le mécanisme existait : `ResumeStore.save` **copie** les fichiers et réécrit leur chemin, donc les sorties survivent au workspace. Vérifié sur le banc de presse : 30 unités sur 30 retrouvées, textes compris, des heures après. Il ne manquait que la **trace** — le manifeste ignorait où elles étaient conservées, donc un `RunResult` ne pouvait pas retrouver ce qu'il avait produit. `RunManifest.artifacts_dir` comble ça. | — |
 | **2** | **Calculer une analyse à la demande, dans la saveur servie.** Un clic sur une section absente la produit, avec le vrai code — pas une réimplémentation en JavaScript, qui divergerait et violerait « tous les nombres sont une fonction auditable des données d'entrée ». L'aperçu de segmentation est le précédent. | 1 |
 
 **Ce que ça ne sera pas.** Le rapport **autonome** ne calcule rien : un fichier
@@ -355,9 +355,15 @@ seul n'a ni code ni données, et y embarquer les textes de toutes les pages le
 ferait peser des centaines de méga-octets. La fonctionnalité appartient à la
 saveur servie, et c'est une limite de conception assumée, pas un manque.
 
-**Inconnue à lever avant de s'engager** : le cache de reprise permet-il de
-retrouver les textes d'une unité ? S'il ne garde que des chemins vers un
-workspace disparu, l'item 1 est un prérequis strict et non une commodité.
+**Inconnue levée** : le cache de reprise garde bien les textes — il **copie**
+les fichiers. L'item 1 n'était donc pas un développement mais un constat, plus
+une trace de deux lignes. Un mécanisme portait deux rôles sans que le second
+soit nommé nulle part : éviter de ré-exécuter, *et* conserver les sorties.
+
+C'est le troisième item de suite dont la mesure préalable change la nature —
+après l'item 11 (fermé à 3,7 % au lieu de 38 %) et l'item 13 (une ligne de
+décision produit valant mieux que trois jours d'optimisation). **Chercher avant
+d'écrire a évité un développement entier.**
 
 ---
 

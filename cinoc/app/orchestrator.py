@@ -298,6 +298,9 @@ def run(
             started_at,
             completed_at,
             system_binaries=_collect_system_binaries(modules),
+            artifacts_dir=(
+                str(resume_store.base_dir) if resume_store is not None else None
+            ),
         )
         # Sink avant la sortie du ``with`` : les URI des artefacts (LAYOUT…)
         # pointent encore dans le workspace vivant. Best-effort côté appelant.
@@ -419,6 +422,7 @@ def _manifest(
     completed_at: datetime,
     *,
     system_binaries: dict[str, str],
+    artifacts_dir: str | None = None,
 ) -> RunManifest:
     names = sorted(modules)
     return RunManifest(
@@ -440,6 +444,7 @@ def _manifest(
         started_at=started_at,
         completed_at=completed_at,
         metadata=spec.metadata,
+        artifacts_dir=artifacts_dir,
     )
 
 
