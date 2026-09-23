@@ -166,6 +166,7 @@ def build_home_router(
     *,
     statuses: StatusProvider,
     segmenters: StatusProvider,
+    third_party: StatusProvider,
     ner: Callable[[], EngineStatus] | None = None,
     history_store: HistoryStore,
     corpus_store: CorpusStore | None = None,
@@ -339,6 +340,10 @@ def build_home_router(
         context["engines"] = engine_list
         context["n_ready"] = n_ready
         context["n_engines"] = len(engine_list)
+        # Les modules tiers ne sont pas dans le catalogue écrit à la main : ils
+        # sont **découverts**. Les taire ici rompait la parité avec
+        # ``cinoc list engines``, qui les montre (D-224).
+        context["third_party"] = list(third_party())
         return templates.TemplateResponse(request, "engines.html", context)
 
     return router

@@ -111,9 +111,20 @@ def test_real_entry_point_load_resolves_dotted_path() -> None:
 
 
 def test_default_loader_runs_clean() -> None:
-    # Aucun entry-point `cinoc.modules` en CI → découverte vide, sans erreur
-    # (prouve que le vrai chemin importlib.metadata est branché correctement).
-    assert discover_plugins(ModuleRegistry(), enabled=True) == ()
+    """Le vrai chemin ``importlib.metadata`` est branché et ne lève pas.
+
+    Ce test affirmait ``== ()``. Il ne vérifiait donc le câblage qu'**en
+    l'absence** de ce qu'il câble, et tombait dès qu'un module tiers était
+    réellement installé — c'est-à-dire dans le cas d'usage supporté. Ce qui se
+    vérifie ici est la **forme** du résultat : des ``kind`` enregistrés, quels
+    qu'ils soient.
+    """
+    registry = ModuleRegistry()
+    découverts = discover_plugins(registry, enabled=True)
+    assert isinstance(découverts, tuple)
+    assert all(isinstance(kind, str) and kind for kind in découverts)
+    # Ce qui est découvert est enregistré : c'est tout le contrat.
+    assert set(découverts) <= set(registry.kinds())
 
 
 def test_discovered_segmenter_produces_layout(tmp_path: Path) -> None:
