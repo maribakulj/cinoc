@@ -40,7 +40,12 @@ from cinoc.pipeline.types import RunContext, StepOutput
 logger = logging.getLogger(__name__)
 
 _VERSION = "1.0"
-_DEFAULT_TIMEOUT = 120.0
+DEFAULT_TIMEOUT = 120.0
+
+#: Plafond de réglage. Une valeur au-delà ne protège plus de rien :
+#: la deadline du run borne déjà l'étape, et un délai d'une heure sur
+#: un sous-processus muet est indiscernable d'un blocage.
+_TIMEOUT_MAX = 3600.0
 
 #: Codes langue Tesseract : ISO 639-3 (≥3 lettres ASCII), combinables par ``+``
 #: (``fra+lat``). ``lang`` finit sur la ligne de commande tesseract → on refuse
@@ -230,6 +235,7 @@ class TesseractAdapter:
         alto: bool = False,
         psm_by_class: str = "",
         dpi: int | None = None,
+        timeout: float = DEFAULT_TIMEOUT,
     ) -> None:
         if not label or not all(c.isalnum() or c in "_-" for c in label):
             raise AdapterStepError(
@@ -249,6 +255,11 @@ class TesseractAdapter:
             raise AdapterStepError(
                 f"TesseractAdapter : dpi ∈ [70, 2400], reçu {dpi}."
             )
+        if not 0 < timeout <= _TIMEOUT_MAX:
+            raise AdapterStepError(
+                f"TesseractAdapter : timeout ∈ ]0, {_TIMEOUT_MAX:g}] secondes, "
+                f"reçu {timeout}."
+            )
         self._psm_by_class = parse_psm_by_class(psm_by_class)
         self._label = label
         self._lang = lang
@@ -257,6 +268,12 @@ class TesseractAdapter:
         #: Résolution imposée à tesseract. ``None`` = il la déduit lui-même, ce qui
         #: le trompe quand le fichier déclare une valeur fausse (cf. ``_config``).
         self._dpi = dpi
+        #: Délai au-delà duquel le sous-processus est abandonné. Réglable parce
+        #: qu'il n'existe pas de bonne valeur universelle : le défaut convient à
+        #: une page ordinaire et **perd** une page de 37 Mpx, qu'aucun réglage ne
+        #: permettait de rattraper. Toujours borné par la deadline du run, qui
+        #: reste l'autorité — ceci n'est qu'un plafond par étape.
+        self._timeout = timeout
         #: Émet en plus un artefact ``ALTO_XML`` (ré-import eScriptorium/Transkribus).
         self._alto = alto
 
@@ -322,7 +339,7 @@ class TesseractAdapter:
             raise AdapterStepError(
                 f"{self.name} : workspace requis (RunContext.workspace_uri)."
             )
-        timeout = max(0.001, context.deadline.clamp_to_remaining(_DEFAULT_TIMEOUT))
+        timeout = max(0.001, context.deadline.clamp_to_remaining(self._timeout))
         psm = self._psm_for(params)
         text = _invoke_tesseract(
             image_path=image.uri,

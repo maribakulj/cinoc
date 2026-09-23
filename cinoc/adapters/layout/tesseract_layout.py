@@ -46,7 +46,10 @@ _VERSION = "1.0"
 #: un bloc unique et il n'y aurait plus rien à découper.
 DEFAULT_PSM = 3
 
-_DEFAULT_TIMEOUT = 300.0
+DEFAULT_TIMEOUT = 300.0
+
+#: Plafond de réglage (cf. ``adapters.ocr.tesseract``).
+_TIMEOUT_MAX = 3600.0
 
 
 class TesseractLayoutSegmenter:
@@ -69,6 +72,7 @@ class TesseractLayoutSegmenter:
         psm: int = DEFAULT_PSM,
         oem: int = 3,
         dpi: int | None = None,
+        timeout: float = DEFAULT_TIMEOUT,
     ) -> None:
         if not 0 <= psm <= 13:
             raise AdapterStepError(
@@ -78,6 +82,14 @@ class TesseractLayoutSegmenter:
             raise AdapterStepError(
                 f"TesseractLayoutSegmenter : oem ∈ [0, 3], reçu {oem}."
             )
+        if not 0 < timeout <= _TIMEOUT_MAX:
+            raise AdapterStepError(
+                f"TesseractLayoutSegmenter : timeout ∈ ]0, {_TIMEOUT_MAX:g}] "
+                f"secondes, reçu {timeout}."
+            )
+        #: Même raison que pour l'OCR : aucune valeur ne convient à toutes les
+        #: tailles de page, et le défaut en perdait une sans recours.
+        self._timeout = timeout
         if dpi is not None and not 70 <= dpi <= 2400:
             raise AdapterStepError(
                 f"TesseractLayoutSegmenter : dpi ∈ [70, 2400], reçu {dpi}."
@@ -123,7 +135,7 @@ class TesseractLayoutSegmenter:
             raise AdapterStepError(
                 f"{self.name} : workspace requis (RunContext.workspace_uri)."
             )
-        timeout = max(0.001, context.deadline.clamp_to_remaining(_DEFAULT_TIMEOUT))
+        timeout = max(0.001, context.deadline.clamp_to_remaining(self._timeout))
         alto = invoke_tesseract_alto(
             image_path=image.uri,
             lang=self._lang,

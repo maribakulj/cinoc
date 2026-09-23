@@ -64,6 +64,20 @@ def _dpi_optionnel(kwargs: Mapping[str, ParamValue]) -> int | None:
     return int(valeur) if isinstance(valeur, (int, float)) else None
 
 
+def _timeout_optionnel(
+    kwargs: Mapping[str, ParamValue], defaut: float
+) -> float:
+    """``timeout`` des kwargs, ou le défaut de la brique.
+
+    Le défaut reste celui de l'adaptateur : le relever pour tout le monde
+    masquerait des blocages réels. Mais l'option devait exister — une page de
+    37 Mpx dépasse les 120 s et se perdait **sans recours**, aucun réglage de
+    spec ne permettant de la rattraper.
+    """
+    valeur = kwargs.get("timeout")
+    return float(valeur) if isinstance(valeur, (int, float)) else defaut
+
+
 def _build_precomputed(kwargs: Mapping[str, ParamValue]) -> Module:
     label = kwargs.get("source_label")
     if not isinstance(label, str):
@@ -166,6 +180,9 @@ def _build_tesseract(kwargs: Mapping[str, ParamValue]) -> Module:
         raise ModuleResolutionError(
             "tesseract : 'label' (str) requis dans adapter_kwargs."
         )
+    from cinoc.adapters.ocr.tesseract import (  # noqa: PLC0415
+        DEFAULT_TIMEOUT as TESSERACT_DEFAULT_TIMEOUT,
+    )
     from cinoc.adapters.ocr.tesseract import TesseractAdapter
 
     return TesseractAdapter(
@@ -180,6 +197,7 @@ def _build_tesseract(kwargs: Mapping[str, ParamValue]) -> Module:
         # Résolution imposée. Absente, tesseract croit les métadonnées du fichier,
         # qui mentent souvent sur les numérisations patrimoniales.
         dpi=_dpi_optionnel(kwargs),
+        timeout=_timeout_optionnel(kwargs, TESSERACT_DEFAULT_TIMEOUT),
     )
 
 
@@ -463,6 +481,9 @@ def _build_tesseract_layout(kwargs: Mapping[str, ParamValue]) -> Module:
         DEFAULT_PSM,
         TesseractLayoutSegmenter,
     )
+    from cinoc.adapters.layout.tesseract_layout import (
+        DEFAULT_TIMEOUT as LAYOUT_DEFAULT_TIMEOUT,
+    )
 
     psm = kwargs.get("psm")
     oem = kwargs.get("oem")
@@ -471,6 +492,7 @@ def _build_tesseract_layout(kwargs: Mapping[str, ParamValue]) -> Module:
         psm=int(psm) if isinstance(psm, (int, float)) else DEFAULT_PSM,
         oem=int(oem) if isinstance(oem, (int, float)) else 3,
         dpi=_dpi_optionnel(kwargs),
+        timeout=_timeout_optionnel(kwargs, LAYOUT_DEFAULT_TIMEOUT),
     )
 
 
