@@ -15,11 +15,13 @@
 3. `PLAN_PARITE.md` — le parcours **post-T7/S6** : tranches T8→T15 + S7 vers
    la parité fonctionnelle avec Picarones (périmètre arbitré : repris /
    abandonné).
-4. `PLAN_FIN_MIGRATION.md` — **la route finale vers `1.0.0`** : 5 étapes
-   ordonnées (Space OCR réel → parité moteurs → parité interface → toutes les
-   métriques restantes → release + gel de Picarones) + références (8 abandons,
-   verdict métrique-par-métrique, garde-fous). **C'est le plan que ces sessions
-   exécutent**, une étape (ou sous-étape) à la fois.
+4. `PLAN_FIN_MIGRATION.md` — **la route finale vers `1.0.0`** : les étapes
+   ordonnées, du Space qui exécute un vrai OCR jusqu'à la release et au gel de
+   Picarones, en passant par les phases `P#` que l'usage réel a fait naître
+   (`P5a` dette du premier banc de presse, `P5b` calcul à la demande, `P5c`
+   joignabilité) + références (abandons, verdict métrique-par-métrique,
+   garde-fous). **C'est le plan que ces sessions exécutent**, une étape (ou
+   sous-étape) à la fois ; **laquelle** est dit par `CLAUDE.md` §0, pas ici.
 5. La `DoD vivante` de chaque couche touchée
    (`cinoc/<couche>/{ANALYSE,MIGRATION}_COUCHE_*.md`).
 
