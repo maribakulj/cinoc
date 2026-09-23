@@ -48,6 +48,8 @@ from cinoc.app.recipes import (
     spec_for_corpus,
 )
 from cinoc.app.run_planning import Competitor, RunPlanningError, plan_benchmark_run
+from cinoc.app.spec_coherence import SpecCoherenceError
+from cinoc.app.spec_coherence import check as coherence_check
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.errors import CinocError
 from cinoc.domain.run_spec import RunSpec
@@ -299,6 +301,14 @@ def build_runs_router(
         Une spec composée à la main ne doit pas ouvrir une porte que le
         formulaire ferme : ce serait un contournement, pas une fonctionnalité.
         """
+        # Cohérence du montage d'abord : une spec peut être typée juste et
+        # décrire un assemblage qui ne fera pas ce qu'il annonce. Refusée en
+        # 422, comme une brique inconnue — c'est la même famille d'erreur, et
+        # elle se constate au même moment.
+        try:
+            coherence_check(spec)
+        except SpecCoherenceError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
         sts = statuses()
         registre = ModuleRegistry()
         register_default_modules(registre)

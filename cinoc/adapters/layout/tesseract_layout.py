@@ -26,6 +26,8 @@ redemander bloc par bloc paierait deux fois la même lecture.
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 from cinoc.adapters.layout._base import layout_step_output
 from cinoc.adapters.ocr.tesseract import invoke_tesseract_alto
 from cinoc.domain.artifacts import Artifact, ArtifactType
@@ -49,6 +51,16 @@ _DEFAULT_TIMEOUT = 300.0
 
 class TesseractLayoutSegmenter:
     """``IMAGE → LAYOUT`` par l'analyse de page native de Tesseract."""
+
+    #: **Vide, et ce n'est pas un oubli.** Tesseract découpe la page en blocs
+    #: mais ne leur donne aucune classe sémantique : il ne dit pas « ceci est un
+    #: article », il dit « ceci est un bloc de texte ». Un vocabulaire vide
+    #: signifie donc « aucune classe à laquelle accrocher un réglage », et une
+    #: table « classe → réglage » posée sur lui est une erreur de conception, pas
+    #: une faute de frappe.
+    LABELS: ClassVar[frozenset[str]] = frozenset()
+
+    DOMAIN: ClassVar[str] = "générique (analyse de page, sans classe sémantique)"
 
     def __init__(
         self,
