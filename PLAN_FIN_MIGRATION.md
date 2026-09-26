@@ -473,17 +473,44 @@ atteignable depuis le web** — ni `dpi`, ni `psm`, ni `timeout`, ni `oem`.
 `params`. Un utilisateur du web qui rencontre ce défaut n'a donc aucun recours,
 alors même que le correctif tient en un entier.
 
+### Ce que la conception a changé à cet enchaînement
+
+La première rédaction de cette phase mettait le câblage en tête et le composeur
+en queue, et portait un item « les recettes manquantes » justifié par une
+affirmation **fausse** : les recettes livrées décriraient mal la presse
+ancienne. Elles la décrivent très bien — `presse_ancienne.yaml` porte
+préprocessing, segmentation, reconnaissance par région, ordre de lecture et
+projection, avec ses paramètres. L'erreur vient de n'avoir pas lu leur contenu.
+Cet item est **retiré**.
+
+La conception ([`PLAN_UI_COMPOSEUR.md`](PLAN_UI_COMPOSEUR.md)) a trouvé la cause
+sous le symptôme : **deux constructeurs de pipeline qui ne se connaissent pas**.
+`run_planning.py` (757 lignes, budget 760) assemble les étapes à la main pour la
+page web seule ; `recipes.py` les déduit d'une table de rôles typés, pour la CLI
+seule. Aucun des deux n'importe l'autre. C'est la *liste parallèle* que le
+projet combat ailleurs, et l'un des deux est à trois lignes de son plafond —
+donc chaque champ réclamé (`dpi`, `psm`) aggrave un fichier saturé pendant qu'à
+côté un mécanisme typé rend le même service pour rien.
+
+La colonne vertébrale de P5c est donc **la convergence vers un seul
+constructeur**, et l'ordre en découle.
+
 ### L'enchaînement, dans l'ordre de fusion
 
 | # | Contenu | Dépend de |
 |---|---|---|
-| **1** | **La troisième clause du garde-fou de parité.** Toute route `/api/*` est soit appelée par le front, soit déclarée `front-absent: <raison>`, soit une `dette:<id>` avec son échéance — exactement la forme des deux clauses existantes. Écrite **en premier** parce qu'elle transforme le reste de la phase en CI rouge plutôt qu'en bonnes intentions : les trois routes de recette rougissent aussitôt et s'inscrivent en dettes datées. | — |
-| **2** | **Brancher les recettes dans la page.** `GET /api/recipes` peuple un catalogue (titre + description, déjà bilingues) ; lancer appelle `POST /api/runs/recipe` avec les briques choisies. Le lanceur, le suivi SSE et l'affichage du rapport existent — c'est le chemin du bouton « lancer » actuel. Ferme deux des trois dettes. | 1 |
-| **3** | **Ouvrir `params` à la requête de recette.** `plan_from_recipe` accepte déjà `params` ; seule la frontière HTTP les refuse. Rend `dpi`/`psm`/`timeout` atteignables sans inventer de surface : un réglage par étape, validé par le rôle. | 2 |
-| **4** | **Trancher la porte « spec complète ».** `POST /api/runs/spec` est documentée comme « la porte qui donne au web l'intégralité du graphe sans une case de plus ». Soit on lui donne une zone de dépôt (un fichier YAML/JSON glissé, le corpus restant celui du serveur), soit on acte qu'elle est réservée aux clients programmatiques et on l'inscrit `front-absent`. Les deux sont défendables ; ce qui ne l'est pas, c'est le silence. Ferme la troisième dette. | 1 |
-| **5** | **Les recettes manquantes — de la donnée, pas du code.** Cinq recettes existent (`ocr_simple`, `ocr_puis_llm`, `alto_corrige`, `presse_ancienne`, `vote_trois_moteurs`). Manquent au moins la chaîne de segmentation → reconnaissance par région → projection telle que la presse ancienne la demande réellement, et une forme avec préprocessing. Ajouter une recette est un fichier YAML validé au chargement. | 3 |
-| **6** | **`standardize_corpus` : une face ou l'autre.** Soit une sous-commande `cinoc corpus standardize` (et son pendant web, que la clause de parité imposera), soit l'inscription explicite qu'il s'agit d'un producteur interne au dépôt, hors produit. Le tenir livré-mais-injoignable est le seul état à exclure. | 1 |
-| **7** | **Le composeur contraint.** Dernier parce qu'il n'est que l'éditeur de ce que 2→5 rendent réel. `roles()` porte déjà la signature typée de chaque rôle : à partir d'un ensemble de types disponibles, les rôles proposables sont ceux dont les `entrees` y sont contenues. L'UI devient une liste d'étapes et un menu **qui ne contient que ce qui peut se brancher** — pas un canevas de nœuds, où rien n'empêche de relier une sortie texte à une entrée image. Sa sortie naturelle est un YAML de recette : de la donnée, versionnable, relançable en CLI, qui alimente le catalogue au lieu de mourir dans un formulaire. | 5 |
+| **1** | **La troisième clause du garde-fou de parité.** Toute route `/api/*` est soit appelée par le front, soit déclarée `front-absent: <raison>`, soit une `dette:<id>` avec son échéance — la forme exacte des deux clauses existantes. Écrite **en premier** parce qu'elle transforme le reste de la phase en CI rouge plutôt qu'en bonnes intentions : les trois routes de recette rougissent aussitôt et s'inscrivent en dettes datées. | — |
+| **2** | **Les deux rôles manquants.** Les adapters LLM déclarent quatre modes ; `roles()` n'en câble que deux (`text_only` → `correction`, `refine` → `refine`). Il n'existe **aucun rôle** pour `zero_shot` (le modèle lit l'image) ni pour `text_and_image`. Une recette ne peut donc pas décrire le zero-shot, l'un des pipelines phares du produit. Deux entrées dans une table — mais un préalable à toute convergence, pas un détail de fin de phase. | 1 |
+| **3** | **La déclaration des paramètres au contrat de module.** Aucun module ne dit ce qu'il accepte : `params` est un dict non typé, donc un formulaire ne peut ni se générer ni valider, et une faute de frappe est **avalée en silence**. Même motif que D-251, qui a ajouté `LABELS` parce qu'une table `psm_by_class` était ignorée sans un mot. Décision d'**enveloppe** (axe 1), et les modules tiers l'obtiennent gratuitement — un segmenteur branché qui déclare ses paramètres reçoit son formulaire sans qu'on touche à cinoc. | 1 |
+| **4** | **Couche 1 — le catalogue de recettes branché à la file.** `GET /api/recipes` peuple des cartes (titre et description sont dans les YAML, déjà bilingues) ; une forme choisie déplie ses étapes, une brique par étape prise dans `Role.briques` ; « ajouter à la file » appelle `POST /api/runs/recipe`. Le lanceur, le suivi SSE et l'affichage du rapport existent déjà. **Cinq formes deviennent atteignables sans une ligne de pipeline nouvelle.** Ferme deux des trois dettes de l'item 1. | 2 |
+| **5** | **Couche 2 — le pli « réglages ».** Généré depuis la déclaration de l'item 3, un pli par étape. `--dpi 300` cesse d'être réservé au terminal — le contournement du défaut de page blanche devient accessible à qui n'ouvre pas de shell. Côté HTTP, `RecipeRequest` accepte enfin `params` ; `plan_from_recipe` les attendait déjà. | 3, 4 |
+| **6** | **La bascule — un seul constructeur.** Les quatre onglets de mode deviennent quatre recettes ; `_pipeline_for_competitor` et `_hybrid_competitor` meurent. Le garde-fou n° 1 du projet interdit de garder deux chemins « le temps de migrer » : les deux coexistent aujourd'hui par accident, les laisser coexister par décision serait la faute qu'il nomme. Six acquis du formulaire actuel sont à préserver explicitement, listés au §7 de la conception — dont un secret (le jeton de segmenteur distant) qui ne doit **jamais** entrer dans une recette enregistrable. | 5 |
+| **7** | **Couche 3 — le composeur contraint.** À partir des types déjà produits, les rôles proposables sont ceux dont les `entrees` y sont contenues : une fonction de cinq lignes sur `roles()`. Une liste d'étapes et un menu **qui ne contient pas le mauvais choix** — pas un canevas de nœuds, où l'on découvre l'erreur après l'avoir faite. Sortie : `[ enregistrer comme recette ]` → un YAML validé comme les autres, qui rejoint le catalogue de la couche 1. | 6 |
+| **8** | **Les deux indépendants.** `standardize_corpus` reçoit une face (commande, et son pendant web que la clause de parité imposera) ou sort du produit ; la porte « spec complète » (`POST /api/runs/spec`) reçoit une zone de dépôt ou s'inscrit `front-absent` avec sa raison. Ferme la troisième dette. | 1 |
+
+> **Conception détaillée** : [`PLAN_UI_COMPOSEUR.md`](PLAN_UI_COMPOSEUR.md) —
+> les trois couches, leurs maquettes, l'arbitrage sur la déclaration des
+> paramètres, ce que la bascule doit préserver, et trois réserves consignées.
 
 ### Pourquoi P5c passe avant P5b
 
@@ -499,10 +526,11 @@ autres sens, et ses items 2 et 3 branchent du code déjà écrit et déjà test�
 
 ### Ce que P5c ne contient pas
 
-Aucune brique de pipeline, aucune métrique, aucune section de rapport. Une seule
-surface nouvelle — le composeur de l'item 7 — et elle n'ajoute aucune capacité :
-elle rend atteignable la capacité que les rôles portent déjà. Le reste est du
-câblage et un garde-fou.
+Aucune brique de pipeline, aucun moteur, aucune métrique, aucune section de
+rapport. Les surfaces nouvelles — le catalogue, le pli de réglages, le
+composeur — **n'ajoutent aucune capacité** : elles rendent atteignable ce que
+les rôles portent déjà. Deux rôles, une déclaration au contrat, du câblage, un
+garde-fou, et un constructeur retiré.
 
 ### Ce que l'audit a corrigé au passage
 
@@ -566,7 +594,7 @@ le sens rassurant — il annonçait un manque là où il y avait une livraison.
 - [x] **Parité web ⇄ CLI ✅ (D-224→D-227)** : toute *capacité* du web l'est aussi en ligne de commande — acquisition de corpus (`cinoc corpus`), introspection (`cinoc list`), validation à blanc, export ALTO, segmentation seule. Les 26 routes sont couvertes ou justifiées `transport`, verrouillé par `tests/guardrails/test_web_cli_parity.py` ; `CLAUDE.md` §8.4 amendé en conséquence. **`examples/config.yaml`** livré, exécutable sans moteur.
 - [x] **Arbitrage rendu ✅ (D-229)** : la correction structurée est **livrée au web** (`POST /api/runs/correction` + section au composeur), et non actée comme outil de ligne de commande — le gel de Picarones ferme la fenêtre, et une capacité qu'on ne peut lancer que par un terminal n'est pas dans le produit. Le lanceur **refuse** un corpus dont la vérité terrain est extraite de son propre ALTO (zéro tautologique). `README` à jour.
 - [x] **P5a — dette révélée par l'usage réel ✅** : 12 items fusionnés (#127→#133, #135→#139) ; l'item 13 — la déduplication entre vues — **fermé sur sa mesure** : 3,7 % réels contre 38 % annoncés, pour une complexité ajoutée au runner. Les cinq défauts qui faussaient des résultats sont corrigés. **Le blocage du tag est levé.**
-- [ ] **P5c — joignabilité** : toute route déclarée est atteignable depuis la page, ou le dit. Né d'un audit des 31 routes — trois d'entre elles, celles des **recettes**, ont zéro appel dans le front alors que le garde-fou de parité les donne vertes. Ferme la classe (troisième clause du garde-fou), puis les cas : recettes branchées, `params` ouverts, porte « spec complète » tranchée, `standardize_corpus` doté d'une face, composeur contraint. **Ne bloque pas le tag ; passe avant P5b**, qui est suspendue à un arbitrage.
+- [ ] **P5c — joignabilité** : toute route déclarée est atteignable depuis la page, ou le dit. Né d'un audit des 31 routes — trois d'entre elles, celles des **recettes**, ont zéro appel dans le front alors que le garde-fou de parité les donne vertes. La conception ([`PLAN_UI_COMPOSEUR.md`](PLAN_UI_COMPOSEUR.md)) a trouvé la cause sous le symptôme : **deux constructeurs de pipeline parallèles**, dont l'un est à trois lignes de son budget. Huit tranches : garde-fou · deux rôles manquants · déclaration des paramètres · catalogue de recettes · pli de réglages · bascule vers un constructeur unique · composeur contraint · les deux indépendants. **Ne bloque pas le tag ; passe avant P5b**, qui est suspendue à un arbitrage.
 - [ ] **P5b — persistance et calcul à la demande** : garder ce qu'un run a produit (**fait**, `RunManifest.artifacts_dir`), puis calculer une analyse au clic dans la saveur servie. Né de #139. **Ne bloque pas le tag** — et reste **suspendue** tant que l'arbitrage manifeste-porte-les-documents ⇄ serveur-retient-la-spec n'est pas rendu.
 - [ ] **Tag `v1.0.0`** — *à poser par le mainteneur, quand il le décide*. Le blocage posé par P5a est **levé** : les défauts qui produisaient de faux classements sont corrigés et fusionnés. Un tag posé le 2026-09-10 l'a été **sans son accord** et a été supprimé (D-232) : le dépôt ne porte aucun tag, la version reste le repli `setuptools_scm`. Le reste de la checklist étant vert, la 1.0 est **prête techniquement** — publier reste une décision, pas une étape.
 - [ ] Gel de Picarones (5b) — **différé à la demande de l'utilisateur**, hors du chemin de la 1.0. Rien n'en dépend : le périmètre gardé est **entièrement** dans Cinoc, c'est la condition que le gel attendait.
