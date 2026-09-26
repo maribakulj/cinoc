@@ -8,7 +8,13 @@ La règle, et la distinction qui la rend applicable :
   :data:`PARITE_CLI` (chaque commande a son pendant web) ;
 * un **transport** — SSE, CSRF, une page HTML, servir un fichier déjà produit —
   n'a pas à être dupliqué. L'équivalent CLI de « suivre la progression en SSE »
-  est stdout, pas une seconde implémentation.
+  est stdout, pas une seconde implémentation ;
+* et, **troisième sens** (D-257), une route doit être **atteignable depuis la
+  page**, ou dire pourquoi elle ne l'est pas : :data:`FRONT`. Les deux premiers
+  sens regardent route ⇄ CLI. Aucun ne regardait route ⇄ navigateur, et une
+  capacité entière — les **recettes** — est passée par ce trou : livrée en
+  ``app``, au routeur, en CLI, testée, documentée, et jamais appelée par le
+  front. Elle portait pourtant un statut de parité parfaitement valide.
 
 **Pourquoi un test et pas une intention.** L'app web a grandi pendant que la CLI
 suivait de loin, et personne ne l'a vu : au moment d'écrire ce garde-fou, huit
@@ -43,7 +49,24 @@ from cinoc.interfaces._cli_parser import SUBCOMMANDS
 #: reste : c'est lui qui rend une nouvelle dette *déclarable*, donc visible et
 #: datée, plutôt que tolérée en silence — comme l'a été pendant des mois
 #: l'absence de surface web de la post-correction.
-DETTES: dict[str, str] = {}
+DETTES: dict[str, str] = {
+    # Les trois routes du composeur ouvert (D-240) n'ont jamais été appelées par
+    # la page. C'est le défaut qui a fait écrire la troisième clause.
+    "recettes-web": (
+        "P5c item 4 — le catalogue de recettes branché à la file du composeur."
+    ),
+    "spec-web": (
+        "P5c item 8 — une zone de dépôt pour une spec complète, ou "
+        "`front-absent` assumé et motivé."
+    ),
+    # Trouvée par la troisième clause **à sa première exécution** : la page
+    # lance un banc mais n'offre aucun moyen de l'arrêter. Plus gênant que les
+    # recettes à l'usage — un banc de trente unités engage des appels facturés.
+    "annulation-web": (
+        "P5c item 8 — un bouton d'arrêt sur le suivi de run, qui appelle la "
+        "route d'annulation déjà servie."
+    ),
+}
 
 #: Route → statut. Trois formes, et trois seulement :
 #: ``"transport"`` · ``"cli:<sous-commande>"`` · ``"dette:<identifiant>"``.
@@ -282,6 +305,141 @@ def test_a_cli_only_command_says_why() -> None:
         f"« cli-only » sans justification : {muettes}. Écris pourquoi cette "
         "capacité n'a de sens qu'en ligne de commande."
     )
+#: Route → **où la page l'atteint**. Quatre formes, et quatre seulement :
+#: ``"vue"`` · ``"page:<fichier>"`` · ``"front-absent: <raison>"`` ·
+#: ``"dette:<identifiant>"``.
+#:
+#: **Pourquoi une déclaration et non une détection.** La première rédaction de
+#: cette clause devait *lire* le front et prouver l'appel toute seule. Trois
+#: règles ont été écrites et mesurées sur les trente-deux routes ; les trois ont
+#: échoué, chacune à sa manière. Chercher le chemin littéral rate les URL
+#: concaténées (``"/api/corpus/import/" + source``) et celles que le serveur
+#: fabrique en f-string (``f"/reports/{quoted}/bundle.zip"``). Élargir au
+#: préfixe rend « atteinte » toute route dont un ancêtre l'est. Exiger chaque
+#: segment littéral bute sur des mots trop communs — ``corpus``, ``runs``,
+#: ``image`` — présents partout. Une quatrième règle aurait sans doute trouvé
+#: une quatrième façon de mentir.
+#:
+#: La forme fiable est celle des deux clauses qui fonctionnent déjà : une
+#: **table**. Son pouvoir n'est pas de deviner, c'est d'**exiger une décision au
+#: moment où la route est ajoutée** — exactement ce qui manquait. Nommer le
+#: fichier plutôt que dire « oui » garde la déclaration vérifiable à la main et
+#: utile à la lecture : elle dit *où aller voir*.
+FRONT: dict[str, str] = {
+    # --- La route **est** la surface : on y arrive par navigation ou par URL.
+    "GET /": "vue",
+    "GET /benchmark": "vue",
+    "GET /library": "vue",
+    "GET /history": "vue",
+    "GET /engines": "vue",
+    "GET /reports/{name}": "vue",
+    # --- Sonde de déploiement. -----------------------------------------------
+    "GET /health": (
+        "front-absent: sonde de santé consommée par l'orchestrateur de "
+        "déploiement ; lui donner une surface de page n'aurait pas de sens."
+    ),
+    # --- Appelées par le JavaScript servi au navigateur. ---------------------
+    # `corpus.js` concatène la source : `"/api/corpus/import/" + source`, les
+    # sources venant des `data-import-source` de `library.html`.
+    "POST /api/corpus": "page:static/js/corpus.js",
+    "POST /api/corpus/import/iiif": "page:static/js/corpus.js",
+    "POST /api/corpus/import/escriptorium": "page:static/js/corpus.js",
+    "POST /api/corpus/import/gallica": "page:static/js/corpus.js",
+    "POST /api/corpus/import/huggingface": "page:static/js/corpus.js",
+    "POST /api/corpus/import/curated": "page:static/js/corpus.js",
+    "DELETE /api/corpus/{corpus_id}": "page:static/js/corpus.js",
+    "GET /api/models/{model_provider}": "page:static/js/benchmark.js",
+    "POST /api/normalization/preview": "page:static/js/benchmark.js",
+    "POST /api/runs": "page:static/js/benchmark.js",
+    "POST /api/runs/config": "page:static/js/benchmark.js",
+    "POST /api/runs/correction": "page:static/js/benchmark.js",
+    "GET /api/runs/{job_id}": "page:static/js/benchmark.js",
+    "GET /api/runs/{job_id}/events": "page:static/js/benchmark.js",
+    "GET /api/segmentation/preview": "page:static/js/benchmark.js",
+    "POST /api/segmentation/run": "page:static/js/benchmark.js",
+    # --- URL fabriquées côté serveur, dans le HTML qu'on envoie. -------------
+    # Ce sont des appels du front tout autant que les précédents : seul change
+    # qui écrit l'URL. `segmentation.py` pose `image_href` dans son fragment,
+    # `reports.py` les `src` des vignettes et fac-similés, `home.py` les liens
+    # de téléchargement de la page historique.
+    "GET /api/segmentation/{seg_id}/image": "page:routers/segmentation.py",
+    "GET /reports/{name}/image/{document_id}": "page:routers/reports.py",
+    "GET /reports/{name}/facsimile/{document_id}": "page:routers/reports.py",
+    "GET /reports/{name}/alto.zip": "page:routers/home.py",
+    "GET /reports/{name}/bundle.zip": "page:routers/home.py",
+    # --- Dettes : servies, joignables par personne. --------------------------
+    "GET /api/recipes": "dette:recettes-web",
+    "POST /api/runs/recipe": "dette:recettes-web",
+    "POST /api/runs/spec": "dette:spec-web",
+    "POST /api/runs/{job_id}/cancel": "dette:annulation-web",
+}
+
+#: Racine du front, pour vérifier qu'un fichier déclaré existe.
+_WEB = Path(__file__).resolve().parents[2] / "cinoc" / "interfaces" / "web"
+
+
+def test_every_route_declares_how_the_page_reaches_it() -> None:
+    """Aucune route hors table, aucune entrée orpheline."""
+    routes, declarees = _web_routes(), frozenset(FRONT)
+    non_declarees = sorted(routes - declarees)
+    fantomes = sorted(declarees - routes)
+    assert not non_declarees, (
+        f"routes sans statut de joignabilité : {non_declarees}. Déclare pour "
+        "chacune si elle est une page ('vue'), quel fichier du front l'appelle "
+        "('page:<fichier>'), pourquoi la page ne l'appelle pas "
+        "('front-absent: <raison>'), ou la dette ('dette:<id>')."
+    )
+    assert not fantomes, (
+        f"entrées de joignabilité sans route correspondante : {fantomes}. "
+        "La route a été renommée ou retirée — mets la table à jour."
+    )
+
+
+def test_front_statuses_are_well_formed() -> None:
+    mauvais = {
+        route: statut
+        for route, statut in FRONT.items()
+        if statut != "vue"
+        and not statut.startswith(("page:", "front-absent:", "dette:"))
+    }
+    assert not mauvais, (
+        f"statuts hors grammaire : {mauvais}. Quatre formes seulement — "
+        "'vue', 'page:<fichier>', 'front-absent: <raison>', 'dette:<id>'."
+    )
+
+
+def test_declared_front_files_exist() -> None:
+    """Un fichier cité qui n'existe pas cacherait l'absence au lieu de la dire."""
+    manquants = sorted(
+        {
+            statut.removeprefix("page:")
+            for statut in FRONT.values()
+            if statut.startswith("page:")
+        }
+        - {
+            str(chemin.relative_to(_WEB))
+            for chemin in _WEB.rglob("*")
+            if chemin.is_file()
+        }
+    )
+    assert not manquants, (
+        f"fichiers de front cités mais inexistants : {manquants}. "
+        "Ils ont été renommés ou retirés."
+    )
+
+
+def test_a_front_absent_route_says_why() -> None:
+    """« Pas dans la page » sans raison est une dette déguisée."""
+    muettes = sorted(
+        route
+        for route, statut in FRONT.items()
+        if statut.startswith("front-absent:")
+        and len(statut.removeprefix("front-absent:").strip()) < 15
+    )
+    assert not muettes, (
+        f"« front-absent » sans justification : {muettes}. Écris pourquoi "
+        "aucune page n'appelle cette route."
+    )
 
 
 def test_debts_are_declared_and_none_is_stale() -> None:
@@ -289,7 +447,7 @@ def test_debts_are_declared_and_none_is_stale() -> None:
     sens : pas de dette non déclarée, pas de dette déclarée puis oubliée."""
     citees = {
         statut.removeprefix("dette:")
-        for statut in (*PARITE.values(), *PARITE_CLI.values())
+        for statut in (*PARITE.values(), *PARITE_CLI.values(), *FRONT.values())
         if statut.startswith("dette:")
     }
     non_declarees = sorted(citees - set(DETTES))
