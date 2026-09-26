@@ -22,7 +22,11 @@
    joignabilité) + références (abandons, verdict métrique-par-métrique,
    garde-fous). **C'est le plan que ces sessions exécutent**, une étape (ou
    sous-étape) à la fois ; **laquelle** est dit par `CLAUDE.md` §0, pas ici.
-5. La `DoD vivante` de chaque couche touchée
+5. `PLAN_UI_COMPOSEUR.md` — la **conception** du composeur de pipelines
+   (recettes, réglages, composition contrainte) qu'exécute `P5c` : les trois
+   couches, l'arbitrage sur la déclaration des paramètres, et ce que la bascule
+   vers un constructeur unique doit préserver.
+6. La `DoD vivante` de chaque couche touchée
    (`cinoc/<couche>/{ANALYSE,MIGRATION}_COUCHE_*.md`).
 
 ## 2. Règles de session (rappel court)
