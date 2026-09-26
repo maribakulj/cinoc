@@ -359,8 +359,11 @@ couche 3), DTO web (transport → couche 8).
      par le front. Toute route `/api/*` est donc soit appelée par la page, soit
      déclarée `front-absent: <raison>`, soit une dette datée. Symétriquement,
      une capacité de couche `app` sans **aucune** des deux faces n'est pas dans
-     le produit : elle en sort, ou elle en reçoit une. Garde-fou à écrire —
-     c'est l'item 1 de **P5c**.
+     le produit : elle en sort, ou elle en reçoit une. Verrouillé par la table
+     `FRONT` du même garde-fou — une **déclaration**, pas une détection : lire
+     le front pour prouver l'appel a été tenté et mesuré, et aucune des trois
+     règles essayées n'a survécu aux URL concaténées et aux `href` fabriqués
+     côté serveur.
    Regrouper reste la règle : `corpus`/`list` (capacités) plutôt qu'un verbe par
    source ou par catalogue.
 5. Sécurité web éclatée en 7 modules `security_*`. → un package `security/`.
