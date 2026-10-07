@@ -283,7 +283,7 @@ original OCR confidence along with their word boxes; unchanged lines retain
 both. This adapter benchmarks text through a canonical layout. It does not
 run Saknussemm's original XML rewrite and integrity checks, so a successful
 Cinoc run does not certify an XML file for publication.
-The `[saknussemm]` extra pins revision `50bb6e58f8baa24dbd66f34e655ec071fb3f7d54`,
+The `[saknussemm]` extra pins revision `d30c493f64150b890609123d66c7c5820ba10b48`,
 the version checked with this bridge. CI requires its installation and import
 before the correction tests can pass.
 
