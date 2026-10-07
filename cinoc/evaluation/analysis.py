@@ -994,12 +994,21 @@ _MAX_DECISION_SAMPLES = 40
 
 
 class DecisionReasonCount(BaseModel):
-    """Combien de lignes un motif de refus a-t-il retenues."""
+    """Combien de lignes portent un motif de refus ou de relecture."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     code: str = Field(min_length=1, max_length=128)
     n: int = Field(ge=0)
+
+
+class DecisionReviewReason(BaseModel):
+    """Motif de relecture transmis par le correcteur, sans le réinterpréter."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    code: str = Field(min_length=1, max_length=128)
+    detail: str | None = Field(default=None, max_length=_MAX_LINE_CHARS)
 
 
 class DecisionSample(BaseModel):
@@ -1015,6 +1024,7 @@ class DecisionSample(BaseModel):
     final_text: str = Field(max_length=_MAX_LINE_CHARS)
     reason_code: str | None = Field(default=None, max_length=128)
     reason_detail: str | None = Field(default=None, max_length=_MAX_LINE_CHARS)
+    review_reasons: tuple[DecisionReviewReason, ...] = ()
 
 
 class PipelineDecisions(BaseModel):
@@ -1034,7 +1044,11 @@ class PipelineDecisions(BaseModel):
     refused: int = Field(ge=0)
     #: Lignes qu'aucune proposition n'a touchées.
     untouched: int = Field(ge=0)
+    #: Indépendant du changement : le texte retenu peut encore exiger un jugement.
+    #: Une archive sans ce champ ne permet pas de conclure qu'il valait zéro.
+    review_required: int | None = Field(default=None, ge=0)
     reasons: tuple[DecisionReasonCount, ...] = ()
+    review_reasons: tuple[DecisionReasonCount, ...] = ()
     samples: tuple[DecisionSample, ...] = ()
 
 
@@ -1095,6 +1109,7 @@ __all__ = [
     "ConformityPayload",
     "CorrectionPayload",
     "DecisionReasonCount",
+    "DecisionReviewReason",
     "DecisionSample",
     "DecisionsPayload",
     "DiagnosticsPayload",

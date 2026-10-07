@@ -30,6 +30,7 @@ def _part(n: int, total: int, lang: str) -> str:
 
 def _row(row: PipelineDecisions, order: dict[str, int], lang: str) -> str:
     badge = engine_cell(row.pipeline, order.get(row.pipeline, 0))
+    review = row.review_required if row.review_required is not None else "—"
     return (
         f'<tr><td class="eng-cell">{badge}</td>'
         f'<td class="disp">{row.n_lines}</td>'
@@ -37,22 +38,27 @@ def _row(row: PipelineDecisions, order: dict[str, int], lang: str) -> str:
         f"({_part(row.changed, row.n_lines, lang)})</span></td>"
         f'<td class="disp">{row.refused} <span class="muted">'
         f"({_part(row.refused, row.n_lines, lang)})</span></td>"
-        f'<td class="disp">{row.untouched}</td></tr>'
+        f'<td class="disp">{row.untouched}</td>'
+        f'<td class="disp">{review}</td></tr>'
     )
 
 
 def _reasons(row: PipelineDecisions, lang: str) -> str:
-    if not row.reasons:
-        return ""
-    titre = localized(lang, "Motifs de refus", "Refusal reasons")
-    items = "".join(
-        f"<li><code>{escape(reason.code)}</code> — {reason.n}</li>"
-        for reason in sorted(row.reasons, key=lambda r: (-r.n, r.code))
-    )
-    return (
-        f'<p class="muted"><b>{escape(row.pipeline)}</b> · {titre}</p>'
-        f"<ul>{items}</ul>"
-    )
+    blocks = []
+    for reasons, titre in (
+        (row.reasons, localized(lang, "Motifs de refus", "Refusal reasons")),
+        (row.review_reasons, localized(lang, "Motifs de relecture", "Review reasons")),
+    ):
+        if reasons:
+            items = "".join(
+                f"<li><code>{escape(reason.code)}</code> — {reason.n}</li>"
+                for reason in sorted(reasons, key=lambda r: (-r.n, r.code))
+            )
+            blocks.append(
+                f'<p class="muted"><b>{escape(row.pipeline)}</b> · {titre}</p>'
+                f"<ul>{items}</ul>"
+            )
+    return "".join(blocks)
 
 
 def _samples(row: PipelineDecisions, lang: str) -> str:
@@ -62,19 +68,26 @@ def _samples(row: PipelineDecisions, lang: str) -> str:
     th_line = localized(lang, "Ligne", "Line")
     th_before = localized(lang, "Avant", "Before")
     th_after = localized(lang, "Après", "After")
+    th_status = localized(lang, "Statut", "Status")
     th_reason = localized(lang, "Motif", "Reason")
     corps = "".join(
         f"<tr><td><code>{escape(s.page_id)}/{escape(s.line_id)}</code></td>"
         f"<td>{escape(s.source_text)}</td>"
         f"<td>{escape(s.final_text)}</td>"
-        f"<td>{escape(s.reason_code or '—')}</td></tr>"
+        f"<td>{escape(s.status)}</td>"
+        f"<td>{escape(s.reason_code or '—')}"
+        + "".join(
+            f"<br><code>{escape(reason.code)}</code> — {escape(reason.detail or '—')}"
+            for reason in s.review_reasons
+        )
+        + "</td></tr>"
         for s in row.samples
     )
     return (
         f'<p class="muted"><b>{escape(row.pipeline)}</b> · {titre}</p>'
         f'<div class="table-scroll"><table class="data">'
         f"<thead><tr><th>{th_line}</th><th>{th_before}</th>"
-        f"<th>{th_after}</th><th>{th_reason}</th></tr></thead>"
+        f"<th>{th_after}</th><th>{th_status}</th><th>{th_reason}</th></tr></thead>"
         f"<tbody>{corps}</tbody></table></div>"
     )
 
@@ -95,19 +108,25 @@ class DecisionsSection:
             "<i>proposé</i> puis écarté par une garde — invisible dans le texte "
             "de sortie, et pourtant la différence entre un correcteur prudent et "
             "un correcteur inerte. <b>Intactes</b> = aucune proposition. Le CER "
-            "seul ne distingue pas ces trois cas.</p>\n",
+            "seul ne distingue pas ces trois cas. <b>À relire</b> = demande de "
+            "jugement humain, comptée séparément : le texte retenu reste un "
+            "candidat, pas une validation. « — » = information absente de "
+            "l'archive.</p>\n",
             '<p class="muted"><b>Changed</b> = lines the corrector modified. '
             "<b>Refused</b> = lines where a change was <i>proposed</i> then "
             "rejected by a guard — invisible in the output text, yet the "
             "difference between a cautious corrector and an inert one. "
             "<b>Untouched</b> = nothing proposed. CER alone tells these three "
-            "apart in no way.</p>\n",
+            "apart in no way. <b>Review required</b> = a request for human "
+            "judgement, counted separately: retained text is a candidate, "
+            "not an approval. ‘—’ = information absent from the archive.</p>\n",
         )
         th_pipeline = localized(ctx.lang, "Pipeline", "Pipeline")
         th_lines = localized(ctx.lang, "Lignes", "Lines")
         th_changed = localized(ctx.lang, "Changées", "Changed")
         th_refused = localized(ctx.lang, "Refusées", "Refused")
         th_untouched = localized(ctx.lang, "Intactes", "Untouched")
+        th_review = localized(ctx.lang, "À relire", "Review required")
 
         def block(prefix: str, payload: DecisionsPayload) -> str:
             corps = "".join(_row(r, order, ctx.lang) for r in payload.pipelines)
@@ -121,7 +140,8 @@ class DecisionsSection:
                 f'<th class="num-cell">{th_lines}</th>'
                 f'<th class="num-cell">{th_changed}</th>'
                 f'<th class="num-cell">{th_refused}</th>'
-                f'<th class="num-cell">{th_untouched}</th></tr></thead>\n'
+                f'<th class="num-cell">{th_untouched}</th>'
+                f'<th class="num-cell">{th_review}</th></tr></thead>\n'
                 f"<tbody>{corps}</tbody>\n</table></div>\n{details}"
             )
 

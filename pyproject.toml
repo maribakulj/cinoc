@@ -41,9 +41,9 @@ ollama = ["httpx", "httpcore"]
 # Post-correction structuree (LAYOUT -> LAYOUT) : corrige dans la mise en
 # page au lieu d'aplatir avant de corriger.
 # Le paquet n'est pas encore publie sur PyPI : on l'installe depuis le
-# depot. Le jour ou il sortira, cette ligne redeviendra "saknussemm".
+# depot, a la revision verifiee avec le pont de correction.
 saknussemm = [
-    "saknussemm @ git+https://github.com/maribakulj/saknussemm.git",
+    "saknussemm @ git+https://github.com/maribakulj/saknussemm.git@50bb6e58f8baa24dbd66f34e655ec071fb3f7d54",
     "httpx",
     "httpcore",
 ]
