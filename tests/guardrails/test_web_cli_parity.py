@@ -417,7 +417,7 @@ def test_declared_front_files_exist() -> None:
             if statut.startswith("page:")
         }
         - {
-            str(chemin.relative_to(_WEB))
+            chemin.relative_to(_WEB).as_posix()
             for chemin in _WEB.rglob("*")
             if chemin.is_file()
         }
