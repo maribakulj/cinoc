@@ -43,7 +43,7 @@ ollama = ["httpx", "httpcore"]
 # Le paquet n'est pas encore publie sur PyPI : on l'installe depuis le
 # depot, a la revision verifiee avec le pont de correction.
 saknussemm = [
-    "saknussemm @ git+https://github.com/maribakulj/saknussemm.git@d30c493f64150b890609123d66c7c5820ba10b48",
+    "saknussemm @ git+https://github.com/maribakulj/saknussemm.git@8a0a00de99531ab375b62a1737de2fb6d70c70b0",
     "httpx",
     "httpcore",
 ]
