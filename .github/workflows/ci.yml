@@ -27,12 +27,9 @@ jobs:
       # `saknussemm` n'est pas publie : sans lui, les tests de la chaine de
       # correction structuree se SAUTENT, et la CI ne garantit rien sur la
       # seule brique qui touche a la mise en page. On l'installe donc depuis le
-      # depot. `continue-on-error` a dessein : une panne reseau ou un depot
-      # momentanement injoignable ne doit pas rendre la CI rouge sur du code
-      # qui n'a pas change — les tests se sauteront alors, comme avant.
+      # depot a la revision figee dans pyproject.toml. Une installation ratee
+      # bloque le gate : les tests du pont ne doivent jamais passer par saut.
       - name: Install saknussemm (non publie — depuis le depot)
-        id: saknussemm
-        continue-on-error: true
         run: pip install ".[saknussemm]"
       - name: Lint
         run: ruff check cinoc/ tests/
@@ -49,7 +46,7 @@ jobs:
           # tests de la chaine de correction exactement comme une panne
           # reseau : en silence, CI verte, brique non exercee.
           # (cf. tests/guardrails/test_optional_deps_really_installed.py)
-          CINOC_REQUIRE_SAKNUSSEMM: ${{ steps.saknussemm.outcome == 'success' && '1' || '' }}
+          CINOC_REQUIRE_SAKNUSSEMM: "1"
         # Le gate (coverage + seuil 85 %) est injecté ICI, pas dans addopts —
         # ainsi les runs locaux restent rapides par défaut (cf. Makefile/pyproject).
         run: python -m pytest -q --cov=cinoc --cov-report=term-missing --cov-fail-under=85

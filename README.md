@@ -275,6 +275,18 @@ cinoc correct alto/ --repeat 5                   # publish a range, never a lone
 
 `--ocr-sidecar` matters on a **ground‑truth** corpus: without it the source reads the reference, the corrector has nothing to correct, and the CER is zero *by construction* — a tautological zero that looks like an excellent result. `--repeat` runs the same configuration *n* times and writes the spread beside the report: a model at temperature 0 is not deterministic, so any comparison tighter than the widest spread is noise. Use `--producer ollama --model <name>` for a local LLM instead of the offline rules.
 
+The decisions report also counts **review required** lines and preserves their
+reasons: the engine retained candidate text that still needs human judgement.
+This count is independent of changed/refused/untouched; it is not an approval.
+Older reports without this information display “—”. Changed lines lose their
+original OCR confidence along with their word boxes; unchanged lines retain
+both. This adapter benchmarks text through a canonical layout. It does not
+run Saknussemm's original XML rewrite and integrity checks, so a successful
+Cinoc run does not certify an XML file for publication.
+The `[saknussemm]` extra pins revision `d30c493f64150b890609123d66c7c5820ba10b48`,
+the version checked with this bridge. CI requires its installation and import
+before the correction tests can pass.
+
 ---
 
 ## The web app & HuggingFace Space

@@ -6,7 +6,7 @@ détruites *avant* que le modèle voie quoi que ce soit. Cette étape corrige
 **dans** la mise en page : chaque ligne garde son identifiant d'un bout à
 l'autre, et l'appariement avant/après est **connu** au lieu d'être deviné.
 
-Deux sorties, et c'est délibéré :
+Trois sorties, et c'est délibéré :
 
 * ``LAYOUT`` — la mise en page corrigée, que ``alto_assembler`` sait rendre en
   ALTO et que les métriques de structure savent noter ;
@@ -472,6 +472,10 @@ def _decisions(result: object, document_id: str) -> bytes:
                 "hyphen_role": outcome.hyphen_role,
                 "reason_code": raison.code if raison else None,
                 "reason_detail": raison.detail if raison else None,
+                "review_reasons": [
+                    {"code": reason.code, "detail": reason.detail}
+                    for reason in decision.review_reasons
+                ],
             }
         )
     return json.dumps(
@@ -489,7 +493,8 @@ def _apply(
     Les mots sont **abandonnés sur une ligne modifiée** : leur géométrie décrit
     des caractères qui ne sont plus là. Les garder ferait dire à l'artefact une
     position que rien ne soutient — le contraire de ce que la structure sert à
-    porter.
+    porter. La confiance OCR décrivait aussi l'ancien texte : elle devient
+    inconnue sur une ligne modifiée, sans inventer de score pour la correction.
     """
 
     def region(reg: Region, page_id: str) -> Region:
@@ -506,7 +511,7 @@ def _apply(
                     geometry=line.geometry,
                     baseline=line.baseline,
                     words=(),
-                    confidence=line.confidence,
+                    confidence=None,
                 )
             )
         return reg.model_copy(

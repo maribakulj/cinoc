@@ -1,11 +1,10 @@
 """Garde-fou : un `skip` conditionnel ne doit pas masquer une installation ratée.
 
 La chaîne de correction structurée passe par ``saknussemm``, qui n'est pas
-publié sur PyPI et s'installe donc depuis le dépôt. La CI accepte que cette
-installation échoue (panne réseau, dépôt momentanément injoignable) : les tests
-concernés se **sautent** alors, et le job reste vert — c'est voulu.
+publié sur PyPI et s'installe donc depuis le dépôt à une révision vérifiée.
+L'installation est obligatoire en CI : un échec bloque le gate.
 
-Le trou est ailleurs. Si l'installation **réussit** mais que le paquet reste
+Si l'installation **réussit** mais que le paquet reste
 inimportable — extra renommé, dépendance transitive cassée, incompatibilité de
 version de Python — les ~20 tests de la chaîne se sautent **exactement de la
 même façon**, en silence, et la CI affirme « vert » sur la seule brique qui
@@ -24,7 +23,7 @@ import os
 
 import pytest
 
-#: Posée par le job CI **seulement** si ``pip install ".[saknussemm]"`` a réussi.
+#: Posée par le job CI après l'installation obligatoire de l'extra.
 _REQUIS = "CINOC_REQUIRE_SAKNUSSEMM"
 
 
@@ -32,7 +31,7 @@ def test_saknussemm_is_importable_when_its_install_succeeded() -> None:
     if not os.environ.get(_REQUIS):
         pytest.skip(
             f"{_REQUIS} non posée : installation de saknussemm non garantie "
-            "(local, ou étape CI en échec — les sauts sont alors légitimes)."
+            "(en local, travailler sans cet extra reste légitime)."
         )
     assert importlib.util.find_spec("saknussemm") is not None, (
         "saknussemm s'est installé mais reste inimportable : les tests de la "

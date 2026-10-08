@@ -25,6 +25,7 @@ from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.evaluation.analysis import (
     Analysis,
     DecisionReasonCount,
+    DecisionReviewReason,
     DecisionSample,
     DecisionsPayload,
     PipelineDecisions,
@@ -55,11 +56,28 @@ def _texte(valeur: object) -> str:
     return str(valeur or "")[:_MAX_CHARS]
 
 
+def _review_reasons(ligne: dict[str, object]) -> tuple[DecisionReviewReason, ...]:
+    reasons = ligne.get("review_reasons")
+    if not isinstance(reasons, list):
+        return ()
+    return tuple(
+        DecisionReviewReason(
+            code=reason["code"][:128],
+            detail=_texte(reason["detail"]) if reason.get("detail") else None,
+        )
+        for reason in reasons
+        if isinstance(reason, dict)
+        and isinstance(reason.get("code"), str)
+        and reason["code"]
+    )
+
+
 def _pipeline_decisions(
     pipeline: str, by_document: Mapping[str, Mapping[ArtifactType, Artifact]]
 ) -> PipelineDecisions | None:
-    total = changed = refused = untouched = 0
+    total = changed = refused = untouched = review_required = 0
     motifs: Counter[str] = Counter()
+    reviews: Counter[str] = Counter()
     echantillons: list[DecisionSample] = []
     vu = False
 
@@ -70,10 +88,15 @@ def _pipeline_decisions(
         vu = True
         for ligne in _lines_of(artifact):
             total += 1
-            source = _texte(ligne.get("source_text"))
-            final = _texte(ligne.get("final_text"))
+            source = str(ligne.get("source_text") or "")
+            final = str(ligne.get("final_text") or "")
             propose = ligne.get("proposed_text")
             code = ligne.get("reason_code")
+            review = ligne.get("status") == "review_required"
+            review_reasons = _review_reasons(ligne)
+            if review:
+                review_required += 1
+                reviews.update({r.code for r in review_reasons} or {"sans_motif"})
             if final != source:
                 changed += 1
             elif code or (propose is not None and str(propose) != source):
@@ -83,7 +106,7 @@ def _pipeline_decisions(
                 motifs[str(code or "sans_motif")] += 1
             else:
                 untouched += 1
-            if final != source or code:
+            if final != source or code or review:
                 if len(echantillons) < _MAX_SAMPLES:
                     echantillons.append(
                         DecisionSample(
@@ -91,14 +114,15 @@ def _pipeline_decisions(
                             page_id=str(ligne.get("page_id") or "?"),
                             line_id=str(ligne.get("line_id") or "?"),
                             status=str(ligne.get("status") or "?"),
-                            source_text=source,
-                            final_text=final,
+                            source_text=_texte(source),
+                            final_text=_texte(final),
                             reason_code=str(code) if code else None,
                             reason_detail=(
                                 _texte(ligne.get("reason_detail"))
                                 if ligne.get("reason_detail")
                                 else None
                             ),
+                            review_reasons=review_reasons,
                         )
                     )
     if not vu:
@@ -109,8 +133,12 @@ def _pipeline_decisions(
         changed=changed,
         refused=refused,
         untouched=untouched,
+        review_required=review_required,
         reasons=tuple(
             DecisionReasonCount(code=code, n=n) for code, n in sorted(motifs.items())
+        ),
+        review_reasons=tuple(
+            DecisionReasonCount(code=code, n=n) for code, n in sorted(reviews.items())
         ),
         samples=tuple(echantillons),
     )
