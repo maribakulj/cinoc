@@ -24,12 +24,12 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: Install
         run: pip install -e ".[dev]"
-      # `saknussemm` n'est pas publie : sans lui, les tests de la chaine de
-      # correction structuree se SAUTENT, et la CI ne garantit rien sur la
-      # seule brique qui touche a la mise en page. On l'installe donc depuis le
-      # depot a la revision figee dans pyproject.toml. Une installation ratee
-      # bloque le gate : les tests du pont ne doivent jamais passer par saut.
-      - name: Install saknussemm (non publie — depuis le depot)
+      # Sans `saknussemm`, les tests de la chaine de correction structuree se
+      # SAUTENT, et la CI ne garantit rien sur la seule brique qui touche a la
+      # mise en page. On l'installe a la version exacte figee dans
+      # pyproject.toml. Une installation ratee bloque le gate : les tests du
+      # pont ne doivent jamais passer par saut.
+      - name: Install saknussemm (version exacte de pyproject.toml)
         run: pip install ".[saknussemm]"
       - name: Lint
         run: ruff check cinoc/ tests/

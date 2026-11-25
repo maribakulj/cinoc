@@ -147,7 +147,7 @@ Heavy dependencies are **optional extras** — install only what you use:
 | D'AlemBERT quality scorer (selective post‑correction) | `[qe]` | `torch` + `transformers<5` |
 | Image preprocessing | `[images]` | Pillow to decode; the maths are plain numpy |
 | Named‑entity step (NER) | `[ner]` | spaCy + a model (`spacy download …`) |
-| Structured post‑correction (ALTO → ALTO) | `[saknussemm]` | installed from its repository — not on PyPI yet |
+| Structured post‑correction (ALTO → ALTO) | `[saknussemm]` | `saknussemm` from PyPI, exact version pinned |
 | HuggingFace import / publish | `[huggingface]` | `datasets` + `huggingface_hub` |
 | Real report thumbnails | `[images]` | Pillow (graceful fallback without) |
 
@@ -286,7 +286,7 @@ original OCR confidence along with their word boxes; unchanged lines retain
 both. This adapter benchmarks text through a canonical layout. It does not
 run Saknussemm's original XML rewrite and integrity checks, so a successful
 Cinoc run does not certify an XML file for publication.
-The `[saknussemm]` extra pins revision `8a0a00de99531ab375b62a1737de2fb6d70c70b0`,
+The `[saknussemm]` extra pins `saknussemm==0.9.0` from PyPI,
 the version checked with this bridge. CI requires its installation and import
 before the correction tests can pass.
 

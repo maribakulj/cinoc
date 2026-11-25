@@ -40,10 +40,10 @@ azure = ["httpx", "httpcore"]  # Document Intelligence via REST — AZURE_DOC_IN
 ollama = ["httpx", "httpcore"]
 # Post-correction structuree (LAYOUT -> LAYOUT) : corrige dans la mise en
 # page au lieu d'aplatir avant de corriger.
-# Le paquet n'est pas encore publie sur PyPI : on l'installe depuis le
-# depot, a la revision verifiee avec le pont de correction.
+# Version exacte : celle verifiee avec le pont de correction (suite complete
+# rejouee contre la roue PyPI). La relever = rejouer les tests du pont.
 saknussemm = [
-    "saknussemm @ git+https://github.com/maribakulj/saknussemm.git@8a0a00de99531ab375b62a1737de2fb6d70c70b0",
+    "saknussemm==0.9.0",
     "httpx",
     "httpcore",
 ]
