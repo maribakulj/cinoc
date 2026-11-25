@@ -101,12 +101,12 @@ def engine_statuses(
         _pero_status(has_module),
         _calamari_status(has_module),
         _mistral_ocr_status(has_module, get_env),
-        _google_vision_status(has_module, get_env),
-        _azure_di_status(has_module, get_env),
+        _google_vision_status(get_env),
+        _azure_di_status(get_env),
         _openai_status(has_module, get_env),
         _anthropic_status(has_module, get_env),
         _mistral_status(has_module, get_env),
-        _ollama_status(has_module),
+        _ollama_status(),
     )
 
 
@@ -160,10 +160,8 @@ def _mistral_ocr_status(has_module: ModuleProbe, get_env: EnvProbe) -> EngineSta
     )
 
 
-def _google_vision_status(has_module: ModuleProbe, get_env: EnvProbe) -> EngineStatus:
-    if not has_module("httpx"):
-        detail, ok = "httpx non installé (extra [google])", False
-    elif not get_env("GOOGLE_VISION_API_KEY"):
+def _google_vision_status(get_env: EnvProbe) -> EngineStatus:
+    if not get_env("GOOGLE_VISION_API_KEY"):
         detail, ok = "clé GOOGLE_VISION_API_KEY absente", False
     else:
         detail, ok = "prêt (REST + clé)", True
@@ -172,10 +170,8 @@ def _google_vision_status(has_module: ModuleProbe, get_env: EnvProbe) -> EngineS
     )
 
 
-def _azure_di_status(has_module: ModuleProbe, get_env: EnvProbe) -> EngineStatus:
-    if not has_module("httpx"):
-        detail, ok = "httpx non installé (extra [azure])", False
-    elif not get_env("AZURE_DOC_INTEL_ENDPOINT"):
+def _azure_di_status(get_env: EnvProbe) -> EngineStatus:
+    if not get_env("AZURE_DOC_INTEL_ENDPOINT"):
         detail, ok = "endpoint AZURE_DOC_INTEL_ENDPOINT absent", False
     elif not get_env("AZURE_DOC_INTEL_KEY"):
         detail, ok = "clé AZURE_DOC_INTEL_KEY absente", False
@@ -221,11 +217,8 @@ def _mistral_status(has_module: ModuleProbe, get_env: EnvProbe) -> EngineStatus:
     return EngineStatus(kind="mistral", label="Mistral", available=ok, detail=detail)
 
 
-def _ollama_status(has_module: ModuleProbe) -> EngineStatus:
-    if not has_module("httpx"):
-        detail, ok = "httpx non installé", False
-    else:
-        detail, ok = "serveur local attendu (non sondé)", True
+def _ollama_status() -> EngineStatus:
+    detail, ok = "serveur local attendu (non sondé)", True
     return EngineStatus(kind="ollama", label="Ollama", available=ok, detail=detail)
 
 
@@ -380,10 +373,7 @@ def segmenter_statuses(
         yolo_ok = True
     else:
         yolo_detail, yolo_ok = "DocLayout-YOLO non installé (extra [yolo])", False
-    if has_module("httpx"):
-        remote_detail, remote_ok = "prêt (endpoint distant à fournir)", True
-    else:
-        remote_detail, remote_ok = "httpx non installé", False
+    remote_detail, remote_ok = "prêt (endpoint distant à fournir)", True
     return (
         EngineStatus(
             kind="pp_doclayout",

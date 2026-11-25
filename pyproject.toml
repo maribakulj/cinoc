@@ -15,6 +15,11 @@ dependencies = [
     "pyyaml>=6",
     "scipy>=1.11",
     "rapidfuzz>=3",
+    # Transport HTTP unique (importeurs de corpus, OCR cloud REST, ollama,
+    # segmenteur distant). En base : la CLI importe les importeurs au
+    # demarrage, et `pip install cinoc` sans extra plantait sur `cinoc --help`.
+    "httpx",
+    "httpcore",
     # numpy est une dépendance directe de evaluation/ (jusqu'ici tirée via scipy).
     # Plafond <2.5 : numpy 2.5 (Python >=3.12 uniquement) livre des stubs en
     # syntaxe PEP 695 `type X = ...` que mypy, ciblant python_version 3.11, refuse
@@ -25,7 +30,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "ruff", "mypy", "pytest", "pytest-cov", "pytest-xdist", "lxml-stubs",
-    "types-PyYAML", "jiwer", "fastapi", "httpx", "httpcore", "jinja2",
+    "types-PyYAML", "jiwer", "fastapi", "jinja2",
     "python-multipart", "Pillow",
 ]
 tesseract = ["pytesseract"]
@@ -35,17 +40,12 @@ calamari = ["calamari-ocr"]  # OCR local par ligne — non déployé au Space
 openai = ["openai"]
 anthropic = ["anthropic"]
 mistral = ["mistralai>=1.5,<2"]  # 2.x = SDK incompatible (pas de `from mistralai import Mistral`)
-google = ["httpx", "httpcore"]  # Vision via REST (≠ SDK gRPC lourd) — clé GOOGLE_VISION_API_KEY
-azure = ["httpx", "httpcore"]  # Document Intelligence via REST — AZURE_DOC_INTEL_ENDPOINT + _KEY
-ollama = ["httpx", "httpcore"]
 # Post-correction structuree (LAYOUT -> LAYOUT) : corrige dans la mise en
 # page au lieu d'aplatir avant de corriger.
 # Version exacte : celle verifiee avec le pont de correction (suite complete
 # rejouee contre la roue PyPI). La relever = rejouer les tests du pont.
 saknussemm = [
     "saknussemm==0.9.0",
-    "httpx",
-    "httpcore",
 ]
 huggingface = ["datasets", "huggingface_hub"]  # datasets = streaming ; huggingface_hub = publication (scripts/) + snapshot dataset curé (import_curated_hf_corpus)
 segment = ["paddlex"]
@@ -60,7 +60,7 @@ yolo = ["doclayout-yolo", "huggingface_hub"]
 # plus du tout.
 qe = ["torch", "transformers<5"]
 ner = ["spacy"]  # extraction d'entités nommées — modèle téléchargé à part (`spacy download`)
-serve = ["fastapi", "uvicorn", "jinja2", "python-multipart", "httpx", "httpcore"]
+serve = ["fastapi", "uvicorn", "jinja2", "python-multipart"]
 images = ["Pillow"]  # vignettes réelles du rapport (redimensionnement) — dégradé gracieux sans
 # Oracle de conformité HIPE (golden test, jamais en runtime — SPEC_HIPE §5).
 # Extra DÉDIÉ (pas dans dev) : le scorer exige Python >= 3.12, l'inclure dans

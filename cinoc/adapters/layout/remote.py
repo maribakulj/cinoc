@@ -16,8 +16,8 @@ Schéma de réponse attendu = sortie **object-detection** HF :
 
 Le détecteur est **injectable** (``detector=``) : la conversion détections →
 ``CanonicalLayout`` se teste sans réseau ; le vrai appel HTTP (``httpx`` + garde
-**anti-SSRF** ``assert_public_url``) n'est exercé qu'en test ``live``. ``httpx`` est
-un extra optionnel (``cinoc[serve]``/``[google]``…), importé paresseusement.
+**anti-SSRF** ``assert_public_url``) n'est exercé qu'en test ``live``. ``httpx``
+(dépendance de base) est importé paresseusement.
 """
 
 from __future__ import annotations
@@ -147,12 +147,8 @@ class RemoteSegmenter:
             raise AdapterStepError(
                 f"remote_segmenter : endpoint refusé (anti-SSRF) : {exc}"
             ) from exc
-        try:
-            import httpx
-        except ImportError as exc:
-            raise AdapterStepError(
-                "remote_segmenter : httpx absent (extra réseau requis)."
-            ) from exc
+        import httpx
+
         headers = {"Content-Type": "application/octet-stream"}
         if self._token:
             headers["Authorization"] = f"Bearer {self._token}"

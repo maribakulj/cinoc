@@ -140,8 +140,9 @@ Heavy dependencies are **optional extras** — install only what you use:
 |---|---|---|
 | Tesseract (OCR) | `[tesseract]` | the `tesseract` binary is required |
 | Kraken · Pero · Calamari (local HTR/OCR) | `[kraken]` `[pero]` `[calamari]` | not deployed on the Space |
-| OpenAI · Anthropic · Mistral · Ollama (LLM/VLM) | `[openai]` `[anthropic]` `[mistral]` `[ollama]` | API key |
-| Google Vision · Azure Document Intelligence | `[google]` `[azure]` | REST, API key |
+| OpenAI · Anthropic · Mistral (LLM/VLM) | `[openai]` `[anthropic]` `[mistral]` | API key |
+| Ollama (local LLM/VLM) | — | a running Ollama server |
+| Google Vision · Azure Document Intelligence | — | REST, API key |
 | PP‑DocLayout segmenter (local) | `[segment]` | PaddleX + weights |
 | DocLayout‑YOLO segmenter (local) | `[yolo]` | pip only; weights pulled from the Hub on first run |
 | D'AlemBERT quality scorer (selective post‑correction) | `[qe]` | `torch` + `transformers<5` |
@@ -151,7 +152,7 @@ Heavy dependencies are **optional extras** — install only what you use:
 | HuggingFace import / publish | `[huggingface]` | `datasets` + `huggingface_hub` |
 | Real report thumbnails | `[images]` | Pillow (graceful fallback without) |
 
-A remote segmenter needs no local model — only `httpx`, shipped with `[serve]` — and delegates to a HuggingFace object‑detection endpoint (swap the model by swapping the URL).
+A remote segmenter needs no local extra — it delegates to a HuggingFace object‑detection endpoint (swap the model by swapping the URL).
 
 ---
 

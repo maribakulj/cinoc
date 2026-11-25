@@ -53,12 +53,12 @@ def test_openai_needs_module_and_key() -> None:
     assert st["openai"][0] is True
 
 
-def test_google_vision_needs_httpx_and_key() -> None:
+def test_google_vision_needs_its_key() -> None:
+    # httpx est une dépendance de base : seule la clé conditionne le moteur.
     base = {"has_binary": lambda _n: None}
-    # httpx absent → extra [google] manquant
     st = _statuses(has_module=lambda _n: False, get_env=lambda _n: "k", **base)
-    assert st["google_vision"][0] is False and "[google]" in st["google_vision"][1]
-    # httpx présent, clé absente
+    assert st["google_vision"][0] is True
+    # clé absente
     st = _statuses(has_module=lambda _n: True, get_env=lambda _n: None, **base)
     assert (
         st["google_vision"][0] is False
@@ -80,12 +80,12 @@ def test_pero_and_calamari_need_their_lib() -> None:
     assert present["calamari"][0] is True
 
 
-def test_azure_di_needs_httpx_endpoint_and_key() -> None:
+def test_azure_di_needs_endpoint_and_key() -> None:
+    # httpx est une dépendance de base : seuls endpoint et clé conditionnent.
     base = {"has_binary": lambda _n: None}
-    # httpx absent
     st = _statuses(has_module=lambda _n: False, get_env=lambda _n: "v", **base)
-    assert st["azure_di"][0] is False and "[azure]" in st["azure_di"][1]
-    # httpx présent, endpoint absent
+    assert st["azure_di"][0] is True
+    # endpoint absent
     st = _statuses(
         has_module=lambda _n: True,
         get_env=lambda n: None if n == "AZURE_DOC_INTEL_ENDPOINT" else "v",
@@ -156,10 +156,10 @@ def test_public_engine_kinds_is_free_first_party_socle() -> None:
     assert PUBLIC_ENGINE_KINDS <= known
 
 
-def test_ollama_needs_httpx() -> None:
+def test_ollama_needs_no_extra() -> None:
+    # httpx est une dépendance de base : ollama ne dépend que de son serveur.
     common = {"has_binary": lambda _n: None, "get_env": lambda _n: None}
-    assert _statuses(has_module=lambda _n: False, **common)["ollama"][0] is False
-    assert _statuses(has_module=lambda _n: True, **common)["ollama"][0] is True
+    assert _statuses(has_module=lambda _n: False, **common)["ollama"][0] is True
 
 
 def test_default_probes_run_without_error() -> None:
@@ -195,18 +195,15 @@ def test_segmenter_unavailable_signals_extra() -> None:
     assert "[segment]" in paddle.detail
 
 
-def test_remote_segmenter_needs_httpx() -> None:
+def test_remote_segmenter_needs_no_extra() -> None:
+    # httpx est une dépendance de base : le segmenteur distant n'exige que
+    # son endpoint, fourni au lancement.
     from cinoc.app.engines import segmenter_statuses
 
     statuses = {
-        s.kind: s for s in segmenter_statuses(has_module=lambda n: n == "httpx")
-    }
-    remote = statuses["remote_segmenter"]
-    assert remote.available is True
-    statuses_off = {
         s.kind: s for s in segmenter_statuses(has_module=lambda _n: False)
     }
-    assert statuses_off["remote_segmenter"].available is False
+    assert statuses["remote_segmenter"].available is True
 
 
 def test_segmenter_not_in_ocr_engine_list() -> None:

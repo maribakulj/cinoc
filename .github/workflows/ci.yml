@@ -51,6 +51,36 @@ jobs:
         # ainsi les runs locaux restent rapides par défaut (cf. Makefile/pyproject).
         run: python -m pytest -q --cov=cinoc --cov-report=term-missing --cov-fail-under=85
 
+  # Le paquet DISTRIBUÉ, pas l'environnement de dev : la roue construite,
+  # installée sans aucun extra dans un venv vierge, lancée hors du dépôt. Le
+  # job `test` installe toujours `[dev]`, qui tire des dépendances que la base
+  # n'a pas : c'est ainsi que `cinoc --help` a planté en installation nue
+  # pendant trois mois avec une CI verte (D-260).
+  install-bare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # setuptools_scm calcule la version depuis l'historique
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Construire la roue
+        run: |
+          python -m pip install build
+          python -m build --wheel --outdir "$RUNNER_TEMP/dist"
+      - name: Installer sans extra et lancer hors du dépôt
+        run: |
+          python -m venv "$RUNNER_TEMP/bare"
+          "$RUNNER_TEMP/bare/bin/pip" install "$RUNNER_TEMP"/dist/*.whl
+          cp -r examples "$RUNNER_TEMP/examples"
+          cd "$RUNNER_TEMP"
+          bare/bin/cinoc --help
+          bare/bin/cinoc list engines
+          bare/bin/cinoc demo --output demo.html
+          bare/bin/cinoc run examples/config.yaml -o run.html
+          test -s demo.html && test -s run.html
+
   # Construit l'image de la vitrine (ce que le sandbox ne pouvait pas vérifier)
   # et la sonde RÉELLEMENT : conteneur lancé → /health via curl.
   docker:
