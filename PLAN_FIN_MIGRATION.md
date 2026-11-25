@@ -612,7 +612,7 @@ après la 1.0 si le temps manque (voir « Ligne de coupe »).
 
 | Session | Contenu | Sortie vérifiable | |
 |---|---|---|---|
-| S1 | P5d 4 (ce que la page propose se planifie ; `host` ollama sur liste blanche) · P5d 5 (sdist sans `corpus/`, `design/`, `campaigns/`, `.claude/` ; wheel sans `.md` ; `cinoc --version`) · P5d 6 (`twine check`) · **`pricing.json` revérifié** (expire le 2026-12-01) | sdist < 5 Mo ; `twine check` vert ; chaque option du `<select>` se planifie | ★ |
+| S1 | P5d 4 (ce que la page propose se planifie ; `host` ollama sur liste blanche) · P5d 5 (sdist sans `corpus/`, `design/`, `campaigns/`, `.claude/` ; wheel sans `.md` ; `cinoc --version`) · P5d 6 (`twine check`) · ~~`pricing.json` revérifié~~ **fait** (D-267 : toutes les entrées aux sources primaires, `valid_until` 2027-05-25) | sdist < 5 Mo ; `twine check` vert ; chaque option du `<select>` se planifie | ★ |
 | S2 | P5d 7a — XSD ALTO 4.4 vendorisés, test sur toute sortie d'écrivain ; écrivain ALTO conforme (`PHYSICAL_IMG_NR`, `Page@ID`, pas de `TextBlock@TYPE` en v4, unité de mesure conservée) | 21/21 ALTO écrits valides | ★ |
 | S3 | P5d 7b — écrivain PAGE conforme (`Metadata` à date fixe, dimensions, types de région énumérés, ImageRegion/SeparatorRegion, ordre des enfants, `TextLine@id`) ; lecture des `<Word>` PAGE ; contrôle d'ID d'`alto_source` sous ComposedBlock | 11/11 PAGE écrits valides ; mots PAGE conservés en aller-retour | ★ |
 | S4 | P5d 7c — IIIF : préférer le service d'images (`full/max`), refuser un `@id` égal au service, vérifier octets magiques et `Content-Type` au téléchargement | les manifestes Bodleian et Wellcome en cassette donnent de vraies images pleine résolution | ★ |

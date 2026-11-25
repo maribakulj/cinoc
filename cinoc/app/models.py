@@ -33,7 +33,7 @@ _CANONICAL: dict[str, tuple[tuple[str, bool], ...]] = {
     ),
     "mistral": (
         ("mistral-small-latest", False),
-        ("mistral-large-latest", False),
+        ("mistral-large", False),
         ("pixtral-12b-latest", True),
     ),
 }

@@ -1,9 +1,9 @@
 {
   "meta": {
     "currency": "EUR",
-    "last_updated": "2026-06-10",
-    "valid_until": "2026-12-01",
-    "note": "Tarifs INDICATIFS (conversions arrondies, hors remises/volumes) — à réviser avant valid_until ; le rapport affiche un avertissement de péremption au-delà.",
+    "last_updated": "2026-11-25",
+    "valid_until": "2027-05-25",
+    "note": "Tarifs INDICATIFS, prix publics hors remises/volumes, convertis depuis l'USD au taux de référence BCE du 2026-11-25 (1 EUR = 1,0935 USD), sauf Azure (prix EUR publié). Sources : pages de tarifs OpenAI, Anthropic, Mistral (cartes de modèle), Google Cloud Vision, API Azure Retail Prices. À réviser avant valid_until ; le rapport avertit au-delà.",
     "hourly_rate_local_cpu_eur": 0.08,
     "time_per_error_seconds": 5.0
   },
@@ -23,29 +23,29 @@
       "pricing_date": "2026-11-25"
     },
     "openai/gpt-4o": {
-      "input_eur_per_mtok": 2.3,
-      "output_eur_per_mtok": 9.2,
+      "input_eur_per_mtok": 2.29,
+      "output_eur_per_mtok": 9.14,
       "pricing_date": "2026-11-25"
     },
     "anthropic/claude-haiku-4-5-20251001": {
-      "input_eur_per_mtok": 0.92,
-      "output_eur_per_mtok": 4.6,
+      "input_eur_per_mtok": 0.91,
+      "output_eur_per_mtok": 4.57,
       "pricing_date": "2026-11-25"
     },
     "anthropic/claude-sonnet-4-6": {
-      "input_eur_per_mtok": 2.76,
-      "output_eur_per_mtok": 13.8,
+      "input_eur_per_mtok": 2.74,
+      "output_eur_per_mtok": 13.72,
       "pricing_date": "2026-11-25"
     },
     "mistral/mistral-small-latest": {
-      "input_eur_per_mtok": 0.1,
-      "output_eur_per_mtok": 0.3,
-      "pricing_date": "2026-06-10"
+      "input_eur_per_mtok": 0.14,
+      "output_eur_per_mtok": 0.55,
+      "pricing_date": "2026-11-25"
     },
-    "mistral/mistral-large-latest": {
-      "input_eur_per_mtok": 1.8,
-      "output_eur_per_mtok": 5.4,
-      "pricing_date": "2026-06-10"
+    "mistral/mistral-large": {
+      "input_eur_per_mtok": 0.64,
+      "output_eur_per_mtok": 1.92,
+      "pricing_date": "2026-11-25"
     }
   },
   "default_models": {
@@ -55,16 +55,16 @@
   },
   "cloud_page_kinds": {
     "mistral_ocr": {
-      "eur_per_1k_pages": 3.65,
+      "eur_per_1k_pages": 3.66,
       "pricing_date": "2026-11-25"
     },
     "google_vision": {
-      "eur_per_1k_pages": 1.38,
+      "eur_per_1k_pages": 1.37,
       "pricing_date": "2026-11-25"
     },
     "azure_di": {
-      "eur_per_1k_pages": 1.38,
-      "pricing_date": "2026-06-10"
+      "eur_per_1k_pages": 1.35,
+      "pricing_date": "2026-11-25"
     }
   }
 }
