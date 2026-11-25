@@ -184,12 +184,47 @@ def _add_corpus(subparsers: _SousCommandes) -> None:
     )
 
 
+class _VersionAction(argparse.Action):
+    """``--version`` : la version **calculée à la demande**, pas à la déclaration.
+
+    L'action ``version`` d'``argparse`` veut sa chaîne à la construction du
+    parseur, donc à chaque invocation de la CLI ; ce module ne fait aucun
+    travail. Elle lit la même source que la provenance des runs
+    (``resolve_code_version``) : deux sources de version se contrediraient.
+    """
+
+    def __init__(self, option_strings: list[str], dest: str, **kwargs: object) -> None:
+        del kwargs  # ``help`` est fixé ici : l'option n'a qu'un sens
+        super().__init__(
+            option_strings,
+            dest=dest,
+            nargs=0,
+            default=argparse.SUPPRESS,
+            help="Affiche la version de cinoc et quitte.",
+        )
+
+    def __call__(
+        self,
+        parser: argparse.ArgumentParser,
+        namespace: argparse.Namespace,
+        values: object,
+        option_string: str | None = None,
+    ) -> None:
+        from cinoc.app import resolve_code_version  # noqa: PLC0415 — à la demande
+
+        # Sur la sortie standard, comme l'action ``version`` d'``argparse`` :
+        # c'est une réponse, pas un diagnostic, et elle doit pouvoir se capturer.
+        print(f"cinoc {resolve_code_version()}")
+        parser.exit()
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Le parseur complet de ``cinoc``. Aucun effet de bord."""
     parser = argparse.ArgumentParser(
         prog="cinoc",
         description="Banc d'essai déterministe de pipelines de transcription.",
     )
+    parser.add_argument("--version", action=_VersionAction, dest="version")
     subparsers = parser.add_subparsers(dest="command", required=True)
     demo = subparsers.add_parser(
         "demo",
@@ -311,7 +346,8 @@ def build_parser() -> argparse.ArgumentParser:
     hybrid_cmd.add_argument(
         "--segmenter",
         default="pp_doclayout",
-        help="Segmenteur (pp_doclayout, remote_segmenter, precomputed_layout).",
+        help="Segmenteur (pp_doclayout, tesseract_layout, doclayout_yolo, "
+        "remote_segmenter ; precomputed_layout en démo).",
     )
     hybrid_cmd.add_argument(
         "--ocr",

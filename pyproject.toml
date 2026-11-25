@@ -92,6 +92,13 @@ include = ["cinoc*"]
 # nommée par son intention, choisie plutôt que composée.
 "cinoc.recipes" = ["*.yaml"]
 
+# Les ``.md`` sous ``cinoc/`` sont des notes de conception (analyses de couche,
+# plans) : setuptools_scm les ferait entrer dans la roue comme données du
+# paquet, alors qu'aucun code ne les lit (P5d item 5, D-270). Le sdist, lui,
+# les garde : ce sont des sources. Les exclusions du sdist sont dans MANIFEST.in.
+[tool.setuptools.exclude-package-data]
+"*" = ["*.md"]
+
 [tool.setuptools_scm]
 fallback_version = "0.1.0"
 version_file = "cinoc/_version.py"

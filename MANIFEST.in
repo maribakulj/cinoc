@@ -1,0 +1,21 @@
+# Le sdist est un paquet de sources, pas une copie du dépôt (P5d item 5, D-270).
+#
+# setuptools_scm y met d'office tout fichier suivi par git : 46 Mo, dont 45 de
+# scans de corpus. On retire ici ce qui n'est ni du code, ni ses tests, ni la
+# documentation de l'utilisateur. Les données du paquet (gabarits, assets,
+# pricing.json, YAML, prompts) vivent sous cinoc/ et ne sont pas touchées.
+
+# Scans et vérités terrain du dépôt : droits à trancher (A4), et jamais du
+# paquet dans tous les cas.
+prune corpus
+# Maquettes et sources graphiques de l'interface.
+prune design
+# Campagnes de mesure et leur outillage (hors CI).
+prune campaigns
+# Prototype de scoreur de qualité (hors CI).
+prune qe
+# Images de déploiement du Space et CI : propres au dépôt, pas au paquet.
+prune deploy
+prune .github
+# Configuration d'agent.
+prune .claude

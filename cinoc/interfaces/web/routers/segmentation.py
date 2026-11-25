@@ -30,8 +30,8 @@ from cinoc.app.run_planning import RunPlanningError
 from cinoc.app.segmentation import SegmentationStore
 from cinoc.app.structure_planning import (
     SEGMENTER_KIND,
-    SEGMENTER_KINDS,
     plan_segmentation_run,
+    segmenter_kinds,
 )
 from cinoc.interfaces.web.security.csrf import csrf_protect
 from cinoc.reports.layout_svg import layout_to_svg
@@ -79,7 +79,7 @@ def build_segmentation_router(
         dependencies=[Depends(csrf_protect)],
     )
     def launch_segmentation(req: SegmentationRunRequest) -> dict[str, str]:
-        if req.segmenter not in SEGMENTER_KINDS:
+        if req.segmenter not in segmenter_kinds():
             raise HTTPException(
                 status_code=422, detail=f"segmenteur inconnu : {req.segmenter}"
             )

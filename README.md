@@ -190,6 +190,7 @@ A recipe declares **roles**, never types: the builder knows each role's typed si
 The `/engines` page, the composer's model dropdowns and the normalisation preview all read probes that live in the `app` layer. `cinoc list` reads the same ones, in text:
 
 ```bash
+cinoc --version                    # the version every run stamps in its manifest
 cinoc list engines                 # engines, segmenters, NER — and *why* one is unavailable
 cinoc list models anthropic        # canonical model suggestions, vision flagged
 cinoc list profiles                # the normalisation profiles
@@ -299,7 +300,7 @@ before the correction tests can pass.
 
 - **Library** — prepare a corpus: drag‑and‑drop ZIP upload, or import from **IIIF / Gallica / eScriptorium / HuggingFace / HTR‑United**. Your curated Cinoc datasets (tagged `cinoc-corpus`) appear **automatically** — your handle is resolved from the Space (`SPACE_ID`) or an HF token, with `CINOC_HF_AUTHOR` as an explicit override; images stay as revision‑pinned remote references (a static‑IIIF layout served from the HF repo), fetched automatically — SSRF‑hardened, size‑capped — when a run needs the pixels.
 - **Benchmark** — the composer: pick a corpus, add competitors (OCR, OCR→LLM, VLM, **Hybrid**), launch (live progress over SSE). The **Hybrid** mode composes *segmenter → per‑region OCR/VLM → assembled text*, scored side‑by‑side with flat pipelines; a **layout preview** panel shows the detected regions before you launch. (There is no separate segmentation tab — it lives here.)
-- **Structured post-correction** — point it at a corpus of existing ALTO and correct it *inside* the layout, with the same producers as `cinoc correct` (offline rules, or a local LLM through Ollama). The corpus must carry a **separate** transcription beside its ALTO: without one the reference is extracted from the ALTO itself, the corrector would start from the very text it is scored against, and the launcher refuses the run rather than publish a meaningless number.
+- **Structured post-correction** — point it at a corpus of existing ALTO and correct it *inside* the layout, with the same producers as `cinoc correct` (offline rules, or a local LLM through Ollama — the server only talks to an Ollama host on the operator's allowlist, `CINOC_OLLAMA_HOSTS`, comma‑separated, `localhost,127.0.0.1` by default; any other host is refused with `403`, whether it comes from this form or from a submitted spec). The corpus must carry a **separate** transcription beside its ALTO: without one the reference is extracted from the ALTO itself, the corrector would start from the very text it is scored against, and the launcher refuses the run rather than publish a meaningless number.
 - **Recipes and specs** — pick a named recipe and fill in the bricks, or drop a full `RunSpec` and run **any** shape the graph admits. A submitted spec never carries its own corpus: that comes from your library, because a spec holds file URIs and accepting them from a client would turn the launcher into a remote disk reader.
 - **Reports / History** — browse rendered reports and longitudinal trends.
 
