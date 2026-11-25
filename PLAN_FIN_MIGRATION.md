@@ -559,51 +559,148 @@ le sens rassurant — il annonçait un manque là où il y avait une livraison.
 
 ## Étape 4quinquies / **P5d → P5i** — La route vers une 1.0 publiable
 
-> **Née de l'audit du 2026-11-25 (D-260)**, mené sur le code réel : installation
-> dans un environnement Python vierge, comparaison des métriques à jiwer et
-> dinglehopper, lecture des SDK installés, clone complet des branches. La
-> checklist « 1.0 prête » plus bas était verte ; l'audit a montré qu'elle avait
-> été cochée **sur la CI, pas sur le produit** — même leçon que P5a, un cran plus
-> loin : une CI verte ne prouve ni qu'un paquet s'installe, ni qu'un chiffre
-> affiché mesure ce que son nom annonce.
+> **État consolidé au 2026-11-25** (D-260 → D-266). Cette section **remplace** la
+> fin de l'ancienne route (P5b, P5c, P5) ; elle n'ajoute pas un plan à côté. Elle
+> est née de trois audits du même jour, menés sur le **produit** et non sur la CI —
+> installation dans un venv vierge, métriques confrontées à jiwer et dinglehopper,
+> sorties confrontées aux XSD officiels, bibliothèques candidates mesurées une à
+> une (`docs/ANALYSE_SUBSTITUTION.md`). La checklist « 1.0 prête » plus bas était
+> verte ; elle avait été cochée sur la CI.
 >
-> **Cette section remplace la fin de route** (P5b, P5c, P5) ; elle n'ajoute pas un
-> plan à côté. **Rien de neuf n'y entre** hors de ce que liste chaque phase. La
-> règle de la phase P5h vaut pour toutes : un défaut trouvé devient un correctif,
-> jamais une feature.
+> **Règles de la route.** Rien de neuf n'y entre hors de ce que liste chaque phase ;
+> un défaut trouvé en route devient un correctif, jamais une feature. Critère de
+> sortie de toute session : **le parcours utilisateur qu'elle touche fonctionne sur
+> le paquet installé**, et le défaut qu'elle ferme est reproduit par un test rouge
+> avant le correctif. Un résultat de référence se calcule contre un **oracle
+> externe** (scipy, jiwer, dinglehopper, XSD officiels), jamais contre Picarones
+> (D-265).
 >
-> Marqueurs : **[connu]** = déjà écrit dans un `.md` du dépôt (cité) ·
-> **[audit]** = trouvé par l'audit du 2026-11-25. Budget en sessions de
-> construction (une tranche par session, `CLAUDE.md` §9).
+> Marqueurs : **[connu]** = déjà écrit dans un `.md` du dépôt (cité) · **[audit]** =
+> trouvé le 2026-11-25. Une session = une tranche (`CLAUDE.md` §9).
 
-### Arbitrages à rendre (mainteneur) — avant la phase qui en dépend
+**Déjà livré sur cette route** : installation nue réparée et gardée par le job CI
+`install-bare` (D-262) · aucun secret dans un rapport (D-262) · segmenteur distant
+épinglé à l'IP validée et authentification limitée à l'origine (D-263) ·
+`saknussemm==0.9.0` depuis PyPI (A1, D-261) · glossaire aligné sur le calcul pour
+six métriques, README honnête sur le déterminisme, tarif Mistral OCR corrigé
+(D-260) · la parité avec Picarones n'est plus un critère (D-265).
 
-| # | Question | Recommandation | Bloque |
+### Arbitrages à rendre (mainteneur) — chacun avant la session qui en dépend
+
+| # | Question | Recommandation | Nécessaire avant |
 |---|---|---|---|
-| A1 | ~~**Canal de publication.**~~ **Rendu le 2026-11-25** : `saknussemm` 0.9.0 est publié sur PyPI ; l'extra l'épingle `==0.9.0` après vérification du pont (D-261). | — | — |
-| A2 | **Normalisation par défaut.** Aujourd'hui aucune : un « é » composé face au même « é » décomposé donne CER 0,545 (dinglehopper : 0). Changer le défaut change **tous** les chiffres déjà publiés. | NFC + retrait des invisibles par défaut ; la comparaison brute reste une vue explicite, nommée comme telle. | P5e item 7 |
-| A3 | **Politique d'échec.** Une unité en échec sort aujourd'hui de la moyenne : le moteur qui échoue sur la page difficile est avantagé. | Exclue **et** affichée (n notés / n attendus à côté de chaque agrégat) ; option « échec = erreur maximale », déjà la règle du bilan de correction (R-1.8). | P5e item 1 |
-| A4 | **Images du dépôt** (`corpus/`, 43 Mo, scans BnF et BNL) : redistribuables dans un sdist ? | Les sortir du paquet dans tous les cas ; les déplacer vers un dataset HF si les droits le permettent, ne garder au dépôt que `tests/fixtures/`. | P5d item 5 |
-| A5 | **Branche `claude/lucid-dirac-0s4p8r`** : seule à porter du code absent de `main` (`block_chain.py`, OCR → LLM par bloc), sans décision d'abandon trouvée. | Supprimer : le besoin est couvert par la correction structurée. | P5g item 7 |
-| A6 | **Campagne de référence** : corpus, moteurs, plafond de dépense, accès à un GPU (vLLM). | Voir P5h ; fixer un plafond en euros avant le premier appel facturé. | P5h |
-| A7 | **Testeurs extérieurs** : qui, combien. | Deux ou trois personnes d'institution patrimoniale, une par parcours. | P5i item 3 |
-| A9 | **Valider les sorties ALTO/PAGE au XSD officiel, en test** (D-264). Renverse L9 de `MIGRATION_COUCHE_2.md`, qui excluait toute validation XSD au motif que la sortie serait « conforme par construction » — la mesure dit 0/32. | Oui : XSD vendorisés en fixtures, `lxml.XMLSchema` (déjà dépendance), **jamais** à l'entrée (la GT réelle reste tolérée). | P5d item 7 |
-| A8 | **Pré-version.** | Une pré-release GitHub `v1.0.0rc1` (non PyPI) à la sortie de P5g, pour les testeurs ; aucun autre tag avant `v1.0.0`. | P5i |
+| A3 | **Politique d'échec.** Une unité en échec sort aujourd'hui de la moyenne : le moteur qui échoue sur la page difficile est avantagé (contre-exemple : CER 0,0 en échouant, 0,0145 en répondant). | Exclue **et** affichée (n notés / n attendus à côté de chaque agrégat) ; option « échec = erreur maximale », déjà la règle du bilan de correction (R-1.8). | S5 |
+| A9 | **Valider les sorties ALTO/PAGE au XSD officiel, en test** (D-264). Renverse L9 de `MIGRATION_COUCHE_2.md` (« conforme par construction ») : la mesure dit 0/32. | Oui : XSD vendorisés en fixtures, `lxml.XMLSchema` (déjà dépendance), **jamais** à l'entrée (la GT réelle reste tolérée). | S2 |
+| A2 | **Normalisation par défaut.** Aucune aujourd'hui : un « é » composé face au même « é » décomposé donne CER 0,545 (dinglehopper : 0). Changer le défaut change **tous** les chiffres déjà publiés. | NFC + retrait des invisibles par défaut ; la comparaison brute reste une vue explicite, nommée comme telle. | S13 |
+| A6 | **Campagne** : corpus, moteurs, plafond de dépense en euros, accès à un GPU (vLLM). | Plafond bas pour le pilote (S10), fixé avant tout appel facturé ; plafond de campagne fixé avant S30. | S10, S30 |
+| A4 | **Images du dépôt** (`corpus/`, 43 Mo, scans BnF et BNL) : redistribuables ? | Hors du paquet dans tous les cas (S1) ; vers un dataset HF si les droits le permettent, sinon hors de l'arbre public (S29). | S1, S29 |
+| A5 | **Branche `claude/lucid-dirac-0s4p8r`** : seule à porter du code absent de `main` (`block_chain.py`, OCR → LLM par bloc), sans décision d'abandon trouvée. | Supprimer : couvert par la correction structurée. | S29 |
+| A8 | **Pré-version.** | `v1.0.0rc1` sur GitHub seulement (pas PyPI), à la sortie de P5g, pour les testeurs ; aucun autre tag avant `v1.0.0`. | après S29 |
+| A7 | **Testeurs extérieurs** : qui, combien. | Deux ou trois personnes d'institution patrimoniale, une par parcours. | S34 |
+| ~~A1~~ | ~~Canal de publication~~ — **rendu** : `saknussemm` 0.9.0 sur PyPI (D-261). | — | — |
 
-### P5d — Installable et sûr · ~2-3 sessions
+### Feuille de route, session par session
+
+L'ordre suit une règle : **tout ce qui change un chiffre affiché passe avant la
+campagne**, qui ne doit tourner qu'une fois ; et les changements d'enveloppe
+(statut d'unité, sorties par étape, archive) passent avant ceux qui s'en servent.
+Les numéros d'items renvoient aux tableaux de phase plus bas, qui portent le
+détail et les preuves. **★** = indispensable à la 1.0 ; **◇** = peut glisser
+après la 1.0 si le temps manque (voir « Ligne de coupe »).
+
+**Bloc 1 — Finir P5d : installable, sûr, conforme**
+
+| Session | Contenu | Sortie vérifiable | |
+|---|---|---|---|
+| S1 | P5d 4 (ce que la page propose se planifie ; `host` ollama sur liste blanche) · P5d 5 (sdist sans `corpus/`, `design/`, `campaigns/`, `.claude/` ; wheel sans `.md` ; `cinoc --version`) · P5d 6 (`twine check`) · **`pricing.json` revérifié** (expire le 2026-12-01) | sdist < 5 Mo ; `twine check` vert ; chaque option du `<select>` se planifie | ★ |
+| S2 | P5d 7a — XSD ALTO 4.4 vendorisés, test sur toute sortie d'écrivain ; écrivain ALTO conforme (`PHYSICAL_IMG_NR`, `Page@ID`, pas de `TextBlock@TYPE` en v4, unité de mesure conservée) | 21/21 ALTO écrits valides | ★ |
+| S3 | P5d 7b — écrivain PAGE conforme (`Metadata` à date fixe, dimensions, types de région énumérés, ImageRegion/SeparatorRegion, ordre des enfants, `TextLine@id`) ; lecture des `<Word>` PAGE ; contrôle d'ID d'`alto_source` sous ComposedBlock | 11/11 PAGE écrits valides ; mots PAGE conservés en aller-retour | ★ |
+| S4 | P5d 7c — IIIF : préférer le service d'images (`full/max`), refuser un `@id` égal au service, vérifier octets magiques et `Content-Type` au téléchargement | les manifestes Bodleian et Wellcome en cassette donnent de vraies images pleine résolution | ★ |
+
+**Bloc 2 — Garder ce qu'on observe (enveloppe)**
+
+| Session | Contenu | Sortie vérifiable | |
+|---|---|---|---|
+| S5 | P5e 1 — issue de chaque unité produite par l'exécution, transportée par `DocumentUsage` ; « n notés / n attendus » à l'écran (A3) | le contre-exemple pero affiche 4/5 et son motif | ★ |
+| S6 | P5e 1b — `DocumentExecution` rend `by_step` ; cible d'étape nommable dans une vue ; précédence par type retirée | un pipeline à deux étapes de même type note les deux | ★ |
+| S7 | P5e 2 + P5f 1 (mêmes adaptateurs) — raison d'arrêt lue, statut `truncated` ; `max_tokens`, `temperature`, `seed` explicites et identiques pour les quatre fournisseurs, écrits au manifeste ; `num_ctx`/`num_predict` pour Ollama ; plus de rejeu payant d'une troncature reproductible | cassette `max_tokens` atteint → `truncated`, par fournisseur | ★ |
+| S8 | P5f 3 — sidecar `NATIVE_JSON` pour tout moteur distant | un run cloud rejoué hors ligne donne les mêmes métriques | ★ |
+| S9 | P5f 2 + 2b — modèle servi, `dependencies_lock`, version Unicode au manifeste ; clé de cache sur `module_versions` + binaires système + configuration effective, une seule empreinte avec la provenance ; `--offline` | une archive se re-note après une montée de version de métrique, sans réseau | ★ |
+| S10 | **Pilote** (P5h) — 10 pages de `37-GT-BNL`, Tesseract + un moteur cloud, plafond bas (A6). Les défauts trouvés s'inscrivent dans les sessions suivantes, pas à côté | liste des défauts du pilote, chacun rattaché à une session | ★ |
+
+**Bloc 3 — Une mesure qui dit vrai (P5e)**
+
+| Session | Contenu | Sortie vérifiable | |
+|---|---|---|---|
+| S11 | P5e 3, 4, 6 — libellé Friedman ; inférence toujours calculée ; Nemenyi et rangs par scipy (corrige k ≥ 30 et α ≠ 0,01) ; barres CD chevauchantes ; post-hoc conditionné à Friedman ; Holm | verdicts identiques à scipy sur 5 000 tirages ; sur BNL, une paire significative affichée là où il y en a une | ★ |
+| S12 | P5e 5 + bootstrap numpy (P5g 6, D-265) — IC du ratio micro, golden recalculé contre scipy | le point affiché est dans son IC | ★ |
+| S13 | P5e 7 — normalisation par défaut (A2) ; une seule définition du CER dans le rapport ; calibration sur GT normalisée, convention de bornes documentée ; parité étendue (NFC/NFD, bords, NBSP, invisibles) | parité jiwer/dinglehopper documentée cas par cas | ★ |
+| S14 | P5e 11a — un helper `rapidfuzz` remplace les cinq `difflib` ; `char_confusions` en `editops` ; pires lignes alignées par F15 ; taxonomie `I→l` | les lacunes de la taxonomie cohérentes avec les D du WER | ★ |
+| S15 | P5e 11b — vrai ROVER ; ordre de lecture par Breuel ; `linregress` pour la tendance ; `roman.py` strict | WER fusionné indépendant du nom des sources ; cas titre + deux colonnes ordonné | ★ |
+| S16 | P5e 8 — noms honnêtes (`unanchored_trigrams`, limites de `fca`, `searchability` relative, `ner_f1` nom exact, régions fantômes comptées, coût humain « simulation », historique par corpus et profil) | — | ★ |
+| S17 | P5e 9 — catégorie et unité déclarées par métrique, fiche au glossaire, classement réservé aux établies, radar réduit | test : toute métrique a catégorie, unité et fiche cohérentes avec le calcul | ★ |
+| S18 | P5e 10 — job CI oracle : dinglehopper léger (`--no-deps`), paquet `roman` | job opt-in vert | ★ |
+
+**Bloc 4 — Une inférence de son temps (P5f)**
+
+| Session | Contenu | Sortie vérifiable | |
+|---|---|---|---|
+| S19 | P5f 4 — Mistral OCR : markdown retiré du texte noté ; réponse OCR 4.1 projetée en `LAYOUT` depuis le sidecar ; `Region.confidence` ; aucune géométrie inventée | — | ★ (markdown) / ◇ (LAYOUT) |
+| S20 | P5f 5 + 7 — confidences Azure et Google ; délais finis ; une seule couche de retry ; retry des OCR cloud ; tentatives comptées dans le coût | — | ★ |
+| S21 | P5f 6 — endpoint OpenAI-compatible par instance (vLLM, SGLang), liste blanche d'hôtes, sémaphore par hôte, coût « auto-hébergé » | un run compare OpenAI distant et un serveur local | ◇ (★ si GPU BnF en A6) |
+| S22 | P5f 8 — une seule source pour modèles par défaut et tarifs ; SDK épinglés par majeure (`mistralai<2` à revoir face à la 3.x) ; jetons de cache et de raisonnement lus | — | ★ |
+
+**Bloc 5 — Par soustraction (P5g)**
+
+| Session | Contenu | Sortie vérifiable | |
+|---|---|---|---|
+| S23 | P5g 1a — rôles `zero_shot` et `text_and_image` ; déclaration des paramètres au contrat de module | — | ★ |
+| S24 | P5g 1b — catalogue de recettes branché à la page | dette `recettes-web` fermée | ◇ |
+| S25-S26 | P5g 2 + 3 — un seul constructeur (`run_planning`, `structure_planning`, `correction_planning` deviennent des recettes) et **une seule politique de vues** | même pipeline par les trois entrées → mêmes vues ; `_pipeline_for_competitor`, `_hybrid_competitor`, `_hybrid_spec` supprimés | ★ (vues) / ◇ (constructeur) |
+| S27 | P5g 4 — bouton d'arrêt d'un run web ; dépôt de spec ou `front-absent` motivé ; face ou sortie de `standardize_corpus` | dettes `annulation-web`, `spec-web` fermées | ★ (arrêt) |
+| S28 | P5g 5 + 6 — listes dérivées du registre ; Tesseract en un appel (2,7-3,9× plus rapide) ; `ocrd_processor` sur METS gabarit ; CSS extrait de `html.py` ; `StrictUndefined` + parité i18n ; shims retirés | — | ★ |
+| S29 | P5g 7 + 8 — `qe/`, `campaigns/tooling/`, code mort, 29-30 branches (A5) ; garde-fous d'agents allégés ; `CLAUDE.md` corrigé ; images du dépôt (A4). Puis **`v1.0.0rc1`** (A8) | — | ★ |
+
+**Bloc 6 — La preuve (P5h)**
+
+| Session | Contenu | Sortie vérifiable | |
+|---|---|---|---|
+| S30-S32 | Campagne d'ablation E0-E5 (A6) sur `37-GT-BNL` et Dresden, `--repeat 5` pour les moteurs stochastiques, CER recoupé par dinglehopper ; archive (`RunResult` + sidecars + rapport) sur un dataset HF avec DOI Zenodo | un tiers re-note l'archive hors ligne et retrouve les chiffres au chiffre près | ★ |
+
+**Bloc 7 — Vitrine et release (P5i)**
+
+| Session | Contenu | Sortie vérifiable | |
+|---|---|---|---|
+| S33 | P5i 1 + 2 — README court avec un vrai résultat de S30-S32 ; trois parcours testés sur le paquet installé | une personne extérieure lance un premier rapport en moins de deux minutes | ★ |
+| S34 | P5i 3 — testeurs extérieurs sur `rc1` (A7) ; leurs blocages traités comme des défauts | — | ★ |
+| S35 | P5i 4 + 5 + 6 — métadonnées du dépôt, `CITATION.cff`, `CHANGELOG [1.0.0]` ; **tag `v1.0.0` posé par le mainteneur** ; Space redéployé ; plans historiques retirés de l'arbre | — | ★ |
+
+### Ligne de coupe
+
+Environ **35 sessions**, hors temps de calcul de la campagne. Si le temps manque,
+cinq items marqués **◇** glissent après la 1.0 sans fausser un chiffre : la
+projection Mistral OCR 4.1 → `LAYOUT` (le markdown, lui, reste retiré), l'endpoint
+par instance (sauf si un GPU est disponible pour la campagne), le catalogue de
+recettes dans la page, l'unification des constructeurs (la **politique de vues
+unique**, elle, reste dans la 1.0), et le dépôt de spec. Cela ramène la route à
+une trentaine de sessions. **Rien de ce qui touche un nombre affiché ne se coupe.**
+
+### Les phases en détail — items, preuves, critères
+
+### P5d — Installable et sûr · S1-S4
 
 | # | Item | Connu ? | Critère de sortie |
 |---|---|---|---|
 | 1 ✅ | **Installation nue réparée** (D-262). `cinoc --help` plante sur `ModuleNotFoundError: httpcore` (le transport des importeurs est importé par la CLI). `httpx`/`httpcore` en dépendances de base ; les extras `google`, `azure`, `ollama`, qui ne contenaient qu'eux, disparaissent ; retirés aussi de `serve` et `saknussemm`. | [audit] | — |
 | 2 ✅ | **Job CI « installation nue »** (D-262, job `install-bare`) : construire le wheel, l'installer dans un venv vierge, lancer depuis un dossier temporaire `cinoc --help`, `cinoc demo`, `cinoc run examples/config.yaml`. C'est l'absence de ce job qui a laissé l'item 1 passer depuis le 16 août. | [audit] | job vert ; rouge prouvé en retirant `httpx` |
-| 3 ✅ | **Aucun secret dans un rapport** (D-262 : le manifeste remplace toute valeur de réglage secret par `<secret>` — un seul point de passage, puisque tout ce qui sort d'un run sort du manifeste ; le jeton reste dans `adapter_kwargs` pour authentifier le module). Le jeton du segmenteur distant entre dans `adapter_kwargs` (`run_planning.py`), donc dans le manifeste, puis s'affiche dans la section composition. Le jeton ne transite plus par `adapter_kwargs` (variable d'environnement ou secret de session) ; la section composition masque en plus toute clé `token`/`key`/`secret` (défense en profondeur). | [connu pour les recettes futures, PLAN_UI_COMPOSEUR §7] ; [audit] pour le chemin actuel | test : un run avec jeton → le JSON `RunResult` et le HTML ne contiennent pas sa valeur |
+| 3 ✅ | **Aucun secret dans un rapport** (D-262 : le manifeste remplace toute valeur de réglage secret par `<secret>` — un seul point de passage, puisque tout ce qui sort d'un run sort du manifeste ; le jeton reste dans `adapter_kwargs` pour authentifier le module). Le jeton du segmenteur distant entrait dans `adapter_kwargs`, donc dans le manifeste, puis s'affichait dans la section composition. | [connu pour les recettes futures, PLAN_UI_COMPOSEUR §7] ; [audit] pour le chemin actuel | test : un run avec jeton → le JSON `RunResult` et le HTML ne contiennent pas sa valeur |
 | 4 | **Ce que la page propose, le planificateur l'accepte.** `tesseract_layout` et `doclayout_yolo` sont proposés par le `<select>` puis refusés (422) ; ce sont les deux seuls segmenteurs exécutables sans dépendance lourde. Les ensembles `PIPELINE_SEGMENTERS`/`SEGMENTER_KINDS` dérivent du registre. Le `host` ollama reçu en HTTP est validé contre une liste blanche opérateur (SSRF sur instance privée). | [audit] | test : chaque option proposée par la page se planifie |
 | 4b ✅ | **Deux fuites réseau fermées** (D-263) : le segmenteur distant validait son endpoint puis laissait `httpx` le résoudre à nouveau (DNS rebinding) — il passe par `post_json`, épinglé à l'IP validée, sans redirection ; et un en-tête d'authentification suivait une redirection dès que le **nom d'hôte** coïncidait, donc sur un changement de port ou une rétrogradation https → http — la comparaison porte désormais sur l'origine (schéma, hôte, port). | [audit de substitution] | deux tests, rouges sans le correctif |
 | 5 | **Paquet propre.** Le sdist pèse 46 Mo (images de `corpus/`, `design/`, `campaigns/`, `.claude/`) ; le wheel embarque 15 `.md` internes. Exclusions explicites ; `cinoc --version`. | [audit] | sdist < 5 Mo ; wheel sans `.md` |
-| 6 | **Canal de publication** selon A1 ; `twine check` vert. | [audit] | `twine check dist/*` vert |
+| 6 | **Publication** : `twine check` vert (A1 rendu, D-261). | [audit] | `twine check dist/*` vert |
 | 7 | **Ce que Cinoc écrit et importe est conforme** (D-264, preuves : `docs/ANALYSE_SUBSTITUTION.md`). 0/21 ALTO et 0/11 PAGE écrits par Cinoc passent le XSD officiel (attributs requis absents, `TextBlock@TYPE` interdit en ALTO 4, types de région hors énumération, ImageRegion réécrite en TextRegion, sous-régions mal placées) — ce qui contredit L9 de `MIGRATION_COUCHE_2.md`. Lecture PAGE : les `<Word>` sont ignorés. `alto_source` ne vérifie pas les lignes sans ID sous un ComposedBlock. IIIF : une v2 dont l'image est l'URL de son service produit un corpus de JSON déguisés en images (Bodleian) ; une v3 prend la vignette au lieu de la pleine résolution (Wellcome : 12× moins de pixels) ; le téléchargement ne vérifie ni octets magiques ni `Content-Type`. Oracle : `lxml.XMLSchema` + XSD vendorisés en fixtures, aucune dépendance. | [audit de substitution] | test XSD sur toute sortie d'écrivain ; les deux manifestes réels en cassette |
 
-### P5e — Une mesure qui dit vrai · ~6-8 sessions
+### P5e — Une mesure qui dit vrai · S5-S7, S11-S18
 
 Le cœur de la 1.0. Ce qu'un instrument doit dire de chaque nombre : **ce qu'il
 mesure, sur quelles unités, et si la différence est significative**.
@@ -623,7 +720,7 @@ mesure, sur quelles unités, et si la différence est significative**.
 | 11 | **Les défauts de justesse trouvés par l'audit de substitution** (D-264). Le vote multi-moteurs n'est pas un ROVER : alignement en étoile sur la première source par ordre alphabétique, insertions perdues, **résultat qui dépend du nom des sources** (WER fusionné 0,089 contre 0,048 pour un ROVER, à 3 moteurs) → ROVER maison (~80 LOC stdlib). Les cinq alignements `difflib` (taxonomie, hallucinations, confusions, mots manqués, modernisation) sont sous-optimaux et triplent les lacunes face au WER affiché → un helper `rapidfuzz` unique. La tendance longitudinale s'affiche sans test → `scipy.stats.linregress`. L'ordre de lecture `columns` entrelace deux colonnes sous un titre large → portage de Breuel. | [audit de substitution] | chaque défaut par un test qui le reproduit, rouge avant |
 | 10 | **Oracles externes en CI** : un golden dinglehopper (extra dédié, comme `hipe-oracle`) sur le mini-corpus de référence, écarts documentés un par un (NFC, graphèmes, segmentation en mots). | HIPE golden [connu, SPEC_HIPE] ; dinglehopper [audit] | job opt-in vert |
 
-### P5f — Une inférence tracée · ~5-7 sessions
+### P5f — Une inférence tracée · S7-S9, S19-S22
 
 | # | Item | Connu ? | Critère de sortie |
 |---|---|---|---|
@@ -637,7 +734,7 @@ mesure, sur quelles unités, et si la différence est significative**.
 | 7 | **Délais finis, tentatives bornées.** Aucun appelant ne passe de deadline : Ollama, Azure et Google tournent sans timeout. Délai par défaut fini ; `call_resilient` borné par la deadline et annulable ; `max_retries=0` côté SDK (aujourd'hui jusqu'à 15 tentatives) ; OCR cloud enveloppés (429) ; tentatives comptées dans le coût. | annulation [connu, ANALYSE_COUCHE_5.md:131,209] ; le reste [audit] | — |
 | 8 | **Modèles et tarifs : une seule source.** Défauts déclarés à trois endroits (`_DEFAULT_MODEL`, `registry.py`, `pricing.json`) → un seul ; défauts actuels ; majeures des SDK `openai`/`anthropic` épinglées ; `pricing.json` revérifié (alias Mistral small/large, Azure) avant `valid_until` ; jetons de cache et de raisonnement lus. | tarifs revérifiés le 2026-11-25 sauf alias Mistral et Azure | — |
 
-### P5g — Par soustraction · ~5-7 sessions
+### P5g — Par soustraction · S23-S29
 
 | # | Item | Connu ? | Critère de sortie |
 |---|---|---|---|
@@ -650,7 +747,7 @@ mesure, sur quelles unités, et si la différence est significative**.
 | 7 | **Retraits sans perte** : `pricing.json` `local_kinds` (aucun consommateur) ; `ArtifactType.CANONICAL_DOCUMENT`/`READING_ORDER`/`ALIGNMENT` ; `qe/` et `campaigns/tooling/` (~4 000 lignes hors CI, remplacées) ; 29 branches distantes intégrées ou obsolètes, plus la 30ᵉ selon A5. | [audit] | — |
 | 8 | **Garde-fous d'agents allégés** : `test_status_freshness` réduit à son seul contrôle de fond (commandes CLI au README) ; `test_layer_dependencies` paramétré. Corrections de `CLAUDE.md` : liste blanche de `evaluation` (contredit le test), 15 profils et non 14, version calculée par `setuptools_scm` et non son repli. | [audit] | — |
 
-### P5h — La preuve : une campagne d'ablation publiée · ~3-5 sessions + temps de calcul
+### P5h — La preuve : une campagne d'ablation publiée · S10 (pilote), S30-S32
 
 **Un pilote d'abord, tôt** (D-261) : dès P5e items 1-1b et P5f item 3 livrés,
 dix pages de `37-GT-BNL`, Tesseract et un moteur cloud, plafond de dépense bas.
@@ -686,7 +783,7 @@ en fidélité philologique (métriques adaptées, lues comme diagnostic) ?
 - **Publication** : `RunResult`, sidecars natifs et rapport sur un dataset HF, avec un DOI Zenodo.
 - **Critère de sortie** : un tiers qui télécharge l'archive publiée la re-note hors ligne (`--offline`, P5f 2b) et obtient des métriques identiques au chiffre près.
 
-### P5i — Vitrine et release · ~2-3 sessions
+### P5i — Vitrine et release · S33-S35
 
 | # | Item | Critère de sortie |
 |---|---|---|
@@ -699,21 +796,14 @@ en fidélité philologique (métriques adaptées, lues comme diagnostic) ?
 
 ### Hors 1.0 (décidé, pas oublié)
 
-P5b (suspendue à son arbitrage) · P5c item 7 (composeur contraint) et pli de
-réglages généré complet · nouvelles familles de métriques, nouveaux importeurs ·
-structure de tableaux dans `CanonicalLayout`, `LAYOUT` pour Azure et Google ·
-API batch des fournisseurs · segmenteur sur le Space (T2.5) · gel de Picarones
-(différé à la demande de l'utilisateur).
-
-### Ordre et budget
-
-`P5d → P5e ∥ P5f → (pilote P5h) → P5g → P5h → P5i`. Critère de toute phase :
-**le parcours utilisateur qu'elle touche fonctionne sur le paquet installé** —
-pas « la couche est finie » ni « la couverture tient ». P5e et P5f peuvent s'entrelacer : P5e
-item 2 et P5f item 1 touchent les mêmes adaptateurs, à faire dans la même
-session. P5e, P5f et P5g changent des chiffres affichés : ils passent **avant**
-la campagne, qui ne doit tourner qu'une fois. Environ **23 à 33 sessions** au
-total, hors temps de calcul de P5h.
+P5b (suspendue à son arbitrage ; sa moitié « conserver ce qu'un run a produit »
+est absorbée par P5f 2b) · P5c item 7 (composeur contraint) et pli de réglages
+généré complet · nouvelles familles de métriques, nouveaux importeurs · structure
+de tableaux dans `CanonicalLayout`, `LAYOUT` pour Azure et Google · API batch des
+fournisseurs · segmenteur sur le Space (T2.5) · LiteLLM, au plus en plugin tiers
+(D-264) · extraction d'une bibliothèque ALTO/PAGE autonome, **seulement** quand un
+consommateur réel se présente (D-266) · gel de Picarones (différé à la demande de
+l'utilisateur).
 
 ---
 
