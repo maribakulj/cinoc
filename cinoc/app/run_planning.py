@@ -86,10 +86,10 @@ class Competitor(BaseModel):
 
     engine: str = Field(min_length=1, max_length=64)
     mode: PipelineMode | None = None
-    #: Pipeline **hybride** : segmenteur de mise en page en tête (``pp_doclayout`` /
-    #: ``remote_segmenter``). Posé ⇒ ``engine`` est le reconnaisseur **par bloc**
-    #: (OCR réel ou VLM zero-shot), scoré comme du texte à la page. ``None`` ⇒
-    #: pipeline à plat (OCR / chaîne / VLM), comportement historique.
+    #: Pipeline **hybride** : segmenteur de mise en page en tête (l'un de
+    #: ``structure_planning.pipeline_segmenters()``). Posé ⇒ ``engine`` est le
+    #: reconnaisseur **par bloc** (OCR réel ou VLM zero-shot), scoré comme du
+    #: texte à la page. ``None`` ⇒ pipeline à plat (OCR / chaîne / VLM).
     segmenter: str | None = Field(default=None, max_length=64)
     #: Endpoint object-detection HF (requis si ``segmenter == "remote_segmenter"``).
     segmenter_endpoint: str | None = Field(default=None, max_length=2048)
@@ -384,16 +384,18 @@ def _hybrid_competitor(
     si ``alto``, assemblage ALTO XML téléchargeable. C'est « segmentation puis OCR/
     VLM » jugé **côte à côte** avec un pipeline à plat, dans le même run."""
     from cinoc.app.structure_planning import (  # cycle → import local
-        PIPELINE_SEGMENTERS,
         pipeline_recognizers,
+        pipeline_segmenters,
     )
 
     # Même ensemble que la transcription autonome : la même intention ne peut
-    # pas recevoir deux réponses selon le mode d'entrée (D-233).
-    if comp.segmenter not in PIPELINE_SEGMENTERS:
+    # pas recevoir deux réponses selon le mode d'entrée (D-233) — et le même
+    # que la page propose (D-269).
+    segmenters = pipeline_segmenters()
+    if comp.segmenter not in segmenters:
         raise RunPlanningError(
             f"hybride : segmenteur non câblé : {comp.segmenter!r} "
-            f"(attendu l'un de {sorted(PIPELINE_SEGMENTERS)})."
+            f"(attendu l'un de {sorted(segmenters)})."
         )
     if comp.engine not in pipeline_recognizers():
         raise RunPlanningError(

@@ -209,8 +209,8 @@ def test_both_planners_accept_the_same_bricks() -> None:
 
     from cinoc.app.run_planning import Competitor, plan_benchmark_run
     from cinoc.app.structure_planning import (
-        PIPELINE_SEGMENTERS,
         pipeline_recognizers,
+        pipeline_segmenters,
         plan_hybrid_run,
     )
     from cinoc.domain.corpus import CorpusSpec
@@ -220,7 +220,7 @@ def test_both_planners_accept_the_same_bricks() -> None:
         name="c", documents=(DocumentRef(id="d", image_uri="d.png", ground_truths=()),)
     )
     refus: list[str] = []
-    for segmenteur in sorted(PIPELINE_SEGMENTERS):
+    for segmenteur in sorted(pipeline_segmenters()):
         for reconnaisseur in sorted(pipeline_recognizers()):
             options = {"segmenter_endpoint": "https://e.test"} if (
                 segmenteur == "remote_segmenter"

@@ -18,7 +18,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
-from cinoc.app.engines import EngineStatus, providers_for_mode
+from cinoc.app.engines import EngineStatus, providers_for_mode, segmenter_statuses
 from cinoc.app.run_planning import (
     _OCR_ENGINES,
     RunPlanningError,
@@ -34,18 +34,30 @@ from cinoc.domain.run_spec import RunSpec
 #: du routeur).
 SEGMENTER_KIND = "pp_doclayout"
 
-#: Segmenteurs du socle proposables au lanceur. ``pp_doclayout`` tourne en local
-#: (poids) ; ``remote_segmenter`` **délègue** à un endpoint object-detection HF
-#: (le modèle tourne à distance — on change de modèle en changeant l'endpoint).
-SEGMENTER_KINDS = ("pp_doclayout", "remote_segmenter")
 
-#: Segmenteurs acceptés **en tête d'un pipeline**, benchmark ou transcription
-#: autonome : les réels, plus la brique de rejeu. **Source unique** — les deux
-#: planificateurs lisaient jusqu'ici deux ensembles différents, si bien que la
-#: même intention exprimée en mode benchmark ou en mode transcription donnait
-#: deux réponses (D-233). Le rejeu appartient à la liste : il sert la démo et la
-#: CI, où il n'y a ni PaddleX ni endpoint distant.
-PIPELINE_SEGMENTERS = frozenset(SEGMENTER_KINDS) | {"precomputed_layout"}
+def segmenter_kinds() -> tuple[str, ...]:
+    """Segmenteurs du socle : **exactement** ceux que la page propose.
+
+    Lus sur ``segmenter_statuses``, qui alimente le ``<select>`` du Banc
+    d'essai — et non plus sur une constante écrite ici. Les deux listes avaient
+    divergé : ``tesseract_layout`` et ``doclayout_yolo`` étaient proposés par la
+    page puis refusés en 422, alors que ce sont les deux seuls segmenteurs
+    exécutables sans PaddleX ni endpoint (D-269). Un segmenteur proposé mais
+    absent de la machine se refuse à la **disponibilité** (409), jamais ici.
+    """
+    return tuple(status.kind for status in segmenter_statuses())
+
+
+def pipeline_segmenters() -> frozenset[str]:
+    """Segmenteurs acceptés **en tête d'un pipeline**, benchmark ou transcription.
+
+    Les réels, plus la brique de rejeu. **Source unique** — les deux
+    planificateurs lisaient jusqu'ici deux ensembles différents, si bien que la
+    même intention exprimée en mode benchmark ou en mode transcription donnait
+    deux réponses (D-233). Le rejeu appartient à la liste : il sert la démo et
+    la CI, où il n'y a ni PaddleX ni endpoint distant.
+    """
+    return frozenset(segmenter_kinds()) | {"precomputed_layout"}
 
 
 def _segmentation_spec(
@@ -97,11 +109,11 @@ def plan_segmentation_run(
 ) -> Callable[[Path], RunSpec]:
     """Builder de spec d'un run de **segmentation**.
 
-    ``segmenter`` choisit le module (``pp_doclayout`` local ou ``remote_segmenter``
-    distant). Pour ``remote_segmenter``, ``endpoint`` est **requis** (la cible
-    object-detection) ; ``token`` est optionnel (auth de l'endpoint).
+    ``segmenter`` choisit le module (l'un de ``segmenter_kinds()``). Pour
+    ``remote_segmenter``, ``endpoint`` est **requis** (la cible object-detection) ;
+    ``token`` est optionnel (auth de l'endpoint).
     """
-    if segmenter not in SEGMENTER_KINDS:
+    if segmenter not in segmenter_kinds():
         raise RunPlanningError(f"segmenteur inconnu : {segmenter!r}.")
     adapter_kwargs: dict[str, dict[str, str | int | float | bool]] = {}
     if segmenter == "remote_segmenter":
@@ -118,8 +130,6 @@ def plan_segmentation_run(
     )
 
 
-#: Segmenteurs valides en tête d'un run hybride (réels + précalculé pour la démo).
-_HYBRID_SEGMENTERS = PIPELINE_SEGMENTERS
 #: Reconnaisseurs **par région** câblés : tout moteur ``IMAGE → RAW_TEXT`` convient
 #: au slot de fan-out (le bloc découpé est OCRisé/transcrit puis réinjecté). Donc
 #: l'ensemble des OCR réels (dont ``mistral_ocr``, ``google_vision``, ``azure_di``)
@@ -141,7 +151,7 @@ def _hybrid_vlm() -> frozenset[str]:
 def pipeline_recognizers() -> frozenset[str]:
     """Reconnaisseurs valides **par bloc**, benchmark ou transcription autonome.
 
-    Source unique, pour la même raison que ``PIPELINE_SEGMENTERS`` : les deux
+    Source unique, pour la même raison que ``pipeline_segmenters`` : les deux
     planificateurs en tenaient deux versions, et le rejeu manquait à celle du
     benchmark (D-233).
     """
@@ -231,8 +241,8 @@ def _hybrid_spec(
 ) -> RunSpec:
     """Pipeline **hybride** à 3 étages en **une** ``PipelineSpec`` :
 
-    1. ``segmenter`` : ``IMAGE → LAYOUT`` (régions seules — ``pp_doclayout`` réel,
-       ``remote_segmenter`` distant, ou ``precomputed_layout`` pour la démo) ;
+    1. ``segmenter`` : ``IMAGE → LAYOUT`` (l'un de ``pipeline_segmenters()`` ;
+       ``precomputed_layout`` pour la démo) ;
     2. ``recognizer`` : reconnaissance **par région** (``fanout=True`` → l'exécuteur
        boucle sur les régions, **découpe** chaque bloc via le cropper de couche 5
        et l'OCR par bloc, couche 4) → ``LAYOUT`` rempli ;
@@ -297,18 +307,19 @@ def plan_hybrid_run(
 ) -> Callable[[Path], RunSpec]:
     """Builder de spec d'un run **hybride** seg → reconnaissance par région → ALTO.
 
-    Compose un segmenteur (``pp_doclayout`` réel par défaut, ``remote_segmenter``,
-    ou ``precomputed_layout`` démo) + un reconnaisseur **par région** (tout OCR réel
-    — ``tesseract`` par défaut, ``mistral_ocr``… — **ou** un VLM en ``zero_shot``)
-    + ``alto_assembler`` en une ``PipelineSpec`` à fan-out. L'exécuteur découpe
-    chaque bloc (cropper couche 5) et le reconnaît. ``remote_segmenter`` exige
-    ``endpoint`` ; ``precomputed_region`` exige ``source_label`` (démo). ``model``/
-    ``prompt`` ciblent le reconnaisseur (modèle du moteur, prompt VLM).
+    Compose un segmenteur (l'un de ``pipeline_segmenters()``, ``pp_doclayout``
+    par défaut, ``precomputed_layout`` en démo) + un reconnaisseur **par région**
+    (tout OCR réel — ``tesseract`` par défaut, ``mistral_ocr``… — **ou** un VLM
+    en ``zero_shot``) + ``alto_assembler`` en une ``PipelineSpec`` à fan-out.
+    L'exécuteur découpe chaque bloc (cropper couche 5) et le reconnaît.
+    ``remote_segmenter`` exige ``endpoint`` ; ``precomputed_region`` exige
+    ``source_label`` (démo). ``model``/``prompt`` ciblent le reconnaisseur
+    (modèle du moteur, prompt VLM).
     """
-    if segmenter not in _HYBRID_SEGMENTERS:
+    if segmenter not in pipeline_segmenters():
         raise RunPlanningError(
             f"plan_hybrid_run : segmenteur inconnu {segmenter!r} "
-            f"(attendu l'un de {sorted(_HYBRID_SEGMENTERS)})."
+            f"(attendu l'un de {sorted(pipeline_segmenters())})."
         )
     recognizer, reco_kwargs = _hybrid_recognizer(
         ocr,
@@ -343,8 +354,10 @@ def plan_hybrid_run(
 
 __all__ = [
     "SEGMENTER_KIND",
-    "SEGMENTER_KINDS",
     "hybrid_recognizer_catalog",
+    "pipeline_recognizers",
+    "pipeline_segmenters",
     "plan_hybrid_run",
     "plan_segmentation_run",
+    "segmenter_kinds",
 ]

@@ -353,3 +353,44 @@ def test_toute_brique_reservee_a_la_cli_est_refusee(
 
     assert reponse.status_code == 403, reponse.json()
     assert brique in reponse.json()["detail"]
+
+
+def test_a_spec_cannot_point_ollama_at_a_private_host(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """La spec déposée ne rouvre pas la porte que la route de correction ferme.
+
+    ``adapter_kwargs`` est libre : sans la garde, un ``host`` y envoyait le
+    serveur poster vers n'importe quelle adresse (P5d 4, D-269).
+    """
+    monkeypatch.delenv("CINOC_OLLAMA_HOSTS", raising=False)
+    client = _client(tmp_path)
+    corpus_id = _corpus(client)
+    spec = yaml.safe_load(_spec_minimale())
+    spec["pipelines"][0]["steps"].append(
+        {
+            "id": "llm",
+            "kind": "post_correction",
+            "adapter_name": "ollama:llm",
+            "input_types": ["raw_text"],
+            "output_types": ["corrected_text"],
+        }
+    )
+    spec["evaluation"]["views"][0]["candidate_types"] = [
+        "raw_text",
+        "corrected_text",
+    ]
+    spec["adapter_kwargs"]["ollama:llm"] = {
+        "label": "llm",
+        "model": "m",
+        "host": "http://169.254.169.254",
+    }
+
+    reponse = client.post(
+        "/api/runs/spec",
+        headers=_CSRF,
+        json={"corpus_id": corpus_id, "spec": yaml.safe_dump(spec)},
+    )
+
+    assert reponse.status_code == 403, reponse.json()
+    assert "CINOC_OLLAMA_HOSTS" in reponse.json()["detail"]

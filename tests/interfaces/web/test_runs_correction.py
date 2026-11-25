@@ -154,3 +154,66 @@ def test_the_library_absence_is_named_before_the_run(
     resp = _post(_client(tmp_path), {"corpus_id": "x"})
     assert resp.status_code == 409
     assert "saknussemm" in resp.json()["detail"]
+
+
+# --- Hôte ollama : liste blanche de l'opérateur (P5d 4, D-269) -----------------
+
+
+@pytest.mark.skipif(not _a_saknussemm, reason="extra [saknussemm] absent")
+@pytest.mark.parametrize(
+    "host",
+    [
+        # Le service de métadonnées d'un nuage : la cible SSRF canonique.
+        "http://169.254.169.254/latest/meta-data",
+        # Une machine du réseau privé de l'instance.
+        "http://10.0.0.7:11434",
+        # Un nom qui *commence* comme l'hôte autorisé n'en est pas un.
+        "http://localhost.evil.example:11434",
+    ],
+)
+def test_an_ollama_host_outside_the_allowlist_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, host: str
+) -> None:
+    """Le ``host`` venait du corps HTTP et partait tel quel au correcteur.
+
+    Sur une instance privée, c'était une requête POST du serveur vers l'adresse
+    de son choix. Refus en 403, **avant** le lancement : aucune requête ne part.
+    """
+    monkeypatch.delenv("CINOC_OLLAMA_HOSTS", raising=False)
+    client = _client(tmp_path)
+    corpus_id = _upload(client, transcription=True)
+
+    resp = _post(
+        client,
+        {"corpus_id": corpus_id, "producer": "ollama", "model": "m", "host": host},
+    )
+
+    assert resp.status_code == 403, resp.json()
+    assert "CINOC_OLLAMA_HOSTS" in resp.json()["detail"]
+
+
+@pytest.mark.skipif(not _a_saknussemm, reason="extra [saknussemm] absent")
+def test_the_operator_can_allow_another_ollama_host(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """La liste blanche est celle de l'opérateur, pas une interdiction figée."""
+    monkeypatch.setenv("CINOC_OLLAMA_HOSTS", "gpu.lan")
+    client = _client(tmp_path)
+    corpus_id = _upload(client, transcription=True)
+
+    accepte = _post(
+        client,
+        {
+            "corpus_id": corpus_id,
+            "producer": "rules",
+            "host": "http://gpu.lan:11434",
+        },
+    )
+    refuse = _post(
+        client,
+        {"corpus_id": corpus_id, "producer": "rules", "host": "http://localhost"},
+    )
+
+    assert accepte.status_code == 201, accepte.json()
+    # La liste posée **remplace** le défaut : rien n'est ajouté en silence.
+    assert refuse.status_code == 403

@@ -311,7 +311,8 @@ def build_parser() -> argparse.ArgumentParser:
     hybrid_cmd.add_argument(
         "--segmenter",
         default="pp_doclayout",
-        help="Segmenteur (pp_doclayout, remote_segmenter, precomputed_layout).",
+        help="Segmenteur (pp_doclayout, tesseract_layout, doclayout_yolo, "
+        "remote_segmenter ; precomputed_layout en démo).",
     )
     hybrid_cmd.add_argument(
         "--ocr",

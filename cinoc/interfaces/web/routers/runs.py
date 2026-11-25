@@ -52,6 +52,7 @@ from cinoc.app.recipes import (
     spec_for_corpus,
 )
 from cinoc.app.run_planning import Competitor, RunPlanningError, plan_benchmark_run
+from cinoc.app.security import HostNotAllowedError, check_ollama_host
 from cinoc.app.spec_coherence import SpecCoherenceError
 from cinoc.app.spec_coherence import check as coherence_check
 from cinoc.domain.corpus import CorpusSpec
@@ -137,6 +138,9 @@ class CorrectionRequest(BaseModel):
     #: Modèle du producteur — **exigé** par le planificateur dès que le
     #: producteur en interroge un.
     model: str | None = Field(default=None, max_length=128)
+    #: Serveur ollama — **confronté à la liste blanche de l'opérateur**
+    #: (``CINOC_OLLAMA_HOSTS``) avant tout lancement : venu d'un client, il
+    #: ferait sinon poster le serveur vers l'adresse de son choix.
     host: str = Field(default="http://localhost:11434", max_length=2048)
 
 
@@ -330,6 +334,18 @@ def build_runs_router(
                 "par la spec).",
             )
 
+    def _hote_autorise(host: str) -> None:
+        """Refuse en 403 un hôte ollama hors de la liste blanche de l'opérateur.
+
+        Une seule fonction pour les deux portes qui reçoivent un ``host`` (la
+        route de correction, la spec déposée) : la règle vit en couche ``app``,
+        ici on ne fait que la traduire en HTTP.
+        """
+        try:
+            check_ollama_host(host)
+        except HostNotAllowedError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+
     def _garder(spec: RunSpec) -> None:
         """Applique à une spec les gardes du lanceur, dans le même ordre.
 
@@ -350,6 +366,12 @@ def build_runs_router(
             coherence_check(spec)
         except SpecCoherenceError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+        # ``adapter_kwargs`` est libre : un ``host`` y ferait poster le serveur
+        # vers l'adresse du choix du client, comme par la route de correction.
+        for reglages in spec.adapter_kwargs.values():
+            host = reglages.get("host")
+            if isinstance(host, str):
+                _hote_autorise(host)
         sts = statuses()
         registre = ModuleRegistry()
         register_default_modules(registre)
@@ -439,7 +461,8 @@ def build_runs_router(
         4. **vérité terrain dérivée de l'ALTO** → ``422``. C'est le refus qui
            compte : sans lui, le banc compare le texte à lui-même et publie un
            verdict inversé. Voir ``ground_truth_is_its_own_source``.
-        5. producteur incohérent (un producteur à modèle sans ``model``) → ``422``.
+        5. ``host`` hors de la liste blanche de l'opérateur → ``403`` (SSRF) ;
+        6. producteur incohérent (un producteur à modèle sans ``model``) → ``422``.
         """
         if public_mode:
             raise HTTPException(
@@ -465,6 +488,7 @@ def build_runs_router(
                 "compare, et le CER vaudrait zéro par construction. Dépose une "
                 "transcription à part (<nom>.gt.txt) à côté de chaque ALTO.",
             )
+        _hote_autorise(payload.host)
         run_id = f"web-corr-{uuid.uuid4().hex[:12]}"
         try:
             spec = plan_correction_run(
