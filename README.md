@@ -8,9 +8,9 @@
 [![Coverage](https://img.shields.io/badge/coverage-%E2%89%A585%25-brightgreen.svg)](#development)
 [![Lint: Ruff](https://img.shields.io/badge/lint-ruff-261230.svg)](https://github.com/astral-sh/ruff)
 [![Types: mypy strict](https://img.shields.io/badge/types-mypy%20strict-1f5082.svg)](https://mypy-lang.org/)
-[![Determinism: hash‑locked](https://img.shields.io/badge/runs-deterministic-6e40c9.svg)](#invariants)
+[![Metrics: deterministic](https://img.shields.io/badge/metrics-deterministic-6e40c9.svg)](#invariants)
 
-**A deterministic benchmark for transcription *pipelines* — OCR, HTR, VLM, OCR→LLM — on heritage documents.**
+**A reproducible benchmark for transcription *pipelines* — OCR, HTR, VLM, OCR→LLM — on heritage documents.**
 
 Cinoc runs competing transcription pipelines over a ground-truth corpus and produces a **factual, quantified verdict** — metrics plus statistical tests — as a **self‑contained interactive HTML report**. No LLM writes the report: every number is an **auditable** function of the inputs.
 
@@ -84,8 +84,9 @@ Far beyond CER/WER — every family ships with its own report section and tests 
 
 ## Invariants
 
-- **Deterministic** — same spec + same corpus + same code → identical artifacts (same hash), identical metrics, identical report.
-- **Reproducible** — every run carries a `RunManifest` (code version, dependency versions, engine binaries, parameter fingerprint).
+- **Deterministic scoring** — same outputs + same spec + same code → identical metrics and verdict. Replaying frozen outputs (`precomputed`) gives identical artifacts (same hash); two reports differ only by their timestamps and measured durations.
+- **Traced, not guaranteed, inference** — a remote or stochastic engine (cloud API, LLM/VLM, even at temperature 0) is *not* deterministic: Cinoc records what was asked and measures the spread (`--repeat`), it does not promise the same transcription twice.
+- **Reproducible** — every run carries a `RunManifest` (code version, engine binaries, parameter fingerprint). Python dependency versions are not captured yet.
 - **Anti‑hallucination** — no LLM writes a single word of the report; every figure is an auditable function of the inputs.
 - **Secure** — hardened XML (`safe_parse_xml`: no DTD/DOCTYPE/external entity/network), all user paths validated (anti‑traversal), anti‑SSRF on remote fetches, and an **opt‑in** public *fail‑closed* mode for protecting a key on a public Space (only the free base runs).
 
@@ -283,7 +284,7 @@ original OCR confidence along with their word boxes; unchanged lines retain
 both. This adapter benchmarks text through a canonical layout. It does not
 run Saknussemm's original XML rewrite and integrity checks, so a successful
 Cinoc run does not certify an XML file for publication.
-The `[saknussemm]` extra pins revision `d30c493f64150b890609123d66c7c5820ba10b48`,
+The `[saknussemm]` extra pins revision `8a0a00de99531ab375b62a1737de2fb6d70c70b0`,
 the version checked with this bridge. CI requires its installation and import
 before the correction tests can pass.
 

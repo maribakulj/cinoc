@@ -20,22 +20,22 @@
     "openai/gpt-4o-mini": {
       "input_eur_per_mtok": 0.14,
       "output_eur_per_mtok": 0.55,
-      "pricing_date": "2026-06-10"
+      "pricing_date": "2026-11-25"
     },
     "openai/gpt-4o": {
       "input_eur_per_mtok": 2.3,
       "output_eur_per_mtok": 9.2,
-      "pricing_date": "2026-06-10"
+      "pricing_date": "2026-11-25"
     },
     "anthropic/claude-haiku-4-5-20251001": {
       "input_eur_per_mtok": 0.92,
       "output_eur_per_mtok": 4.6,
-      "pricing_date": "2026-06-10"
+      "pricing_date": "2026-11-25"
     },
     "anthropic/claude-sonnet-4-6": {
       "input_eur_per_mtok": 2.76,
       "output_eur_per_mtok": 13.8,
-      "pricing_date": "2026-06-10"
+      "pricing_date": "2026-11-25"
     },
     "mistral/mistral-small-latest": {
       "input_eur_per_mtok": 0.1,
@@ -55,12 +55,12 @@
   },
   "cloud_page_kinds": {
     "mistral_ocr": {
-      "eur_per_1k_pages": 0.92,
-      "pricing_date": "2026-06-10"
+      "eur_per_1k_pages": 3.65,
+      "pricing_date": "2026-11-25"
     },
     "google_vision": {
       "eur_per_1k_pages": 1.38,
-      "pricing_date": "2026-06-10"
+      "pricing_date": "2026-11-25"
     },
     "azure_di": {
       "eur_per_1k_pages": 1.38,
