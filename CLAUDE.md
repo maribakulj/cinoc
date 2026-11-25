@@ -35,8 +35,8 @@ avant d'écrire la moindre ligne.**
   `pip install cinoc` sans extra ne démarrait pas, et plusieurs chiffres
   affichés ne mesuraient pas ce qu'annonçait leur nom. Cette route **remplace**
   la fin de l'ancienne : P5c y est absorbée (items 2-4, 6, 8 en P5g), P5b et le
-  composeur contraint sortent du chemin de la 1.0. Huit arbitrages du mainteneur
-  y sont listés, chacun avant la phase qu'il bloque. Aucun tag `git` n'existe ;
+  composeur contraint sortent du chemin de la 1.0. Les arbitrages du mainteneur
+  y sont listés, chacun avant la phase qu'il bloque (A1 rendu, D-261). Aucun tag `git` n'existe ;
   le tag `v1.0.0` est posé par le mainteneur, à la fin de P5i.
 - **Un axe hors numérotation P#, livré en août 2026 : la post-correction
   structurée** (`ALTO → ALTO` via `saknussemm`, commande `cinoc correct`).

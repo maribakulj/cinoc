@@ -580,7 +580,7 @@ le sens rassurant — il annonçait un manque là où il y avait une livraison.
 
 | # | Question | Recommandation | Bloque |
 |---|---|---|---|
-| A1 | **Canal de publication.** PyPI refuse un paquet dont une dépendance (extras compris) est une URL directe : l'extra `[saknussemm]` pointe sur un dépôt git. | Publier `saknussemm` sur PyPI et l'épingler par version. À défaut : retirer l'extra des métadonnées et documenter l'installation git. | P5d item 6 |
+| A1 | ~~**Canal de publication.**~~ **Rendu le 2026-11-25** : `saknussemm` 0.9.0 est publié sur PyPI ; l'extra l'épingle `==0.9.0` après vérification du pont (D-261). | — | — |
 | A2 | **Normalisation par défaut.** Aujourd'hui aucune : un « é » composé face au même « é » décomposé donne CER 0,545 (dinglehopper : 0). Changer le défaut change **tous** les chiffres déjà publiés. | NFC + retrait des invisibles par défaut ; la comparaison brute reste une vue explicite, nommée comme telle. | P5e item 7 |
 | A3 | **Politique d'échec.** Une unité en échec sort aujourd'hui de la moyenne : le moteur qui échoue sur la page difficile est avantagé. | Exclue **et** affichée (n notés / n attendus à côté de chaque agrégat) ; option « échec = erreur maximale », déjà la règle du bilan de correction (R-1.8). | P5e item 1 |
 | A4 | **Images du dépôt** (`corpus/`, 43 Mo, scans BnF et BNL) : redistribuables dans un sdist ? | Les sortir du paquet dans tous les cas ; les déplacer vers un dataset HF si les droits le permettent, ne garder au dépôt que `tests/fixtures/`. | P5d item 5 |
@@ -607,7 +607,8 @@ mesure, sur quelles unités, et si la différence est significative**.
 
 | # | Item | Connu ? | Critère de sortie |
 |---|---|---|---|
-| 1 | **Statut de chaque unité, dans `RunResult`.** Aujourd'hui une unité en échec donne des artefacts vides, son score `None` sort de la moyenne, et la raison ne vit que dans un `logger.warning`. Champ de statut par (pipeline × document) : `ok` · `truncated` · `failed: <motif>` ; agrégats accompagnés de « n notés / n attendus » (tableau des mesures clés compris) ; politique selon A3. | [audit] | test : un moteur qui échoue sur un document voit son support baisser **à l'écran** |
+| 1 | **Le statut d'une unité est produit par l'exécution, pas reconstruit au rapport** (D-261). Aujourd'hui l'orchestrateur écrit `results[unit] = {}` et la raison ne vit que dans un `logger.warning` : rien dans `RunResult` ne distingue un échec d'une absence. Contre-exemple reproduit sur `examples/` : pero sans sa sortie pour `folio_002` obtient **CER 0,0** (support 4), contre 0,0145 quand il la produit et **0,1667** s'il rend une page vide — **échouer rapporte plus que répondre**. `DocumentExecution` porte l'issue de l'unité — `ok` · `truncated` · `failed` + motif codé (`engine` · `infrastructure` · `unsupported` · `cancelled`) —, l'orchestrateur la conserve au lieu d'un dict vide, et l'enregistrement par unité qui existe déjà (`DocumentUsage`, un par pipeline × document) la transporte dans `RunResult`. Les cas « vérité terrain absente » et « métrique inapplicable » restent côté évaluation (score `None`), où ils sont déjà. Agrégats accompagnés de « n notés / n attendus » ; politique selon A3. | [audit] | le contre-exemple ci-contre affiche le support 4/5 et le motif, à l'écran et dans le JSON |
+| 1b | **Les sorties de chaque étape restent observables, et la cible se nomme** (D-261). L'exécuteur tient déjà `by_step` (toutes les sorties, étape par étape) mais ne rend que `pool`, le dernier artefact **par type** : deux étapes de même type s'écrasent. Contre-exemple reproduit : un pipeline `ocr1 (tesseract) → ocr2 (pero)` ne laisse noter que pero (0,0145) ; le 0,029 de l'étape 1 n'est plus atteignable dans le run. `DocumentExecution` rend `by_step` (le pool s'en déduit, une structure au lieu de deux) avec la consommation **par étape** ; `EvaluationView` gagne une cible d'étape facultative, la dernière par défaut — la règle actuelle de `_candidate_for`, devenue explicite ; le fan-out estampille son étape, et la précédence par type, qui ne servait plus qu'à lui, disparaît. C'est ce qui rend une ablation (OCR seul / OCR + correction) mesurable **dans un seul run, sans réexécuter le préfixe**. | [audit] | le pipeline ci-contre note ses deux étapes dans le même run |
 | 2 | **La troncature se voit.** Les quatre fournisseurs LLM/VLM ignorent la raison d'arrêt (`stop_reason`, `finish_reason`, `done_reason`) : une page coupée à 4 096 jetons (plafond codé en dur chez Anthropic) est notée comme complète. `LLMCompletion` porte la raison d'arrêt ; `max_tokens` devient un paramètre ; Ollama reçoit `num_ctx`/`num_predict` (le correctif existe pour `ollama_structured`, pas pour l'adaptateur principal). La correction structurée ne retente plus une troncature reproductible. | [audit] ; classe Ollama [connu, MIGRATION_PLAN.md:54] | tests sur cassette par fournisseur : `max_tokens` atteint → statut `truncated` |
 | 3 | **Le libellé du test est le bon test.** En mode rapide (le défaut), un Friedman (k ≥ 3) s'affiche « Wilcoxon ». L'inférence (coût négligeable) tourne toujours, ou le rapport écrit « test non calculé ». | [audit] | test à 3 pipelines |
 | 4 | **Nemenyi juste et lu juste.** Table écrite à la main fausse pour k ≥ 30, dans le sens anti-conservateur → `scipy.stats.studentized_range` (et `rankdata` pour les rangs). Les groupes « indiscernables » sont disjoints alors que le texte en tire une significativité : afficher les paires significatives, ou des groupes qui se chevauchent ; retirer la phrase. Post-hoc conditionné au rejet de Friedman. | [audit] | parité scipy ; test rangs 1,0/1,8/2,6 |
@@ -615,7 +616,7 @@ mesure, sur quelles unités, et si la différence est significative**.
 | 6 | **Comparaisons multiples.** Une ligne « significatif » par (vue × métrique) sans correction, alors que le glossaire dit lui-même qu'elle est exigée. Holm sur la table ; verdict mis en avant pour la seule métrique principale. | [audit] | — |
 | 7 | **Normalisation par défaut** selon A2 ; une seule définition du CER dans le rapport (l'analyse par lignes applique déjà NFC + strip) ; la calibration lit la GT normalisée comme la vue. Tests de parité étendus aux cas NFC/NFD, bords, NBSP, invisibles. | [audit] | parité jiwer/dinglehopper documentée cas par cas |
 | 8 | **Des noms qui ne promettent pas plus.** `hallucination` → clé `unanchored_trigrams` (aveugle à une page dupliquée : 0,021) ; `fca` déclarée limitée (0 dès que les lignes sont fusionnées, cas typique d'un VLM) ; `searchability` à seuil relatif ; `ner_f1` reçoit une variante « nom exact » (aujourd'hui « Montfort » lu « Montfert » compte juste) et perd la mention « CoNLL/HIPE » inexacte ; `region_cer` compte le texte des régions fantômes ; coût humain étiqueté **simulation** (« hypothèse : 5 s par erreur caractère ») ; historique indexé par (corpus, profil, pipeline, vue). Au passage : taxonomie (`I→l`, `O→o` mortes car appliquées après `lower()`), pires lignes appariées par F15 comme `lines.py`. | renommages d'affichage [connu, D-194] ; le reste [audit] | — |
-| 9 | **Une fiche par métrique, et trois niveaux.** Chaque métrique du registre déclare sa catégorie — **établie** (conforme à une référence nommée), **adaptée** (variante justifiée), **exploratoire** — et son unité (caractère / mot / région). Le glossaire porte, pour chaque métrique affichée par défaut : définition implémentée, ce qu'elle mesure, limites, oracle. Les exploratoires sortent du radar et des colonnes par défaut (le radar a 5 axes quasi colinéaires sur 6) ; `char_accuracy`, `word_accuracy`, `bow_f1` quittent le radar. | glossaire corrigé sur 6 métriques le 2026-11-25 ; le reste [audit] | test : toute métrique enregistrée a catégorie, unité et fiche ; l'unité de la fiche est celle du calcul |
+| 9 | **Une fiche par métrique, trois niveaux, et le classement réservé aux établies.** Chaque métrique du registre déclare sa catégorie — **établie** (conforme à une référence nommée), **adaptée** (variante justifiée), **exploratoire** — et son unité (caractère / mot / région). Le glossaire porte, pour chaque métrique affichée par défaut : définition implémentée, ce qu'elle mesure, limites, oracle. Les exploratoires sortent du radar et des colonnes par défaut (le radar a 5 axes quasi colinéaires sur 6) ; `char_accuracy`, `word_accuracy`, `bow_f1` quittent le radar. **Seules les métriques établies entrent dans le classement et les tests de significativité** ; adaptées et exploratoires restent au diagnostic, affichées comme telles. Une métrique exploratoire n'est pas fausse : elle n'a pas encore la validité qu'un classement lui prêterait. | glossaire corrigé sur 6 métriques le 2026-11-25 ; le reste [audit] | test : toute métrique enregistrée a catégorie, unité et fiche ; l'unité de la fiche est celle du calcul |
 | 10 | **Oracles externes en CI** : un golden dinglehopper (extra dédié, comme `hipe-oracle`) sur le mini-corpus de référence, écarts documentés un par un (NFC, graphèmes, segmentation en mots). | HIPE golden [connu, SPEC_HIPE] ; dinglehopper [audit] | job opt-in vert |
 
 ### P5f — Une inférence tracée · ~5-7 sessions
@@ -623,9 +624,10 @@ mesure, sur quelles unités, et si la différence est significative**.
 | # | Item | Connu ? | Critère de sortie |
 |---|---|---|---|
 | 1 | **Mêmes réglages pour tous.** OpenAI et Mistral passent `temperature=0`, Anthropic et Ollama rien : le banc compare des réglages différents. `temperature`, `seed`, `top_p`, `max_tokens` deviennent des paramètres à défauts explicites et identiques, écrits au manifeste. | [audit] (`ANALYSE_COUCHE_5.md` ne le dit que pour OpenAI) | le manifeste d'un run porte les valeurs effectives, défauts compris |
-| 2 | **Le modèle servi, pas l'alias demandé.** `response.model` lu et écrit au manifeste ; la clé de reprise ne réutilise plus un résultat quand l'alias `-latest` a changé de cible ; tarification indexée sur le modèle servi. `dependencies_lock` rempli (versions des distributions en jeu). | lock [connu, ANALYSE_COUCHE_6.md:252] ; le reste [audit] | — |
+| 2 | **Le modèle servi, pas l'alias demandé.** `response.model` lu et écrit au manifeste ; tarification indexée sur le modèle servi. `dependencies_lock` rempli (versions des distributions en jeu). | lock [connu, ANALYSE_COUCHE_6.md:252] ; le reste [audit] | — |
+| 2b | **Réévaluer sans réexécuter** (D-261). L'évaluation est déjà recalculée à chaque run et le cache de reprise garde les artefacts ; deux défauts empêchent pourtant de re-noter une campagne dans six mois. (a) La clé d'unité contient la version **du paquet entier** : une correction de métrique en 1.0.1 invalide tout le cache d'inférence et fait re-payer chaque appel. Elle porte désormais les `module_versions` des étapes (déjà au manifeste) au lieu de `code_version`. (b) Elle ignore toute configuration lue dans l'environnement : un endpoint passé par `OPENAI_BASE_URL` — le contournement vLLM d'aujourd'hui — réutilise en silence les sorties du modèle précédent (par lecture du code, non exécuté faute de clé). Toute configuration qui change une sortie passe par `adapter_kwargs`, donc dans la clé ; et la clé et le `parameters_hash` de provenance — qui ne hache aujourd'hui que `step.params`, sans le modèle ni le prompt — deviennent **une seule empreinte**. Le cache, enrichi de `by_step` (P5e 1b), de l'issue (P5e 1) et des sidecars natifs (item 3), **est** l'archive du run : `cinoc run --resume-dir <archive> --offline` re-note sans aucun appel et échoue sur une unité manquante au lieu de l'exécuter. Absorbe le « garder ce qu'un run a produit » de P5b. *Vérifié et écarté* : le cache ne rend pas de sortie `precomputed` périmée quand le fichier source change. | [audit] | une campagne archivée se re-note après une montée de version de métrique, sans réseau |
 | 3 | **Les réponses natives conservées.** Aujourd'hui jetées : réévaluer impose de re-payer. Sidecar `NATIVE_JSON` (nouvelle valeur d'`ArtifactType`, sur le modèle du sidecar `CONFIDENCES`) pour tout moteur distant. | [audit] | un run cloud rejoué hors ligne depuis ses sidecars donne les mêmes métriques |
-| 4 | **Mistral OCR sans perte.** Le markdown (`#`, `**`, `\|---\|`, `![img](…)`) est noté comme du texte et pénalise le moteur : projection markdown → texte. La réponse OCR 4.1 (blocs, boîtes, tableaux, en-têtes/pieds) est projetée vers `LAYOUT` **depuis le sidecar** — fonction pure, testée sur cassette. `CanonicalLayout` reçoit ce qui lui manque pour ne pas être un plus petit dénominateur : confiance de région (le score de détection est jeté aujourd'hui), coordonnées non entières ; les tableaux restent hors 1.0. | [audit] | — |
+| 4 | **Mistral OCR sans perte.** Le markdown (`#`, `**`, `\|---\|`, `![img](…)`) est noté comme du texte et pénalise le moteur : projection markdown → texte. La réponse OCR 4.1 (blocs, boîtes, tableaux, en-têtes/pieds) est projetée vers `LAYOUT` **depuis le sidecar** — fonction pure, testée sur cassette. `CanonicalLayout` ne porte que ce qui est **commun** — la réponse native, elle, est le sidecar — et reçoit ce qui lui manque pour ne pas être un plus petit dénominateur : une confiance de région (le score de détection est jeté aujourd'hui). Règle de projection : **aucune information absente n'est inventée pour satisfaire le schéma** — un bloc de texte sans lignes devient une ligne **sans géométrie** (le schéma l'admet déjà), jamais une boîte fabriquée, et les métriques qui exigent une segmentation en lignes s'y déclarent non applicables. Les coordonnées restent entières (arrondi sous le pixel, documenté) ; les tableaux restent hors 1.0. | [audit] | — |
 | 5 | **Azure et Google** émettent `CONFIDENCES` depuis leurs mots (aujourd'hui seulement le texte : absents de la calibration). | [audit] | — |
 | 6 | **Endpoint par instance.** `base_url` et `api_key_env` par instance OpenAI-compatible (vLLM, SGLang, serveur local) ; liste blanche d'hôtes opérateur ; sémaphore par hôte, pas par fournisseur ; marqueur « auto-hébergé » pour l'économie (sinon « tarif inconnu »). | [audit] | un run compare OpenAI distant et un serveur OpenAI-compatible local |
 | 7 | **Délais finis, tentatives bornées.** Aucun appelant ne passe de deadline : Ollama, Azure et Google tournent sans timeout. Délai par défaut fini ; `call_resilient` borné par la deadline et annulable ; `max_retries=0` côté SDK (aujourd'hui jusqu'à 15 tentatives) ; OCR cloud enveloppés (429) ; tentatives comptées dans le coût. | annulation [connu, ANALYSE_COUCHE_5.md:131,209] ; le reste [audit] | — |
@@ -644,20 +646,41 @@ mesure, sur quelles unités, et si la différence est significative**.
 | 7 | **Retraits sans perte** : `pricing.json` `local_kinds` (aucun consommateur) ; `ArtifactType.CANONICAL_DOCUMENT`/`READING_ORDER`/`ALIGNMENT` ; `qe/` et `campaigns/tooling/` (~4 000 lignes hors CI, remplacées) ; 29 branches distantes intégrées ou obsolètes, plus la 30ᵉ selon A5. | [audit] | — |
 | 8 | **Garde-fous d'agents allégés** : `test_status_freshness` réduit à son seul contrôle de fond (commandes CLI au README) ; `test_layer_dependencies` paramétré. Corrections de `CLAUDE.md` : liste blanche de `evaluation` (contredit le test), 15 profils et non 14, version calculée par `setuptools_scm` et non son repli. | [audit] | — |
 
-### P5h — La preuve : une campagne de référence publiée · ~3-5 sessions + temps de calcul
+### P5h — La preuve : une campagne d'ablation publiée · ~3-5 sessions + temps de calcul
 
-Le banc s'exécute sur sa **version finale** (d'où sa place après P5g, qui change
-les rapports). Ce qu'elle doit montrer : qu'une institution peut comparer des
-chaînes complètes sur ses propres pages, et que chaque chiffre se rejoue.
+**Un pilote d'abord, tôt** (D-261) : dès P5e items 1-1b et P5f item 3 livrés,
+dix pages de `37-GT-BNL`, Tesseract et un moteur cloud, plafond de dépense bas.
+Son rôle n'est pas de publier : il fait apparaître les défauts que seule une
+vraie campagne trouve — comme le premier banc de presse a fait naître P5a —
+pendant qu'il est encore temps de les corriger.
+
+**La campagne publiée** s'exécute sur la **version finale** (après P5g, qui change
+les rapports). Elle ne compare pas une liste de moteurs : elle répond à des
+questions par **ablation**, chaque variante étant une cible d'étape (P5e 1b) d'un
+pipeline à préfixe commun, donc sans réexécuter les préfixes.
+
+| Variante | Chaîne |
+|---|---|
+| E0 | OCR |
+| E1 | segmentation → OCR par région |
+| E2 | OCR → correction LLM |
+| E3 | segmentation → OCR par région → correction structurée |
+| E4 | OCR → score de qualité → correction **sélective** |
+| E5 | VLM direct sur la page |
+
+Questions visées : la segmentation explicite aide-t-elle encore les VLM ? À
+partir de quel CER la post-correction devient-elle bénéfique ? La correction
+sélective est-elle plus rentable que l'intégrale ? Un gain de CER se paie-t-il
+en fidélité philologique (métriques adaptées, lues comme diagnostic) ?
 
 - **Corpus** : `37-GT-BNL` (presse, 37 pages, déjà au dépôt) et le dataset Dresden curé (HF) ; un corpus BnF si ses droits le permettent (A4).
-- **Moteurs** : Tesseract, Kraken, Mistral OCR 4.1, un VLM zero-shot cloud, un VLM ouvert servi par vLLM si un GPU est disponible (A6), et OCR → correction structurée.
+- **Moteurs** : Tesseract, Kraken, Mistral OCR 4.1, un VLM zero-shot cloud, un VLM ouvert servi par vLLM si un GPU est disponible (A6), et la correction structurée `saknussemm`.
 - **Protocole** :
   - défaut méthodologique de la campagne d'août corrigé : césure de la GT mêlée au texte OCR → `--ocr-sidecar` [connu, `campaigns/2026-08-14-bnl-mistral-m2`] ;
   - `--repeat 5` pour tout moteur stochastique, et dispersion publiée ;
   - CER recoupé par dinglehopper sur toutes les sorties.
 - **Publication** : `RunResult`, sidecars natifs et rapport sur un dataset HF, avec un DOI Zenodo.
-- **Critère de sortie** : un tiers qui télécharge les sorties publiées obtient, par `cinoc run` en `precomputed`, des métriques identiques au chiffre près.
+- **Critère de sortie** : un tiers qui télécharge l'archive publiée la re-note hors ligne (`--offline`, P5f 2b) et obtient des métriques identiques au chiffre près.
 
 ### P5i — Vitrine et release · ~2-3 sessions
 
@@ -680,7 +703,9 @@ API batch des fournisseurs · segmenteur sur le Space (T2.5) · gel de Picarones
 
 ### Ordre et budget
 
-`P5d → P5e ∥ P5f → P5g → P5h → P5i`. P5e et P5f peuvent s'entrelacer : P5e
+`P5d → P5e ∥ P5f → (pilote P5h) → P5g → P5h → P5i`. Critère de toute phase :
+**le parcours utilisateur qu'elle touche fonctionne sur le paquet installé** —
+pas « la couche est finie » ni « la couverture tient ». P5e et P5f peuvent s'entrelacer : P5e
 item 2 et P5f item 1 touchent les mêmes adaptateurs, à faire dans la même
 session. P5e, P5f et P5g changent des chiffres affichés : ils passent **avant**
 la campagne, qui ne doit tourner qu'une fois. Environ **23 à 33 sessions** au
