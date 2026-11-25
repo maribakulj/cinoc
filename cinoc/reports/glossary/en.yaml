@@ -26,14 +26,16 @@ cer:
 cer_diplo:
   title: "Diplomatic CER"
   definition: >-
-    CER computed without any graphical normalization: historical variants
-    (long s ſ, u/v, ligatures) are counted as distinct.
+    CER computed after a minimal normalization applied to both sides: NFC
+    Unicode form, long s ſ folded to s, invisible characters removed. Other
+    historical variants (u/v, ligatures) remain distinct.
   measures: >-
-    Fidelity to the exact spelling of the witness, as expected in a
-    diplomatic edition of a heritage document.
+    Fidelity to the witness's spelling, without penalising the ſ/s choice
+    alone or a Unicode encoding difference invisible to the eye.
   limits: >-
-    Stricter than normalized CER; comparable only across engines evaluated on
-    the same diplomatic ground truth.
+    Less strict than raw CER, not more: the gap between the two mixes the
+    NFC effect, the ſ effect and invisible-character cleanup. Comparable only
+    across engines evaluated on the same ground truth.
 
 wer:
   title: "WER — word error rate"
@@ -51,21 +53,22 @@ wer:
 mer:
   title: "MER — match error rate"
   definition: >-
-    Ratio of the number of edit operations to the alignment length (reference
-    + insertions), bounded between 0 and 1.
+    At word level: (S+D+I)/(H+S+D+I), the ratio of edit operations to the
+    length of the word alignment, bounded between 0 and 1.
   measures: >-
-    The fraction of the character alignment that is not an exact match; a
-    bounded variant of CER.
+    The fraction of the word-to-word alignment that is not an exact match; a
+    bounded variant of WER.
   limits: >-
-    Close to CER on clean text; diverges mainly with long
-    insertions/deletions.
+    Close to WER on clean text; diverges mainly with long insertions. For
+    its character variant, see cMER.
 
 cmer:
   title: "cMER — character match error rate (HIPE)"
   definition: >-
     Character-level Match Error Rate — (S+D+I)/(H+S+D+I) —, bounded between
-    0 and 1. The ranking metric of the HIPE-OCRepair benchmark, computed
-    under the official scorer's normalization profile.
+    0 and 1. The ranking metric of the HIPE-OCRepair benchmark; it matches
+    the official scorer only in a view using the "hipe" profile — otherwise
+    it is computed under the view's own profile.
   measures: >-
     The fraction of the character alignment that is not an exact match.
     Unlike CER (relative to the reference only), it stays comparable even
@@ -104,8 +107,8 @@ numseq_value:
 del_rate:
   title: "Deletion rate"
   definition: >-
-    Share of reference characters missing from the hypothesis, relative to
-    the reference length.
+    Share of reference words missing from the hypothesis (deletions of the
+    word alignment), relative to the number of reference words.
   measures: >-
     The engine's tendency to "drop" text (under-transcription).
   limits: >-
@@ -115,8 +118,9 @@ del_rate:
 ins_rate:
   title: "Insertion rate"
   definition: >-
-    Share of characters present in the hypothesis with no counterpart in the
-    reference, relative to the reference length.
+    Number of hypothesis words with no counterpart in the reference
+    (insertions of the word alignment), relative to the number of reference
+    words.
   measures: >-
     The engine's tendency to "invent" text (over-transcription, sometimes a
     sign of LLM hallucination).
@@ -127,14 +131,16 @@ ins_rate:
 diacritic_err:
   title: "Diacritic error"
   definition: >-
-    Error rate restricted to diacritical marks (accents, cedillas, breves…)
-    after isolating the diacritic layer of the text.
+    Among reference characters carrying a diacritic (accent, cedilla,
+    breve…), the share substituted or deleted in the hypothesis. The whole
+    character is judged: é read as è counts as an error.
   measures: >-
     The engine's fidelity to accentuation, often lost by OCR trained on
     modern text.
   limits: >-
-    Not applicable to scripts without diacritics; depends on the Unicode
-    normalization applied to the reference.
+    Not applicable to scripts without diacritics. Sensitive to Unicode form:
+    without a normalization profile, a precomposed é against the same
+    decomposed é counts as an error.
 
 mufi_err:
   title: "MUFI error (medieval characters)"
