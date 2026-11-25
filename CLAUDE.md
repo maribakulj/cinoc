@@ -27,21 +27,17 @@ avant d'écrire la moindre ligne.**
   Space public exécutant un vrai OCR gratuit. Le détail vivant, tranche par
   tranche, est dans le roll-up — **pas ici**.
 - **Le plan qu'exécutent les sessions est [`PLAN_FIN_MIGRATION.md`](PLAN_FIN_MIGRATION.md)**
-  (P0→P5), pas les axes `T#`/`S#` : ceux-ci décrivent comment on est arrivé là.
-  **Étapes 1→4 + P0→P3 livrées.**
-- **Prochaine étape = P5c** — *joignabilité* : toute route déclarée est
-  atteignable depuis la page, ou le dit. Née d'un audit des routes de l'app :
-  celles des **recettes** ont zéro appel dans le front alors que le garde-fou de
-  parité les donne vertes — il vérifie route ⇄ CLI, pas route ⇄ page. La phase
-  ferme d'abord la **classe** (troisième clause du garde-fou), puis les cas.
-  **P5a est close** : douze items fusionnés, le treizième fermé sur sa mesure
-  (3,7 % réels contre 38 % annoncés) ; les défauts qui produisaient de faux
-  classements sont corrigés, donc **le blocage du tag est levé**. **P5b** —
-  calcul d'une analyse à la demande — reste **suspendue** à un arbitrage de
-  produit non rendu, d'où l'ordre P5c puis P5b. Vient ensuite **P5** (release,
-  puis gel de Picarones — ce dernier différé à la demande de l'utilisateur).
-  Ni P5b ni P5c ne bloquent le tag. Aucun tag `git` n'existe encore : la version
-  est le repli `setuptools_scm`.
+  (P0→P5i), pas les axes `T#`/`S#` : ceux-ci décrivent comment on est arrivé là.
+  **Étapes 1→4 + P0→P4 + P5a livrées.**
+- **Prochaine étape = P5d** — *installable et sûr*, première phase de la route
+  **P5d → P5i** vers une 1.0 publiable (`PLAN_FIN_MIGRATION.md` §« Étape
+  4quinquies », D-260). Née d'un audit sur le produit et non sur la CI : un
+  `pip install cinoc` sans extra ne démarrait pas, et plusieurs chiffres
+  affichés ne mesuraient pas ce qu'annonçait leur nom. Cette route **remplace**
+  la fin de l'ancienne : P5c y est absorbée (items 2-4, 6, 8 en P5g), P5b et le
+  composeur contraint sortent du chemin de la 1.0. Huit arbitrages du mainteneur
+  y sont listés, chacun avant la phase qu'il bloque. Aucun tag `git` n'existe ;
+  le tag `v1.0.0` est posé par le mainteneur, à la fin de P5i.
 - **Un axe hors numérotation P#, livré en août 2026 : la post-correction
   structurée** (`ALTO → ALTO` via `saknussemm`, commande `cinoc correct`).
   L'arbitrage qu'il portait **est rendu** : il a sa surface web depuis D-229

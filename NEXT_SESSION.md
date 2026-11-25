@@ -18,14 +18,16 @@
 4. `PLAN_FIN_MIGRATION.md` — **la route finale vers `1.0.0`** : les étapes
    ordonnées, du Space qui exécute un vrai OCR jusqu'à la release et au gel de
    Picarones, en passant par les phases `P#` que l'usage réel a fait naître
-   (`P5a` dette du premier banc de presse, `P5b` calcul à la demande, `P5c`
-   joignabilité) + références (abandons, verdict métrique-par-métrique,
-   garde-fous). **C'est le plan que ces sessions exécutent**, une étape (ou
-   sous-étape) à la fois ; **laquelle** est dit par `CLAUDE.md` §0, pas ici.
+   (`P5a` dette du premier banc de presse, puis la route `P5d → P5i` vers une
+   1.0 publiable, qui absorbe `P5c`) + références (abandons, verdict
+   métrique-par-métrique, garde-fous). **C'est le plan que ces sessions
+   exécutent**, une phase (ou un item) à la fois ; **laquelle** est dit par
+   `CLAUDE.md` §0, pas ici. Avant une phase, vérifier que les arbitrages qui la
+   bloquent (tableau « Arbitrages à rendre ») sont rendus — sinon s'arrêter.
 5. `PLAN_UI_COMPOSEUR.md` — la **conception** du composeur de pipelines
-   (recettes, réglages, composition contrainte) qu'exécute `P5c` : les trois
-   couches, l'arbitrage sur la déclaration des paramètres, et ce que la bascule
-   vers un constructeur unique doit préserver.
+   (recettes, réglages, composition contrainte) dont `P5g` exécute la bascule
+   vers un constructeur unique : ce qu'elle doit préserver, et l'arbitrage sur
+   la déclaration des paramètres.
 6. La `DoD vivante` de chaque couche touchée
    (`cinoc/<couche>/{ANALYSE,MIGRATION}_COUCHE_*.md`).
 
