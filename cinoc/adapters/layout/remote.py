@@ -15,8 +15,8 @@ Schéma de réponse attendu = sortie **object-detection** HF :
 ``[{"label": str, "score": float, "box": {"xmin","ymin","xmax","ymax"}}, …]``.
 
 Le détecteur est **injectable** (``detector=``) : la conversion détections →
-``CanonicalLayout`` se teste sans réseau ; le vrai appel HTTP (``httpx`` + garde
-**anti-SSRF** ``assert_public_url``) n'est exercé qu'en test ``live``. ``httpx``
+``CanonicalLayout`` se teste sans réseau ; le vrai appel passe par ``post_json``
+(anti-SSRF **épinglé** : l'IP validée est celle à laquelle on se connecte). ``httpx``
 (dépendance de base) est importé paresseusement.
 """
 
@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from cinoc.adapters.corpus._http import SsrfError, assert_public_url
+from cinoc.adapters.corpus._http import HttpFetchError, SsrfError, post_json
 from cinoc.adapters.layout._base import (
     DetectedRegion,
     DetectorFn,
@@ -141,27 +141,21 @@ class RemoteSegmenter:
     def _remote_detect(  # pragma: no cover -- réseau réel (test 'live')
         self, image_path: str
     ) -> LayoutDetection:
-        try:
-            assert_public_url(self._endpoint)
-        except SsrfError as exc:
-            raise AdapterStepError(
-                f"remote_segmenter : endpoint refusé (anti-SSRF) : {exc}"
-            ) from exc
-        import httpx
-
         headers = {"Content-Type": "application/octet-stream"}
         if self._token:
             headers["Authorization"] = f"Bearer {self._token}"
         try:
-            with httpx.Client(timeout=self._timeout) as client:
-                response = client.post(
-                    self._endpoint,
-                    content=Path(image_path).read_bytes(),
-                    headers=headers,
-                )
-                response.raise_for_status()
-                payload = response.json()
-        except httpx.HTTPError as exc:
+            payload = post_json(
+                self._endpoint,
+                content=Path(image_path).read_bytes(),
+                headers=headers,
+                timeout=self._timeout,
+            )
+        except SsrfError as exc:
+            raise AdapterStepError(
+                f"remote_segmenter : endpoint refusé (anti-SSRF) : {exc}"
+            ) from exc
+        except HttpFetchError as exc:
             raise AdapterStepError(
                 f"remote_segmenter : appel à l'endpoint échoué : {exc}"
             ) from exc

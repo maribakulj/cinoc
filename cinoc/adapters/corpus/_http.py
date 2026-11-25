@@ -230,6 +230,16 @@ def _make_client(pins: tuple[str, ...] | None, timeout: float) -> httpx.Client:
     )
 
 
+_DEFAULT_PORTS = {"http": 80, "https": 443}
+
+
+def _origin(url: str) -> tuple[str, str | None, int | None]:
+    """Origine au sens web (RFC 6454) : schéma, hôte, port effectif."""
+    parts = urlsplit(url)
+    scheme = parts.scheme.lower()
+    return scheme, parts.hostname, parts.port or _DEFAULT_PORTS.get(scheme)
+
+
 @contextlib.contextmanager
 def _stream_validated(
     url: str, *, timeout: float, headers: dict[str, str] | None = None
@@ -239,17 +249,20 @@ def _stream_validated(
     Chaque saut (origine + redirections, bornées) : résout+valide une fois via
     ``assert_public_url``, épingle la connexion sur l'IP retournée, puis envoie.
     Les en-têtes fournis (ex. ``Authorization: Token …``) ne sont **jamais**
-    propagés vers un **hôte différent** de l'origine (fuite de credentials sur
-    redirection). Un client ``httpx`` distinct est créé par saut (épinglage
-    propre à l'IP du saut) ; tous sont fermés à la sortie du contexte.
+    propagés hors de l'**origine** — schéma, hôte et port (fuite de credentials
+    sur redirection, y compris par rétrogradation https → http). Un client
+    ``httpx`` distinct est créé par saut (épinglage propre à l'IP du saut) ;
+    tous sont fermés à la sortie du contexte.
     """
-    origin_host = urlsplit(url).hostname
+    origin = _origin(url)
     current = url
     with contextlib.ExitStack() as stack:
         for _ in range(_MAX_REDIRECTS + 1):
             pins = assert_public_url(current)
-            # Auth conservée seulement tant qu'on reste sur l'hôte d'origine.
-            hop_headers = headers if urlsplit(current).hostname == origin_host else None
+            # Auth conservée seulement tant qu'on reste sur l'**origine** :
+            # schéma, hôte et port. Comparer le seul nom d'hôte renverrait le
+            # jeton en clair sur une redirection https → http du même hôte.
+            hop_headers = headers if _origin(current) == origin else None
             client = stack.enter_context(_make_client(pins, timeout))
             request = client.build_request("GET", current, headers=hop_headers)
             response = client.send(request, stream=True)
@@ -394,6 +407,50 @@ def fetch_text(
     )
 
 
+def post_json(
+    url: str,
+    *,
+    content: bytes,
+    headers: dict[str, str] | None = None,
+    timeout: float = DEFAULT_TIMEOUT,
+) -> object:
+    """POST ``content`` et parse la réponse JSON ; anti-SSRF **épinglé** + plafond.
+
+    Pour un endpoint fourni par l'utilisateur (segmenteur distant) : l'IP est
+    résolue et validée **une fois** par ``assert_public_url``, puis la connexion
+    est épinglée dessus — valider puis laisser ``httpx`` résoudre à nouveau
+    ouvrirait la porte au DNS rebinding. Un POST ne suit **aucune** redirection
+    (un 3xx est une erreur) : rejouer un corps vers un autre hôte n'est jamais
+    voulu.
+    """
+    pins = assert_public_url(url)
+    try:
+        with _make_client(pins, timeout) as client:
+            request = client.build_request(
+                "POST", url, content=content, headers=headers
+            )
+            response = client.send(request, stream=True)
+            try:
+                if response.is_redirect:
+                    raise HttpFetchError(
+                        f"redirection refusée pour un POST vers {url!r}."
+                    )
+                response.raise_for_status()
+                raw = _read_capped(response, MANIFEST_MAX_BYTES)
+            finally:
+                response.close()
+    except httpx.HTTPStatusError as exc:
+        raise HttpFetchError(
+            f"statut HTTP {exc.response.status_code} sur {url!r}."
+        ) from exc
+    except httpx.HTTPError as exc:
+        raise HttpFetchError(f"échec de transport sur {url!r} : {exc}.") from exc
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise HttpFetchError(f"réponse non-JSON depuis {url!r} : {exc}.") from exc
+
+
 __all__ = [
     "CorpusHttpError",
     "HttpFetchError",
@@ -405,4 +462,5 @@ __all__ = [
     "fetch_bytes",
     "fetch_json",
     "fetch_text",
+    "post_json",
 ]
