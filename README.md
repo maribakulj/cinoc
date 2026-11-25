@@ -190,6 +190,7 @@ A recipe declares **roles**, never types: the builder knows each role's typed si
 The `/engines` page, the composer's model dropdowns and the normalisation preview all read probes that live in the `app` layer. `cinoc list` reads the same ones, in text:
 
 ```bash
+cinoc --version                    # the version every run stamps in its manifest
 cinoc list engines                 # engines, segmenters, NER — and *why* one is unavailable
 cinoc list models anthropic        # canonical model suggestions, vision flagged
 cinoc list profiles                # the normalisation profiles

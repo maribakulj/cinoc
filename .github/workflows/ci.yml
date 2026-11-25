@@ -65,10 +65,21 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Construire la roue
+      # sdist puis roue construite **depuis le sdist** : c'est le chemin de la
+      # publication, et il prouve que MANIFEST.in n'a rien retiré dont la roue
+      # a besoin (gabarits, assets, pricing.json, YAML, prompts).
+      - name: Construire le sdist et la roue
         run: |
-          python -m pip install build
-          python -m build --wheel --outdir "$RUNNER_TEMP/dist"
+          python -m pip install build twine
+          python -m build --outdir "$RUNNER_TEMP/dist"
+      # Publiable (P5d items 5-6, D-270) : métadonnées valides pour PyPI, sdist
+      # sans les scans du dépôt, roue sans les notes de conception.
+      - name: Vérifier le paquet publiable
+        run: |
+          python -m twine check --strict "$RUNNER_TEMP"/dist/*
+          taille=$(stat -c %s "$RUNNER_TEMP"/dist/*.tar.gz)
+          test "$taille" -lt 5000000 || { echo "::error::sdist de $taille octets (plafond : 5 Mo)"; exit 1; }
+          python -c "import sys, zipfile; md = [n for n in zipfile.ZipFile(sys.argv[1]).namelist() if n.endswith('.md')]; sys.exit(f'.md dans la roue : {md}' if md else 0)" "$RUNNER_TEMP"/dist/*.whl
       - name: Installer sans extra et lancer hors du dépôt
         run: |
           python -m venv "$RUNNER_TEMP/bare"
@@ -76,6 +87,7 @@ jobs:
           cp -r examples "$RUNNER_TEMP/examples"
           cd "$RUNNER_TEMP"
           bare/bin/cinoc --help
+          bare/bin/cinoc --version
           bare/bin/cinoc list engines
           bare/bin/cinoc demo --output demo.html
           bare/bin/cinoc run examples/config.yaml -o run.html
