@@ -589,10 +589,10 @@ six métriques, README honnête sur le déterminisme, tarif Mistral OCR corrigé
 
 | # | Question | Recommandation | Nécessaire avant |
 |---|---|---|---|
-| A3 | **Politique d'échec.** Une unité en échec sort aujourd'hui de la moyenne : le moteur qui échoue sur la page difficile est avantagé (contre-exemple : CER 0,0 en échouant, 0,0145 en répondant). | Exclue **et** affichée (n notés / n attendus à côté de chaque agrégat) ; option « échec = erreur maximale », déjà la règle du bilan de correction (R-1.8). | S5 |
-| A9 | **Valider les sorties ALTO/PAGE au XSD officiel, en test** (D-264). Renverse L9 de `MIGRATION_COUCHE_2.md` (« conforme par construction ») : la mesure dit 0/32. | Oui : XSD vendorisés en fixtures, `lxml.XMLSchema` (déjà dépendance), **jamais** à l'entrée (la GT réelle reste tolérée). | S2 |
-| A2 | **Normalisation par défaut.** Aucune aujourd'hui : un « é » composé face au même « é » décomposé donne CER 0,545 (dinglehopper : 0). Changer le défaut change **tous** les chiffres déjà publiés. | NFC + retrait des invisibles par défaut ; la comparaison brute reste une vue explicite, nommée comme telle. | S13 |
-| A6 | **Campagne** : corpus, moteurs, plafond de dépense en euros, accès à un GPU (vLLM). | Plafond bas pour le pilote (S10), fixé avant tout appel facturé ; plafond de campagne fixé avant S30. | S10, S30 |
+| ~~A3~~ | ~~Politique d'échec~~ — **rendu (D-271)** : exclue de la moyenne **et** affichée (n notés / n attendus à côté de chaque agrégat) ; option « échec = erreur maximale ». | — | S5 |
+| ~~A9~~ | ~~Validation XSD~~ — **rendu (D-271)** : oui, les ALTO et PAGE **écrits** par Cinoc sont validés contre les XSD officiels dans les tests ; l'entrée reste tolérante, aucune validation à l'exécution. | — | S2 |
+| ~~A2~~ | ~~Normalisation par défaut~~ — **rendu (D-271)** : NFC + retrait des invisibles par défaut ; la comparaison brute reste une vue explicite. | — | S13 |
+| ~~A6~~ | ~~Campagne~~ — **rendu (D-271)** : Tesseract + un petit VLM **local** via Ollama (Qwen2.5-VL 3B par défaut, repli SmolVLM/Moondream) tant que la clé Mistral n'est pas fournie ; Mistral ensuite, **plafond 10 €** pour pilote et campagne réunis, estimation montrée avant tout appel facturé. | — | S10, S30 |
 | A4 | **Images du dépôt** (`corpus/`, 43 Mo, scans BnF et BNL) : redistribuables ? | Hors du paquet dans tous les cas (S1) ; vers un dataset HF si les droits le permettent, sinon hors de l'arbre public (S29). | S1, S29 |
 | A5 | **Branche `claude/lucid-dirac-0s4p8r`** : seule à porter du code absent de `main` (`block_chain.py`, OCR → LLM par bloc), sans décision d'abandon trouvée. | Supprimer : couvert par la correction structurée. | S29 |
 | A8 | **Pré-version.** | `v1.0.0rc1` sur GitHub seulement (pas PyPI), à la sortie de P5g, pour les testeurs ; aucun autre tag avant `v1.0.0`. | après S29 |
