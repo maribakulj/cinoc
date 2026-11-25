@@ -63,7 +63,13 @@ Seules **les strates** manquaient d'un champ ; c'est l'objet de la Phase 0.
 | **P5a — Dette révélée par l'usage** | sept défauts trouvés par le premier banc de presse multi-colonnes ; onze PR ordonnées en quatre groupes. Une seule brique neuve : l'appariement géométrique des régions, qui débloque l'OLR inter-systèmes. | P2 (métriques layout) | correctif |
 | **P5b — Persistance et calcul à la demande** | garder ce qu'un run a produit (fait), puis calculer une analyse au clic dans la saveur servie. **Suspendue** à un arbitrage de produit : le manifeste porte-t-il la liste des documents, ou le serveur retient-il l'association run ⇄ spec. | P5a | neuf |
 | **P5c — Joignabilité** | ce qui est construit doit être atteignable. Une capacité entière — les recettes — livrée en `app`, en routeur, en CLI, testée… et jamais appelée par la page. Le garde-fou de parité était vert : il ne regarde pas dans ce sens. La phase ferme la **classe** avant d'en réparer les cas. | P5a | correctif + surface |
-| **P5 — Release 1.0 + gel Picarones** | checklist · tag · README/CHANGELOG · gel. | tout, **dont P5a** ; P5b et P5c ne bloquent pas le tag | — |
+| **P5d — Installable et sûr** | `pip install cinoc` fonctionne nu (aujourd'hui il plante) · aucun secret dans un rapport · ce que la page propose, le planificateur l'accepte · paquet publiable. | — | correctif |
+| **P5e — Une mesure qui dit vrai** | statut de chaque unité (tronquée, en échec) visible et compté · statistiques correctes · normalisation par défaut · chaque métrique porte un nom qui ne promet pas plus qu'elle ne mesure. | P5d | correctif |
+| **P5f — Une inférence tracée** | mêmes réglages pour tous les fournisseurs, écrits au manifeste · modèle servi et réponses natives conservés · endpoint par instance (vLLM/SGLang) · délais finis. | P5d | correctif + enveloppe |
+| **P5g — Par soustraction** | un seul constructeur de pipeline et une seule politique de vues (absorbe P5c items 2-4, 6, 8) · listes parallèles dérivées du registre · code et docs sans consommateur retirés. | P5e, P5f | soustraction |
+| **P5h — La preuve** | une campagne de référence publiée, rejouable, recoupée par un oracle externe ; ses défauts deviennent des correctifs, jamais des features. | P5g | validation |
+| **P5i — Vitrine et release** | README court, parcours de deux minutes, résultat réel en tête · testeurs extérieurs · tag `v1.0.0` posé par le mainteneur. | P5h | — |
+| **P5 — Release 1.0 + gel Picarones** | checklist · tag · README/CHANGELOG · gel. **Exécutée par P5i** (route ci-dessous, audit du 2026-11-25) ; P5b et P5c items 5 et 7 sortent du chemin de la 1.0. | P5d→P5h | — |
 
 **Intégration métriques ⇄ dataset** (le point clé) : P2 et P3 se renforcent. Le
 dataset **donne aux métriques leur vérité-terrain** (layout→région/structure ;
@@ -551,6 +557,256 @@ le sens rassurant — il annonçait un manque là où il y avait une livraison.
 
 ---
 
+## Étape 4quinquies / **P5d → P5i** — La route vers une 1.0 publiable
+
+> **État consolidé au 2026-11-25** (D-260 → D-266). Cette section **remplace** la
+> fin de l'ancienne route (P5b, P5c, P5) ; elle n'ajoute pas un plan à côté. Elle
+> est née de trois audits du même jour, menés sur le **produit** et non sur la CI —
+> installation dans un venv vierge, métriques confrontées à jiwer et dinglehopper,
+> sorties confrontées aux XSD officiels, bibliothèques candidates mesurées une à
+> une (`docs/ANALYSE_SUBSTITUTION.md`). La checklist « 1.0 prête » plus bas était
+> verte ; elle avait été cochée sur la CI.
+>
+> **Règles de la route.** Rien de neuf n'y entre hors de ce que liste chaque phase ;
+> un défaut trouvé en route devient un correctif, jamais une feature. Critère de
+> sortie de toute session : **le parcours utilisateur qu'elle touche fonctionne sur
+> le paquet installé**, et le défaut qu'elle ferme est reproduit par un test rouge
+> avant le correctif. Un résultat de référence se calcule contre un **oracle
+> externe** (scipy, jiwer, dinglehopper, XSD officiels), jamais contre Picarones
+> (D-265).
+>
+> Marqueurs : **[connu]** = déjà écrit dans un `.md` du dépôt (cité) · **[audit]** =
+> trouvé le 2026-11-25. Une session = une tranche (`CLAUDE.md` §9).
+
+**Déjà livré sur cette route** : installation nue réparée et gardée par le job CI
+`install-bare` (D-262) · aucun secret dans un rapport (D-262) · segmenteur distant
+épinglé à l'IP validée et authentification limitée à l'origine (D-263) ·
+`saknussemm==0.9.0` depuis PyPI (A1, D-261) · glossaire aligné sur le calcul pour
+six métriques, README honnête sur le déterminisme, tarif Mistral OCR corrigé
+(D-260) · la parité avec Picarones n'est plus un critère (D-265).
+
+### Arbitrages à rendre (mainteneur) — chacun avant la session qui en dépend
+
+| # | Question | Recommandation | Nécessaire avant |
+|---|---|---|---|
+| A3 | **Politique d'échec.** Une unité en échec sort aujourd'hui de la moyenne : le moteur qui échoue sur la page difficile est avantagé (contre-exemple : CER 0,0 en échouant, 0,0145 en répondant). | Exclue **et** affichée (n notés / n attendus à côté de chaque agrégat) ; option « échec = erreur maximale », déjà la règle du bilan de correction (R-1.8). | S5 |
+| A9 | **Valider les sorties ALTO/PAGE au XSD officiel, en test** (D-264). Renverse L9 de `MIGRATION_COUCHE_2.md` (« conforme par construction ») : la mesure dit 0/32. | Oui : XSD vendorisés en fixtures, `lxml.XMLSchema` (déjà dépendance), **jamais** à l'entrée (la GT réelle reste tolérée). | S2 |
+| A2 | **Normalisation par défaut.** Aucune aujourd'hui : un « é » composé face au même « é » décomposé donne CER 0,545 (dinglehopper : 0). Changer le défaut change **tous** les chiffres déjà publiés. | NFC + retrait des invisibles par défaut ; la comparaison brute reste une vue explicite, nommée comme telle. | S13 |
+| A6 | **Campagne** : corpus, moteurs, plafond de dépense en euros, accès à un GPU (vLLM). | Plafond bas pour le pilote (S10), fixé avant tout appel facturé ; plafond de campagne fixé avant S30. | S10, S30 |
+| A4 | **Images du dépôt** (`corpus/`, 43 Mo, scans BnF et BNL) : redistribuables ? | Hors du paquet dans tous les cas (S1) ; vers un dataset HF si les droits le permettent, sinon hors de l'arbre public (S29). | S1, S29 |
+| A5 | **Branche `claude/lucid-dirac-0s4p8r`** : seule à porter du code absent de `main` (`block_chain.py`, OCR → LLM par bloc), sans décision d'abandon trouvée. | Supprimer : couvert par la correction structurée. | S29 |
+| A8 | **Pré-version.** | `v1.0.0rc1` sur GitHub seulement (pas PyPI), à la sortie de P5g, pour les testeurs ; aucun autre tag avant `v1.0.0`. | après S29 |
+| A7 | **Testeurs extérieurs** : qui, combien. | Deux ou trois personnes d'institution patrimoniale, une par parcours. | S34 |
+| ~~A1~~ | ~~Canal de publication~~ — **rendu** : `saknussemm` 0.9.0 sur PyPI (D-261). | — | — |
+
+### Feuille de route, session par session
+
+L'ordre suit une règle : **tout ce qui change un chiffre affiché passe avant la
+campagne**, qui ne doit tourner qu'une fois ; et les changements d'enveloppe
+(statut d'unité, sorties par étape, archive) passent avant ceux qui s'en servent.
+Les numéros d'items renvoient aux tableaux de phase plus bas, qui portent le
+détail et les preuves. **★** = indispensable à la 1.0 ; **◇** = peut glisser
+après la 1.0 si le temps manque (voir « Ligne de coupe »).
+
+**Bloc 1 — Finir P5d : installable, sûr, conforme**
+
+| Session | Contenu | Sortie vérifiable | |
+|---|---|---|---|
+| S1 | P5d 4 (ce que la page propose se planifie ; `host` ollama sur liste blanche) · P5d 5 (sdist sans `corpus/`, `design/`, `campaigns/`, `.claude/` ; wheel sans `.md` ; `cinoc --version`) · P5d 6 (`twine check`) · ~~`pricing.json` revérifié~~ **fait** (D-267 : toutes les entrées aux sources primaires, `valid_until` 2027-05-25) | sdist < 5 Mo ; `twine check` vert ; chaque option du `<select>` se planifie | ★ |
+| S2 | P5d 7a — XSD ALTO 4.4 vendorisés, test sur toute sortie d'écrivain ; écrivain ALTO conforme (`PHYSICAL_IMG_NR`, `Page@ID`, pas de `TextBlock@TYPE` en v4, unité de mesure conservée) | 21/21 ALTO écrits valides | ★ |
+| S3 | P5d 7b — écrivain PAGE conforme (`Metadata` à date fixe, dimensions, types de région énumérés, ImageRegion/SeparatorRegion, ordre des enfants, `TextLine@id`) ; lecture des `<Word>` PAGE ; contrôle d'ID d'`alto_source` sous ComposedBlock | 11/11 PAGE écrits valides ; mots PAGE conservés en aller-retour | ★ |
+| S4 | P5d 7c — IIIF : préférer le service d'images (`full/max`), refuser un `@id` égal au service, vérifier octets magiques et `Content-Type` au téléchargement | les manifestes Bodleian et Wellcome en cassette donnent de vraies images pleine résolution | ★ |
+
+**Bloc 2 — Garder ce qu'on observe (enveloppe)**
+
+| Session | Contenu | Sortie vérifiable | |
+|---|---|---|---|
+| S5 | P5e 1 — issue de chaque unité produite par l'exécution, transportée par `DocumentUsage` ; « n notés / n attendus » à l'écran (A3) | le contre-exemple pero affiche 4/5 et son motif | ★ |
+| S6 | P5e 1b — `DocumentExecution` rend `by_step` ; cible d'étape nommable dans une vue ; précédence par type retirée | un pipeline à deux étapes de même type note les deux | ★ |
+| S7 | P5e 2 + P5f 1 (mêmes adaptateurs) — raison d'arrêt lue, statut `truncated` ; `max_tokens`, `temperature`, `seed` explicites et identiques pour les quatre fournisseurs, écrits au manifeste ; `num_ctx`/`num_predict` pour Ollama ; plus de rejeu payant d'une troncature reproductible | cassette `max_tokens` atteint → `truncated`, par fournisseur | ★ |
+| S8 | P5f 3 — sidecar `NATIVE_JSON` pour tout moteur distant | un run cloud rejoué hors ligne donne les mêmes métriques | ★ |
+| S9 | P5f 2 + 2b — modèle servi, `dependencies_lock`, version Unicode au manifeste ; clé de cache sur `module_versions` + binaires système + configuration effective, une seule empreinte avec la provenance ; `--offline` | une archive se re-note après une montée de version de métrique, sans réseau | ★ |
+| S10 | **Pilote** (P5h) — 10 pages de `37-GT-BNL`, Tesseract + un moteur cloud, plafond bas (A6). Les défauts trouvés s'inscrivent dans les sessions suivantes, pas à côté | liste des défauts du pilote, chacun rattaché à une session | ★ |
+
+**Bloc 3 — Une mesure qui dit vrai (P5e)**
+
+| Session | Contenu | Sortie vérifiable | |
+|---|---|---|---|
+| S11 | P5e 3, 4, 6 — libellé Friedman ; inférence toujours calculée ; Nemenyi et rangs par scipy (corrige k ≥ 30 et α ≠ 0,01) ; barres CD chevauchantes ; post-hoc conditionné à Friedman ; Holm | verdicts identiques à scipy sur 5 000 tirages ; sur BNL, une paire significative affichée là où il y en a une | ★ |
+| S12 | P5e 5 + bootstrap numpy (P5g 6, D-265) — IC du ratio micro, golden recalculé contre scipy | le point affiché est dans son IC | ★ |
+| S13 | P5e 7 — normalisation par défaut (A2) ; une seule définition du CER dans le rapport ; calibration sur GT normalisée, convention de bornes documentée ; parité étendue (NFC/NFD, bords, NBSP, invisibles) | parité jiwer/dinglehopper documentée cas par cas | ★ |
+| S14 | P5e 11a — un helper `rapidfuzz` remplace les cinq `difflib` ; `char_confusions` en `editops` ; pires lignes alignées par F15 ; taxonomie `I→l` | les lacunes de la taxonomie cohérentes avec les D du WER | ★ |
+| S15 | P5e 11b — vrai ROVER ; ordre de lecture par Breuel ; `linregress` pour la tendance ; `roman.py` strict | WER fusionné indépendant du nom des sources ; cas titre + deux colonnes ordonné | ★ |
+| S16 | P5e 8 — noms honnêtes (`unanchored_trigrams`, limites de `fca`, `searchability` relative, `ner_f1` nom exact, régions fantômes comptées, coût humain « simulation », historique par corpus et profil) | — | ★ |
+| S17 | P5e 9 — catégorie et unité déclarées par métrique, fiche au glossaire, classement réservé aux établies, radar réduit | test : toute métrique a catégorie, unité et fiche cohérentes avec le calcul | ★ |
+| S18 | P5e 10 — job CI oracle : dinglehopper léger (`--no-deps`), paquet `roman` | job opt-in vert | ★ |
+
+**Bloc 4 — Une inférence de son temps (P5f)**
+
+| Session | Contenu | Sortie vérifiable | |
+|---|---|---|---|
+| S19 | P5f 4 — Mistral OCR : markdown retiré du texte noté ; réponse OCR 4.1 projetée en `LAYOUT` depuis le sidecar ; `Region.confidence` ; aucune géométrie inventée | — | ★ (markdown) / ◇ (LAYOUT) |
+| S20 | P5f 5 + 7 — confidences Azure et Google ; délais finis ; une seule couche de retry ; retry des OCR cloud ; tentatives comptées dans le coût | — | ★ |
+| S21 | P5f 6 — endpoint OpenAI-compatible par instance (vLLM, SGLang), liste blanche d'hôtes, sémaphore par hôte, coût « auto-hébergé » | un run compare OpenAI distant et un serveur local | ◇ (★ si GPU BnF en A6) |
+| S22 | P5f 8 — modèles listés en direct chez les quatre fournisseurs (une fonction, web et CLI) ; plus aucun modèle par défaut codé ; vision et dépréciation lues dans l'API ; SDK épinglés par majeure ; jetons de cache et de raisonnement lus | aucun nom de modèle codé hors tarifs ; spec sans modèle refusée avec la liste disponible | ★ |
+
+**Bloc 5 — Par soustraction (P5g)**
+
+| Session | Contenu | Sortie vérifiable | |
+|---|---|---|---|
+| S23 | P5g 1a — rôles `zero_shot` et `text_and_image` ; déclaration des paramètres au contrat de module | — | ★ |
+| S24 | P5g 1b — catalogue de recettes branché à la page | dette `recettes-web` fermée | ◇ |
+| S25-S26 | P5g 2 + 3 — un seul constructeur (`run_planning`, `structure_planning`, `correction_planning` deviennent des recettes) et **une seule politique de vues** | même pipeline par les trois entrées → mêmes vues ; `_pipeline_for_competitor`, `_hybrid_competitor`, `_hybrid_spec` supprimés | ★ (vues) / ◇ (constructeur) |
+| S27 | P5g 4 — bouton d'arrêt d'un run web ; dépôt de spec ou `front-absent` motivé ; face ou sortie de `standardize_corpus` | dettes `annulation-web`, `spec-web` fermées | ★ (arrêt) |
+| S28 | P5g 5 + 6 — listes dérivées du registre ; Tesseract en un appel (2,7-3,9× plus rapide) ; `ocrd_processor` sur METS gabarit ; CSS extrait de `html.py` ; `StrictUndefined` + parité i18n ; shims retirés | — | ★ |
+| S29 | P5g 7 + 8 — `qe/`, `campaigns/tooling/`, code mort, 29-30 branches (A5) ; garde-fous d'agents allégés ; `CLAUDE.md` corrigé ; images du dépôt (A4). Puis **`v1.0.0rc1`** (A8) | — | ★ |
+
+**Bloc 6 — La preuve (P5h)**
+
+| Session | Contenu | Sortie vérifiable | |
+|---|---|---|---|
+| S30-S32 | Campagne d'ablation E0-E5 (A6) sur `37-GT-BNL` et Dresden, `--repeat 5` pour les moteurs stochastiques, CER recoupé par dinglehopper ; archive (`RunResult` + sidecars + rapport) sur un dataset HF avec DOI Zenodo | un tiers re-note l'archive hors ligne et retrouve les chiffres au chiffre près | ★ |
+
+**Bloc 7 — Vitrine et release (P5i)**
+
+| Session | Contenu | Sortie vérifiable | |
+|---|---|---|---|
+| S33 | P5i 1 + 2 — README court avec un vrai résultat de S30-S32 ; trois parcours testés sur le paquet installé | une personne extérieure lance un premier rapport en moins de deux minutes | ★ |
+| S34 | P5i 3 — testeurs extérieurs sur `rc1` (A7) ; leurs blocages traités comme des défauts | — | ★ |
+| S35 | P5i 4 + 5 + 6 — métadonnées du dépôt, `CITATION.cff`, `CHANGELOG [1.0.0]` ; **tag `v1.0.0` posé par le mainteneur** ; Space redéployé ; plans historiques retirés de l'arbre | — | ★ |
+
+### Ligne de coupe
+
+Environ **35 sessions**, hors temps de calcul de la campagne. Si le temps manque,
+cinq items marqués **◇** glissent après la 1.0 sans fausser un chiffre : la
+projection Mistral OCR 4.1 → `LAYOUT` (le markdown, lui, reste retiré), l'endpoint
+par instance (sauf si un GPU est disponible pour la campagne), le catalogue de
+recettes dans la page, l'unification des constructeurs (la **politique de vues
+unique**, elle, reste dans la 1.0), et le dépôt de spec. Cela ramène la route à
+une trentaine de sessions. **Rien de ce qui touche un nombre affiché ne se coupe.**
+
+### Les phases en détail — items, preuves, critères
+
+### P5d — Installable et sûr · S1-S4
+
+| # | Item | Connu ? | Critère de sortie |
+|---|---|---|---|
+| 1 ✅ | **Installation nue réparée** (D-262). `cinoc --help` plante sur `ModuleNotFoundError: httpcore` (le transport des importeurs est importé par la CLI). `httpx`/`httpcore` en dépendances de base ; les extras `google`, `azure`, `ollama`, qui ne contenaient qu'eux, disparaissent ; retirés aussi de `serve` et `saknussemm`. | [audit] | — |
+| 2 ✅ | **Job CI « installation nue »** (D-262, job `install-bare`) : construire le wheel, l'installer dans un venv vierge, lancer depuis un dossier temporaire `cinoc --help`, `cinoc demo`, `cinoc run examples/config.yaml`. C'est l'absence de ce job qui a laissé l'item 1 passer depuis le 16 août. | [audit] | job vert ; rouge prouvé en retirant `httpx` |
+| 3 ✅ | **Aucun secret dans un rapport** (D-262 : le manifeste remplace toute valeur de réglage secret par `<secret>` — un seul point de passage, puisque tout ce qui sort d'un run sort du manifeste ; le jeton reste dans `adapter_kwargs` pour authentifier le module). Le jeton du segmenteur distant entrait dans `adapter_kwargs`, donc dans le manifeste, puis s'affichait dans la section composition. | [connu pour les recettes futures, PLAN_UI_COMPOSEUR §7] ; [audit] pour le chemin actuel | test : un run avec jeton → le JSON `RunResult` et le HTML ne contiennent pas sa valeur |
+| 4 | **Ce que la page propose, le planificateur l'accepte.** `tesseract_layout` et `doclayout_yolo` sont proposés par le `<select>` puis refusés (422) ; ce sont les deux seuls segmenteurs exécutables sans dépendance lourde. Les ensembles `PIPELINE_SEGMENTERS`/`SEGMENTER_KINDS` dérivent du registre. Le `host` ollama reçu en HTTP est validé contre une liste blanche opérateur (SSRF sur instance privée). | [audit] | test : chaque option proposée par la page se planifie |
+| 4b ✅ | **Deux fuites réseau fermées** (D-263) : le segmenteur distant validait son endpoint puis laissait `httpx` le résoudre à nouveau (DNS rebinding) — il passe par `post_json`, épinglé à l'IP validée, sans redirection ; et un en-tête d'authentification suivait une redirection dès que le **nom d'hôte** coïncidait, donc sur un changement de port ou une rétrogradation https → http — la comparaison porte désormais sur l'origine (schéma, hôte, port). | [audit de substitution] | deux tests, rouges sans le correctif |
+| 5 | **Paquet propre.** Le sdist pèse 46 Mo (images de `corpus/`, `design/`, `campaigns/`, `.claude/`) ; le wheel embarque 15 `.md` internes. Exclusions explicites ; `cinoc --version`. | [audit] | sdist < 5 Mo ; wheel sans `.md` |
+| 6 | **Publication** : `twine check` vert (A1 rendu, D-261). | [audit] | `twine check dist/*` vert |
+| 7 | **Ce que Cinoc écrit et importe est conforme** (D-264, preuves : `docs/ANALYSE_SUBSTITUTION.md`). 0/21 ALTO et 0/11 PAGE écrits par Cinoc passent le XSD officiel (attributs requis absents, `TextBlock@TYPE` interdit en ALTO 4, types de région hors énumération, ImageRegion réécrite en TextRegion, sous-régions mal placées) — ce qui contredit L9 de `MIGRATION_COUCHE_2.md`. Lecture PAGE : les `<Word>` sont ignorés. `alto_source` ne vérifie pas les lignes sans ID sous un ComposedBlock. IIIF : une v2 dont l'image est l'URL de son service produit un corpus de JSON déguisés en images (Bodleian) ; une v3 prend la vignette au lieu de la pleine résolution (Wellcome : 12× moins de pixels) ; le téléchargement ne vérifie ni octets magiques ni `Content-Type`. Oracle : `lxml.XMLSchema` + XSD vendorisés en fixtures, aucune dépendance. | [audit de substitution] | test XSD sur toute sortie d'écrivain ; les deux manifestes réels en cassette |
+
+### P5e — Une mesure qui dit vrai · S5-S7, S11-S18
+
+Le cœur de la 1.0. Ce qu'un instrument doit dire de chaque nombre : **ce qu'il
+mesure, sur quelles unités, et si la différence est significative**.
+
+| # | Item | Connu ? | Critère de sortie |
+|---|---|---|---|
+| 1 | **Le statut d'une unité est produit par l'exécution, pas reconstruit au rapport** (D-261). Aujourd'hui l'orchestrateur écrit `results[unit] = {}` et la raison ne vit que dans un `logger.warning` : rien dans `RunResult` ne distingue un échec d'une absence. Contre-exemple reproduit sur `examples/` : pero sans sa sortie pour `folio_002` obtient **CER 0,0** (support 4), contre 0,0145 quand il la produit et **0,1667** s'il rend une page vide — **échouer rapporte plus que répondre**. `DocumentExecution` porte l'issue de l'unité — `ok` · `truncated` · `failed` + motif codé (`engine` · `infrastructure` · `unsupported` · `cancelled`) —, l'orchestrateur la conserve au lieu d'un dict vide, et l'enregistrement par unité qui existe déjà (`DocumentUsage`, un par pipeline × document) la transporte dans `RunResult`. Les cas « vérité terrain absente » et « métrique inapplicable » restent côté évaluation (score `None`), où ils sont déjà. Agrégats accompagnés de « n notés / n attendus » ; politique selon A3. | [audit] | le contre-exemple ci-contre affiche le support 4/5 et le motif, à l'écran et dans le JSON |
+| 1b | **Les sorties de chaque étape restent observables, et la cible se nomme** (D-261). L'exécuteur tient déjà `by_step` (toutes les sorties, étape par étape) mais ne rend que `pool`, le dernier artefact **par type** : deux étapes de même type s'écrasent. Contre-exemple reproduit : un pipeline `ocr1 (tesseract) → ocr2 (pero)` ne laisse noter que pero (0,0145) ; le 0,029 de l'étape 1 n'est plus atteignable dans le run. `DocumentExecution` rend `by_step` (le pool s'en déduit, une structure au lieu de deux) avec la consommation **par étape** ; `EvaluationView` gagne une cible d'étape facultative, la dernière par défaut — la règle actuelle de `_candidate_for`, devenue explicite ; le fan-out estampille son étape, et la précédence par type, qui ne servait plus qu'à lui, disparaît. C'est ce qui rend une ablation (OCR seul / OCR + correction) mesurable **dans un seul run, sans réexécuter le préfixe**. | [audit] | le pipeline ci-contre note ses deux étapes dans le même run |
+| 2 | **La troncature se voit.** Les quatre fournisseurs LLM/VLM ignorent la raison d'arrêt (`stop_reason`, `finish_reason`, `done_reason`) : une page coupée à 4 096 jetons (plafond codé en dur chez Anthropic) est notée comme complète. `LLMCompletion` porte la raison d'arrêt ; `max_tokens` devient un paramètre ; Ollama reçoit `num_ctx`/`num_predict` (le correctif existe pour `ollama_structured`, pas pour l'adaptateur principal). La correction structurée ne retente plus une troncature reproductible. | [audit] ; classe Ollama [connu, MIGRATION_PLAN.md:54] | tests sur cassette par fournisseur : `max_tokens` atteint → statut `truncated` |
+| 3 | **Le libellé du test est le bon test.** En mode rapide (le défaut), un Friedman (k ≥ 3) s'affiche « Wilcoxon ». L'inférence (coût négligeable) tourne toujours, ou le rapport écrit « test non calculé ». | [audit] | test à 3 pipelines |
+| 4 | **Nemenyi juste et lu juste.** Table écrite à la main fausse pour k ≥ 30, dans le sens anti-conservateur → `scipy.stats.studentized_range` (et `rankdata` pour les rangs). Les groupes « indiscernables » sont disjoints alors que le texte en tire une significativité : afficher les paires significatives, ou des groupes qui se chevauchent ; retirer la phrase. Post-hoc conditionné au rejet de Friedman. La table servait en outre la colonne α = 0,05 pour **tout** α ≠ 0,01 (D-264). | [audit] | parité scipy ; test rangs 1,0/1,8/2,6 |
+| 5 | **L'intervalle porte sur le chiffre affiché.** Le tableau donne un CER micro, l'IC en dessous une moyenne macro : le chiffre peut sortir de son propre intervalle. Bootstrap du ratio micro (rééchantillonner les documents, recalculer Σ erreurs / Σ poids). | micro voulu [connu, D-016] ; décalage [audit] | test : le point affiché est dans son IC |
+| 6 | **Comparaisons multiples.** Une ligne « significatif » par (vue × métrique) sans correction, alors que le glossaire dit lui-même qu'elle est exigée. Holm sur la table ; verdict mis en avant pour la seule métrique principale. | [audit] | — |
+| 7 | **Normalisation par défaut** selon A2 ; une seule définition du CER dans le rapport (l'analyse par lignes applique déjà NFC + strip) ; la calibration lit la GT normalisée comme la vue. Tests de parité étendus aux cas NFC/NFD, bords, NBSP, invisibles. | [audit] | parité jiwer/dinglehopper documentée cas par cas |
+| 8 | **Des noms qui ne promettent pas plus.** `hallucination` → clé `unanchored_trigrams` (aveugle à une page dupliquée : 0,021) ; `fca` déclarée limitée (0 dès que les lignes sont fusionnées, cas typique d'un VLM) ; `searchability` à seuil relatif ; `ner_f1` reçoit une variante « nom exact » (aujourd'hui « Montfort » lu « Montfert » compte juste) et perd la mention « CoNLL/HIPE » inexacte ; `region_cer` compte le texte des régions fantômes ; coût humain étiqueté **simulation** (« hypothèse : 5 s par erreur caractère ») ; historique indexé par (corpus, profil, pipeline, vue). Au passage : taxonomie (`I→l`, `O→o` mortes car appliquées après `lower()`), pires lignes appariées par F15 comme `lines.py` ; `roman.py` accepte `IIV`, `IXI`, `XIIX` et prend `ci`, `dix` pour des numéraux (le paquet `roman` en oracle de test, D-264). | renommages d'affichage [connu, D-194] ; le reste [audit] | — |
+| 9 | **Une fiche par métrique, trois niveaux, et le classement réservé aux établies.** Chaque métrique du registre déclare sa catégorie — **établie** (conforme à une référence nommée), **adaptée** (variante justifiée), **exploratoire** — et son unité (caractère / mot / région). Le glossaire porte, pour chaque métrique affichée par défaut : définition implémentée, ce qu'elle mesure, limites, oracle. Les exploratoires sortent du radar et des colonnes par défaut (le radar a 5 axes quasi colinéaires sur 6) ; `char_accuracy`, `word_accuracy`, `bow_f1` quittent le radar. **Seules les métriques établies entrent dans le classement et les tests de significativité** ; adaptées et exploratoires restent au diagnostic, affichées comme telles. Une métrique exploratoire n'est pas fausse : elle n'a pas encore la validité qu'un classement lui prêterait. | glossaire corrigé sur 6 métriques le 2026-11-25 ; le reste [audit] | test : toute métrique enregistrée a catégorie, unité et fiche ; l'unité de la fiche est celle du calcul |
+| 11 | **Les défauts de justesse trouvés par l'audit de substitution** (D-264). Le vote multi-moteurs n'est pas un ROVER : alignement en étoile sur la première source par ordre alphabétique, insertions perdues, **résultat qui dépend du nom des sources** (WER fusionné 0,089 contre 0,048 pour un ROVER, à 3 moteurs) → ROVER maison (~80 LOC stdlib). Les cinq alignements `difflib` (taxonomie, hallucinations, confusions, mots manqués, modernisation) sont sous-optimaux et triplent les lacunes face au WER affiché → un helper `rapidfuzz` unique. La tendance longitudinale s'affiche sans test → `scipy.stats.linregress`. L'ordre de lecture `columns` entrelace deux colonnes sous un titre large → portage de Breuel. | [audit de substitution] | chaque défaut par un test qui le reproduit, rouge avant |
+| 10 | **Oracles externes en CI** : un golden dinglehopper (extra dédié, comme `hipe-oracle`) sur le mini-corpus de référence, écarts documentés un par un (NFC, graphèmes, segmentation en mots). | HIPE golden [connu, SPEC_HIPE] ; dinglehopper [audit] | job opt-in vert |
+
+### P5f — Une inférence tracée · S7-S9, S19-S22
+
+| # | Item | Connu ? | Critère de sortie |
+|---|---|---|---|
+| 1 | **Mêmes réglages pour tous.** OpenAI et Mistral passent `temperature=0`, Anthropic et Ollama rien : le banc compare des réglages différents. `temperature`, `seed`, `top_p`, `max_tokens` deviennent des paramètres à défauts explicites et identiques, écrits au manifeste. | [audit] (`ANALYSE_COUCHE_5.md` ne le dit que pour OpenAI) | le manifeste d'un run porte les valeurs effectives, défauts compris |
+| 2 | **Le modèle servi, pas l'alias demandé.** `response.model` lu et écrit au manifeste ; tarification indexée sur le modèle servi. `dependencies_lock` rempli (versions des distributions en jeu), et la version de la base Unicode (`unicodedata.unidata_version`), dont dépend la normalisation. | lock [connu, ANALYSE_COUCHE_6.md:252] ; le reste [audit] | — |
+| 2b | **Réévaluer sans réexécuter** (D-261 ; la clé ignore aussi les binaires système, D-264). L'évaluation est déjà recalculée à chaque run et le cache de reprise garde les artefacts ; deux défauts empêchent pourtant de re-noter une campagne dans six mois. (a) La clé d'unité contient la version **du paquet entier** : une correction de métrique en 1.0.1 invalide tout le cache d'inférence et fait re-payer chaque appel. Elle porte désormais les `module_versions` des étapes (déjà au manifeste) au lieu de `code_version`. (b) Elle ignore toute configuration lue dans l'environnement : un endpoint passé par `OPENAI_BASE_URL` — le contournement vLLM d'aujourd'hui — réutilise en silence les sorties du modèle précédent (par lecture du code, non exécuté faute de clé). Toute configuration qui change une sortie passe par `adapter_kwargs`, donc dans la clé ; et la clé et le `parameters_hash` de provenance — qui ne hache aujourd'hui que `step.params`, sans le modèle ni le prompt — deviennent **une seule empreinte**. Le cache, enrichi de `by_step` (P5e 1b), de l'issue (P5e 1) et des sidecars natifs (item 3), **est** l'archive du run : `cinoc run --resume-dir <archive> --offline` re-note sans aucun appel et échoue sur une unité manquante au lieu de l'exécuter. Absorbe le « garder ce qu'un run a produit » de P5b. *Vérifié et écarté* : le cache ne rend pas de sortie `precomputed` périmée quand le fichier source change. | [audit] | une campagne archivée se re-note après une montée de version de métrique, sans réseau |
+| 3 | **Les réponses natives conservées.** Aujourd'hui jetées : réévaluer impose de re-payer. Sidecar `NATIVE_JSON` (nouvelle valeur d'`ArtifactType`, sur le modèle du sidecar `CONFIDENCES`) pour tout moteur distant. | [audit] | un run cloud rejoué hors ligne depuis ses sidecars donne les mêmes métriques |
+| 4 | **Mistral OCR sans perte.** Le markdown (`#`, `**`, `\|---\|`, `![img](…)`) est noté comme du texte et pénalise le moteur : projection markdown → texte. La réponse OCR 4.1 (blocs, boîtes, tableaux, en-têtes/pieds) est projetée vers `LAYOUT` **depuis le sidecar** — fonction pure, testée sur cassette. `CanonicalLayout` ne porte que ce qui est **commun** — la réponse native, elle, est le sidecar — et reçoit ce qui lui manque pour ne pas être un plus petit dénominateur : une confiance de région (le score de détection est jeté aujourd'hui). Règle de projection : **aucune information absente n'est inventée pour satisfaire le schéma** — un bloc de texte sans lignes devient une ligne **sans géométrie** (le schéma l'admet déjà), jamais une boîte fabriquée, et les métriques qui exigent une segmentation en lignes s'y déclarent non applicables. Les coordonnées restent entières (arrondi sous le pixel, documenté) ; les tableaux restent hors 1.0. | [audit] | — |
+| 5 | **Azure et Google** émettent `CONFIDENCES` depuis leurs mots (aujourd'hui seulement le texte : absents de la calibration). | [audit] | — |
+| 6 | **Endpoint par instance.** `base_url` et `api_key_env` par instance OpenAI-compatible (vLLM, SGLang, serveur local) ; liste blanche d'hôtes opérateur ; sémaphore par hôte, pas par fournisseur ; marqueur « auto-hébergé » pour l'économie (sinon « tarif inconnu »). | [audit] | un run compare OpenAI distant et un serveur OpenAI-compatible local |
+| 7 | **Délais finis, tentatives bornées.** Aucun appelant ne passe de deadline : Ollama, Azure et Google tournent sans timeout. Délai par défaut fini ; `call_resilient` borné par la deadline et annulable ; `max_retries=0` côté SDK (aujourd'hui jusqu'à 15 tentatives) ; OCR cloud enveloppés (429) ; tentatives comptées dans le coût. | annulation [connu, ANALYSE_COUCHE_5.md:131,209] ; le reste [audit] | — |
+| 8 | **Les modèles se demandent au fournisseur, ils ne se codent pas** (D-268). Aujourd'hui seuls Ollama et Mistral sont listés en direct ; OpenAI et Anthropic viennent d'une liste figée (`app/models.py`), que la route `/api/models/{provider}` et `cinoc list models` servent **pour les quatre** — le menu du composeur proposait ainsi `mistral-large-latest`, retiré par Mistral. Les API exposent pourtant ce qu'il faut : Anthropic `models.list` (capacité `image_input`, `lifecycle` actif/déprécié/retiré, `max_input_tokens`), Mistral (`capabilities.vision`, `ocr`, dépréciation), OpenAI (`id`, `shutdown_date` — **pas** la vision), Ollama (`/api/tags`, capacités par `/api/show`, non vérifié). Une seule fonction `available_models(provider)` en couche `app`, en direct, pour le web et la CLI ; la vision affichée quand le fournisseur la déclare, « inconnue » sinon (jamais devinée) ; un modèle déprécié signalé. **Plus aucun modèle par défaut codé** : les trois copies (`_DEFAULT_MODEL`, `registry.py`, `pricing.json` `default_models`) disparaissent, et une spec qui ne nomme pas son modèle est refusée avec la liste de ceux que la clé permet — un défaut implicite qui change de cible en silence contredit la reproductibilité. **Les tarifs, eux, restent une donnée** : aucune de ces API ne publie de prix ; la table est indexée sur le **modèle servi** (item 2), et un modèle absent de la table s'affiche « tarif inconnu ». Majeures des SDK `openai`/`anthropic` épinglées (`mistralai<2` à revoir face à la 3.x) ; jetons de cache et de raisonnement lus. | tarifs revérifiés aux sources primaires le 2026-11-25 (D-267) | `grep` : aucun nom de modèle dans `cinoc/` hors tests et `pricing.json` ; une spec sans modèle est refusée en nommant les modèles disponibles |
+
+### P5g — Par soustraction · S23-S29
+
+| # | Item | Connu ? | Critère de sortie |
+|---|---|---|---|
+| 1 | **P5c items 2-4** : rôles `zero_shot` et `text_and_image` · déclaration des paramètres au contrat de module · catalogue de recettes branché à la page. | [connu, P5c] | dette `recettes-web` fermée |
+| 2 | **P5c item 6 étendu — un seul constructeur.** `run_planning` **et** deux constructeurs que P5c ignore — `structure_planning` (hybride, ~190 LOC) et `correction_planning` (~110 LOC, exactement `recipes/alto_corrige.yaml`) — deviennent des recettes. Le pli de réglages (P5c item 5) est réduit à ce que le formulaire offre déjà. | run_planning [connu, D-258] ; les deux autres [audit] | `_pipeline_for_competitor`, `_hybrid_competitor`, `_hybrid_spec` supprimés |
+| 3 | **Une seule politique de vues.** Formulaire, recettes et correction produisent aujourd'hui **trois rapports différents** pour un même pipeline (métriques, noms de vue `text`/`texte` que `cinoc compare` n'apparie pas). | [audit] | test : même pipeline par les trois entrées → mêmes vues |
+| 4 | **P5c item 8** : bouton d'arrêt (un banc lancé du web ne peut pas être interrompu alors qu'il engage des appels facturés) · zone de dépôt de spec ou `front-absent` motivé · face ou sortie de `standardize_corpus`. | [connu, P5c] | dettes `annulation-web`, `spec-web` fermées |
+| 5 | **Listes parallèles dérivées du registre** : catalogue OCR tenu à la main en 4 endroits, défauts `"fra"` ×8 et `fr_core_news_sm` ×4 ramenés à l'adaptateur ; puis fusion des quatre garde-fous qui patrouillaient ces listes. | LLM [connu, D-233] ; OCR [audit] | — |
+| 6 | **Délégations et copies** (inventaire prouvé : `docs/ANALYSE_SUBSTITUTION.md`, D-264) : Nemenyi, rangs, Jensen-Shannon et OLS vers scipy (déjà dépendance, ~−110 LOC) ; bootstrap vers `numpy.random.default_rng` (~30× plus rapide, déterminisme vérifié entre versions de numpy et de Python) — **D-067 amendé par D-265 : la parité avec Picarones n'est plus un critère**, un golden se recalcule contre un oracle externe (scipy), pas contre l'ancien outil ; Tesseract en **un** appel du binaire (l'OCR tournait 2 à 3 fois par page) avec `OMP_THREAD_LIMIT=1` ; `ocrd_processor` sur un METS gabarit, une chaîne de processeurs, arrêt à l'annulation ; le CSS de `reports/html.py` (~580 LOC) extrait en fichier ; `StrictUndefined` et parité FR/EN pour l'i18n web ; retrait du shim `nfc`/`diplomatic` et de `from_yaml`. **Aucune nouvelle dépendance** : ocrd, dinglehopper, LiteLLM, scikit-posthocs, statsmodels, docling-core, pagexml-tools, pygal, defusedxml, crowd-kit et iiif-prezi3 ont été mesurés et rejetés comme dépendances d'exécution. Et : cinq alignements `difflib` (qui contredisent Levenshtein dans 14 cas sur 300) → un helper sur `rapidfuzz` ; un seul `parse_layout_xml` (3 copies) ; une seule table d'extensions d'image (5 copies qui divergent) ; une seule suppression de diacritiques (3 copies). | [audit] | — |
+| 7 | **Retraits sans perte** : `pricing.json` `local_kinds` (aucun consommateur) ; `ArtifactType.CANONICAL_DOCUMENT`/`READING_ORDER`/`ALIGNMENT` ; `qe/` et `campaigns/tooling/` (~4 000 lignes hors CI, remplacées) ; 29 branches distantes intégrées ou obsolètes, plus la 30ᵉ selon A5. | [audit] | — |
+| 8 | **Garde-fous d'agents allégés** : `test_status_freshness` réduit à son seul contrôle de fond (commandes CLI au README) ; `test_layer_dependencies` paramétré. Corrections de `CLAUDE.md` : liste blanche de `evaluation` (contredit le test), 15 profils et non 14, version calculée par `setuptools_scm` et non son repli. | [audit] | — |
+
+### P5h — La preuve : une campagne d'ablation publiée · S10 (pilote), S30-S32
+
+**Un pilote d'abord, tôt** (D-261) : dès P5e items 1-1b et P5f item 3 livrés,
+dix pages de `37-GT-BNL`, Tesseract et un moteur cloud, plafond de dépense bas.
+Son rôle n'est pas de publier : il fait apparaître les défauts que seule une
+vraie campagne trouve — comme le premier banc de presse a fait naître P5a —
+pendant qu'il est encore temps de les corriger.
+
+**La campagne publiée** s'exécute sur la **version finale** (après P5g, qui change
+les rapports). Elle ne compare pas une liste de moteurs : elle répond à des
+questions par **ablation**, chaque variante étant une cible d'étape (P5e 1b) d'un
+pipeline à préfixe commun, donc sans réexécuter les préfixes.
+
+| Variante | Chaîne |
+|---|---|
+| E0 | OCR |
+| E1 | segmentation → OCR par région |
+| E2 | OCR → correction LLM |
+| E3 | segmentation → OCR par région → correction structurée |
+| E4 | OCR → score de qualité → correction **sélective** |
+| E5 | VLM direct sur la page |
+
+Questions visées : la segmentation explicite aide-t-elle encore les VLM ? À
+partir de quel CER la post-correction devient-elle bénéfique ? La correction
+sélective est-elle plus rentable que l'intégrale ? Un gain de CER se paie-t-il
+en fidélité philologique (métriques adaptées, lues comme diagnostic) ?
+
+- **Corpus** : `37-GT-BNL` (presse, 37 pages, déjà au dépôt) et le dataset Dresden curé (HF) ; un corpus BnF si ses droits le permettent (A4).
+- **Moteurs** : Tesseract, Kraken, Mistral OCR 4.1, un VLM zero-shot cloud, un VLM ouvert servi par vLLM si un GPU est disponible (A6), et la correction structurée `saknussemm`.
+- **Protocole** :
+  - défaut méthodologique de la campagne d'août corrigé : césure de la GT mêlée au texte OCR → `--ocr-sidecar` [connu, `campaigns/2026-08-14-bnl-mistral-m2`] ;
+  - `--repeat 5` pour tout moteur stochastique, et dispersion publiée ;
+  - CER recoupé par dinglehopper sur toutes les sorties.
+- **Publication** : `RunResult`, sidecars natifs et rapport sur un dataset HF, avec un DOI Zenodo.
+- **Critère de sortie** : un tiers qui télécharge l'archive publiée la re-note hors ligne (`--offline`, P5f 2b) et obtient des métriques identiques au chiffre près.
+
+### P5i — Vitrine et release · S33-S35
+
+| # | Item | Critère de sortie |
+|---|---|---|
+| 1 | **README court** : le problème en trois lignes, le Space et `pip install cinoc` en tête, **un vrai résultat de P5h**, captures en haut ; le détail (extras, architecture, extensibilité) part dans `docs/`. | une personne extérieure lance un premier rapport en moins de deux minutes |
+| 2 | **Trois parcours documentés et testés** : (1) noter des sorties existantes (texte ou ALTO, sans moteur), (2) comparer des moteurs sur son corpus, (3) corriger un ALTO existant. | chacun couvert par un test de bout en bout sur le paquet installé |
+| 3 | **Testeurs extérieurs** (A7) sur la pré-release (A8) ; leurs blocages traités comme des défauts. | — |
+| 4 | **Dépôt public** : description, topics, champ Website = Space, `CITATION.cff`, `CHANGELOG` `[1.0.0]` réécrit. | — |
+| 5 | **Tag `v1.0.0` — posé par le mainteneur**, release GitHub avec wheel et sdist, publication selon A1, Space redéployé sur le tag. | — |
+| 6 | **Après le tag** : les plans historiques sortent de l'arbre (l'historique git et le tag les gardent ; `CLAUDE.md` §8.9 interdit un `docs/archive`) ; `MIGRATION_PLAN.md` devient un journal figé. | — |
+
+### Hors 1.0 (décidé, pas oublié)
+
+P5b (suspendue à son arbitrage ; sa moitié « conserver ce qu'un run a produit »
+est absorbée par P5f 2b) · P5c item 7 (composeur contraint) et pli de réglages
+généré complet · nouvelles familles de métriques, nouveaux importeurs · structure
+de tableaux dans `CanonicalLayout`, `LAYOUT` pour Azure et Google · API batch des
+fournisseurs · segmenteur sur le Space (T2.5) · LiteLLM, au plus en plugin tiers
+(D-264) · extraction d'une bibliothèque ALTO/PAGE autonome, **seulement** quand un
+consommateur réel se présente (D-266) · gel de Picarones (différé à la demande de
+l'utilisateur).
+
+---
+
 ## Étape 5 — Release `1.0.0` puis gel de Picarones
 
 | Sous-étape | Contenu |
@@ -603,7 +859,13 @@ le sens rassurant — il annonçait un manque là où il y avait une livraison.
 - [x] **P5a — dette révélée par l'usage réel ✅** : 12 items fusionnés (#127→#133, #135→#139) ; l'item 13 — la déduplication entre vues — **fermé sur sa mesure** : 3,7 % réels contre 38 % annoncés, pour une complexité ajoutée au runner. Les cinq défauts qui faussaient des résultats sont corrigés. **Le blocage du tag est levé.**
 - [ ] **P5c — joignabilité** : toute route déclarée est atteignable depuis la page, ou le dit. Né d'un audit des 31 routes — trois d'entre elles, celles des **recettes**, ont zéro appel dans le front alors que le garde-fou de parité les donne vertes. La conception ([`PLAN_UI_COMPOSEUR.md`](PLAN_UI_COMPOSEUR.md)) a trouvé la cause sous le symptôme : **deux constructeurs de pipeline parallèles**, dont l'un est à trois lignes de son budget. Huit tranches : garde-fou · deux rôles manquants · déclaration des paramètres · catalogue de recettes · pli de réglages · bascule vers un constructeur unique · composeur contraint · les deux indépendants. **Ne bloque pas le tag ; passe avant P5b**, qui est suspendue à un arbitrage.
 - [ ] **P5b — persistance et calcul à la demande** : garder ce qu'un run a produit (**fait**, `RunManifest.artifacts_dir`), puis calculer une analyse au clic dans la saveur servie. Né de #139. **Ne bloque pas le tag** — et reste **suspendue** tant que l'arbitrage manifeste-porte-les-documents ⇄ serveur-retient-la-spec n'est pas rendu.
-- [ ] **Tag `v1.0.0`** — *à poser par le mainteneur, quand il le décide*. Le blocage posé par P5a est **levé** : les défauts qui produisaient de faux classements sont corrigés et fusionnés. Un tag posé le 2026-09-10 l'a été **sans son accord** et a été supprimé (D-232) : le dépôt ne porte aucun tag, la version reste le repli `setuptools_scm`. Le reste de la checklist étant vert, la 1.0 est **prête techniquement** — publier reste une décision, pas une étape.
+- [ ] **P5d — installable et sûr** : installation nue réparée et gardée par un job CI ; aucun secret dans un rapport ; ce que la page propose se planifie ; paquet publiable (A1).
+- [ ] **P5e — une mesure qui dit vrai** : statut de chaque unité et support affiché ; troncature visible ; tests statistiques corrects et correctement libellés ; normalisation par défaut (A2) ; noms, catégories et fiches de métriques ; oracle dinglehopper.
+- [ ] **P5f — une inférence tracée** : réglages identiques et écrits ; modèle servi ; réponses natives ; Mistral OCR sans perte ; endpoint par instance ; délais finis.
+- [ ] **P5g — par soustraction** : un constructeur, une politique de vues, P5c items 2-4 et 8, listes dérivées du registre, retraits.
+- [ ] **P5h — la preuve** : campagne de référence publiée et rejouable au chiffre près.
+- [ ] **P5i — vitrine et release** : README court, trois parcours testés sur le paquet installé, testeurs extérieurs.
+- [ ] **Tag `v1.0.0`** — *à poser par le mainteneur, quand il le décide*. Un tag posé le 2026-09-10 l'a été **sans son accord** et a été supprimé (D-232) : le dépôt ne porte aucun tag. **Révision 2026-11-25 (D-260)** : la phrase qui suivait ici — « le reste de la checklist étant vert, la 1.0 est prête techniquement » — était fausse. Un `pip install cinoc` sans extra ne démarrait pas, et plusieurs chiffres affichés ne mesuraient pas ce qu'annonçait leur nom. La route P5d → P5i, plus haut, ferme ces écarts ; le tag la suit.
 - [ ] Gel de Picarones (5b) — **différé à la demande de l'utilisateur**, hors du chemin de la 1.0. Rien n'en dépend : le périmètre gardé est **entièrement** dans Cinoc, c'est la condition que le gel attendait.
 
 ---

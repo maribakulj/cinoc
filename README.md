@@ -8,9 +8,9 @@
 [![Coverage](https://img.shields.io/badge/coverage-%E2%89%A585%25-brightgreen.svg)](#development)
 [![Lint: Ruff](https://img.shields.io/badge/lint-ruff-261230.svg)](https://github.com/astral-sh/ruff)
 [![Types: mypy strict](https://img.shields.io/badge/types-mypy%20strict-1f5082.svg)](https://mypy-lang.org/)
-[![Determinism: hash‑locked](https://img.shields.io/badge/runs-deterministic-6e40c9.svg)](#invariants)
+[![Metrics: deterministic](https://img.shields.io/badge/metrics-deterministic-6e40c9.svg)](#invariants)
 
-**A deterministic benchmark for transcription *pipelines* — OCR, HTR, VLM, OCR→LLM — on heritage documents.**
+**A reproducible benchmark for transcription *pipelines* — OCR, HTR, VLM, OCR→LLM — on heritage documents.**
 
 Cinoc runs competing transcription pipelines over a ground-truth corpus and produces a **factual, quantified verdict** — metrics plus statistical tests — as a **self‑contained interactive HTML report**. No LLM writes the report: every number is an **auditable** function of the inputs.
 
@@ -84,8 +84,9 @@ Far beyond CER/WER — every family ships with its own report section and tests 
 
 ## Invariants
 
-- **Deterministic** — same spec + same corpus + same code → identical artifacts (same hash), identical metrics, identical report.
-- **Reproducible** — every run carries a `RunManifest` (code version, dependency versions, engine binaries, parameter fingerprint).
+- **Deterministic scoring** — same outputs + same spec + same code → identical metrics and verdict. Replaying frozen outputs (`precomputed`) gives identical artifacts (same hash); two reports differ only by their timestamps and measured durations.
+- **Traced, not guaranteed, inference** — a remote or stochastic engine (cloud API, LLM/VLM, even at temperature 0) is *not* deterministic: Cinoc records what was asked and measures the spread (`--repeat`), it does not promise the same transcription twice.
+- **Reproducible** — every run carries a `RunManifest` (code version, engine binaries, parameter fingerprint). Python dependency versions are not captured yet.
 - **Anti‑hallucination** — no LLM writes a single word of the report; every figure is an auditable function of the inputs.
 - **Secure** — hardened XML (`safe_parse_xml`: no DTD/DOCTYPE/external entity/network), all user paths validated (anti‑traversal), anti‑SSRF on remote fetches, and an **opt‑in** public *fail‑closed* mode for protecting a key on a public Space (only the free base runs).
 
@@ -139,12 +140,15 @@ Heavy dependencies are **optional extras** — install only what you use:
 |---|---|---|
 | Tesseract (OCR) | `[tesseract]` | the `tesseract` binary is required |
 | Kraken · Pero · Calamari (local HTR/OCR) | `[kraken]` `[pero]` `[calamari]` | not deployed on the Space |
-| OpenAI · Anthropic · Mistral · Ollama (LLM/VLM) | `[openai]` `[anthropic]` `[mistral]` `[ollama]` | API key |
-| Google Vision · Azure Document Intelligence | `[google]` `[azure]` | REST, API key |
+| OpenAI · Anthropic · Mistral (LLM/VLM) | `[openai]` `[anthropic]` `[mistral]` | API key |
+| Ollama (local LLM/VLM) | — | a running Ollama server |
+| Google Vision · Azure Document Intelligence | — | REST, API key |
 | PP‑DocLayout segmenter (local) | `[segment]` | PaddleX + weights |
+| DocLayout‑YOLO segmenter (local) | `[yolo]` | pip only; weights pulled from the Hub on first run |
+| D'AlemBERT quality scorer (selective post‑correction) | `[qe]` | `torch` + `transformers<5` |
 | Image preprocessing | `[images]` | Pillow to decode; the maths are plain numpy |
 | Named‑entity step (NER) | `[ner]` | spaCy + a model (`spacy download …`) |
-| Structured post‑correction (ALTO → ALTO) | `[saknussemm]` | installed from its repository — not on PyPI yet |
+| Structured post‑correction (ALTO → ALTO) | `[saknussemm]` | `saknussemm` from PyPI, exact version pinned |
 | HuggingFace import / publish | `[huggingface]` | `datasets` + `huggingface_hub` |
 | Real report thumbnails | `[images]` | Pillow (graceful fallback without) |
 
@@ -283,7 +287,7 @@ original OCR confidence along with their word boxes; unchanged lines retain
 both. This adapter benchmarks text through a canonical layout. It does not
 run Saknussemm's original XML rewrite and integrity checks, so a successful
 Cinoc run does not certify an XML file for publication.
-The `[saknussemm]` extra pins revision `d30c493f64150b890609123d66c7c5820ba10b48`,
+The `[saknussemm]` extra pins `saknussemm==0.9.0` from PyPI,
 the version checked with this bridge. CI requires its installation and import
 before the correction tests can pass.
 

@@ -1,8 +1,8 @@
 """Garde-fou : un `skip` conditionnel ne doit pas masquer une installation ratée.
 
-La chaîne de correction structurée passe par ``saknussemm``, qui n'est pas
-publié sur PyPI et s'installe donc depuis le dépôt à une révision vérifiée.
-L'installation est obligatoire en CI : un échec bloque le gate.
+La chaîne de correction structurée passe par ``saknussemm``, installé à la
+version exacte vérifiée avec le pont (``pyproject.toml``). L'installation est
+obligatoire en CI : un échec bloque le gate.
 
 Si l'installation **réussit** mais que le paquet reste
 inimportable — extra renommé, dépendance transitive cassée, incompatibilité de

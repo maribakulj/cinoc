@@ -431,7 +431,7 @@ def _manifest(
         n_documents=len(spec.corpus.documents),
         pipeline_specs=spec.pipelines,
         adapter_kwargs={
-            name: dict(spec.adapter_kwargs.get(name, {})) for name in names
+            name: _sans_secrets(spec.adapter_kwargs.get(name, {})) for name in names
         },
         # Reproductibilité (R-2) : la version de chaque module exécuté entre dans
         # l'empreinte. `module_versions` = version d'*adapter* ; la version du
@@ -446,6 +446,24 @@ def _manifest(
         metadata=spec.metadata,
         artifacts_dir=artifacts_dir,
     )
+
+
+#: Réglages qui portent une **valeur secrète** (jeton d'un endpoint privé…). Le
+#: module la reçoit pour s'authentifier ; le manifeste, lui, voyage — dans le
+#: JSON ``RunResult``, dans la section « composition » du rapport, chez qui on
+#: partage le rapport. Il garde donc le **fait** qu'un secret a été fourni,
+#: jamais sa valeur. Un seul point de passage : tout ce qui sort d'un run sort
+#: du manifeste.
+_SECRET_KWARGS = frozenset({"token", "api_key", "key", "secret", "password"})
+_SECRET_PLACEHOLDER = "<secret>"
+
+
+def _sans_secrets(
+    kwargs: Mapping[str, str | int | float | bool],
+) -> dict[str, str | int | float | bool]:
+    return {
+        k: _SECRET_PLACEHOLDER if k in _SECRET_KWARGS else v for k, v in kwargs.items()
+    }
 
 
 __all__ = ["ArtifactSink", "OrchestrationError", "PipelineOutputs", "run"]

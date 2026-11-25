@@ -4,7 +4,7 @@ Moteur cloud **first-party**. On vise l'**API REST** (``httpx``) plutôt que le 
 ``google-cloud-vision`` (gRPC + auth ADC service-account, lourd et difficile à
 rejouer) : transport léger, **testable par cassette HTTP**, auth par **clé d'API**
 (``GOOGLE_VISION_API_KEY``). Implémente le ``Module`` Protocol **directement** ;
-``httpx`` est l'extra ``cinoc[google]``, importé **paresseusement** dans
+``httpx`` (dépendance de base) est importé **paresseusement** dans
 ``_invoke_google_vision`` (mockable, CI sans clé ni réseau).
 
 Sortie : ``fullTextAnnotation.text`` de ``DOCUMENT_TEXT_DETECTION`` — le texte
@@ -75,12 +75,7 @@ def _invoke_google_vision(
     *query string* (jamais journalisée : les messages d'erreur ne portent que le
     statut). ``httpx`` paresseux : importer ce module n'exige pas l'extra.
     """
-    try:
-        import httpx
-    except ImportError as exc:
-        raise AdapterStepError(
-            "google_vision : httpx non installé (pip install 'cinoc[google]')."
-        ) from exc
+    import httpx
     content = b64encode(Path(image_path).read_bytes()).decode("ascii")
     body = {
         "requests": [

@@ -4,8 +4,8 @@ Moteur cloud **first-party**. API **REST** (``httpx``) plutôt que le SDK
 ``azure-ai-documentintelligence`` (lourd, auth credential) : transport léger,
 **testable par cassette HTTP**. Auth par **clé d'abonnement**
 (``AZURE_DOC_INTEL_KEY``) + endpoint de la ressource (``AZURE_DOC_INTEL_ENDPOINT``).
-Implémente le ``Module`` Protocol **directement** ; ``httpx`` est l'extra
-``cinoc[azure]``, importé **paresseusement** (mockable, CI sans clé ni réseau).
+Implémente le ``Module`` Protocol **directement** ; ``httpx`` (dépendance
+de base) est importé **paresseusement** (mockable, CI sans clé ni réseau).
 
 Flux **asynchrone** propre à Azure DI (fidèlement modélisé) : ``POST …:analyze``
 renvoie ``202`` + un en-tête ``Operation-Location`` ; on **sonde** cette URL
@@ -74,12 +74,7 @@ def _invoke_azure_di(
     messages d'erreur ne portent que le statut). ``transport``/``sleep`` injectés
     → cassette **et** sonde déterministes en test (aucune attente réelle).
     """
-    try:
-        import httpx
-    except ImportError as exc:
-        raise AdapterStepError(
-            "azure_di : httpx non installé (pip install 'cinoc[azure]')."
-        ) from exc
+    import httpx
     content = b64encode(Path(image_path).read_bytes()).decode("ascii")
     analyze_url = endpoint.rstrip("/") + _ANALYZE_PATH
     with httpx.Client(

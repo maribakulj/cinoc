@@ -435,3 +435,38 @@ def test_run_result_carries_sorted_usage(
         u.usage.duration_seconds is not None and u.usage.duration_seconds >= 0.0
         for u in result.usage
     )
+
+
+def test_a_secret_kwarg_never_leaves_the_run(tmp_path: Path) -> None:
+    """Un jeton passé à un module ne sort ni dans le JSON ni dans le rapport.
+
+    Défaut réel (D-260) : le jeton du segmenteur distant entrait dans
+    ``adapter_kwargs``, que le manifeste recopiait et que la section
+    « composition » affichait en clair. Le manifeste garde le fait qu'un
+    secret a été fourni, jamais sa valeur.
+    """
+    from cinoc.reports.renderer import default_report_renderer
+
+    (tmp_path / "doc1.eng.txt").write_text("abxd", encoding="utf-8")
+    (tmp_path / "doc1.gt.txt").write_text("abcd", encoding="utf-8")
+    document = DocumentRef(
+        id="doc1",
+        image_uri=str(tmp_path / "doc1.png"),
+        ground_truths=(
+            GroundTruthRef(
+                type=ArtifactType.RAW_TEXT, uri=str(tmp_path / "doc1.gt.txt")
+            ),
+        ),
+    )
+    secret = "hf_NEPASFUIRxyz123"
+    spec = RunSpec(
+        corpus=CorpusSpec(name="c", documents=(document,)),
+        pipelines=(_pipeline("eng", "eng"),),
+        evaluation=EvaluationSpec(views=(TEXT_VIEW,)),
+        adapter_kwargs={"precomputed:eng": {"source_label": "eng", "token": secret}},
+    )
+    result = run(spec, registry=_registry(), code_version="test")
+
+    assert result.manifest.adapter_kwargs["precomputed:eng"]["token"] == "<secret>"
+    assert secret not in result.model_dump_json()
+    assert secret not in default_report_renderer().render(result)

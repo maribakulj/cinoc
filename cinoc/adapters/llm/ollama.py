@@ -66,12 +66,7 @@ def _invoke_ollama(  # pragma: no cover -- réseau (serveur ollama ; cf. marqueu
     control: RunControl,
     image_b64: str | None = None,
 ) -> LLMCompletion:
-    try:
-        import httpx  # type: ignore[import-not-found]
-    except ImportError as exc:
-        raise AdapterStepError(
-            "ollama : httpx non installé (pip install 'cinoc[ollama]')."
-        ) from exc
+    import httpx
     # L'image voyage dans un tableau ``images`` **du message**, en base64 nu —
     # pas d'URI ``data:``, pas de type de média : ollama ne suit pas la
     # convention d'OpenAI ici, et un ``data:`` passé tel quel est ignoré en
@@ -121,10 +116,8 @@ def list_installed_models(
     Aucune exception propagée. Le ``name`` renvoyé est le **tag exact** servable à
     ``/api/generate`` (ex. ``gemma3:1b`` ou ``hf.co/…/churro-3B-GGUF:Q4_K_M``).
     """
-    try:
-        import httpx  # type: ignore[import-not-found]
-    except ImportError:
-        return ()
+    import httpx
+
     try:
         with httpx.Client(timeout=timeout) as client:
             response = client.get(f"{host}/api/tags")

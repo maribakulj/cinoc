@@ -27,14 +27,16 @@ cer:
 cer_diplo:
   title: "CER diplomatique"
   definition: >-
-    CER calculé sans aucune normalisation graphique : les variantes
-    historiques (s long ſ, u/v, ligatures) sont comptées comme distinctes.
+    CER calculé après une normalisation minimale appliquée des deux côtés :
+    forme Unicode NFC, s long ſ replié en s, caractères invisibles retirés.
+    Les autres variantes historiques (u/v, ligatures) restent distinctes.
   measures: >-
-    La fidélité à la graphie exacte du témoin, telle qu'attendue dans une
-    édition diplomatique de document patrimonial.
+    La fidélité à la graphie du témoin, sans pénaliser le seul choix ſ/s
+    ni une différence d'encodage Unicode invisible à l'œil.
   limits: >-
-    Plus sévère que le CER normalisé ; à ne comparer qu'entre moteurs
-    évalués sur la même vérité terrain diplomatique.
+    Moins sévère que le CER brut, pas plus : l'écart entre les deux mêle
+    l'effet NFC, l'effet ſ et le nettoyage des invisibles. À ne comparer
+    qu'entre moteurs évalués sur la même vérité terrain.
 
 wer:
   title: "WER — taux d'erreur mot"
@@ -52,21 +54,22 @@ wer:
 mer:
   title: "MER — match error rate"
   definition: >-
-    Rapport entre le nombre d'opérations d'édition et la longueur de
-    l'alignement (référence + insertions), borné entre 0 et 1.
+    Au niveau du mot : (S+D+I)/(H+S+D+I), rapport entre les opérations
+    d'édition et la longueur de l'alignement des mots, borné entre 0 et 1.
   measures: >-
-    La part de l'alignement caractère qui n'est pas une correspondance
-    exacte ; variante bornée du CER.
+    La part de l'alignement mot-à-mot qui n'est pas une correspondance
+    exacte ; variante bornée du WER.
   limits: >-
-    Proche du CER sur texte propre ; diverge surtout en présence de longues
-    insertions/suppressions.
+    Proche du WER sur texte propre ; diverge surtout en présence de longues
+    insertions. Pour sa variante caractère, voir le cMER.
 
 cmer:
   title: "cMER — match error rate caractère (HIPE)"
   definition: >-
     Match Error Rate au niveau caractère — (S+D+I)/(H+S+D+I) —, borné entre
-    0 et 1. C'est la métrique de classement du benchmark HIPE-OCRepair,
-    calculée sous le profil de normalisation du scorer officiel.
+    0 et 1. C'est la métrique de classement du benchmark HIPE-OCRepair ;
+    elle n'est conforme au scorer officiel que dans une vue au profil
+    « hipe » — sinon elle est calculée sous le profil de la vue.
   measures: >-
     La part de l'alignement caractère qui n'est pas une correspondance
     exacte. Contrairement au CER (rapporté à la seule référence), il reste
@@ -106,8 +109,8 @@ numseq_value:
 del_rate:
   title: "Taux de suppressions"
   definition: >-
-    Part des caractères de la référence absents de l'hypothèse, rapportée à
-    la longueur de référence.
+    Part des mots de la référence absents de l'hypothèse (suppressions de
+    l'alignement au mot), rapportée au nombre de mots de référence.
   measures: >-
     La tendance du moteur à « oublier » du texte (sous-transcription).
   limits: >-
@@ -117,8 +120,9 @@ del_rate:
 ins_rate:
   title: "Taux d'insertions"
   definition: >-
-    Part de caractères présents dans l'hypothèse sans correspondant dans la
-    référence, rapportée à la longueur de référence.
+    Nombre de mots de l'hypothèse sans correspondant dans la référence
+    (insertions de l'alignement au mot), rapporté au nombre de mots de
+    référence.
   measures: >-
     La tendance du moteur à « inventer » du texte (sur-transcription,
     parfois signe d'hallucination LLM).
@@ -129,14 +133,17 @@ ins_rate:
 diacritic_err:
   title: "Erreur sur les diacritiques"
   definition: >-
-    Taux d'erreur restreint aux signes diacritiques (accents, cédilles,
-    brèves…) après isolement de la couche diacritique du texte.
+    Parmi les caractères de la référence qui portent un signe diacritique
+    (accent, cédille, brève…), part substituée ou supprimée dans
+    l'hypothèse. C'est le caractère entier qui est jugé : é lu è compte
+    comme une erreur.
   measures: >-
     La fidélité du moteur à l'accentuation, souvent perdue par les OCR
     entraînés sur du texte moderne.
   limits: >-
-    Non applicable aux écritures sans diacritiques ; dépend de la
-    normalisation Unicode appliquée à la référence.
+    Non applicable aux écritures sans diacritiques. Sensible à la forme
+    Unicode : sans profil de normalisation, un é composé face au même é
+    décomposé compte comme une erreur.
 
 mufi_err:
   title: "Erreur MUFI (caractères médiévaux)"
