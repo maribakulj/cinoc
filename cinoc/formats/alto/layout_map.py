@@ -6,6 +6,11 @@ Première moitié du pont de la tranche segmentation (l'assembleur inverse
 vocabulaire neutre ``CanonicalLayout`` (couche 1) que consomment les métriques
 de structure.
 
+L'unité de mesure ALTO (``MeasurementUnit``) passe dans
+``CanonicalLayout.coordinate_unit`` et en revient : les coordonnées ne sont pas
+converties, et un ALTO ``mm10`` réassemblé sans son unité se lirait en pixels.
+Une unité inconnue (lecture tolérante) est signalée et prise pour des pixels.
+
 Choix de tranche (largeur minimale) : le texte de ligne est la **jointure simple**
 des ``<String>`` (la dé-césure ``HypPart1/HypPart2`` est une affaire de projection
 ``layout → texte``, différée). Les ``id`` de région absents sont **synthétisés**
@@ -15,9 +20,13 @@ appariables.
 
 from __future__ import annotations
 
+import logging
+from typing import get_args
+
 from cinoc.domain.layout import (
     BBox,
     CanonicalLayout,
+    CoordinateUnit,
     Geometry,
     LayoutPage,
     Line,
@@ -38,7 +47,11 @@ from cinoc.formats.alto.types import (
     AltoTextBlock,
 )
 
+logger = logging.getLogger(__name__)
+
 _NON_TEXT_TYPES = frozenset({"illustration", "graphical"})
+
+_UNITS: frozenset[str] = frozenset(get_args(CoordinateUnit))
 
 
 class _Counter:
@@ -132,11 +145,22 @@ def _page(page: AltoPage, counter: _Counter) -> LayoutPage:
     )
 
 
+def _unit(document: AltoDocument) -> CoordinateUnit:
+    unit = document.measurement_unit
+    if unit is None:
+        return "pixel"
+    if unit not in _UNITS:
+        logger.warning("[alto] unité de mesure %r inconnue, lue comme pixel", unit)
+        return "pixel"
+    return unit  # type: ignore[return-value]  # membre de CoordinateUnit, vérifié
+
+
 def alto_to_layout(document: AltoDocument) -> CanonicalLayout:
     """Projette un ``AltoDocument`` parsé vers le ``CanonicalLayout`` neutre."""
     counter = _Counter()
     return CanonicalLayout(
-        pages=tuple(_page(page, counter) for page in document.pages)
+        pages=tuple(_page(page, counter) for page in document.pages),
+        coordinate_unit=_unit(document),
     )
 
 
@@ -185,24 +209,36 @@ def _alto_line(line: Line) -> AltoLine:
     )
 
 
+def _declared(region_type: str | None, default: str) -> str | None:
+    """Le type à écrire : aucun si c'est celui que la lecture prête par défaut.
+
+    ``alto_to_layout`` nomme ``text`` un ``TextBlock`` sans type ; le réécrire
+    ferait dire à l'ALTO assemblé ce que la source ne disait pas.
+    """
+    return None if region_type == default else region_type
+
+
 def _alto_block(region: Region) -> AltoBlock:
     bbox = _alto_bbox(region.geometry)
     polygon = _alto_polygon(region.geometry)
     if region.regions:
         return AltoComposedBlock(
             id=region.id,
-            block_type=region.region_type,
+            block_type=_declared(region.region_type, "composed"),
             bbox=bbox,
             polygon=polygon,
             blocks=tuple(_alto_block(child) for child in region.regions),
         )
     if region.region_type in _NON_TEXT_TYPES and not region.lines:
         return AltoIllustration(
-            id=region.id, block_type=region.region_type, bbox=bbox, polygon=polygon
+            id=region.id,
+            block_type=_declared(region.region_type, "illustration"),
+            bbox=bbox,
+            polygon=polygon,
         )
     return AltoTextBlock(
         id=region.id,
-        block_type=region.region_type,
+        block_type=_declared(region.region_type, "text"),
         bbox=bbox,
         polygon=polygon,
         lines=tuple(_alto_line(line) for line in region.lines),
@@ -229,7 +265,10 @@ def _alto_page(page: LayoutPage) -> AltoPage:
 
 def layout_to_alto(layout: CanonicalLayout) -> AltoDocument:
     """Assemble un ``CanonicalLayout`` (rempli) en ``AltoDocument`` sérialisable."""
-    return AltoDocument(pages=tuple(_alto_page(page) for page in layout.pages))
+    return AltoDocument(
+        pages=tuple(_alto_page(page) for page in layout.pages),
+        measurement_unit=layout.coordinate_unit,
+    )
 
 
 __all__ = ["alto_to_layout", "layout_to_alto"]

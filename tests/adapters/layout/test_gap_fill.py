@@ -70,6 +70,14 @@ def test_a_block_the_detector_missed_is_recovered() -> None:
     assert textes == ["en haut", "oublié"]
 
 
+def test_the_completed_layout_keeps_its_coordinate_unit() -> None:
+    detecte = _layout(_region("r1", 0, 0)).model_copy(
+        update={"coordinate_unit": "mm10"}
+    )
+    complete, _ = combler(detecte, _layout(_region("f2", 0, 500)), seuil=0.5)
+    assert complete.coordinate_unit == "mm10"
+
+
 def test_a_block_already_read_is_not_duplicated() -> None:
     """Sans ce contrôle, chaque page verrait son texte doublé."""
     detecte = _layout(_region("r1", 0, 0, texte="lu"))

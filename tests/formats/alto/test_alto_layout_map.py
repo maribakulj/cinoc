@@ -16,7 +16,7 @@ from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.documents import DocumentRef, GroundTruthRef
 from cinoc.domain.evaluation import EvaluationSpec, EvaluationView
-from cinoc.domain.layout import BBox
+from cinoc.domain.layout import BBox, CanonicalLayout, LayoutPage, Line, Region
 from cinoc.domain.pipeline import PipelineSpec
 from cinoc.domain.run import RunManifest
 from cinoc.evaluation.registry import MetricRegistry, register_default_metrics
@@ -56,7 +56,9 @@ def _doc(*blocks: AltoTextBlock, width: int = 100, height: int = 50) -> AltoDocu
 def test_maps_regions_lines_words_and_order() -> None:
     doc = _doc(
         _block(
-            "b1", "hello", "world",
+            "b1",
+            "hello",
+            "world",
             bbox=AltoBBox(hpos=1, vpos=2, width=3, height=4),
         ),
         _block("b2", "second", "block"),
@@ -110,6 +112,51 @@ def test_layout_to_alto_round_trips_region_text() -> None:
     rebuilt = alto_to_layout(parse_alto(write_alto(layout_to_alto(source))))
     assert _region_texts(rebuilt) == _region_texts(source)
     assert _region_texts(rebuilt) == ["hello world", "second block"]
+
+
+def test_layout_round_trip_is_lossless_on_bnl_gt() -> None:
+    """ALTO (BNL, ``mm10``) → layout → ALTO → layout : rien ne se perd.
+
+    L'unité n'est pas convertie à la lecture ; la perdre à l'assemblage
+    ferait relire en pixels des dixièmes de millimètre.
+    """
+    path = (
+        Path(__file__).resolve().parents[2]
+        / "fixtures/reference_corpus/bnl_waeschfra/waeschfra_p2_excerpt.alto.xml"
+    )
+    source = alto_to_layout(parse_alto(path.read_bytes()))
+    assert source.coordinate_unit == "mm10"
+    rebuilt = alto_to_layout(parse_alto(write_alto(layout_to_alto(source))))
+    assert rebuilt == source
+
+
+def test_region_types_survive_alto_4() -> None:
+    """``TextBlock@TYPE`` interdit en ALTO 4 : le type passe par ``<Tags>``."""
+    layout = CanonicalLayout(
+        pages=(
+            LayoutPage(
+                regions=(
+                    Region(id="r1", region_type="title", lines=(Line(text="Titre"),)),
+                    Region(id="r2", region_type="text+gapfill"),
+                    Region(id="r3", region_type="text"),
+                ),
+            ),
+        )
+    )
+    data = write_alto(layout_to_alto(layout))
+    assert b"TYPE=" not in data.replace(b"DESCRIPTION=", b"")
+    rebuilt = alto_to_layout(parse_alto(data))
+    assert [r.region_type for r in rebuilt.pages[0].regions] == [
+        "title",
+        "text+gapfill",
+        "text",
+    ]
+
+
+def test_unknown_alto_unit_reads_as_pixel(caplog: pytest.LogCaptureFixture) -> None:
+    doc = _doc(_block("b1", "x")).model_copy(update={"measurement_unit": "cm"})
+    assert alto_to_layout(doc).coordinate_unit == "pixel"
+    assert "inconnue" in caplog.text
 
 
 def test_layout_to_alto_is_octet_stable() -> None:

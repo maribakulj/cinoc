@@ -123,7 +123,7 @@ def combler(
         # étage d'ordre de lecture en aval les replacera ; les intercaler ici
         # sur une intuition de position ferait deux ordres concurrents.
         pages.append(page.model_copy(update={"regions": page.regions + tuple(ajouts)}))
-    return CanonicalLayout(pages=tuple(pages)), rattrapes
+    return principale.model_copy(update={"pages": tuple(pages)}), rattrapes
 
 
 class LayoutGapFiller:

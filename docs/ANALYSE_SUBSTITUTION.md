@@ -133,7 +133,7 @@ l'extra `hipe-oracle`), crowd-kit et LiteLLM hors CI.
 |---|---|---|---|
 | 1 | Segmenteur distant : validation SSRF puis seconde résolution DNS | sécurité | **corrigé** (D-263) |
 | 2 | Auth renvoyée sur redirection vers un autre port / https → http | sécurité | **corrigé** (D-263) |
-| 3 | ALTO et PAGE écrits invalides au XSD officiel | conformité | → P5d item 7 |
+| 3 | ALTO et PAGE écrits invalides au XSD officiel | conformité | ALTO **corrigé** (D-272) ; PAGE → P5d item 7b (S3) |
 | 4 | IIIF v2 : URL du service prise pour l'image (corpus corrompu) | intégrité des données | → P5d item 7 |
 | 5 | IIIF v3 : vignette au lieu de l'image pleine résolution | biais de mesure | → P5d item 7 |
 | 6 | Vote multi-moteurs : pas un ROVER, dépend du nom des sources | justesse | → P5e item 11 |

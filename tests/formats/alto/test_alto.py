@@ -18,7 +18,7 @@ from cinoc.formats.alto import (
     parse_alto,
     write_alto,
 )
-from cinoc.formats.alto.writer import AltoWriteError
+from tests.formats._xsd import alto_errors
 
 _ALTO_V4 = b"""<?xml version="1.0" encoding="UTF-8"?>
 <alto xmlns="http://www.loc.gov/standards/alto/ns-v4#">
@@ -81,7 +81,13 @@ def _rich_doc() -> AltoDocument:
     composed = AltoComposedBlock(
         id="c1", block_type="article", blocks=(text_block, illustration)
     )
-    page = AltoPage(id="p1", width=1000, height=1400, blocks=(composed, graphic))
+    page = AltoPage(
+        id="p1",
+        width=1000,
+        height=1400,
+        physical_img_nr=1,
+        blocks=(composed, graphic),
+    )
     return AltoDocument(pages=(page,), source_version="v4", measurement_unit="pixel")
 
 
@@ -181,13 +187,70 @@ def test_writer_is_deterministic() -> None:
 
 
 def test_roundtrip_empty_document() -> None:
-    doc = AltoDocument(pages=(AltoPage(id="p"),), source_version="v4")
+    doc = AltoDocument(
+        pages=(AltoPage(id="p", physical_img_nr=1),), source_version="v4"
+    )
     assert parse_alto(write_alto(doc)) == doc
 
 
-def test_write_invalid_version_rejected() -> None:
-    with pytest.raises(AltoWriteError):
-        write_alto(_rich_doc(), version="v9")
+def test_rich_document_is_valid_alto_4_4() -> None:
+    assert alto_errors(write_alto(_rich_doc())) == []
+
+
+def test_text_block_type_travels_as_tag_not_type_attribute() -> None:
+    """ALTO 4 interdit ``TextBlock@TYPE`` : le type passe par ``TAGREFS``."""
+    data = write_alto(_rich_doc())
+    assert b'TYPE="paragraph"' not in data
+    assert b'LABEL="paragraph"' in data and b'TAGREFS="BT1"' in data
+    composed = parse_alto(data).pages[0].blocks[0]
+    assert isinstance(composed, AltoComposedBlock)
+    assert composed.block_type == "article"  # ComposedBlock@TYPE reste permis
+    assert isinstance(composed.blocks[0], AltoTextBlock)
+    assert composed.blocks[0].block_type == "paragraph"
+
+
+def test_parse_reads_block_type_from_tagrefs() -> None:
+    """La forme d'eScriptorium : ``OtherTag`` désigné par ``TAGREFS``."""
+    data = b"""<alto xmlns="http://www.loc.gov/standards/alto/ns-v4#">
+      <Tags><OtherTag ID="BT3" LABEL="Main" DESCRIPTION="block type Main"/>
+            <NamedEntityTag ID="NE1" LABEL="Paris"/></Tags>
+      <Layout><Page ID="p" PHYSICAL_IMG_NR="4"><PrintSpace>
+        <TextBlock ID="b" TAGREFS="NE1 BT3"/>
+      </PrintSpace></Page></Layout></alto>"""
+    page = parse_alto(data).pages[0]
+    assert page.physical_img_nr == 4
+    block = page.blocks[0]
+    assert isinstance(block, AltoTextBlock) and block.block_type == "Main"
+
+
+def test_writer_derives_required_attributes_deterministically() -> None:
+    """Ni ``Page@ID``, ni ``PHYSICAL_IMG_NR``, ni ``ID`` de bloc ne manquent.
+
+    Dérivés du rang, hors des identifiants déjà pris (``xsd:ID`` est unique) ;
+    le second passage est un point fixe.
+    """
+    doc = AltoDocument(
+        pages=(
+            AltoPage(blocks=(AltoTextBlock(id="page_1"), AltoTextBlock())),
+            AltoPage(id="p2", physical_img_nr=7),
+        )
+    )
+    data = write_alto(doc)
+    assert alto_errors(data) == []
+    first, second = parse_alto(data).pages
+    assert (first.id, first.physical_img_nr) == ("page_2", 1)
+    assert [b.id for b in first.blocks] == ["page_1", "block_1"]
+    assert (second.id, second.physical_img_nr) == ("p2", 7)
+    assert write_alto(parse_alto(data)) == data
+
+
+def test_unknown_unit_is_not_written(caplog: pytest.LogCaptureFixture) -> None:
+    doc = AltoDocument(
+        pages=(AltoPage(id="p", physical_img_nr=1),), measurement_unit="cm"
+    )
+    data = write_alto(doc)
+    assert b"MeasurementUnit" not in data and alto_errors(data) == []
+    assert "hors ALTO 4" in caplog.text
 
 
 # --- erreurs & sécurité ------------------------------------------------------
