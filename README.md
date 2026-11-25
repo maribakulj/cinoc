@@ -143,13 +143,15 @@ Heavy dependencies are **optional extras** — install only what you use:
 | OpenAI · Anthropic · Mistral · Ollama (LLM/VLM) | `[openai]` `[anthropic]` `[mistral]` `[ollama]` | API key |
 | Google Vision · Azure Document Intelligence | `[google]` `[azure]` | REST, API key |
 | PP‑DocLayout segmenter (local) | `[segment]` | PaddleX + weights |
+| DocLayout‑YOLO segmenter (local) | `[yolo]` | pip only; weights pulled from the Hub on first run |
+| D'AlemBERT quality scorer (selective post‑correction) | `[qe]` | `torch` + `transformers<5` |
 | Image preprocessing | `[images]` | Pillow to decode; the maths are plain numpy |
 | Named‑entity step (NER) | `[ner]` | spaCy + a model (`spacy download …`) |
 | Structured post‑correction (ALTO → ALTO) | `[saknussemm]` | installed from its repository — not on PyPI yet |
 | HuggingFace import / publish | `[huggingface]` | `datasets` + `huggingface_hub` |
 | Real report thumbnails | `[images]` | Pillow (graceful fallback without) |
 
-A remote segmenter needs no local extra — it delegates to a HuggingFace object‑detection endpoint (swap the model by swapping the URL).
+A remote segmenter needs no local model — only `httpx`, shipped with `[serve]` — and delegates to a HuggingFace object‑detection endpoint (swap the model by swapping the URL).
 
 ---
 
