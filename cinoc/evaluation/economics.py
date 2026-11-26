@@ -168,33 +168,34 @@ def _cloud_model_keys(
     """Clés ``kind/modèle`` des étages cloud du pipeline → clé **demandée**, et
     les modèles servis par un serveur **auto-hébergé** déclaré.
 
-    La valeur est la clé du modèle demandé (saisi, sinon défaut de la table) :
-    elle ne sert qu'à reconnaître un servi qui en est l'instantané daté.
+    La valeur est la clé du modèle demandé (saisi) : elle ne sert qu'à
+    reconnaître un servi qui en est l'instantané daté.
 
     Un *kind cloud* (facturé au jeton) = un fournisseur listé dans
-    ``default_models`` de la table — la source datée fait foi (pas de liste
+    ``token_kinds`` de la table — la source datée fait foi (pas de liste
     codée en dur qui dériverait quand la table gagne un fournisseur). Les kinds
     **à la page** vivent dans ``cloud_page_kinds`` (cf. ``_page_rates``) ; le
     reste (``local_kinds``) : temps machine seul.
 
     Modèle : le(s) **servi(s)** quand le manifeste les connaît — plusieurs si un
     alias a changé de cible en cours de run, et le coût devient alors non
-    ventilable —, sinon le **demandé**, sinon le défaut de la table. Une étape
+    ventilable —, sinon le **demandé** ; aucun défaut (D-268) : un manifeste
+    sans modèle donne « tarif inconnu ». Une étape
     à un endpoint hors table : auto-hébergée déclarée → second élément (aucun
     tarif) ; sinon une clé ``kind/modèle @ hôte:port``, absente de la table.
     """
-    defaults = pricing.get("default_models", {})
+    token_kinds = set(pricing.get("token_kinds", ()))
     served = served_models or {}
     keys: dict[str, str] = {}
     self_hosted: set[str] = set()
     for step in spec.steps:
         kind = step.adapter_name.split(":", 1)[0]
-        if kind not in defaults:
+        if kind not in token_kinds:
             continue
         kwargs = adapter_kwargs.get(step.adapter_name, {})
         model = kwargs.get("model")
         if not isinstance(model, str) or not model:
-            model = str(defaults.get(kind, ""))
+            model = ""
         requested = f"{kind}/{model}"
         host = _off_table_endpoint(kind, kwargs, pricing)
         for servi in served.get(step.adapter_name) or (model,):

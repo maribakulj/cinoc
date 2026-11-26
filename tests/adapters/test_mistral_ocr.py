@@ -30,7 +30,7 @@ def _image(tmp_path: Path) -> Artifact:
 
 
 def test_satisfies_module_protocol() -> None:
-    adapter = MistralOCRAdapter(label="ocr")
+    adapter = MistralOCRAdapter(model="m", label="ocr")
     assert isinstance(adapter, Module)
     assert adapter.name == "mistral_ocr:ocr"
     assert adapter.input_types == frozenset({ArtifactType.IMAGE})
@@ -46,7 +46,7 @@ def test_execute_writes_markdown_text(
         "cinoc.adapters.ocr.mistral_ocr._invoke_mistral_ocr",
         lambda **_: {"pages": [{"index": 0, "markdown": "# Page\n\ntexte reconnu"}]},
     )
-    out = MistralOCRAdapter(label="ocr").execute(
+    out = MistralOCRAdapter(model="m", label="ocr").execute(
         {ArtifactType.IMAGE: _image(tmp_path)}, {}, _ctx(tmp_path), RunControl()
     )
     artifact = out.artifacts[ArtifactType.RAW_TEXT]
@@ -56,4 +56,6 @@ def test_execute_writes_markdown_text(
 
 def test_missing_image_raises(tmp_path: Path) -> None:
     with pytest.raises(AdapterStepError):
-        MistralOCRAdapter(label="ocr").execute({}, {}, _ctx(tmp_path), RunControl())
+        MistralOCRAdapter(
+            model="m", label="ocr"
+        ).execute({}, {}, _ctx(tmp_path), RunControl())

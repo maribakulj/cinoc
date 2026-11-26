@@ -198,11 +198,18 @@ def _no_wait(monkeypatch: pytest.MonkeyPatch) -> list[float]:
 
 _LLM_CASES: dict[str, tuple[Callable[[], object], str, str, str]] = {
     # sdk : (adaptateur, cassette, scénario, kwarg de délai à l'appel)
-    "openai": (lambda: OpenAIAdapter(label="g"), "openai", "stop", "timeout"),
-    "anthropic": (
-        lambda: AnthropicAdapter(label="c"), "anthropic", "end_turn", "timeout"
+    "openai": (
+        lambda: OpenAIAdapter(model="m", label="g"), "openai", "stop", "timeout"
     ),
-    "mistralai": (lambda: MistralAdapter(label="m"), "mistral", "stop", "timeout_ms"),
+    "anthropic": (
+        lambda: AnthropicAdapter(model="m", label="c"),
+        "anthropic",
+        "end_turn",
+        "timeout",
+    ),
+    "mistralai": (
+        lambda: MistralAdapter(model="m", label="m"), "mistral", "stop", "timeout_ms"
+    ),
 }
 
 
@@ -250,7 +257,7 @@ def test_the_timeout_is_set_by_the_spec(
     register_default_modules(registry)
     seen: dict[str, list[dict[str, Any]]] = {}
     _install(monkeypatch, seen, {"openai": [wire("llm", "openai", "stop")]})
-    module = registry.build("openai:g", {"label": "g", "timeout": 30})
+    module = registry.build("openai:g", {"model": "m", "label": "g", "timeout": 30})
     module.execute(_raw(tmp_path), {}, _ctx(tmp_path), RunControl())
     (call,) = seen["openai:call"]
     assert 0 < call["timeout"] <= 30.0
@@ -259,11 +266,11 @@ def test_the_timeout_is_set_by_the_spec(
 @pytest.mark.parametrize(
     "build",
     [
-        lambda: OpenAIAdapter(label="g", timeout=0),
-        lambda: OllamaAdapter(label="o", timeout=-1),
+        lambda: OpenAIAdapter(model="m", label="g", timeout=0),
+        lambda: OllamaAdapter(model="m", label="o", timeout=-1),
         lambda: AzureDocIntelAdapter(label="a", timeout=0),
         lambda: GoogleVisionAdapter(label="v", timeout=10_000),
-        lambda: MistralOCRAdapter(label="m", timeout=0),
+        lambda: MistralOCRAdapter(model="m", label="m", timeout=0),
     ],
 )
 def test_an_unbounded_or_null_timeout_is_refused(build: Callable[[], object]) -> None:
@@ -281,7 +288,9 @@ def test_openai_retries_a_429_itself_only_through_cinoc(
     _install(
         monkeypatch, seen, {"openai": [_Status(429), wire("llm", "openai", "stop")]}
     )
-    OpenAIAdapter(label="g").execute(_raw(tmp_path), {}, _ctx(tmp_path), RunControl())
+    OpenAIAdapter(
+        model="m", label="g"
+    ).execute(_raw(tmp_path), {}, _ctx(tmp_path), RunControl())
     assert len(seen["openai:call"]) == 2
     assert len(waits) == 1
 
@@ -432,7 +441,7 @@ def test_mistral_ocr_retries_a_429(
         seen,
         {"mistral_ocr": [_Status(429), wire("ocr", "mistral_ocr", "folio_a")]},
     )
-    output = MistralOCRAdapter(label="m").execute(
+    output = MistralOCRAdapter(model="m", label="m").execute(
         _image(tmp_path), {}, _ctx(tmp_path), RunControl()
     )
     assert len(seen["mistralai:ocr"]) == 2
@@ -477,7 +486,7 @@ def test_ollama_runs_under_a_finite_timeout(
         [],
         timeouts,
     )
-    OllamaAdapter(label="o", host=OLLAMA_HOST).execute(
+    OllamaAdapter(model="m", label="o", host=OLLAMA_HOST).execute(
         _raw(tmp_path), {}, _ctx(tmp_path), RunControl()
     )
     (timeout,) = timeouts
@@ -496,7 +505,7 @@ def test_a_timed_out_ollama_call_is_a_deadline_not_an_engine_fault(
 
     _http_queue(monkeypatch, [slow], [])
     with pytest.raises(DeadlineExceeded) as raised:
-        OllamaAdapter(label="o", host=OLLAMA_HOST, timeout=0.01).execute(
+        OllamaAdapter(model="m", label="o", host=OLLAMA_HOST, timeout=0.01).execute(
             _raw(tmp_path), {}, _ctx(tmp_path), RunControl()
         )
     assert failure_reason(raised.value) == "cancelled"
@@ -529,7 +538,7 @@ def test_a_refused_answer_is_billed_even_though_the_unit_fails(
     body = wire("llm", "anthropic", "refusal")
     _install(monkeypatch, seen, {"anthropic": [body]})
     with pytest.raises(AdapterStepError) as raised:
-        AnthropicAdapter(label="c").execute(
+        AnthropicAdapter(model="m", label="c").execute(
             _raw(tmp_path), {}, _ctx(tmp_path), RunControl()
         )
     billed = raised.value.billed

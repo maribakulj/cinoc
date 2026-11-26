@@ -314,7 +314,7 @@ def create_app(
             public_mode=is_public,
         )
     )
-    app.include_router(build_engines_router())
+    app.include_router(build_engines_router(public_mode=is_public))
     app.include_router(build_corpus_router(corpus_store, public_mode=is_public))
     return app
 

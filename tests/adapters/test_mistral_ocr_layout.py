@@ -174,7 +174,7 @@ def _execute(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, scenario: str) -> 
         "cinoc.adapters.ocr.mistral_ocr._invoke_mistral_ocr",
         lambda **_: _response(scenario),
     )
-    return MistralOCRAdapter(label="ocr").execute(
+    return MistralOCRAdapter(model="m", label="ocr").execute(
         {
             ArtifactType.IMAGE: Artifact(
                 id="d1:img", document_id="d1", type=ArtifactType.IMAGE, uri=str(image)
@@ -192,7 +192,7 @@ def _execute(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, scenario: str) -> 
 def test_version_relevee_les_blocs_sont_demandes() -> None:
     """1.2 : le texte sans syntaxe ; 1.3 : la requête demande les blocs — le
     sidecar et le ``LAYOUT`` changent, une archive 1.2 est ré-exécutée."""
-    assert MistralOCRAdapter(label="ocr").version == "1.3"
+    assert MistralOCRAdapter(model="m", label="ocr").version == "1.3"
 
 
 def test_la_requete_demande_les_blocs_et_le_layout_arrive(
@@ -221,7 +221,7 @@ def test_la_requete_demande_les_blocs_et_le_layout_arrive(
     monkeypatch.setenv("MISTRAL_API_KEY", "sk-test")
     image = tmp_path / "page.png"
     image.write_bytes(b"\x89PNG\r\n\x1a\n")
-    out = MistralOCRAdapter(label="ocr").execute(
+    out = MistralOCRAdapter(model="m", label="ocr").execute(
         {
             ArtifactType.IMAGE: Artifact(
                 id="d1:img", document_id="d1", type=ArtifactType.IMAGE, uri=str(image)

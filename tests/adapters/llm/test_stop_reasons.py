@@ -165,6 +165,22 @@ def _mock_provider(
             def post(self, url: str, json: dict[str, Any]) -> _Reponse:  # noqa: A002
                 return _Reponse()
 
+            # Sonde du digest (``system_binaries`` → ``/api/tags``) : aucun
+            # modèle listé, la sonde rend ``{}``.
+            def __enter__(self) -> _Client:
+                return self
+
+            def __exit__(self, *_: object) -> None: ...
+
+            def get(self, url: str) -> _Tags:
+                return _Tags()
+
+        class _Tags:
+            def raise_for_status(self) -> None: ...
+
+            def json(self) -> dict[str, Any]:
+                return {"models": []}
+
         import httpx
 
         monkeypatch.setattr(httpx, "Client", _Client)

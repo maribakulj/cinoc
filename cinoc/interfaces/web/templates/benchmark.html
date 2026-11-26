@@ -74,6 +74,12 @@
           </select>
         </label>
 
+        <label class="comp-field" data-show="text_only text_and_image">
+          <span class="comp-label">{{ t.bench_ocr_model }}</span>
+          <input id="draft-ocr-model" class="input" type="text"
+                 placeholder="{{ t.bench_ocr_model_ph }}">
+        </label>
+
         <label class="comp-field" data-show="hybrid">
           <span class="comp-label">{{ t.bench_segmenter }}</span>
           <select id="draft-segmenter" class="select">
@@ -188,19 +194,9 @@
           <span class="dropzone-meta">{{ t.bench_alto_hint }}</span>
         </label>
 
-        {# Suggestions canoniques openai/anthropic — peuplée par benchmark.js
-           depuis /api/models/{provider} (avec capacité vision). #}
+        {# Modèles du fournisseur choisi — peuplée par benchmark.js depuis
+           /api/models/{provider}, demandés en direct (vision si déclarée). #}
         <datalist id="api-model-list"></datalist>
-        {% if ollama_models %}
-        <datalist id="ollama-models">
-          {% for m in ollama_models %}<option value="{{ m }}"></option>{% endfor %}
-        </datalist>
-        {% endif %}
-        {% if mistral_models %}
-        <datalist id="mistral-models">
-          {% for m in mistral_models %}<option value="{{ m }}"></option>{% endfor %}
-        </datalist>
-        {% endif %}
 
         <button id="add-competitor" class="btn btn-primary" type="button">+ {{ t.bench_add_competitor }}</button>
       </div>

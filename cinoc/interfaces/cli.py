@@ -205,9 +205,13 @@ def _print_plan(spec: RunSpec) -> int:
     dont le montage ne ferait pas ce qu'il annonce doit être refusée avant le
     premier appel facturé, pas après.
     """
+    from cinoc.app.models import check_spec_models  # noqa: PLC0415
     from cinoc.app.spec_coherence import check  # noqa: PLC0415
 
     check(spec)
+    # Chaque modèle nommé est demandé **en direct** au fournisseur (D13) : un
+    # modèle absent est refusé ; une liste illisible est dite, pas tranchée.
+    notes = check_spec_models(spec, live=True)
     print(f"Corpus     : {spec.corpus.name} — {len(spec.corpus.documents)} document(s)")
     print(f"Pipelines  : {len(spec.pipelines)}")
     for pipeline in spec.pipelines:
@@ -220,6 +224,8 @@ def _print_plan(spec: RunSpec) -> int:
         cible = f" (étape notée : {view.target_step})" if view.target_step else ""
         metriques = ", ".join(view.metric_names) or "(aucune métrique)"
         print(f"  {view.name} — {metriques}{cible}")
+    for note in notes:
+        print(f"Attention  : {note}")
     print("\nSpec valide. Rien n'a été exécuté (--check).")
     return 0
 
@@ -262,9 +268,11 @@ def _run_config(
         return _print_plan(spec)
     # Même contrôle hors ``--check`` : un run lancé sans relecture ne doit pas
     # échapper à ce qu'une relecture aurait refusé.
+    from cinoc.app.models import check_spec_models  # noqa: PLC0415
     from cinoc.app.spec_coherence import check as _coherent  # noqa: PLC0415
 
     _coherent(spec)
+    check_spec_models(spec, live=False)  # aucun modèle par défaut
     resume_store = ResumeStore(Path(resume_dir)) if resume_dir else None
     # Export HIPE = sink d'artefacts (les textes sont lus avant le nettoyage du
     # workspace) — le format JSONL porte les textes, pas les scores.

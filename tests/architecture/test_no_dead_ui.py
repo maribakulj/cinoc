@@ -52,10 +52,12 @@ def test_catalog_engines_are_registered_builders() -> None:
 
 def _competitor(role: str, kind: str) -> Competitor:
     if role == "ocr":
-        return Competitor(engine=kind)
+        return Competitor(engine=kind, model="m")
     if role == "llm":
-        return Competitor(engine="tesseract", mode="text_only", llm=kind)
-    return Competitor(engine="tesseract", mode="text_and_image", llm=kind)  # vlm
+        return Competitor(engine="tesseract", mode="text_only", llm=kind, model="m")
+    return Competitor(
+        engine="tesseract", mode="text_and_image", llm=kind, model="m"
+    )  # vlm
 
 
 def test_every_catalog_option_has_a_working_plan_branch() -> None:
@@ -70,7 +72,7 @@ def test_every_catalog_option_has_a_working_plan_branch() -> None:
 def test_vlm_engines_also_plan_zero_shot() -> None:
     corpus = _corpus()
     for entry in _catalog()["vlm"]:
-        comp = Competitor(engine=str(entry["kind"]), mode="zero_shot")
+        comp = Competitor(engine=str(entry["kind"]), mode="zero_shot", model="m")
         plan_benchmark_run((comp,), corpus, "r")
 
 

@@ -63,14 +63,14 @@ _GT = (
 )
 
 _COMPETITORS = (
-    Competitor(engine="mistral_ocr"),
+    Competitor(model="m", engine="mistral_ocr"),
     Competitor(engine="azure_di"),
     Competitor(engine="google_vision"),
     Competitor(engine="openai", mode="zero_shot", model="gpt-4o-mini"),
     Competitor(engine="anthropic", mode="zero_shot", model="claude-haiku-4-5"),
     Competitor(engine="mistral", mode="zero_shot", model="pixtral-12b"),
     Competitor(engine="ollama", mode="zero_shot", model="qwen2.5vl:3b"),
-    Competitor(
+    Competitor(ocr_model="m",
         engine="mistral_ocr", mode="text_only", llm="openai", model="gpt-4o-mini"
     ),
 )

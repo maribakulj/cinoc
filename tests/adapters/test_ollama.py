@@ -57,7 +57,7 @@ def test_satisfies_module_protocol() -> None:
 
 def test_invalid_label_rejected() -> None:
     with pytest.raises(AdapterStepError):
-        OllamaAdapter(label="bad label")
+        OllamaAdapter(model="m", label="bad label")
 
 
 def test_execute_produces_corrected_text(
@@ -65,7 +65,7 @@ def test_execute_produces_corrected_text(
 ) -> None:
     (tmp_path / "ocr.txt").write_text("Helo wrld", encoding="utf-8")
     _mock(monkeypatch, "Hello world")
-    adapter = OllamaAdapter(label="llama")
+    adapter = OllamaAdapter(model="m", label="llama")
     out = adapter.execute(
         {ArtifactType.RAW_TEXT: _raw_text(tmp_path / "ocr.txt")},
         {},
@@ -80,7 +80,7 @@ def test_execute_produces_corrected_text(
 
 
 def test_requires_workspace() -> None:
-    adapter = OllamaAdapter(label="llama")
+    adapter = OllamaAdapter(model="m", label="llama")
     ctx = RunContext(document_id="doc1", code_version="t", pipeline_name="p")
     with pytest.raises(AdapterStepError):
         adapter.execute(
@@ -89,13 +89,13 @@ def test_requires_workspace() -> None:
 
 
 def test_missing_input_raises(tmp_path: Path) -> None:
-    adapter = OllamaAdapter(label="llama")
+    adapter = OllamaAdapter(model="m", label="llama")
     with pytest.raises(AdapterStepError):
         adapter.execute({}, {}, _ctx(tmp_path), RunControl())
 
 
 def test_cancellation_raises(tmp_path: Path) -> None:
-    adapter = OllamaAdapter(label="llama")
+    adapter = OllamaAdapter(model="m", label="llama")
     control = RunControl()
     control.trigger_cancel()
     with pytest.raises(RunCancelledError):

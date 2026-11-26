@@ -98,7 +98,7 @@ def test_openai(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
             max_retries=0,
         ),
     )
-    module = OpenAIAdapter(label="o", role="zero_shot")
+    module = OpenAIAdapter(model="m", label="o", role="zero_shot")
     artifacts = _run(tmp_path, monkeypatch, "OPENAI_API_KEY", module)
     _check(tmp_path, artifacts, body, seen, lambda n: _completion_from_chat(n).text)
 
@@ -120,7 +120,7 @@ def test_anthropic(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
             max_retries=0,
         ),
     )
-    module = AnthropicAdapter(label="c", role="zero_shot")
+    module = AnthropicAdapter(model="m", label="c", role="zero_shot")
     artifacts = _run(tmp_path, monkeypatch, "ANTHROPIC_API_KEY", module)
     _check(tmp_path, artifacts, body, seen, lambda n: _completion_from_message(n).text)
 
@@ -148,9 +148,9 @@ def test_mistralai(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, ocr: bool) -
         ),
     )
     module: Module = (
-        MistralOCRAdapter(label="m")
+        MistralOCRAdapter(model="m", label="m")
         if ocr
-        else MistralAdapter(label="p", role="zero_shot")
+        else MistralAdapter(model="m", label="p", role="zero_shot")
     )
     read: Callable[[Any], str] = (
         _text_from_response if ocr else (lambda n: _completion_from_chat(n).text)
@@ -188,7 +188,7 @@ def test_mistral_ocr_blocks_reach_the_layout(
             client=httpx2.Client(transport=httpx2.MockTransport(handle)),
         ),
     )
-    module = MistralOCRAdapter(label="m")
+    module = MistralOCRAdapter(model="m", label="m")
     artifacts = _run(tmp_path, monkeypatch, "MISTRAL_API_KEY", module)
     (sent,) = requests
     assert sent["include_blocks"] is True

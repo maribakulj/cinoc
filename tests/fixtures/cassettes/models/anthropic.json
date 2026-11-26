@@ -1,0 +1,23 @@
+{
+  "statut": "construite, au format documenté de GET /v1/models (SDK anthropic 2.14 : ModelInfo.id, display_name, created_at, type ; capabilities, lifecycle, deprecated_at, retires_at, max_input_tokens quand l'API les donne) — deux pages (has_more), à confirmer sur une réponse réelle",
+  "responses": {
+    "page1": {
+      "data": [
+        {"type": "model", "id": "claude-test-haiku-20251001", "display_name": "Test Haiku", "created_at": "2025-10-01T00:00:00Z", "capabilities": {"image_input": {"supported": true}}, "lifecycle": "active", "max_input_tokens": 200000},
+        {"type": "model", "id": "claude-test-ancien-20240229", "display_name": "Test ancien", "created_at": "2024-02-29T00:00:00Z", "capabilities": {"image_input": {"supported": true}}, "lifecycle": "deprecated", "deprecated_at": "2026-06-01T00:00:00Z", "retires_at": "2027-01-05T00:00:00Z"}
+      ],
+      "has_more": true,
+      "first_id": "claude-test-haiku-20251001",
+      "last_id": "claude-test-ancien-20240229"
+    },
+    "page2": {
+      "data": [
+        {"type": "model", "id": "claude-test-nu-20250101", "display_name": "Test sans capacités", "created_at": "2025-01-01T00:00:00Z"}
+      ],
+      "has_more": false,
+      "first_id": "claude-test-nu-20250101",
+      "last_id": "claude-test-nu-20250101"
+    },
+    "retrieve_alias": {"type": "model", "id": "claude-test-haiku-20251001", "display_name": "Test Haiku", "created_at": "2025-10-01T00:00:00Z", "capabilities": {"image_input": {"supported": true}}, "lifecycle": "active"}
+  }
+}

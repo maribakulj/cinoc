@@ -62,29 +62,74 @@ def test_engines_covers_the_three_categories(
     assert "saknussemm" in sortie
 
 
-def test_models_of_one_provider(capsys: pytest.CaptureFixture[str]) -> None:
+def _listing(monkeypatch: pytest.MonkeyPatch, listing: object) -> list[object]:
+    """``available_models`` remplacé : la CLI n'est qu'un transport."""
+    asked: list[object] = []
+
+    def fake(provider: str, settings: object = None, **_: object) -> object:
+        asked.append((provider, settings))
+        return listing
+
+    monkeypatch.setattr("cinoc.interfaces._list_command.available_models", fake)
+    return asked
+
+
+def test_models_are_asked_live_and_say_only_what_is_declared(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from cinoc.app.models import ModelInfo, ModelListing
+
+    _listing(
+        monkeypatch,
+        ModelListing(
+            provider="anthropic",
+            models=(
+                ModelInfo(name="claude-test-a", vision=True, lifecycle="active"),
+                ModelInfo(
+                    name="claude-test-b",
+                    lifecycle="deprecated",
+                    retires_at="2027-01-05T00:00:00Z",
+                ),
+            ),
+        ),
+    )
     assert main(["list", "models", "anthropic"]) == 0
     sortie = capsys.readouterr().out
-    assert "claude" in sortie
-    assert "[vision]" in sortie
+    assert "claude-test-a  [vision]" in sortie
+    # Vision non déclarée : « inconnue », jamais « sans vision ».
+    assert "claude-test-b  [vision inconnue · déprécié · arrêt 2027-01-05" in sortie
+    assert "Aucun modèle par défaut" in sortie
 
 
 def test_models_without_a_provider_lists_them_all(
-    capsys: pytest.CaptureFixture[str],
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    from cinoc.app.models import ModelListing
+
+    asked = _listing(monkeypatch, ModelListing(provider="x", unavailable="hors ligne"))
     assert main(["list", "models"]) == 0
     sortie = capsys.readouterr().out
-    for provider in ("openai", "anthropic", "mistral", "ollama"):
-        assert provider in sortie
+    for provider in ("openai", "anthropic", "mistral", "mistral_ocr", "ollama"):
+        assert f"\n{provider}\n" in sortie
+    assert [p for p, _ in asked] == sorted(p for p, _ in asked)
 
 
-def test_a_provider_without_a_catalogue_says_so(
-    capsys: pytest.CaptureFixture[str],
+def test_an_unavailable_list_says_why(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """``ollama`` n'a pas de catalogue canonique — le dire vaut mieux qu'un vide
-    qui se lirait « ce fournisseur ne marche pas »."""
-    assert main(["list", "models", "ollama"]) == 0
-    assert "aucun modèle canonique" in capsys.readouterr().out
+    """Une liste illisible dit pourquoi — un vide se lirait « aucun modèle »."""
+    from cinoc.app.models import ModelListing
+
+    asked = _listing(
+        monkeypatch,
+        ModelListing(
+            provider="ollama",
+            unavailable="serveur ollama injoignable (http://gpu.lan:11434)",
+        ),
+    )
+    assert main(["list", "models", "ollama", "--host", "http://gpu.lan:11434"]) == 0
+    assert "liste indisponible : serveur ollama injoignable" in capsys.readouterr().out
+    assert asked == [("ollama", {"host": "http://gpu.lan:11434"})]
 
 
 def test_profiles_are_listed(capsys: pytest.CaptureFixture[str]) -> None:

@@ -150,7 +150,7 @@ def test_builds_google_vision_module() -> None:
 
 def test_builds_anthropic_with_role() -> None:
     module = _registry().build(
-        "anthropic:claude", {"label": "claude", "role": "zero_shot"}
+        "anthropic:claude", {"model": "m", "label": "claude", "role": "zero_shot"}
     )
     assert module.name == "anthropic:claude"
     assert module.input_types == frozenset({ArtifactType.IMAGE})
@@ -161,7 +161,7 @@ def test_builds_anthropic_with_role() -> None:
 
 def test_builds_openai_with_vision_role() -> None:
     module = _registry().build(
-        "openai:v", {"label": "v", "role": "text_and_image"}
+        "openai:v", {"model": "m", "label": "v", "role": "text_and_image"}
     )
     assert module.input_types == frozenset(
         {ArtifactType.RAW_TEXT, ArtifactType.IMAGE}

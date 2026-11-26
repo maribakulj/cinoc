@@ -242,7 +242,7 @@ def _shared_writer_spec(tmp_path: Path) -> RunSpec:
         adapter_kwargs={
             "precomputed:engA": {"source_label": "engA"},
             "precomputed:engB": {"source_label": "engB"},
-            "openai:gpt": {"label": "gpt"},
+            "openai:gpt": {"model": "m", "label": "gpt"},
         },
         run_id="t",
     )

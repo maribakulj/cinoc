@@ -69,8 +69,8 @@ def test_no_planned_view_takes_the_native_response(tmp_path: object) -> None:
     )
     spec = plan_benchmark_run(
         (
-            Competitor(engine="mistral_ocr"),
-            Competitor(engine="openai", mode="zero_shot"),
+            Competitor(model="m", engine="mistral_ocr"),
+            Competitor(model="m", engine="openai", mode="zero_shot"),
         ),
         corpus,
         "r",

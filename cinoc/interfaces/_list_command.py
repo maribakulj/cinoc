@@ -2,7 +2,7 @@
 
 **Deuxième transport, zéro logique nouvelle.** Les quatre sondes vivent en
 couche ``app`` — ``engine_statuses`` / ``segmenter_statuses`` / ``ner_status``,
-``provider_models``, ``normalization_profiles``, ``curated_prompts`` — et le web
+``available_models``, ``normalization_profiles``, ``curated_prompts`` — et le web
 les rendait en HTML (page Moteurs, ``<select>`` du composeur, aperçu de
 normalisation). Ce module les rend en texte. Rien d'autre.
 
@@ -24,14 +24,13 @@ from cinoc.app.engines import (
     correction_status,
     curated_prompts,
     engine_statuses,
-    llm_modes,
     ner_status,
     normalization_profiles,
     preprocess_status,
     segmenter_statuses,
     third_party_statuses,
 )
-from cinoc.app.models import provider_models
+from cinoc.app.models import ModelInfo, available_models, model_providers
 from cinoc.app.normalization_preview import preview_normalization
 from cinoc.domain.errors import CinocError
 
@@ -65,23 +64,44 @@ def run_list_engines(args: argparse.Namespace) -> int:
     return 0
 
 
+def _model_line(model: ModelInfo) -> str:
+    """Ce que le fournisseur déclare, et rien d'autre (« inconnue » sinon)."""
+    vision = {True: "vision", False: "sans vision", None: "vision inconnue"}
+    bits = [vision[model.vision]]
+    if model.ocr:
+        bits.append("ocr")
+    if model.lifecycle in ("deprecated", "retired"):
+        bits.append({"deprecated": "déprécié", "retired": "retiré"}[model.lifecycle])
+    if model.deprecated_at:
+        bits.append(f"dépréciation {model.deprecated_at}")
+    if model.retires_at:
+        bits.append(f"arrêt {model.retires_at}")
+    if model.aliases:
+        bits.append(f"alias {', '.join(model.aliases)}")
+    if model.digest:
+        bits.append(f"digest {model.digest[:12]}")
+    return f"  {model.name}  [{' · '.join(bits)}]"
+
+
 def run_list_models(args: argparse.Namespace) -> int:
-    """Modèles canoniques d'un fournisseur — les mêmes suggestions qu'à l'UI."""
-    # Lus sur les adapters : une liste recopiée ici dériverait le jour où un
-    # fournisseur arrive ou perd un mode (cf. le garde-fou des capacités).
-    fournisseurs = (args.provider,) if args.provider else sorted(llm_modes())
+    """Modèles d'un fournisseur, **demandés en direct** — la même fonction que
+    le composeur web (``available_models``). Ollama : les modèles installés."""
+    fournisseurs = (args.provider,) if args.provider else model_providers()
     for provider in fournisseurs:
-        modeles = provider_models(provider)
+        reglages = {"host": args.host} if args.host and provider == "ollama" else {}
+        listing = available_models(provider, reglages)
         print(f"\n{provider}")
-        if not modeles:
-            print(
-                "  (aucun modèle canonique — le champ reste libre ; pour ollama, "
-                "ce sont les modèles réellement tirés en local qui comptent)"
-            )
+        if listing.unavailable is not None:
+            print(f"  liste indisponible : {listing.unavailable}")
             continue
-        for modele in modeles:
-            vision = "  [vision]" if modele.vision else ""
-            print(f"  {modele.name}{vision}")
+        if not listing.models:
+            print("  (aucun modèle)")
+        for modele in listing.models:
+            print(_model_line(modele))
+    print(
+        "\nAucun modèle par défaut : une spec nomme le sien "
+        "(adapter_kwargs.<brique>.model)."
+    )
     return 0
 
 

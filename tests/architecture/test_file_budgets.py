@@ -49,7 +49,9 @@ FILE_BUDGETS: dict[str, int] = {
     # concurrent** (segmenteur → reconnaissance par bloc → texte scoré CER/WER,
     # comparé côte à côte avec un pipeline à plat) — concern benchmark, distinct
     # du run structure autonome. Budget re-basé au courant (~727 LOC) + ~5 %.
-    "app/run_planning.py": 760,
+    # S22 (D-294) : +11 — le modèle du moteur OCR amont d'une chaîne
+    # (``ocr_model``) et le refus d'un concurrent sans modèle, faute de défaut.
+    "app/run_planning.py": 775,
     # Helpers SVG **serveur** déterministes (un par type de graphe : dispersion,
     # Venn, barres, calibration, heatmap, radar, bulles, box plot, camembert,
     # haltère, colonnes groupées, bump). Cohésion d'un même contrat de rendu

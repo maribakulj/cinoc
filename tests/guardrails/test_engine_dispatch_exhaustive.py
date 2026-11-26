@@ -32,7 +32,7 @@ def test_uncabled_ocr_engine_is_refused() -> None:
     # 'mistral' n'est pas un moteur OCR : OCR seul (mode None) refusé, jamais
     # retombé en silence sur tesseract.
     with pytest.raises(RunPlanningError):
-        plan_benchmark_run((Competitor(engine="mistral"),), _corpus(), "r-1")
+        plan_benchmark_run((Competitor(model="m", engine="mistral"),), _corpus(), "r-1")
 
 
 def test_zero_shot_requires_vlm_engine() -> None:
@@ -67,7 +67,9 @@ def test_text_and_image_rejects_a_provider_without_vision(
     )
     with pytest.raises(RunPlanningError, match="indisponible"):
         plan_benchmark_run(
-            (Competitor(engine="tesseract", mode="text_and_image", llm="ollama"),),
+            (Competitor(
+                model="m", engine="tesseract", mode="text_and_image", llm="ollama"
+            ),),
             _corpus(),
             "r-1",
         )
@@ -76,7 +78,9 @@ def test_text_and_image_rejects_a_provider_without_vision(
 def test_a_vision_provider_is_accepted_in_text_and_image() -> None:
     """Le pendant : ce qui déclare la vision doit passer."""
     spec = plan_benchmark_run(
-        (Competitor(engine="tesseract", mode="text_and_image", llm="ollama"),),
+        (Competitor(
+            model="m", engine="tesseract", mode="text_and_image", llm="ollama"
+        ),),
         _corpus(),
         "r-1",
     )(Path("/tmp"))

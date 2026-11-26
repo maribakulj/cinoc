@@ -36,6 +36,7 @@ au lieu de le doubler.
 
 from __future__ import annotations
 
+import logging
 from typing import Any, ClassVar, NoReturn
 
 from cinoc.adapters._native import public_endpoint, served_model
@@ -65,6 +66,12 @@ from cinoc.adapters.llm._base import (
     validate_llm_label,
     validate_role,
 )
+from cinoc.adapters.llm._listing import (
+    ModelInfo,
+    ModelListingError,
+    declared_text,
+    require_model,
+)
 from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.deadline import Deadline
 from cinoc.domain.errors import AdapterStepError, DeadlineExceeded
@@ -73,12 +80,13 @@ from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
 
+logger = logging.getLogger(__name__)
+
 #: 2 : ``options`` explicites (``temperature``, ``seed``, ``num_predict``,
 #: ``num_ctx``) et ``done_reason`` lu — une sortie peut changer.
 #: 2.1 : la réponse native est publiée en sidecar (``NATIVE_JSON``) ; le texte
 #: ne change pas.
 _VERSION = "2.1"
-_DEFAULT_MODEL = "llama3"
 
 _DEFAULT_HOST = "http://localhost:11434"
 #: Fenêtre de contexte demandée au serveur : la sortie (``max_tokens`` = 8 192)
@@ -215,15 +223,47 @@ def _never_retry(exc: BaseException) -> bool:
     return False
 
 
-def list_installed_models(
-    host: str = _DEFAULT_HOST, *, timeout: float = 3.0
-) -> tuple[str, ...]:
-    """Noms des modèles installés sur le serveur ollama (``GET /api/tags``).
+def same_model(asked: str, listed: str) -> bool:
+    """``asked`` désigne-t-il ``listed`` ? Ollama lit un nom sans tag comme
+    ``:latest`` (``llama`` = ``llama:latest``) ; rien d'autre n'est rapproché."""
+    return asked == listed or (":" not in asked and listed == f"{asked}:latest")
 
-    **Best-effort, commodité d'UI** : serveur injoignable, ``httpx`` absent ou
-    réponse inattendue → ``()`` (l'interface retombe alors sur la saisie libre).
-    Aucune exception propagée. Le ``name`` renvoyé est le **tag exact** servable à
-    ``/api/generate`` (ex. ``gemma3:1b`` ou ``hf.co/…/churro-3B-GGUF:Q4_K_M``).
+
+def model_from_tag(item: object, show: object = None) -> ModelInfo | None:
+    """Un élément de ``GET /api/tags`` (+ ``POST /api/show`` éventuel) → modèle.
+    **Pur.**
+
+    ``digest`` = l'empreinte des poids : c'est **elle** qui identifie le modèle
+    (un tag se réaffecte par ``ollama pull``). Vision = ``"vision"`` parmi les
+    ``capabilities`` déclarées — par ``/api/tags`` (versions récentes), sinon
+    par ``/api/show`` ; ni l'un ni l'autre → inconnue.
+    """
+    if not isinstance(item, dict):
+        return None
+    name = declared_text(item.get("name"))
+    if name is None:
+        return None
+    caps = item.get("capabilities")
+    if not isinstance(caps, list) and isinstance(show, dict):
+        caps = show.get("capabilities")
+    return ModelInfo(
+        name=name,
+        vision=("vision" in caps) if isinstance(caps, list) else None,
+        digest=declared_text(item.get("digest")),
+    )
+
+
+def list_models(
+    host: str = _DEFAULT_HOST,
+    *,
+    timeout: float = 3.0,
+    capabilities: bool = True,
+) -> tuple[ModelInfo, ...]:
+    """Les modèles **installés** sur le serveur Ollama (``GET /api/tags``),
+    avec leur digest ; capacités par ``/api/show`` quand ``/api/tags`` ne les
+    donne pas (``capabilities=False`` : le digest seul, un appel). Serveur
+    injoignable ou réponse illisible → ``ModelListingError``. Le nom est le
+    **tag exact** servable à ``/api/chat``.
     """
     import httpx
 
@@ -232,16 +272,30 @@ def list_installed_models(
             response = client.get(f"{host}/api/tags")
             response.raise_for_status()
             data = response.json()
-    except (httpx.HTTPError, ValueError):
-        return ()
-    models = data.get("models") if isinstance(data, dict) else None
-    if not isinstance(models, list):
-        return ()
-    return tuple(
-        m["name"]
-        for m in models
-        if isinstance(m, dict) and isinstance(m.get("name"), str)
-    )
+            items = data.get("models") if isinstance(data, dict) else None
+            if not isinstance(items, list):
+                raise ModelListingError(f"{public_endpoint(host)} : réponse illisible")
+            found: list[ModelInfo] = []
+            for item in items:
+                show = None
+                if (
+                    capabilities
+                    and isinstance(item, dict)
+                    and not isinstance(item.get("capabilities"), list)
+                ):
+                    reply = client.post(
+                        f"{host}/api/show", json={"model": item.get("name")}
+                    )
+                    show = reply.json() if reply.is_success else None
+                model = model_from_tag(item, show)
+                if model is not None:
+                    found.append(model)
+    except (httpx.HTTPError, ValueError) as exc:
+        raise ModelListingError(
+            f"serveur ollama injoignable ({public_endpoint(host)}) : "
+            f"{type(exc).__name__}"
+        ) from exc
+    return tuple(sorted(found, key=lambda m: m.name))
 
 
 class OllamaAdapter:
@@ -265,7 +319,7 @@ class OllamaAdapter:
         self,
         *,
         label: str,
-        model: str = _DEFAULT_MODEL,
+        model: str,
         host: str = _DEFAULT_HOST,
         role: str = "text_only",
         prompt: str | None = None,
@@ -287,7 +341,7 @@ class OllamaAdapter:
                 f"reçu {num_ctx!r}."
             )
         self._num_ctx = num_ctx
-        self._model = model
+        self._model = require_model(model, "OllamaAdapter")
         self._host = host
         self._role: PipelineMode = validate_role(
             role, "OllamaAdapter", self.SUPPORTED_MODES
@@ -303,6 +357,31 @@ class OllamaAdapter:
     @property
     def version(self) -> str:
         return _VERSION
+
+    def system_binaries(self) -> dict[str, str]:
+        """Le **digest** des poids servis sous ce tag (``/api/tags``), sondé
+        une fois avant la première page : au manifeste
+        (``system_binaries_lock``) et dans la clé d'unité. Un tag se réaffecte
+        (``ollama pull``) : deux digests sont deux modèles, et une archive d'un
+        autre digest est ré-exécutée, pas relue. Relu de l'archive hors ligne.
+
+        Best-effort comme le binaire de Tesseract : serveur injoignable ou
+        modèle absent → ``{}`` (l'unité échouera alors en le nommant).
+        """
+        try:
+            models = list_models(self._host, capabilities=False)
+        except ModelListingError as exc:
+            logger.warning("[ollama] digest de %s non lu : %s", self._model, exc)
+            return {}
+        for listed in models:
+            if same_model(self._model, listed.name) and listed.digest:
+                return {f"ollama:{listed.name}": listed.digest}
+        logger.warning(
+            "[ollama] %s absent du serveur %s : digest non lu.",
+            self._model,
+            public_endpoint(self._host),
+        )
+        return {}
 
     def effective_settings(self) -> EffectiveSettings:
         """Réglages **effectifs** (défauts compris) : manifeste et empreinte.
@@ -378,4 +457,4 @@ class OllamaAdapter:
         )
 
 
-__all__ = ["OllamaAdapter"]
+__all__ = ["OllamaAdapter", "list_models", "model_from_tag", "same_model"]

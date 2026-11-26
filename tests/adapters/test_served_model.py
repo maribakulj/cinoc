@@ -98,7 +98,7 @@ def test_mistral_ocr_declares_the_served_model(
     )
     image = tmp_path / "p.png"
     image.write_bytes(b"\x89PNG")
-    output = MistralOCRAdapter(label="m").execute(
+    output = MistralOCRAdapter(model="m", label="m").execute(
         {ArtifactType.IMAGE: Artifact(
             id="i", document_id="d", type=ArtifactType.IMAGE, uri=str(image)
         )},
@@ -107,8 +107,8 @@ def test_mistral_ocr_declares_the_served_model(
         RunControl(),
     )
     assert output.served_models == ("mistral-ocr-2505",)
-    assert MistralOCRAdapter(label="m").effective_settings() == {
-        "model": "mistral-ocr-latest"
+    assert MistralOCRAdapter(model="m", label="m").effective_settings() == {
+        "model": "m"
     }
 
 

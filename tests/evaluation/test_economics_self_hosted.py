@@ -36,7 +36,7 @@ _PRICING = {
     "cloud_models": {
         "openai/gpt-4o-mini": {"input_eur_per_mtok": 0.20, "output_eur_per_mtok": 0.60}
     },
-    "default_models": {"openai": "gpt-4o-mini"},
+    "token_kinds": ["openai"],
     "endpoints": {"openai": _OPENAI},
 }
 
@@ -130,4 +130,4 @@ def test_the_packaged_table_names_the_endpoint_its_prices_apply_to() -> None:
     table = load_pricing()
     assert table["endpoints"]["openai"] == _OPENAI
     assert table["endpoints"]["anthropic"] == "https://api.anthropic.com"
-    assert set(table["endpoints"]) <= set(table["default_models"])
+    assert set(table["endpoints"]) <= set(table["token_kinds"])
