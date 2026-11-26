@@ -1261,7 +1261,11 @@ table.data a { color: var(--fern-deep); font-weight: 500; }
 }
 
 @media (max-width: 720px) {
-  .app { grid-template-columns: 1fr; }
+  /* `minmax(0, 1fr)` et non `1fr` : une piste `1fr` ne descend pas sous le
+     min-content de ses enfants, et la rangée d'onglets du rail (4 × 136 px)
+     élargissait la page entière à ~640 px sur un téléphone (D-299). */
+  .app { grid-template-columns: minmax(0, 1fr); }
+  .rail, .main { min-width: 0; }
   .rail {
     position: static;
     height: auto;

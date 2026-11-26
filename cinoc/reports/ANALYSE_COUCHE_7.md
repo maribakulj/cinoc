@@ -302,6 +302,8 @@ cinoc/reports/
 
 > **S22 fin (D-294, P5f 8)** : Économie — les cellules « jetons in » / « jetons out » ajoutent sous le total les parties rendues (« dont N lus en cache, N écrits en cache » / « incl. N read from cache… », « dont N de raisonnement » / « incl. N reasoning ») — aucune colonne ni section nouvelle, rien quand le fournisseur ne les rend pas ; la cellule « base » d'un pipeline à jetons de cache non tarifés le dit dans la langue du rapport (« jetons de cache non tarifés : … » / « cache tokens not priced: … »). Preuve : `tests/reports/test_economics_section.py` (3 tests).
 
+> **S27 (D-299)** : sous 720 px, `table.data` défile dans sa boîte (la page ne défile plus en largeur) ; le tableau de la section composition (`class="tbl"`, non stylé) rejoint la forme commune `.table-scroll` + `table.data`. — *preuves : `tests/reports/test_html.py::test_a_wide_table_scrolls_in_its_own_box_on_a_phone`, `test_composition.py::test_the_table_scrolls_inside_its_frame_on_a_narrow_screen` ; navigateur à 390 px (D-299)*
+
 > Tri-état : `[x]` fait **+ preuve** · `[ ]` à faire · `[~]` différé/réserve + raison.
 > Maj dans le **même commit** que le code. **Statut : ✅ T2** — cadre `Section` + assembleur autonome + sections **overview** & **cross_engine** + rapport de **comparaison** (deltas 2 runs) verts. **+ T7 `synthesis`** : section verdict factuel par vue (meilleur pipeline CER · Δ au suivant · significativité `cross_engine`), gatée `requires=("cer",)`, déterministe — **toutes les vues S4 au design désormais livrées**. Différé : importeurs cœur · longitudinal (T7), interactivité client-side.
 

@@ -58,3 +58,13 @@ def test_view_label_passes_through_already_human_names() -> None:
 
 def test_view_label_is_deterministic() -> None:
     assert view_label("text", "fr") == view_label("text", "fr")
+
+
+def test_a_wide_table_scrolls_in_its_own_box_on_a_phone() -> None:
+    """À 390 px, un tableau de dix colonnes élargissait **toute** la page
+    (défilement horizontal du rapport servi, D-299). Sur écran étroit, chaque
+    ``table.data`` défile dans sa propre boîte — la page, jamais."""
+    assert (
+        "@media (max-width:720px){table.data{display:block;overflow-x:auto;"
+        "max-width:100%;}}" in _CSS
+    )

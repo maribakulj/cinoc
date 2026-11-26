@@ -10,8 +10,9 @@ une transcription hybride et une correction d'ALTO sont des recettes
 ``recipes.py`` décrit le langage (rôles, YAML, une recette → un pipeline) ; ce
 module en assemble plusieurs dans un run, et c'est ici que se règlent ce qui
 dépend de la file entière : instances partagées ou distinguées, noms uniques,
-notation commune, et le piège d'un corpus dont la vérité terrain est l'ALTO
-même qu'on corrige.
+notation commune, le piège d'un corpus dont la vérité terrain est l'ALTO
+même qu'on corrige, et ce qu'une file peut **montrer** d'elle-même : jamais un
+secret (:func:`exportable_entries`, D-299).
 """
 
 from __future__ import annotations
@@ -24,13 +25,17 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from cinoc.app.alto_corpus import ground_truth_is_its_own_source
 from cinoc.app.evaluation_views import EvaluationOptions, plan_evaluation
+from cinoc.app.modules.params import secret_names
+from cinoc.app.modules.registry import socle_params
 from cinoc.app.recipes import (
     Recipe,
     RecipeError,
+    RecipeStep,
     Settings,
     plan_from_recipe,
     recipe_by_name,
 )
+from cinoc.app.run_manifest import SECRET_KWARGS
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.errors import CinocError
 from cinoc.domain.pipeline import PipelineSpec, PipelineStep
@@ -61,6 +66,9 @@ class RecipeEntry(BaseModel):
     )
     #: Étapes **facultatives** retenues (``("ner",)``, ``("alto",)``).
     optional: tuple[_Nom, ...] = Field(default=(), max_length=16)
+    #: Secrets **retirés** d'un export (``("seg.token",)``) : à ressaisir avant
+    #: de lancer. Absent quand rien n'a été retiré (D-299).
+    withheld_secrets: tuple[_Nom, ...] | None = Field(default=None, max_length=16)
 
 
 def plan_recipe_run(
@@ -90,8 +98,10 @@ def plan_recipe_run(
     kwargs: Settings = {}
     vus: dict[str, int] = {}
     for rang, entree in enumerate(entries, start=1):
+        recette = recipe_by_name(entree.recipe)
+        _secrets_ressaisis(recette, entree)
         pipeline, reglages = plan_from_recipe(
-            recipe_by_name(entree.recipe),
+            recette,
             choices=entree.choices,
             params=entree.params,
             optional=entree.optional,
@@ -140,6 +150,67 @@ def _source_sans_reference(
                 "ALTO : le correcteur partirait du texte auquel on le compare, "
                 "et le CER vaudrait zéro par construction. Dépose une "
                 "transcription à part (<nom>.gt.txt) à côté de chaque ALTO."
+            )
+
+
+def _secrets_de(recette: Recipe, entree: RecipeEntry, etape: str) -> frozenset[str]:
+    """Réglages secrets de la brique retenue pour ``etape`` : ceux qu'elle
+    déclare (``Param.secret``), plus les noms que tout module garde secrets."""
+    par_id: dict[str, RecipeStep] = {s.id: s for s in recette.steps}
+    step = par_id.get(etape)
+    if step is None:
+        return SECRET_KWARGS
+    brique = entree.choices.get(etape) or recette.brique_de(step)
+    return SECRET_KWARGS | secret_names(socle_params(brique))
+
+
+def exportable_entries(entries: Sequence[RecipeEntry]) -> tuple[RecipeEntry, ...]:
+    """La file **sans ses secrets**, telle qu'elle peut sortir : l'export de
+    configuration aujourd'hui, une recette enregistrée demain.
+
+    Chaque secret retiré est nommé (``withheld_secrets``, ``"étape.réglage"``) :
+    l'import le redemande, le lanceur refuse tant qu'il n'est pas ressaisi. Un
+    marqueur déjà présent est gardé — une entrée importée puis réexportée sans
+    avoir été complétée reste incomplète.
+    """
+    sorties: list[RecipeEntry] = []
+    for entree in entries:
+        recette = recipe_by_name(entree.recipe)
+        retires = set(entree.withheld_secrets or ())
+        params: dict[str, dict[str, object]] = {}
+        for etape, reglages in entree.params.items():
+            secrets = _secrets_de(recette, entree, etape)
+            retires.update(f"{etape}.{nom}" for nom in reglages if nom in secrets)
+            params[etape] = {k: v for k, v in reglages.items() if k not in secrets}
+        sorties.append(
+            entree.model_copy(
+                update={
+                    "params": {k: v for k, v in params.items() if v},
+                    "withheld_secrets": tuple(sorted(retires)) or None,
+                }
+            )
+        )
+    return tuple(sorties)
+
+
+def _secrets_ressaisis(recette: Recipe, entree: RecipeEntry) -> None:
+    """Refuse une entrée dont un secret retiré n'a pas été ressaisi : partir
+    sans lui, ce serait le deviner (vide) ; et le marqueur ne nomme qu'un
+    secret que la brique déclare."""
+    for marque in entree.withheld_secrets or ():
+        etape, _, nom = marque.partition(".")
+        if nom not in _secrets_de(recette, entree, etape) or etape not in {
+            s.id for s in recette.steps
+        }:
+            raise RecipeError(
+                f"recette {recette.name!r} : {marque!r} ne nomme pas un secret "
+                "de la brique retenue (forme attendue : étape.réglage)."
+            )
+        if nom not in entree.params.get(etape, {}):
+            raise RecipeError(
+                f"recette {recette.name!r}, étape {etape!r} : le secret {nom!r} "
+                "a été retiré de la configuration exportée — saisis-le à "
+                "nouveau avant de lancer (il n'est jamais deviné)."
             )
 
 
@@ -258,4 +329,4 @@ def _sans_collision(
     return pipeline.model_copy(update={"steps": tuple(etapes)})
 
 
-__all__ = ["RecipeEntry", "plan_recipe_run", "recipe_entries"]
+__all__ = ["RecipeEntry", "exportable_entries", "plan_recipe_run", "recipe_entries"]

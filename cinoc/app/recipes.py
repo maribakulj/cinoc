@@ -34,6 +34,7 @@ from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.errors import CinocError
 from cinoc.domain.pipeline import INITIAL_STEP_ID, PipelineSpec, PipelineStep
 from cinoc.domain.run_spec import RunSpec
+from cinoc.formats import safe_load_yaml
 
 RECIPES_DIR = Path(__file__).resolve().parent.parent / "recipes"
 
@@ -482,7 +483,7 @@ def spec_for_corpus(document: str, corpus: CorpusSpec, *, run_id: str) -> RunSpe
     qui l'oublierait rouvrirait la porte sans qu'aucun test ne le voie.
     """
     try:
-        brut = yaml.safe_load(document)
+        brut = safe_load_yaml(document)
     except yaml.YAMLError as exc:
         raise RecipeError(f"spec illisible : {exc}") from exc
     if not isinstance(brut, dict):

@@ -180,3 +180,33 @@ def test_the_composer_names_a_setting_its_brick_refuses(
     )
     assert reponse.status_code == 422, reponse.json()
     assert "model" in reponse.json()["detail"]
+
+
+def test_a_replay_brick_without_its_files_is_refused_before_launch(
+    tmp_path: Path,
+) -> None:
+    """``precomputed`` rejoue ``<doc>.<étape>.txt`` : sur un corpus qui n'en a
+    aucun, le job échouait page après page. Refusé d'emblée (422), la brique
+    et le fichier attendu nommés — sans chemin du serveur (D-299)."""
+    client = _client(tmp_path)
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("p1.png", _PNG)
+        zf.writestr("p1.gt.txt", "le soleil")
+    corpus_id = client.post(
+        "/api/corpus",
+        files={"file": ("c.zip", buf.getvalue(), "application/zip")},
+        headers=_CSRF,
+    ).json()["corpus_id"]
+    reponse = client.post(
+        "/api/runs",
+        headers=_CSRF,
+        json={
+            "corpus_id": corpus_id,
+            "entries": [{"recipe": "ocr_simple", "choices": {"ocr": "precomputed"}}],
+        },
+    )
+    assert reponse.status_code == 422, reponse.json()
+    detail = reponse.json()["detail"]
+    assert "precomputed" in detail and "p1.ocr.txt" in detail
+    assert "/" not in detail  # aucun chemin du serveur

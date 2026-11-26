@@ -87,14 +87,16 @@ def get_csp_policy(path: str | None = None) -> str:
     les **empreintes sha256** des scripts statiques inlinés du rapport autonome
     (comparaison, navigation clavier, palette) — l'``'unsafe-inline'`` reste
     **exclu** partout (la CSP reste un contrat ; seuls ces scripts connus, épinglés
-    par hash, peuvent s'exécuter)."""
+    par hash, peuvent s'exécuter). ``font-src`` y admet aussi ``data:`` : le
+    rapport est **un** fichier, ses polices y sont embarquées en ``data:`` ;
+    ``'self'`` seul les bloquait (D-299). La coquille garde ``'self'`` seul."""
     base = _CSP_BASE
     if path is not None and path.startswith("/reports/"):
         from cinoc.reports.embedded import script_csp_hashes
 
         base = base.replace(
             "script-src 'self'", f"script-src 'self' {script_csp_hashes()}"
-        )
+        ).replace("font-src 'self'", "font-src 'self' data:")
     return f"{base}; {_frame_ancestors_directive()}"
 
 

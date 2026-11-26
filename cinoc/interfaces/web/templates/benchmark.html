@@ -96,7 +96,9 @@
         <div class="stack-sub">{{ t.bench_queue_hint }}</div>
       </div>
       <div id="queue-list" class="queue-list"
-           data-no-corpus="{{ t.bench_recipe_no_corpus }}"></div>
+           data-no-corpus="{{ t.bench_recipe_no_corpus }}"
+           data-secret-label="{{ t.bench_secret_label }}"
+           data-secret-missing="{{ t.bench_secret_missing }}"></div>
       <p id="queue-empty" class="empty">{{ t.bench_queue_empty }}</p>
     </div>
   </div>
@@ -157,9 +159,23 @@
       </div>
       <span id="config-feedback" class="dropzone-meta" aria-live="polite"
             data-loaded="{{ t.bench_config_loaded }}"
-            data-invalid="{{ t.bench_config_invalid }}"></span>
+            data-invalid="{{ t.bench_config_invalid }}"
+            data-secrets="{{ t.bench_config_secrets }}"></span>
       <span class="dropzone-meta">{{ t.bench_config_hint }}</span>
     </div>
+    {% if not public_mode %}
+    {# La porte « spec complète » (POST /api/runs/spec) : tout le graphe que la
+       CLI lit en YAML, sur le corpus choisi ci-dessus — fermée en mode public
+       (D-299), d'où l'absence de la zone. #}
+    <div class="panel stack-panel">
+      <label class="label" for="spec-file">{{ t.bench_spec }}</label>
+      <div class="config-io">
+        <label class="btn btn-sm" for="spec-file">{{ t.bench_spec_pick }}</label>
+        <input id="spec-file" type="file" accept=".yaml,.yml,.json,application/json,text/yaml" hidden>
+      </div>
+      <span class="dropzone-meta">{{ t.bench_spec_hint }}</span>
+    </div>
+    {% endif %}
   </div>
 </section>
 
@@ -175,8 +191,18 @@
       <div class="run-line">
         <button id="launch" class="btn btn-primary"
                 data-launching="{{ t.bench_launching }}">{{ t.bench_run }}</button>
+        {# Arrêt : visible le temps d'un run ; POST /api/runs/{id}/cancel
+           (annulation coopérative). #}
+        <button id="run-stop" class="btn" type="button" hidden
+                data-stopping="{{ t.bench_stopping }}"
+                data-late="{{ t.bench_stop_late }}">{{ t.bench_stop }}</button>
         <span class="label">{{ t.bench_status }}</span>
-        <span id="run-status" class="run-status">{{ t.bench_idle }}</span>
+        <span id="run-status" class="run-status" role="status" aria-live="polite"
+              data-state-pending="{{ t.bench_state_pending }}"
+              data-state-running="{{ t.bench_state_running }}"
+              data-state-done="{{ t.bench_state_done }}"
+              data-state-failed="{{ t.bench_state_failed }}"
+              data-state-cancelled="{{ t.bench_state_cancelled }}">{{ t.bench_idle }}</span>
       </div>
 
       <div id="run-progress" class="run-progress" hidden role="status" aria-live="polite">
@@ -190,6 +216,7 @@
 
       <div id="run-result" class="run-result"
            data-open="{{ t.open_report_full }}"
+           data-cancelled="{{ t.bench_cancelled_result }}"
            data-neterror="{{ t.bench_net_error }}"
            data-error-403="{{ t.bench_error_403 }}"
            data-error-404="{{ t.bench_error_404 }}"
@@ -211,6 +238,7 @@
     <div class="queue-main">
       <div class="queue-label"></div>
       <div class="queue-meta"></div>
+      <div class="queue-secrets"></div>
     </div>
     <button class="c-del queue-remove" type="button"
             title="{{ t.bench_remove }}" aria-label="{{ t.bench_remove }}">{{ t.bench_remove }}</button>

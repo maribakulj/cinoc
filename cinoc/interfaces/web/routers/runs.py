@@ -12,11 +12,14 @@ Ordre de garde (``_garder``, le même pour une spec déposée) : brique réserv�
 la CLI → ``403`` ; montage incohérent → ``422`` ; cible hors liste blanche →
 ``403`` ; brique inconnue → ``422`` ; **mode public** hors du socle local et
 gratuit (``PUBLIC_BRICK_KINDS``) → ``403``, avant toute sonde de clé ; modèle ou
-réglage refusé → ``422`` ; brique **indisponible** (binaire, SDK, clé, extra) →
-``409``. Avant elles : corpus introuvable → ``404``, recette mal formée (dont la
-vérité terrain extraite de l'ALTO à corriger) → ``422``.
+réglage refusé, brique de rejeu sans aucun de ses fichiers → ``422`` ; brique
+**indisponible** (binaire, SDK, clé, extra) → ``409``. Avant elles : corpus
+introuvable → ``404``, recette mal formée (dont la vérité terrain extraite de
+l'ALTO à corriger, ou un secret retiré et non ressaisi) → ``422``.
 
-``GET`` restitue l'état ; ``cancel`` déclenche l'annulation coopérative. Écritures
+``GET`` restitue l'état ; ``cancel`` (le bouton « Arrêter ») déclenche l'annulation
+coopérative. La spec complète est fermée en mode public. Un export de
+configuration (``/api/runs/config``) ne porte jamais un secret. Écritures
 protégées **CSRF**. Le ``RunResult`` produit atterrit dans le dossier vitrine.
 """
 
@@ -44,9 +47,16 @@ from cinoc.app.evaluation_views import EvaluationOptions
 from cinoc.app.jobs import JobRunner
 from cinoc.app.models import ModelChoiceError, check_spec_models
 from cinoc.app.modules import ModuleRegistry, register_default_modules
-from cinoc.app.modules.registry import check_spec_settings
+from cinoc.app.modules.registry import (
+    check_replay_sources,
+    check_spec_settings,
+)
 from cinoc.app.recipe_catalog import recipe_catalog
-from cinoc.app.recipe_queue import RecipeEntry, plan_recipe_run
+from cinoc.app.recipe_queue import (
+    RecipeEntry,
+    exportable_entries,
+    plan_recipe_run,
+)
 from cinoc.app.recipes import RecipeError, referenced_kinds, spec_for_corpus
 from cinoc.app.security import HostNotAllowedError, check_endpoint_settings
 from cinoc.app.spec_coherence import SpecCoherenceError
@@ -281,6 +291,9 @@ def build_runs_router(
         # de ``cinoc run --check``, en couche ``app`` (D14 du pilote).
         try:
             check_spec_settings(spec, registre)
+            # Une brique de rejeu sans aucun de ses fichiers : refusée ici,
+            # plutôt qu'un job qui échoue page après page (D-299).
+            check_replay_sources(spec, registre)
         except CinocError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         # La disponibilité se juge **par instance** : une instance ``openai``
@@ -329,7 +342,18 @@ def build_runs_router(
         Le corpus vient du dépôt, jamais de la spec — la règle et sa raison
         vivent en couche ``app`` (``spec_for_corpus``), pour qu'un transport qui
         l'oublierait ne puisse pas rouvrir la porte en silence.
+
+        **Fermée en mode public** (D-299) : une file de recettes est bornée (16
+        entrées), une spec ne l'est pas — un visiteur anonyme y décrirait mille
+        pipelines du socle gratuit. Une instance privée la garde ; la page y
+        dépose un fichier.
         """
+        if public_mode:
+            raise HTTPException(
+                status_code=403,
+                detail="spec complète refusée en mode public : seule une file "
+                "de recettes (bornée) s'exécute ici.",
+            )
         corpus = _corpus_du_depot(payload.corpus_id)
         try:
             spec = spec_for_corpus(
@@ -351,8 +375,18 @@ def build_runs_router(
         l'**import** côté client, qui valide ici le fichier déposé avant de
         repeupler le formulaire — un champ inconnu ou une borne dépassée tombe en
         ``422`` (Pydantic, ``extra="forbid"``), jamais un repeuplement muet.
+
+        C'est aussi **l'export** : la page y fait passer sa file avant de la
+        télécharger, et la forme canonique est **sans secret** — un réglage
+        déclaré secret (le jeton du segmenteur distant) en est retiré et nommé
+        (``withheld_secrets``), pour que l'import le redemande (D-299).
         """
-        return {"config": payload.model_dump(mode="json", exclude_none=True)}
+        try:
+            entries = exportable_entries(payload.entries)
+        except RecipeError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        canonique = payload.model_copy(update={"entries": entries})
+        return {"config": canonique.model_dump(mode="json", exclude_none=True)}
 
     @router.get("/api/runs/{job_id}")
     def get_run(job_id: str) -> dict[str, object]:

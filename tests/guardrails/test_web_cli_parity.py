@@ -50,20 +50,10 @@ from cinoc.interfaces._cli_parser import SUBCOMMANDS
 #: datée, plutôt que tolérée en silence — comme l'a été pendant des mois
 #: l'absence de surface web de la post-correction.
 DETTES: dict[str, str] = {
-    # Des trois routes du composeur ouvert (D-240), jamais appelées par la page
-    # — le défaut qui a fait écrire la troisième clause —, les deux routes de
-    # recettes sont fermées par D-296 (S24). Reste la spec complète.
-    "spec-web": (
-        "P5c item 8 — une zone de dépôt pour une spec complète, ou "
-        "`front-absent` assumé et motivé."
-    ),
-    # Trouvée par la troisième clause **à sa première exécution** : la page
-    # lance un banc mais n'offre aucun moyen de l'arrêter. Plus gênant que les
-    # recettes à l'usage — un banc de trente unités engage des appels facturés.
-    "annulation-web": (
-        "P5c item 8 — un bouton d'arrêt sur le suivi de run, qui appelle la "
-        "route d'annulation déjà servie."
-    ),
+    # Vide depuis D-299 (S27) : `spec-web` (la porte « spec complète » reçoit
+    # une zone de dépôt sur la page d'une instance privée, et se ferme en mode
+    # public) et `annulation-web` (le bouton « Arrêter » du suivi de run) sont
+    # fermées. Le dictionnaire reste pour la prochaine.
 }
 
 #: Route → statut. Trois formes, et trois seulement :
@@ -112,8 +102,10 @@ PARITE: dict[str, str] = {
     "POST /api/runs/config": "cli:run",
     # Le catalogue de recettes (`cinoc list recipes`), et la porte « spec
     # complète » qui donne au web le graphe entier, que la CLI avait déjà par
-    # son YAML. La correction d'un ALTO n'a plus de route à part : c'est la
-    # recette `alto_corrige`, lancée par `POST /api/runs` (D-298).
+    # son YAML — sur une instance privée : fermée en mode public (D-299), où
+    # seule une file bornée s'exécute. La correction d'un ALTO n'a plus de
+    # route à part : c'est la recette `alto_corrige`, lancée par
+    # `POST /api/runs` (D-298).
     "GET /api/recipes": "cli:list",
     "POST /api/runs/spec": "cli:run",
     # L'état d'un job, son annulation et son flux d'événements n'existent que
@@ -239,6 +231,12 @@ PARITE_CLI: dict[str, str] = {
     # `hybrid` et `correct` sont deux recettes (`segmentation_puis_lecture`,
     # `alto_corrige`) lancées par la même fonction que la file de la page.
     "hybrid": "web:POST /api/runs",
+    # `corpus standardize` (D-299) est le seul verbe sans pendant web, et c'est
+    # assumé : il **produit** un dataset curé sur le disque du curateur, que
+    # `scripts/publish_dataset.py` pousse sur HuggingFace (jeton d'écriture,
+    # hors du produit) et que `/library` découvre ensuite. Sur le serveur, il
+    # écrirait un dossier que personne ne pourrait publier. Le verbe
+    # n'appelle aucune route ; la sous-commande garde le statut de ses imports.
     "corpus": "web:POST /api/corpus",
     "list": "web:GET /engines",
     "history": "web:GET /history",
@@ -360,8 +358,15 @@ FRONT: dict[str, str] = {
     "GET /api/recipes": "page:static/js/recipes.js",
     "GET /api/runs/{job_id}": "page:static/js/benchmark.js",
     "GET /api/runs/{job_id}/events": "page:static/js/benchmark.js",
-    "GET /api/segmentation/preview": "page:static/js/benchmark.js",
-    "POST /api/segmentation/run": "page:static/js/benchmark.js",
+    # L'aperçu des régions lit les champs de l'étape de segmentation, que
+    # `recipes.js` rend : il vit avec eux (D-299).
+    "GET /api/segmentation/preview": "page:static/js/recipes.js",
+    "POST /api/segmentation/run": "page:static/js/recipes.js",
+    # « Arrêter » sur le suivi de run (annulation coopérative, `RunControl`),
+    # et la zone de dépôt d'une spec complète — instance privée seulement :
+    # la route est fermée en mode public, la page n'y montre pas la zone.
+    "POST /api/runs/{job_id}/cancel": "page:static/js/benchmark.js",
+    "POST /api/runs/spec": "page:static/js/benchmark.js",
     # --- URL fabriquées côté serveur, dans le HTML qu'on envoie. -------------
     # Ce sont des appels du front tout autant que les précédents : seul change
     # qui écrit l'URL. `segmentation.py` pose `image_href` dans son fragment,
@@ -372,9 +377,6 @@ FRONT: dict[str, str] = {
     "GET /reports/{name}/facsimile/{document_id}": "page:routers/reports.py",
     "GET /reports/{name}/alto.zip": "page:routers/home.py",
     "GET /reports/{name}/bundle.zip": "page:routers/home.py",
-    # --- Dettes : servies, joignables par personne. --------------------------
-    "POST /api/runs/spec": "dette:spec-web",
-    "POST /api/runs/{job_id}/cancel": "dette:annulation-web",
 }
 
 #: Racine du front, pour vérifier qu'un fichier déclaré existe.

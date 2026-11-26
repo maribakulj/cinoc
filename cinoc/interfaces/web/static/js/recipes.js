@@ -10,6 +10,9 @@
  * déclaration de la brique (PARAMS), aucun écrit ici. Une étape facultative
  * (entités nommées, export ALTO) se retient par sa case.
  *
+ * L'aperçu des régions (recette qui segmente) lit le segmenteur et l'adresse
+ * de l'étape : POST /api/segmentation/run, puis GET /api/segmentation/preview.
+ *
  * Le serveur reste la source de vérité : il dit quelles briques tournent ici
  * (disponibilité, mode public) et ce que chacune accepte ; le client n'invente
  * aucune règle, il n'empêche que ce que le serveur refuserait.
@@ -27,6 +30,96 @@
     if (cls) node.className = cls;
     if (text) node.textContent = text;
     return node;
+  }
+
+  // Écriture : JSON + en-tête CSRF (l'aperçu de segmentation).
+  function postJson(url, payload) {
+    var headers = { "Content-Type": "application/json", "X-Cinoc-CSRF": "1" };
+    return fetchJson(url, { method: "POST", headers: headers, body: JSON.stringify(payload) });
+  }
+
+  function fetchJson(url, opts) {
+    return fetch(url, opts).then(function (res) {
+      return res.json().then(
+        function (body) { return { ok: res.ok, status: res.status, body: body }; },
+        function () { return { ok: res.ok, status: res.status, body: {} }; }
+      );
+    });
+  }
+
+  // Aperçu de mise en page (recette qui segmente) : lance une segmentation sur
+  // le corpus choisi, avec le segmenteur et l'adresse de l'étape, et injecte le
+  // SVG des régions (rendu serveur). Un transport, gardé tel quel (D-298) ;
+  // il vit ici parce qu'il lit les champs de l'étape que ce script rend.
+  function wireSegPreview() {
+    var btn = document.getElementById("seg-preview-btn");
+    var container = document.getElementById("seg-preview");
+    if (!btn || !container) return;
+    var status = document.getElementById("seg-preview-status");
+    var corpusSelect = document.getElementById("corpus-select");
+
+    function stepField(step, name) {
+      var field = document.querySelector(
+        '#recipe-steps [data-step="' + step + '"][data-param="' + name + '"]'
+      );
+      return field && field.value.trim();
+    }
+
+    function poll(jobId) {
+      fetchJson("/api/runs/" + encodeURIComponent(jobId)).then(function (res) {
+        var state = res.body && res.body.state;
+        if (state === "done") {
+          // Le sink clé le store par id propre → on lit le dernier layout persisté.
+          fetch("/api/segmentation/preview")
+            .then(function (r) {
+              return r.ok ? r.text() : "";
+            })
+            .then(function (svg) {
+              container.innerHTML = svg;
+              if (status) status.textContent = "";
+              btn.disabled = false;
+            });
+          return;
+        }
+        if (state === "failed" || state === "cancelled" || !res.ok) {
+          if (status) {
+            status.textContent =
+              (res.body && res.body.error) || "HTTP " + res.status;
+          }
+          btn.disabled = false;
+          return;
+        }
+        window.setTimeout(function () {
+          poll(jobId);
+        }, 1500);
+      });
+    }
+
+    btn.addEventListener("click", function () {
+      var corpusId = corpusSelect && corpusSelect.value;
+      if (!corpusId) {
+        if (status) status.textContent = btn.getAttribute("data-no-corpus") || "";
+        return;
+      }
+      var segmenter = document.querySelector('#recipe-steps select[data-role="segmenter"]');
+      var step = segmenter && segmenter.getAttribute("data-step");
+      var payload = { corpus_id: corpusId, segmenter: segmenter ? segmenter.value : "" };
+      if (stepField(step, "endpoint")) payload.endpoint = stepField(step, "endpoint");
+      if (stepField(step, "token")) payload.token = stepField(step, "token");
+      btn.disabled = true;
+      if (status) status.textContent = status.getAttribute("data-running") || "…";
+      postJson("/api/segmentation/run", payload).then(function (res) {
+        if (!res.ok) {
+          if (status) {
+            status.textContent =
+              (res.body && res.body.detail) || "HTTP " + res.status;
+          }
+          btn.disabled = false;
+          return;
+        }
+        poll(res.body.job_id);
+      });
+    });
   }
 
   ready(function () {
@@ -307,7 +400,45 @@
       say("added");
     });
 
-    window.cinocRecipes = { describe: describe };
+    // Un secret retiré à l'export (withheld_secrets) : un champ masqué, marqué
+    // « à ressaisir » tant qu'il est vide. Rempli, il rejoint les réglages de
+    // l'étape et le marqueur tombe ; vidé, le marqueur revient — le serveur
+    // refuse de lancer une entrée marquée, il ne devine jamais un secret.
+    function secretFields(box, entry, marks, caption) {
+      box.textContent = "";
+      marks.forEach(function (mark) {
+        var step = mark.split(".")[0];
+        var name = mark.slice(step.length + 1);
+        var field = el("label", "comp-field queue-secret");
+        field.appendChild(el("span", "comp-label", name + " · " + step + " — " + caption));
+        var input = el("input", "input");
+        input.type = "password";
+        input.autocomplete = "off";
+        input.required = true;
+        var current = ((entry.params || {})[step] || {})[name];
+        input.value = typeof current === "string" ? current : "";
+        input.setAttribute("aria-invalid", input.value ? "false" : "true");
+        input.addEventListener("input", function () {
+          var v = input.value;
+          var left = (entry.withheld_secrets || []).filter(function (m) { return m !== mark; });
+          entry.params = entry.params || {};
+          if (v) {
+            (entry.params[step] = entry.params[step] || {})[name] = v;
+          } else {
+            if (entry.params[step]) delete entry.params[step][name];
+            left.push(mark);
+          }
+          if (left.length) entry.withheld_secrets = left;
+          else delete entry.withheld_secrets;
+          input.setAttribute("aria-invalid", v ? "false" : "true");
+        });
+        field.appendChild(input);
+        box.appendChild(field);
+      });
+    }
+
+    window.cinocRecipes = { describe: describe, secretFields: secretFields };
+    wireSegPreview();
 
     say("loading");
     fetch("/api/recipes?lang=" + lang)

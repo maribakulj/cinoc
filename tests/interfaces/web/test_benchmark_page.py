@@ -278,7 +278,8 @@ def test_the_hybrid_is_a_recipe_with_its_region_preview(tmp_path: Path) -> None:
     hybride = _catalog(tmp_path)["segmentation_puis_lecture"]
     roles = [e["role"] for e in hybride["steps"]]  # type: ignore[attr-defined]
     assert roles[:2] == ["segmenter", "region_recognizer"]
-    assert 'select[data-role="segmenter"]' in _JS.read_text(encoding="utf-8")
+    # L'aperçu lit le segmenteur dans les champs que recipes.js rend (D-299).
+    assert 'select[data-role="segmenter"]' in _RECIPES_JS.read_text(encoding="utf-8")
 
 
 def test_the_page_no_longer_splits_recipes_from_composed_runs(tmp_path: Path) -> None:

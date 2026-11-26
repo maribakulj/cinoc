@@ -48,6 +48,7 @@ from cinoc.interfaces._corpus_command import (
     run_corpus_discover,
     run_corpus_import,
     run_corpus_search,
+    run_corpus_standardize,
 )
 from cinoc.interfaces._correction_command import run_correction, write_variance
 from cinoc.interfaces._list_command import (
@@ -564,11 +565,13 @@ def main(argv: list[str] | None = None) -> int:
             )
         if args.command == "corpus":
             # Sous-arbre : le verbe choisi porte la capacité (importer,
-            # chercher, découvrir) ; argparse a déjà borné les valeurs.
+            # chercher, standardiser, découvrir) ; argparse a déjà borné les valeurs.
             if args.corpus_command == "import":
                 return run_corpus_import(args)
             if args.corpus_command == "search":
                 return run_corpus_search(args)
+            if args.corpus_command == "standardize":
+                return run_corpus_standardize(args)
             return run_corpus_discover(args)
         if args.command == "list":
             sujets = {
