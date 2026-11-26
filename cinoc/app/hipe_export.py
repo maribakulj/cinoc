@@ -20,7 +20,7 @@ import re
 from pathlib import Path
 
 from cinoc.app.orchestrator import ArtifactSink, PipelineOutputs
-from cinoc.domain.artifacts import ArtifactType
+from cinoc.domain.artifacts import ArtifactType, latest_by_type
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.run import RunManifest
 from cinoc.evaluation.representations import load_representation
@@ -35,7 +35,8 @@ def _slug(name: str) -> str:
 def _text_of(
     outputs: PipelineOutputs, pipeline: str, document_id: str, kind: ArtifactType
 ) -> str | None:
-    artifact = outputs.get(pipeline, {}).get(document_id, {}).get(kind)
+    by_step = outputs.get(pipeline, {}).get(document_id, {})
+    artifact = latest_by_type(by_step).get(kind)
     if artifact is None or artifact.uri is None:
         return None
     return str(load_representation(artifact.uri, kind))

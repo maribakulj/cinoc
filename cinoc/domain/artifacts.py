@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from collections.abc import Mapping
 from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -189,4 +190,31 @@ from cinoc.domain.provenance import ProvenanceRecord  # noqa: E402
 Artifact.model_rebuild()
 
 
-__all__ = ["Artifact", "ArtifactType", "compute_content_hash"]
+#: Sorties d'une exécution **étape par étape** : ``{id d'étape: {type: artefact}}``,
+#: dans l'**ordre d'exécution** (les entrées initiales d'abord, sous
+#: ``INITIAL_STEP_ID``). Deux étapes du même type y restent distinctes — c'est
+#: ce qui permet de noter une étape intermédiaire.
+StepArtifacts = Mapping[str, Mapping[ArtifactType, Artifact]]
+
+
+def latest_by_type(by_step: StepArtifacts) -> dict[ArtifactType, Artifact]:
+    """Le **pool** : dernier artefact de chaque type, dans l'ordre d'exécution.
+
+    Ce n'est pas une seconde structure, mais une lecture de ``by_step`` : celle
+    qu'attend une étape sans ``inputs_from`` (« la version la plus récente de
+    chaque type ») et un consommateur qui ne veut que la sortie finale (export
+    ALTO, JSONL HIPE).
+    """
+    pool: dict[ArtifactType, Artifact] = {}
+    for outputs in by_step.values():
+        pool.update(outputs)
+    return pool
+
+
+__all__ = [
+    "Artifact",
+    "ArtifactType",
+    "StepArtifacts",
+    "compute_content_hash",
+    "latest_by_type",
+]

@@ -12,11 +12,12 @@ factory de modules **et** le ``RunManifest`` (reproductibilité).
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from cinoc.domain.corpus import CorpusSpec
-from cinoc.domain.evaluation import EvaluationSpec
-from cinoc.domain.pipeline import PipelineSpec
+from cinoc.domain.errors import CinocError
+from cinoc.domain.evaluation import EvaluationSpec, EvaluationView
+from cinoc.domain.pipeline import PipelineSpec, PipelineStep
 
 
 class RunSpec(BaseModel):
@@ -32,6 +33,50 @@ class RunSpec(BaseModel):
     )
     run_id: str | None = Field(default=None, max_length=256)
     metadata: dict[str, str] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _check_view_targets(self) -> RunSpec:
+        """Chaque vue désigne, dans chaque pipeline, **une** sortie à noter.
+
+        Une cible d'étape (``target_step``) inconnue d'un pipeline est refusée
+        ici, au chargement, plutôt que de rendre une vue vide après un run payé.
+        Une étape visée — nommée, ou à défaut la plus aval qui produit un type
+        candidat — qui **déclare** plusieurs types candidats de la vue est
+        ambiguë : aucune précédence implicite ne tranche plus entre eux.
+        """
+        for view in self.evaluation.views:
+            for pipeline in self.pipelines:
+                step = _scored_step(view, pipeline)
+                if step is None:
+                    continue
+                candidats = sorted(
+                    t.value for t in step.output_types if t in view.candidate_types
+                )
+                if len(candidats) > 1:
+                    raise CinocError(
+                        f"vue {view.name!r} : l'étape {step.id!r} du pipeline "
+                        f"{pipeline.name!r} produit plusieurs types candidats "
+                        f"({', '.join(candidats)}) — restreignez "
+                        "'candidate_types' à celui qui doit être noté."
+                    )
+        return self
+
+
+def _scored_step(view: EvaluationView, pipeline: PipelineSpec) -> PipelineStep | None:
+    """L'étape dont ``view`` note la sortie dans ``pipeline`` (déclarations seules)."""
+    if view.target_step is not None:
+        step = pipeline.step_by_id(view.target_step)
+        if step is None:
+            raise CinocError(
+                f"vue {view.name!r} : cible d'étape {view.target_step!r} inconnue "
+                f"du pipeline {pipeline.name!r} (étapes : "
+                f"{', '.join(s.id for s in pipeline.steps) or 'aucune'})."
+            )
+        return step
+    for step in reversed(pipeline.steps):
+        if any(t in view.candidate_types for t in step.output_types):
+            return step
+    return None
 
 
 __all__ = ["RunSpec"]

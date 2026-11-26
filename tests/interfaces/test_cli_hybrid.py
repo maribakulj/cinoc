@@ -207,12 +207,14 @@ def test_layout_files_are_named_so_they_can_be_replayed(tmp_path: Path) -> None:
     outputs = {
         "seg": {
             "doc/1": {
-                ArtifactType.LAYOUT: Artifact(
-                    id="a1",
-                    document_id="doc/1",
-                    type=ArtifactType.LAYOUT,
-                    uri=str(source),
-                )
+                "ocr": {
+                    ArtifactType.LAYOUT: Artifact(
+                        id="a1",
+                        document_id="doc/1",
+                        type=ArtifactType.LAYOUT,
+                        uri=str(source),
+                    )
+                }
             }
         }
     }

@@ -20,7 +20,7 @@ import shutil
 from pathlib import Path
 
 from cinoc.app.orchestrator import PipelineOutputs
-from cinoc.domain.artifacts import ArtifactType
+from cinoc.domain.artifacts import ArtifactType, latest_by_type
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.documents import DocumentRef
 from cinoc.domain.errors import CinocError
@@ -102,8 +102,8 @@ def write_alto_files(out_dir: Path, outputs: PipelineOutputs) -> list[Path]:
     written: list[Path] = []
     for pipeline_name, by_document in outputs.items():
         pipeline = _safe(pipeline_name)
-        for document_id, artifacts in by_document.items():
-            artifact = artifacts.get(ArtifactType.ALTO_XML)
+        for document_id, by_step in by_document.items():
+            artifact = latest_by_type(by_step).get(ArtifactType.ALTO_XML)
             if artifact is None or artifact.uri is None:
                 continue
             target = out_dir / f"{_safe(document_id)}.{pipeline}.alto.xml"
@@ -132,8 +132,8 @@ def write_layout_files(out_dir: Path, outputs: PipelineOutputs) -> list[Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
     for by_document in outputs.values():
-        for document_id, artifacts in by_document.items():
-            artifact = artifacts.get(ArtifactType.LAYOUT)
+        for document_id, by_step in by_document.items():
+            artifact = latest_by_type(by_step).get(ArtifactType.LAYOUT)
             if artifact is None or artifact.uri is None:
                 continue
             target = out_dir / f"{document_id.replace('/', '_')}.layout.json"

@@ -175,6 +175,8 @@ backlog inexistant. **Aucune logique ne change.**
 
 > **P5e 1 (D-275)** : `usage.py` gagne deux alias `Literal` — `UnitOutcome` (`ok` · `truncated` · `failed`) et `FailureReason` (`engine` · `infrastructure` · `unsupported` · `cancelled`), vocabulaire de l'issue d'une unité produite en couche 4 et transportée en couche 3 (aucune classe neuve) ; `evaluation.py` : `FailurePolicy` + `EvaluationSpec.failure_policy` (`exclude` par défaut, `max_error`) ; `run.py` : `RunManifest.failure_policy` (un agrégat ne se relit pas sans elle). Preuves : `tests/app/test_unit_outcome.py`, `tests/evaluation/test_result.py::test_v2_payload_still_loads_as_ok_units_without_expected`.
 
+> **P5e 1b (D-276)** : `artifacts.py` gagne l'alias `StepArtifacts` (`{id d'étape: {type: artefact}}`, ordre d'exécution, entrées initiales sous `INITIAL_STEP_ID`) et `latest_by_type` (le pool = une lecture de `by_step`, partagée par les couches 3, 4 et 6 — la couche 4 ne peut importer que `domain`) ; `EvaluationView.target_step` (`None` = l'étape la plus aval qui produit un type candidat), omise du JSON quand `None` (sérialiseur *wrap*) ; `RunSpec` refuse au chargement une cible inconnue d'un pipeline du run et une étape visée qui **déclare** plusieurs types candidats (erreur `CinocError`, message nommant vue, étape, pipeline et étapes connues). Preuves : `tests/domain/test_run_spec.py`, `tests/app/test_step_target.py`.
+
 > Tri-état : `[x]` fait **+ preuve** · `[ ]` à faire · `[~]` différé/réserve + raison.
 > Mise à jour dans le **même commit** que le code (règle d'or anti-dérive).
 > **Statut couche 1 : ✅ vert** (vérifié 2026-05-31).

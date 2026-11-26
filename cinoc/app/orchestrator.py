@@ -32,14 +32,13 @@ from cinoc.adapters.layout.crop import crop_region
 from cinoc.app.modules.registry import ModuleRegistry
 from cinoc.app.resume import ResumeStore, unit_key
 from cinoc.app.security import safe_stem
-from cinoc.domain.artifacts import Artifact, ArtifactType
+from cinoc.domain.artifacts import Artifact, ArtifactType, StepArtifacts
 from cinoc.domain.deadline import Deadline
 from cinoc.domain.documents import DocumentRef
 from cinoc.domain.errors import CinocError, RunCancelledError
 from cinoc.domain.pipeline import PipelineSpec
 from cinoc.domain.run import RunManifest, utcnow
 from cinoc.domain.run_spec import RunSpec
-from cinoc.domain.usage import ResourceUsage
 from cinoc.evaluation.archaic import resolve_archaic_list
 from cinoc.evaluation.metrics.archaic import make_air_metric, make_hcpr_metric
 from cinoc.evaluation.registry import MetricRegistry, register_default_metrics
@@ -61,8 +60,10 @@ class OrchestrationError(CinocError):
     """Run impossible à exécuter (document sans image, etc.)."""
 
 
-#: Sorties d'un run, indexées ``pipeline → document → type → artefact``.
-PipelineOutputs = Mapping[str, Mapping[str, Mapping[ArtifactType, Artifact]]]
+#: Sorties d'un run, indexées ``pipeline → document → étape → type → artefact``
+#: (``by_step`` de chaque unité ; le pool d'une unité se lit par
+#: ``latest_by_type``). Une unité en échec n'a aucune étape.
+PipelineOutputs = Mapping[str, Mapping[str, StepArtifacts]]
 #: Sink optionnel d'artefacts : reçoit les sorties **avant** le nettoyage du
 #: workspace (les URI sont encore lisibles). La couche 6 (app) le fournit ;
 #: l'orchestrateur l'invoque sans rien connaître de sa cible (un store, etc.).
@@ -216,10 +217,7 @@ def run(
                 )
                 cached = resume_store.load(key) if resume_store and key else None
                 if cached is not None:
-                    artifacts, cached_usage = cached
-                    results[(pipeline.name, document.id)] = DocumentExecution(
-                        artifacts=dict(artifacts), usage=cached_usage
-                    )
+                    results[(pipeline.name, document.id)] = cached
                     progress.tick()
                 else:
                     pending.append((pipeline, document, key))
@@ -229,7 +227,7 @@ def run(
         #    speedup réel sans sérialiser les artefacts. Un échec isolé d'unité
         #    (`AdapterStepError`/`PipelineStepError`) n'abat pas le banc ; seule
         #    l'annulation (`RunCancelledError`) arrête tout le run.
-        saves: list[tuple[str, Mapping[ArtifactType, Artifact], ResourceUsage]] = []
+        saves: list[tuple[str, DocumentExecution]] = []
         if pending:
             workers = _resolve_workers(max_workers, len(pending))
             with ThreadPoolExecutor(max_workers=workers) as pool:
@@ -272,7 +270,7 @@ def run(
                             continue
                         results[unit] = execution
                         if key is not None:
-                            saves.append((key, execution.artifacts, execution.usage))
+                            saves.append((key, execution))
                         progress.tick()
                 except RunCancelledError:
                     # Annulation coopérative : on cesse de planifier (les unités
@@ -282,18 +280,18 @@ def run(
 
         # 3) Reprise : persistance des unités exécutées (thread principal, post-pool).
         if resume_store is not None:
-            for saved_key, saved_artifacts, saved_usage in saves:
-                resume_store.save(saved_key, saved_artifacts, saved_usage)
+            for saved_key, saved in saves:
+                resume_store.save(saved_key, saved)
 
         # 4) Assemblage **déterministe** : ordre du spec, indépendant de l'ordre
         #    d'achèvement des threads → `RunResult` byte-identique au séquentiel.
-        pipeline_outputs: dict[str, dict[str, dict[ArtifactType, Artifact]]] = {}
+        pipeline_outputs: dict[str, dict[str, StepArtifacts]] = {}
         usage_records: list[DocumentUsage] = []
         for pipeline in spec.pipelines:
-            per_document: dict[str, dict[ArtifactType, Artifact]] = {}
+            per_document: dict[str, StepArtifacts] = {}
             for document in documents:
                 execution = results[(pipeline.name, document.id)]
-                per_document[document.id] = dict(execution.artifacts)
+                per_document[document.id] = execution.by_step
                 usage_records.append(
                     DocumentUsage(
                         document_id=document.id,

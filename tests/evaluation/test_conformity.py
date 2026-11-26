@@ -78,12 +78,14 @@ def _run(tmp_path: Path, views: tuple[EvaluationView, ...]):
     outputs = {
         "eng": {
             "doc1": {
-                ArtifactType.RAW_TEXT: Artifact(
-                    id="doc1:raw",
-                    document_id="doc1",
-                    type=ArtifactType.RAW_TEXT,
-                    uri=str(hyp1),
-                )
+                "ocr": {
+                    ArtifactType.RAW_TEXT: Artifact(
+                        id="doc1:raw",
+                        document_id="doc1",
+                        type=ArtifactType.RAW_TEXT,
+                        uri=str(hyp1),
+                    )
+                }
             }
             # doc2 : aucune sortie → non scoré (n_missing).
         }

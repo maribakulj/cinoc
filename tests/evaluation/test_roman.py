@@ -101,12 +101,14 @@ def _run(tmp_path: Path, gt_text: str, hyp_text: str) -> object:
     outputs = {
         "eng": {
             "doc1": {
-                ArtifactType.RAW_TEXT: Artifact(
-                    id="doc1:raw",
-                    document_id="doc1",
-                    type=ArtifactType.RAW_TEXT,
-                    uri=str(hyp),
-                )
+                "ocr": {
+                    ArtifactType.RAW_TEXT: Artifact(
+                        id="doc1:raw",
+                        document_id="doc1",
+                        type=ArtifactType.RAW_TEXT,
+                        uri=str(hyp),
+                    )
+                }
             }
         }
     }

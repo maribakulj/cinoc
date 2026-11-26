@@ -50,12 +50,14 @@ def _run(tmp_path: Path, analyses: tuple[str, ...] | str | None):
     outputs = {
         "eng": {
             "d": {
-                ArtifactType.RAW_TEXT: Artifact(
-                    id="d:p:raw_text",
-                    document_id="d",
-                    type=ArtifactType.RAW_TEXT,
-                    uri=str(hyp),
-                )
+                "ocr": {
+                    ArtifactType.RAW_TEXT: Artifact(
+                        id="d:p:raw_text",
+                        document_id="d",
+                        type=ArtifactType.RAW_TEXT,
+                        uri=str(hyp),
+                    )
+                }
             }
         }
     }

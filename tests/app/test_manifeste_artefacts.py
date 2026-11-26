@@ -29,6 +29,7 @@ def test_le_store_copie_les_fichiers_hors_du_workspace(tmp_path: Path) -> None:
     """
     from cinoc.domain.artifacts import Artifact, ArtifactType
     from cinoc.domain.usage import ResourceUsage
+    from cinoc.pipeline.types import DocumentExecution
 
     workspace = tmp_path / "workspace"
     workspace.mkdir()
@@ -37,23 +38,26 @@ def test_le_store_copie_les_fichiers_hors_du_workspace(tmp_path: Path) -> None:
     store = ResumeStore(tmp_path / "reprise")
     store.save(
         "cle",
-        {
-            ArtifactType.RAW_TEXT: Artifact(
-                id="d:p:raw_text",
-                document_id="d",
-                type=ArtifactType.RAW_TEXT,
-                uri=str(sortie),
-            )
-        },
-        ResourceUsage(),
+        DocumentExecution(
+            by_step={
+                "ocr": {
+                    ArtifactType.RAW_TEXT: Artifact(
+                        id="d:p:raw_text",
+                        document_id="d",
+                        type=ArtifactType.RAW_TEXT,
+                        uri=str(sortie),
+                    )
+                }
+            },
+            step_usage={"ocr": ResourceUsage()},
+        ),
     )
     # Le workspace disparaît, comme à la fin d'un vrai run.
     shutil.rmtree(workspace)
 
     charge = store.load("cle")
     assert charge is not None
-    artefacts, _ = charge
-    conserve = artefacts[ArtifactType.RAW_TEXT]
+    conserve = charge.by_step["ocr"][ArtifactType.RAW_TEXT]
     assert conserve.uri is not None
     assert Path(conserve.uri).read_text(encoding="utf-8") == "le texte produit"
 

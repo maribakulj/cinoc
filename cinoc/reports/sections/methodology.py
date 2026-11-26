@@ -41,6 +41,12 @@ def _view_block(view: EvaluationView, lang: str) -> str:
         rows += _kv(
             localized(lang, "Description", "Description"), escape(view.description)
         )
+    if view.target_step is not None:
+        # Une vue qui ne note pas la sortie finale doit le dire : sans cette
+        # ligne, deux vues d'un même pipeline sembleraient noter la même chose.
+        rows += _kv(
+            localized(lang, "Étape notée", "Scored step"), escape(view.target_step)
+        )
     rows += _kv(
         localized(lang, "Normalisation", "Normalisation"),
         escape(view.normalization_profile or localized(lang, "aucune", "none")),

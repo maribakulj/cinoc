@@ -119,7 +119,7 @@ def _run(tmp_path: Path, view: EvaluationView) -> object:
     return evaluate_run(
         corpus=CorpusSpec(name="c", documents=(doc,)),
         evaluation=EvaluationSpec(views=(view,)),
-        pipeline_outputs={"seg": {"doc1": {ArtifactType.LAYOUT: hyp}}},
+        pipeline_outputs={"seg": {"doc1": {"ocr": {ArtifactType.LAYOUT: hyp}}}},
         registry=_registry(),
         manifest=_manifest(),
     )

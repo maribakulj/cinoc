@@ -13,9 +13,11 @@ machines). Tout changement (paramètre, code, image) invalide la clé : pas de
 journal d'invalidation, l'adressage par contenu suffit (≠ la source, qui
 journalisait en NDJSON).
 
-L'``usage`` mesuré au run d'origine est restauré avec les artefacts (les
-ressources réellement consommées pour produire le résultat — un coût de
-re-lecture de cache serait un mensonge économique).
+Ce qui est persisté est l'exécution **étape par étape** (``by_step`` + la
+consommation de chaque étape) : une vue qui note une étape intermédiaire se
+note encore sur un run rechargé. L'``usage`` mesuré au run d'origine est
+restauré avec les artefacts (les ressources réellement consommées pour produire
+le résultat — un coût de re-lecture de cache serait un mensonge économique).
 """
 
 from __future__ import annotations
@@ -33,8 +35,14 @@ from cinoc.domain.artifacts import Artifact, ArtifactType, compute_content_hash
 from cinoc.domain.documents import DocumentRef
 from cinoc.domain.pipeline import PipelineSpec
 from cinoc.domain.usage import ResourceUsage
+from cinoc.pipeline.types import DocumentExecution
 
 logger = logging.getLogger(__name__)
+
+#: Version du format de l'index d'une unité. **2** : une entrée par étape
+#: (sorties + consommation), dans l'ordre d'exécution. La 1 (sans ce champ) ne
+#: gardait que le pool et l'usage agrégé ; elle est invalidée, pas convertie.
+CACHE_FORMAT = 2
 
 
 def unit_key(
@@ -89,45 +97,79 @@ class ResumeStore:
         """
         return self._base
 
-    def load(
-        self, key: str
-    ) -> tuple[dict[ArtifactType, Artifact], ResourceUsage] | None:
-        """Artefacts + usage d'une unité, ou ``None`` (absent/corrompu)."""
+    def load(self, key: str) -> DocumentExecution | None:
+        """Exécution d'une unité (sorties + consommation par étape), ou ``None``.
+
+        ``None`` = absente, corrompue, incomplète **ou d'un format antérieur** :
+        un index d'avant :data:`CACHE_FORMAT` ne gardait que le pool (dernier
+        artefact par type) et l'usage agrégé. On n'en déduit pas ``by_step`` —
+        la sortie écrasée d'une étape amont n'y est plus, et la reconstruire
+        serait inventer : l'unité est ré-exécutée, puis réécrite au format courant.
+        """
         index = self._base / key / "index.json"
         try:
             data = json.loads(index.read_bytes())
-            artifacts = {
-                ArtifactType(type_name): Artifact.model_validate(entry)
-                for type_name, entry in data["artifacts"].items()
-            }
-            usage = ResourceUsage.model_validate(data["usage"])
-        except (OSError, ValueError, KeyError, ValidationError):
+        except (OSError, ValueError):
             return None
-        for artifact in artifacts.values():
-            if artifact.uri is not None and not Path(artifact.uri).is_file():
-                return None  # entrée incomplète → ré-exécution
-        return artifacts, usage
+        if not isinstance(data, dict) or data.get("format") != CACHE_FORMAT:
+            logger.info(
+                "[resume] unité %s : cache d'un format antérieur, ré-exécutée.", key
+            )
+            return None
+        try:
+            by_step = {
+                entry["step"]: {
+                    ArtifactType(type_name): Artifact.model_validate(artifact)
+                    for type_name, artifact in entry["artifacts"].items()
+                }
+                for entry in data["steps"]
+            }
+            step_usage = {
+                entry["step"]: ResourceUsage.model_validate(entry["usage"])
+                for entry in data["steps"]
+                if entry["usage"] is not None
+            }
+        except (AttributeError, TypeError, ValueError, KeyError, ValidationError):
+            return None
+        for outputs in by_step.values():
+            for artifact in outputs.values():
+                if artifact.uri is not None and not Path(artifact.uri).is_file():
+                    return None  # entrée incomplète → ré-exécution
+        return DocumentExecution(by_step=by_step, step_usage=step_usage)
 
-    def save(
-        self,
-        key: str,
-        artifacts: Mapping[ArtifactType, Artifact],
-        usage: ResourceUsage,
-    ) -> None:
-        """Persiste fichiers + index ; best-effort (un échec n'abat pas le run)."""
+    def save(self, key: str, execution: DocumentExecution) -> None:
+        """Persiste fichiers + index ; best-effort (un échec n'abat pas le run).
+
+        Une entrée par étape, **dans l'ordre d'exécution** (une liste : l'ordre
+        est ce qui désigne l'étape la plus aval). Les fichiers sont nommés par
+        étape et par type — deux étapes de même type ne s'écrasent plus.
+        """
         unit_dir = self._base / key
         try:
             unit_dir.mkdir(parents=True, exist_ok=True)
-            stored: dict[str, dict[str, object]] = {}
-            for artifact_type, artifact in artifacts.items():
-                entry = artifact
-                if artifact.uri is not None and Path(artifact.uri).is_file():
-                    suffix = Path(artifact.uri).suffix
-                    destination = unit_dir / f"{artifact_type.value}{suffix}"
-                    shutil.copyfile(artifact.uri, destination)
-                    entry = artifact.model_copy(update={"uri": str(destination)})
-                stored[artifact_type.value] = entry.model_dump(mode="json")
-            payload = {"artifacts": stored, "usage": usage.model_dump(mode="json")}
+            steps: list[dict[str, object]] = []
+            for step_id, outputs in execution.by_step.items():
+                stored: dict[str, object] = {}
+                for artifact_type, artifact in outputs.items():
+                    entry = artifact
+                    if artifact.uri is not None and Path(artifact.uri).is_file():
+                        suffix = Path(artifact.uri).suffix
+                        name = f"{step_id}.{artifact_type.value}{suffix}"
+                        destination = unit_dir / name
+                        shutil.copyfile(artifact.uri, destination)
+                        entry = artifact.model_copy(update={"uri": str(destination)})
+                    stored[artifact_type.value] = entry.model_dump(mode="json")
+                usage = execution.step_usage.get(step_id)
+                steps.append(
+                    {
+                        "step": step_id,
+                        "artifacts": stored,
+                        "usage": (
+                            usage.model_dump(mode="json") if usage is not None else None
+                        ),
+                    }
+                )
+            payload = {"format": CACHE_FORMAT, "steps": steps}
             (unit_dir / "index.json").write_text(
                 json.dumps(payload, ensure_ascii=False, sort_keys=True),
                 encoding="utf-8",
@@ -136,4 +178,4 @@ class ResumeStore:
             logger.warning("[resume] persistance dégradée (unité %s) : %s", key, exc)
 
 
-__all__ = ["ResumeStore", "unit_key"]
+__all__ = ["CACHE_FORMAT", "ResumeStore", "unit_key"]

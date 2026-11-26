@@ -12,7 +12,12 @@ from dataclasses import dataclass, field
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from cinoc.domain.artifacts import Artifact, ArtifactType
+from cinoc.domain.artifacts import (
+    Artifact,
+    ArtifactType,
+    StepArtifacts,
+    latest_by_type,
+)
 from cinoc.domain.deadline import Deadline
 from cinoc.domain.errors import CinocError
 from cinoc.domain.usage import FailureReason, ResourceUsage, UnitOutcome
@@ -51,8 +56,13 @@ class StepOutput:
 class DocumentExecution:
     """Résultat de l'exécution d'une pipeline sur **un** document.
 
-    ``artifacts`` est le pool final (dernier artefact par type) ; ``usage``
-    agrège durées et jetons de toutes les étapes (somme ``None``-tolérante).
+    ``by_step`` garde la sortie de **chaque** étape, dans l'ordre d'exécution
+    (entrées initiales d'abord, sous ``INITIAL_STEP_ID``) ; ``step_usage`` la
+    consommation de chacune (durée mesurée par l'exécuteur + jetons remontés).
+    Le pool (``artifacts``, dernier artefact par type) et la consommation totale
+    (``usage``) s'en **déduisent** : une seule structure, deux lectures. Rendre
+    le seul pool laissait deux étapes de même type s'écraser, et l'étape amont
+    devenait inobservable dans le run qui l'avait payée.
 
     ``outcome`` est l'**issue** de l'unité, produite ici et non reconstruite au
     rapport : une unité en échec n'est pas une unité absente. ``failed`` exige
@@ -60,8 +70,8 @@ class DocumentExecution:
     lisible (sans secret — l'appelant qui connaît les secrets la caviarde).
     """
 
-    artifacts: Mapping[ArtifactType, Artifact]
-    usage: ResourceUsage = field(default_factory=ResourceUsage)
+    by_step: StepArtifacts = field(default_factory=dict)
+    step_usage: Mapping[str, ResourceUsage] = field(default_factory=dict)
     outcome: UnitOutcome = "ok"
     reason: FailureReason | None = None
     message: str | None = None
@@ -73,15 +83,28 @@ class DocumentExecution:
                 f"« failed », et elle seule (issue {self.outcome!r}, "
                 f"motif {self.reason!r})."
             )
-        if self.outcome == "failed" and self.artifacts:
+        if self.outcome == "failed" and self.by_step:
             raise CinocError(
                 "DocumentExecution : une unité en échec n'a pas d'artefact."
             )
 
+    @property
+    def artifacts(self) -> dict[ArtifactType, Artifact]:
+        """Le pool : dernier artefact par type (déduit de ``by_step``)."""
+        return latest_by_type(self.by_step)
+
+    @property
+    def usage(self) -> ResourceUsage:
+        """Consommation de l'unité : somme ``None``-tolérante des étapes."""
+        total = ResourceUsage()
+        for step in self.step_usage.values():
+            total = total.merged_with(step)
+        return total
+
     @classmethod
     def failed(cls, reason: FailureReason, message: str) -> DocumentExecution:
         """Unité sans sortie : motif codé + message, aucune consommation mesurée."""
-        return cls(artifacts={}, outcome="failed", reason=reason, message=message)
+        return cls(outcome="failed", reason=reason, message=message)
 
 
 __all__ = ["DocumentExecution", "RunContext", "StepOutput"]

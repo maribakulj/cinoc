@@ -223,7 +223,20 @@ def test_mono_stage_pipeline_has_no_payload(tmp_path: Path) -> None:
 
 
 def test_through_evaluate_run(tmp_path: Path) -> None:
-    corpus, outputs = _witness_outputs(tmp_path)
+    corpus, pools = _witness_outputs(tmp_path)
+    # Le runner reçoit ``by_step`` : l'OCR puis la correction, deux étapes.
+    outputs = {
+        pipeline: {
+            document_id: {
+                "ocr": {ArtifactType.RAW_TEXT: arts[ArtifactType.RAW_TEXT]},
+                "llm": {
+                    ArtifactType.CORRECTED_TEXT: arts[ArtifactType.CORRECTED_TEXT]
+                },
+            }
+            for document_id, arts in by_document.items()
+        }
+        for pipeline, by_document in pools.items()
+    }
     registry = MetricRegistry()
     register_default_metrics(registry)
     manifest = RunManifest(

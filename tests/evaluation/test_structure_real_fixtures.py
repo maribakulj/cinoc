@@ -155,12 +155,14 @@ def test_region_cer_through_runner_on_real_gt(tmp_path: Path) -> None:
     outputs = {
         "seg": {
             "doc1": {
-                ArtifactType.LAYOUT: Artifact(
-                    id="doc1:assemble:layout",
-                    document_id="doc1",
-                    type=ArtifactType.LAYOUT,
-                    uri=str(hyp_path),
-                )
+                "ocr": {
+                    ArtifactType.LAYOUT: Artifact(
+                        id="doc1:assemble:layout",
+                        document_id="doc1",
+                        type=ArtifactType.LAYOUT,
+                        uri=str(hyp_path),
+                    )
+                }
             }
         }
     }
