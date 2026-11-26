@@ -235,9 +235,10 @@ def test_the_hidden_replays_are_exactly_those_the_upload_cannot_feed() -> None:
 
     from cinoc.app import corpus_upload
     from cinoc.app.recipe_catalog import WEB_UNREACHABLE_REPLAYS
+    from cinoc.formats.images import IMAGE_SUFFIXES
 
     acceptees = (
-        corpus_upload._IMAGE_EXT | corpus_upload._GT_EXT | corpus_upload._GT_XML_EXT
+        set(IMAGE_SUFFIXES) | corpus_upload._GT_EXT | corpus_upload._GT_XML_EXT
     )
     registre = ModuleRegistry()
     register_default_modules(registre)

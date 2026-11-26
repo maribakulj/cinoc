@@ -34,6 +34,7 @@ from cinoc.domain.layout import (
     Word,
 )
 from cinoc.formats._geometry import Point
+from cinoc.formats._region_ids import RegionIds
 from cinoc.formats.alto.types import (
     AltoBBox,
     AltoBlock,
@@ -52,18 +53,6 @@ logger = logging.getLogger(__name__)
 _NON_TEXT_TYPES = frozenset({"illustration", "graphical"})
 
 _UNITS: frozenset[str] = frozenset(get_args(CoordinateUnit))
-
-
-class _Counter:
-    """Compteur déterministe pour synthétiser les ``id`` de région manquants."""
-
-    def __init__(self) -> None:
-        self._n = 0
-
-    def next_id(self) -> str:
-        rid = f"region_{self._n}"
-        self._n += 1
-        return rid
 
 
 def _geometry(
@@ -103,7 +92,7 @@ def _line(line: AltoLine) -> Line:
     )
 
 
-def _region(block: AltoBlock, counter: _Counter) -> Region:
+def _region(block: AltoBlock, counter: RegionIds) -> Region:
     rid = block.id or counter.next_id()
     if isinstance(block, AltoTextBlock):
         return Region(
@@ -135,7 +124,7 @@ def _region(block: AltoBlock, counter: _Counter) -> Region:
     raise AssertionError(f"bloc ALTO non géré : {block!r}")  # pragma: no cover
 
 
-def _page(page: AltoPage, counter: _Counter) -> LayoutPage:
+def _page(page: AltoPage, counter: RegionIds) -> LayoutPage:
     regions = tuple(_region(block, counter) for block in page.blocks)
     return LayoutPage(
         width=page.width,
@@ -157,7 +146,7 @@ def _unit(document: AltoDocument) -> CoordinateUnit:
 
 def alto_to_layout(document: AltoDocument) -> CanonicalLayout:
     """Projette un ``AltoDocument`` parsé vers le ``CanonicalLayout`` neutre."""
-    counter = _Counter()
+    counter = RegionIds()
     return CanonicalLayout(
         pages=tuple(_page(page, counter) for page in document.pages),
         coordinate_unit=_unit(document),

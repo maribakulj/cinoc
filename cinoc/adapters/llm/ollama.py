@@ -171,52 +171,82 @@ def _fail_or_cancel(
     raise AdapterStepError(f"ollama a échoué ({model}) : {exc}") from exc
 
 
-def _read_stream(
-    lines: Iterable[str], *, control: RunControl, deadline: Deadline, model: str
-) -> dict[str, Any]:
+class ChatStream:
     """Morceaux NDJSON de ``/api/chat`` (``stream: true``) → le corps que
     rendrait ``stream: false`` : le **dernier** morceau (``done``, raison
     d'arrêt, jetons, durées) dont le message porte le texte **concaténé**.
     Mêmes clés, même texte, mêmes jetons (vérifié contre le vrai serveur) : le
     sidecar natif ne change pas de forme.
 
-    Entre deux morceaux, l'arrêt du run et la deadline de l'étape sont sondés :
-    un arrêt coupe la génération en une fraction de seconde au lieu d'attendre
-    sa fin (D-299). Un morceau ``error`` est rendu tel quel
+    Un morceau à la fois (``feed``) : le même pli sert la lecture synchrone de
+    l'adaptateur (``_read_stream``) et la lecture asynchrone du client de
+    correction structurée. Un morceau ``error`` est rendu tel quel
     (``_completion_from_chat`` le lève, comme l'erreur en HTTP 200 du mode
     non diffusé).
     """
-    parts: dict[str, list[str]] = {}
-    last: dict[str, Any] | None = None
-    for line in lines:
-        control.raise_if_cancelled()
-        if deadline.is_expired():
-            raise DeadlineExceeded(f"ollama ({model}) : délai dépassé en génération.")
+
+    def __init__(self, model: str) -> None:
+        self._model = model
+        self._parts: dict[str, list[str]] = {}
+        self._last: dict[str, Any] | None = None
+        self._error: dict[str, Any] | None = None
+
+    def feed(self, line: str) -> bool:
+        """Lit un morceau ; vrai quand le corps est complet (``done`` ou
+        ``error``) — la suite n'est pas à lire."""
         if not line.strip():
-            continue
+            return False
         try:
             chunk = json.loads(line)
         except ValueError as exc:
             raise AdapterStepError(
-                f"ollama ({model}) : morceau de réponse illisible : {exc}"
+                f"ollama ({self._model}) : morceau de réponse illisible : {exc}"
             ) from exc
         if not isinstance(chunk, dict):
-            raise AdapterStepError(f"ollama ({model}) : morceau de réponse illisible.")
+            raise AdapterStepError(
+                f"ollama ({self._model}) : morceau de réponse illisible."
+            )
         if chunk.get("error"):
-            return chunk
+            self._error = chunk
+            return True
         message = chunk.get("message")
         if isinstance(message, dict):
             for key in ("content", "thinking"):
                 if isinstance(message.get(key), str):
-                    parts.setdefault(key, []).append(message[key])
-        last = chunk
-        if chunk.get("done"):
+                    self._parts.setdefault(key, []).append(message[key])
+        self._last = chunk
+        return bool(chunk.get("done"))
+
+    def body(self) -> dict[str, Any]:
+        """Le corps reconstitué ; ``AdapterStepError`` si le flux s'est
+        arrêté avant son dernier morceau."""
+        if self._error is not None:
+            return self._error
+        last = self._last
+        if last is None or not last.get("done"):
+            raise AdapterStepError(
+                f"ollama ({self._model}) : réponse interrompue avant la fin."
+            )
+        message = dict(last.get("message") or {})
+        message.update({key: "".join(values) for key, values in self._parts.items()})
+        return {**last, "message": message}
+
+
+def _read_stream(
+    lines: Iterable[str], *, control: RunControl, deadline: Deadline, model: str
+) -> dict[str, Any]:
+    """Le flux de ``/api/chat`` lu en entier (``ChatStream``). Entre deux
+    morceaux, l'arrêt du run et la deadline de l'étape sont sondés : un arrêt
+    coupe la génération en une fraction de seconde au lieu d'attendre sa fin
+    (D-299)."""
+    stream = ChatStream(model)
+    for line in lines:
+        control.raise_if_cancelled()
+        if deadline.is_expired():
+            raise DeadlineExceeded(f"ollama ({model}) : délai dépassé en génération.")
+        if stream.feed(line):
             break
-    if last is None or not last.get("done"):
-        raise AdapterStepError(f"ollama ({model}) : réponse interrompue avant la fin.")
-    message = dict(last.get("message") or {})
-    message.update({key: "".join(values) for key, values in parts.items()})
-    return {**last, "message": message}
+    return stream.body()
 
 
 def _invoke_ollama(
@@ -536,4 +566,4 @@ class OllamaAdapter:
         )
 
 
-__all__ = ["OllamaAdapter", "list_models", "model_from_tag", "same_model"]
+__all__ = ["ChatStream", "OllamaAdapter", "list_models", "model_from_tag", "same_model"]

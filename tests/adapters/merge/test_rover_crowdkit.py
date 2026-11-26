@@ -27,11 +27,20 @@ pandas et scikit-learn compris) : mêmes sorties sur les 300 fusions de
    change ; avec elle, la transcription égale Cinoc partout (bnl_mini et
    5 000 jeux tirés). Sur ``bnl_mini`` le bord ne joue sur aucune fusion ; sur
    des lectures courtes tirées, il en change un peu plus d'une sur dix (559).
+
+**Coût** (S29a, reste de S18) : les 300 fusions coûtaient ~50-90 s de CPU dans
+la suite ordinaire (une page de 629 mots pèse à elle seule le quart, la
+programmation dynamique est quadratique). La suite ordinaire vérifie un
+**échantillon** — les 10 triplets sur 10 pages (100 fusions, ~1 s) : les plus
+courtes, dont 15 fusions où l'ordre des noms donne un autre résultat, et deux
+pages moyennes ; les 300 tournent dans le job CI ``oracle`` (marqueur
+``oracle``, ``CINOC_REQUIRE_ORACLES``), sans quitter la CI.
 """
 
 from __future__ import annotations
 
 import itertools
+import os
 import random
 from copy import deepcopy
 from dataclasses import dataclass
@@ -200,12 +209,10 @@ _ECARTS_ORDRE_DES_NOMS = {
 }
 
 
-@pytest.mark.parametrize("triplet", list(itertools.combinations(_MOTEURS, 3)))
-def test_same_input_same_output_on_bnl_mini(triplet: tuple[str, str, str]) -> None:
-    """Chaque page de chaque triplet : crowd-kit, lectures dans l'ordre de
-    Cinoc, rend la fusion de Cinoc — bord compris (il ne joue pas ici)."""
-    pages = sorted(p.name.removesuffix(".gt.txt") for p in _BNL_MINI.glob("*.gt.txt"))
-    assert len(pages) == 30
+def _parity(triplet: tuple[str, str, str], pages: tuple[str, ...]) -> int:
+    """Chaque page : crowd-kit, lectures dans l'ordre de Cinoc, rend la fusion
+    de Cinoc — bord compris (il ne joue pas ici). Rend le nombre de pages où,
+    dans l'ordre des noms de moteurs, il en rend une autre."""
     ecarts = 0
     for page in pages:
         lectures = {
@@ -215,8 +222,51 @@ def test_same_input_same_output_on_bnl_mini(triplet: tuple[str, str, str]) -> No
         fusion = vote_tokens(lectures)
         assert crowdkit_rover(_cinoc_order(lectures)) == fusion, page
         ecarts += crowdkit_rover(list(lectures.values())) != fusion
+    return ecarts
+
+
+#: L'échantillon de la suite ordinaire : 8 pages courtes (6 à 36 mots) et deux
+#: moyennes (``0003``, 96 mots ; ``0015``, 79) — un tiers du corpus.
+_ECHANTILLON = (
+    "0001", "0003", "0008", "0011", "0013", "0015", "0021", "0023", "0024", "0029",
+)
+#: Sur l'échantillon, fusions où l'ordre des noms donne un autre résultat (15).
+_ECARTS_ECHANTILLON = {
+    ("deu", "deu_latf", "easyocr"): 1,
+    ("deu", "deu_latf", "fra"): 0,
+    ("deu", "deu_latf", "frk"): 0,
+    ("deu", "easyocr", "fra"): 3,
+    ("deu", "easyocr", "frk"): 3,
+    ("deu", "fra", "frk"): 2,
+    ("deu_latf", "easyocr", "fra"): 4,
+    ("deu_latf", "easyocr", "frk"): 1,
+    ("deu_latf", "fra", "frk"): 1,
+    ("easyocr", "fra", "frk"): 0,
+}
+
+
+@pytest.mark.parametrize("triplet", list(itertools.combinations(_MOTEURS, 3)))
+def test_same_input_same_output_on_a_sample_of_bnl_mini(
+    triplet: tuple[str, str, str],
+) -> None:
+    """La suite ordinaire : les 10 triplets, sur l'échantillon."""
+    assert sum(_ECARTS_ECHANTILLON.values()) == 15
+    assert _parity(triplet, _ECHANTILLON) == _ECARTS_ECHANTILLON[triplet]
+
+
+@pytest.mark.oracle
+@pytest.mark.parametrize("triplet", list(itertools.combinations(_MOTEURS, 3)))
+def test_same_input_same_output_on_bnl_mini(triplet: tuple[str, str, str]) -> None:
+    """Les 300 fusions — job CI ``oracle`` seulement (~50-90 s de CPU)."""
+    if not os.environ.get("CINOC_REQUIRE_ORACLES"):
+        pytest.skip("300 fusions : job CI oracle (l'échantillon tourne ici).")
+    pages = tuple(
+        sorted(p.name.removesuffix(".gt.txt") for p in _BNL_MINI.glob("*.gt.txt"))
+    )
+    assert len(pages) == 30
+    assert set(_ECHANTILLON) <= set(pages)
     assert sum(_ECARTS_ORDRE_DES_NOMS.values()) == 74
-    assert ecarts == _ECARTS_ORDRE_DES_NOMS[triplet]
+    assert _parity(triplet, pages) == _ECARTS_ORDRE_DES_NOMS[triplet]
 
 
 def test_the_border_is_the_only_other_gap() -> None:

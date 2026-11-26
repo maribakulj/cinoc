@@ -57,7 +57,7 @@ def test_real_review_referral_reaches_artifact_analysis_and_report(
 
     producer = RulesProducer([SubstitutionRule("document.", "document en 1789.")])
     monkeypatch.setattr(
-        SaknussemmCorrector, "_build_producer", lambda self: (producer, None)
+        SaknussemmCorrector, "_build_producer", lambda self, _control: (producer, None)
     )
     layout = CanonicalLayout(
         pages=(

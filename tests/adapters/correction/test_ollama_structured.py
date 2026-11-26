@@ -17,6 +17,11 @@ from __future__ import annotations
 import asyncio
 import importlib.util
 import json
+import sys
+import threading
+import time
+from collections.abc import Iterator
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
 import httpx
@@ -26,6 +31,7 @@ from cinoc.adapters.correction.ollama_structured import (
     OllamaStructuredClient,
     _bare_schema,
 )
+from cinoc.pipeline.run_control import RunControl
 
 #: Les classes d'erreur attendues appartiennent au contrat de ``saknussemm`` :
 #: sans la bibliothèque, il n'y a pas de contrat à vérifier.
@@ -44,38 +50,35 @@ def _fake_client(
     text: str | None = None,
     raises: Exception | None = None,
     captured: dict[str, Any] | None = None,
-) -> type:
-    """Faux ``httpx.AsyncClient`` : capture la requête, rend la réponse voulue."""
+) -> Any:
+    """``httpx.AsyncClient`` servi par un ``MockTransport`` : capture la requête
+    (``ctor``, ``url``, ``body``, ``sent``), rend la réponse voulue — un corps
+    d'un bloc, que le flux lit comme son dernier morceau."""
+    real = httpx.AsyncClient
 
-    class _Fake:
-        def __init__(self, **kwargs: Any) -> None:
-            if captured is not None:
-                captured["ctor"] = kwargs
+    def handle(request: httpx.Request) -> httpx.Response:
+        if captured is not None:
+            captured["url"] = str(request.url)
+            captured["body"] = json.loads(request.content)
+            captured.setdefault("sent", []).append(captured["body"])
+        if raises is not None:
+            raise raises
+        if text is not None:
+            return httpx.Response(status, text=text)
+        return httpx.Response(status, json=payload)
 
-        async def __aenter__(self) -> _Fake:
-            return self
+    def factory(**kwargs: Any) -> httpx.AsyncClient:
+        if captured is not None:
+            captured["ctor"] = kwargs
+        return real(transport=httpx.MockTransport(handle), **kwargs)
 
-        async def __aexit__(self, *exc: object) -> bool:
-            return False
-
-        async def post(self, url: str, json: Any = None) -> httpx.Response:
-            if captured is not None:
-                captured["url"] = url
-                captured["body"] = json
-            if raises is not None:
-                raise raises
-            request = httpx.Request("POST", url)
-            if text is not None:
-                return httpx.Response(status, text=text, request=request)
-            return httpx.Response(status, json=payload, request=request)
-
-    return _Fake
+    return factory
 
 
 def _call(
     monkeypatch: pytest.MonkeyPatch,
     client: OllamaStructuredClient,
-    fake: type,
+    fake: Any,
     **kwargs: Any,
 ) -> tuple[dict[str, Any], Any]:
     monkeypatch.setattr(httpx, "AsyncClient", fake)
@@ -131,7 +134,7 @@ def test_the_request_pins_num_ctx_and_carries_the_bare_schema(
     hallucination du modèle."""
     captured: dict[str, Any] = {}
     fake = _fake_client(
-        payload={"message": {"content": '{"lines": ["le soleil"]}'}},
+        payload={"message": {"content": '{"lines": ["le soleil"]}'}, "done": True},
         captured=captured,
     )
     parsed, raw = _call(
@@ -147,7 +150,7 @@ def test_the_request_pins_num_ctx_and_carries_the_bare_schema(
     assert captured["url"] == "http://ollama.test:11434/api/chat"
     body = captured["body"]
     assert body["model"] == "gemma4:e2b"
-    assert body["stream"] is False
+    assert body["stream"] is True  # en flux : interruptible en vol
     assert body["format"] == _SCHEMA
     assert body["options"] == {"temperature": 0.0, "num_ctx": 8192}
     assert [m["role"] for m in body["messages"]] == ["system", "user"]
@@ -162,7 +165,9 @@ def test_the_payload_keeps_its_accents_and_long_s(
     """``ensure_ascii=False`` : un ``ſ`` échappé en ``\\u017f`` traverse mais
     gonfle le contexte, et c'est exactement ce corpus-là qu'on corrige."""
     captured: dict[str, Any] = {}
-    fake = _fake_client(payload={"message": {"content": "{}"}}, captured=captured)
+    fake = _fake_client(
+        payload={"message": {"content": "{}"}, "done": True}, captured=captured
+    )
     _call(
         monkeypatch,
         OllamaStructuredClient(),
@@ -177,7 +182,9 @@ def test_num_ctx_and_temperature_are_configurable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: dict[str, Any] = {}
-    fake = _fake_client(payload={"message": {"content": "{}"}}, captured=captured)
+    fake = _fake_client(
+        payload={"message": {"content": "{}"}, "done": True}, captured=captured
+    )
     _call(
         monkeypatch,
         OllamaStructuredClient(num_ctx=32768, timeout=12.0),
@@ -240,7 +247,9 @@ def test_an_unreadable_answer_without_stop_reason_is_transient(
     il reste réessayable. L'extrait dans le message dit ce qui est revenu."""
     from saknussemm.core.protocols import ProviderTransientError
 
-    fake = _fake_client(payload={"message": {"content": '{"lines": ["le sol'}})
+    fake = _fake_client(
+        payload={"message": {"content": '{"lines": ["le sol'}, "done": True}
+    )
     with pytest.raises(ProviderTransientError, match="tronquée") as capture:
         _call(monkeypatch, OllamaStructuredClient(), fake)
     assert "le sol" in str(capture.value)
@@ -254,13 +263,16 @@ def test_a_json_answer_that_is_not_an_object_is_transient(
     liste là où il attend un objet et casserait plus loin, hors contexte."""
     from saknussemm.core.protocols import ProviderTransientError
 
-    fake = _fake_client(payload={"message": {"content": "[1, 2]"}})
+    fake = _fake_client(payload={"message": {"content": "[1, 2]"}, "done": True})
     with pytest.raises(ProviderTransientError, match="list"):
         _call(monkeypatch, OllamaStructuredClient(), fake)
 
 
 @_needs_saknussemm
-@pytest.mark.parametrize("body", [{}, {"message": None}, {"message": {}}])
+@pytest.mark.parametrize(
+    "body",
+    [{"done": True}, {"message": None, "done": True}, {"message": {}, "done": True}],
+)
 def test_an_answer_without_content_is_transient(
     monkeypatch: pytest.MonkeyPatch, body: dict
 ) -> None:
@@ -281,17 +293,132 @@ def test_a_truncated_answer_is_permanent_and_sent_once(
     l'identique : erreur **permanente**, que ``saknussemm`` ne rejoue pas."""
     from saknussemm.core.protocols import ProviderPermanentError
 
-    sent: list[Any] = []
-
-    class _Counting(_fake_client(  # type: ignore[misc]
-        payload={"message": {"content": '{"lines": ["le sol'}, "done_reason": "length"}
-    )):
-        async def post(self, url: str, json: Any = None) -> httpx.Response:
-            sent.append(json)
-            return await super().post(url, json=json)
-
+    captured: dict[str, Any] = {}
+    fake = _fake_client(
+        payload={
+            "message": {"content": '{"lines": ["le sol'},
+            "done": True,
+            "done_reason": "length",
+        },
+        captured=captured,
+    )
     with pytest.raises(ProviderPermanentError, match="length") as capture:
-        _call(monkeypatch, OllamaStructuredClient(), _Counting)
-    assert len(sent) == 1
+        _call(monkeypatch, OllamaStructuredClient(), fake)
+    assert len(captured["sent"]) == 1
     assert capture.value.retryable is False
     assert "num_ctx" in str(capture.value)
+
+
+# --------------------------------------------------------------------------- #
+# En flux : même corps, et un arrêt coupe l'appel en vol (S29a)
+# --------------------------------------------------------------------------- #
+
+
+def _streamed(chunks: list[dict[str, Any]]) -> Any:
+    """Le serveur répond en morceaux NDJSON (``stream: true``)."""
+    real = httpx.AsyncClient
+    content = "".join(json.dumps(c) + "\n" for c in chunks).encode()
+    transport = httpx.MockTransport(lambda _r: httpx.Response(200, content=content))
+    return lambda **kw: real(transport=transport, **kw)
+
+
+@_needs_saknussemm
+def test_the_stream_rebuilds_the_non_streamed_body(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Le texte est concaténé, le dernier morceau porte arrêt et jetons : le
+    corps gardé (sidecar ``NATIVE_JSON``) est celui du mode non diffusé."""
+    final = {"model": "m", "done": True, "done_reason": "stop", "eval_count": 7,
+             "message": {"role": "assistant", "content": ""}}
+    chunks = [
+        {"model": "m", "message": {"role": "assistant", "content": '{"lines": '},
+         "done": False},
+        {"model": "m", "message": {"role": "assistant", "content": '["le soleil"]}'},
+         "done": False},
+        final,
+    ]
+    client = OllamaStructuredClient()
+    parsed, _ = _call(monkeypatch, client, _streamed(chunks))
+    assert parsed == {"lines": ["le soleil"]}
+    assert client.responses == [
+        {**final, "message": {"role": "assistant",
+                              "content": '{"lines": ["le soleil"]}'}}
+    ]
+
+
+@_needs_saknussemm
+@pytest.mark.parametrize(
+    ("chunks", "motif"),
+    [
+        ([{"error": "model runner has unexpectedly stopped"}], "unexpectedly"),
+        ([{"message": {"content": '{"li'}, "done": False}], "interrompue"),
+        ([{"message": {"content": "x"}, "done": False}, "pas du JSON"], "illisible"),
+    ],
+    ids=["erreur-en-flux", "flux-interrompu", "morceau-illisible"],
+)
+def test_a_broken_stream_is_transient(
+    monkeypatch: pytest.MonkeyPatch, chunks: list[Any], motif: str
+) -> None:
+    """Une erreur de génération arrive **dans** le flux (en 200), un flux peut
+    s'arrêter avant son dernier morceau : incidents passagers, réessayables."""
+    from saknussemm.core.protocols import ProviderTransientError
+
+    real = httpx.AsyncClient
+    content = "".join(
+        (c if isinstance(c, str) else json.dumps(c)) + "\n" for c in chunks
+    ).encode()
+    transport = httpx.MockTransport(lambda _r: httpx.Response(200, content=content))
+    with pytest.raises(ProviderTransientError, match=motif):
+        _call(monkeypatch, OllamaStructuredClient(),
+              lambda **kw: real(transport=transport, **kw))
+
+
+class _Silent(BaseHTTPRequestHandler):
+    """Reçoit la demande puis se tait 10 s (un modèle qui encode sa page)."""
+
+    release = threading.Event()
+
+    def do_POST(self) -> None:  # noqa: N802 — API de http.server
+        self.rfile.read(int(self.headers.get("Content-Length") or 0))
+        self.release.wait(10)
+        try:
+            self.send_response(500)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+        except OSError:
+            return
+
+    def log_message(self, *_: object) -> None: ...
+
+
+@pytest.fixture
+def silent() -> Iterator[str]:
+    handler = type("Handler", (_Silent,), {"release": threading.Event()})
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    yield f"http://127.0.0.1:{httpd.server_address[1]}"
+    handler.release.set()
+    httpd.shutdown()
+    httpd.server_close()
+
+
+@_needs_saknussemm
+def test_a_stop_cuts_the_call_in_flight(
+    silent: str, request: pytest.FixtureRequest
+) -> None:
+    """« Arrêter » → ``CorrectionAborted`` (l'annulation de ``saknussemm`` :
+    ni rejouée ni prise pour une panne) en moins de 2 s, au lieu d'attendre la
+    réponse — rouge avant S29a."""
+    from saknussemm.errors import CorrectionAborted
+
+    if sys.platform == "win32":  # ``shutdown`` d'un autre fil : mesuré sous Linux
+        request.applymarker(pytest.mark.xfail(strict=False))
+    control = RunControl()
+    client = OllamaStructuredClient(host=silent, control=control)
+    threading.Timer(0.5, control.trigger_cancel).start()
+    started = time.monotonic()
+    with pytest.raises(CorrectionAborted):
+        asyncio.run(
+            client.complete_structured("", "m", "corrige", {"lines": []}, _SCHEMA)
+        )
+    assert time.monotonic() - started < 2.0

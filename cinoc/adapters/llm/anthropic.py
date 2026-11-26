@@ -38,7 +38,7 @@ from cinoc.adapters._native import sdk_native, served_model
 from cinoc.adapters._resilience import (
     DEFAULT_LLM_TIMEOUT,
     call_resilient,
-    register_close,
+    cut_on_cancel_hooks,
     request_timeout,
     step_deadline,
     validate_timeout,
@@ -171,17 +171,22 @@ def _anthropic_client(
         from anthropic import (  # type: ignore[import-not-found]
             Anthropic,
             AnthropicError,
+            DefaultHttpxClient,
         )
     except ImportError as exc:
         raise AdapterStepError(
             "anthropic : SDK non installé (pip install 'cinoc[anthropic]')."
         ) from exc
+    ctrl = control if control is not None else RunControl()
+    # Le client HTTP du SDK, ses défauts compris (dont ses options TCP
+    # keepalive), + la trace qui coupe l'appel en vol à l'arrêt.
+    http = DefaultHttpxClient(event_hooks=cut_on_cancel_hooks(ctrl))
     try:
         # SDK anthropic typé strictement ; dicts valides à l'exécution (tests live).
         # ``max_retries=0`` : une seule politique de retry, celle de Cinoc.
-        client = Anthropic(api_key=api_key, base_url=base_url, max_retries=0)
-        if control is not None:
-            register_close(control, client)
+        client = Anthropic(
+            api_key=api_key, base_url=base_url, max_retries=0, http_client=http
+        )
 
         def _create() -> Any:
             return client.messages.create(  # type: ignore[call-overload]
@@ -192,7 +197,7 @@ def _anthropic_client(
         # Cap de concurrence (≤ N appels Anthropic simultanés) + retry borné sur
         # 429/5xx/transport (Retry-After respecté), dans le délai de l'étape.
         response = call_resilient(
-            "anthropic", _create, deadline=deadline, control=control
+            "anthropic", _create, deadline=deadline, control=ctrl
         )
     except CinocError:
         raise  # délai, annulation : déjà typés
@@ -203,6 +208,8 @@ def _anthropic_client(
         raise AdapterStepError(
             f"anthropic a échoué ({model}) : {type(exc).__name__}: {exc}"
         ) from exc
+    finally:
+        http.close()
     return _completion_from_message(sdk_native(response, "anthropic"))
 
 

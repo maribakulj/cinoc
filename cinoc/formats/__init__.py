@@ -12,7 +12,9 @@ Surface publique :
 - format ALTO (``parse_alto`` / ``write_alto`` + types) ;
 - format PAGE (``parse_pagexml`` / ``write_pagexml`` + types) ;
 - normalisation de comparaison (``NormalizationProfile`` & profils) ;
-- lecture de texte brut (``read_plaintext``).
+- lecture de texte brut (``read_plaintext``) ;
+- formats d'image d'une page (``images.IMAGE_SUFFIXES``, ``looks_like_image``) —
+  la table unique de ce qu'un import accepte.
 """
 
 from __future__ import annotations

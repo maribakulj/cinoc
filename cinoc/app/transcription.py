@@ -25,11 +25,11 @@ from cinoc.domain.artifacts import ArtifactType, latest_by_type
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.documents import DocumentRef
 from cinoc.domain.errors import CinocError
+from cinoc.formats.images import IMAGE_SUFFIXES
 
 logger = logging.getLogger(__name__)
 
 #: Extensions d'image reconnues dans un dossier de transcription.
-_IMAGE_EXT = frozenset({".png", ".jpg", ".jpeg", ".tif", ".tiff", ".jp2"})
 
 
 class TranscriptionError(CinocError):
@@ -67,12 +67,12 @@ def corpus_from_images(
     paths = sorted(
         p
         for p in folder.iterdir()
-        if p.is_file() and p.suffix.lower() in _IMAGE_EXT
+        if p.is_file() and p.suffix.lower() in IMAGE_SUFFIXES
     )
     if not paths:
         raise TranscriptionError(
             f"aucune image reconnue dans {folder} "
-            f"(extensions : {sorted(_IMAGE_EXT)})."
+            f"(extensions : {list(IMAGE_SUFFIXES)})."
         )
     taken: set[str] = set()
     documents = tuple(

@@ -32,6 +32,9 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from cinoc.adapters.llm.mistral import _completion_from_chat
+from cinoc.domain.usage import ResourceUsage
+
 #: Hôte de l'API. Constante, jamais fournie par l'utilisateur — donc hors du
 #: périmètre du garde SSRF (qui protège les URI *de corpus*, elles saisies).
 MISTRAL_BASE = "https://api.mistral.ai"
@@ -96,20 +99,42 @@ def parse_chat_json(data: dict[str, Any], model: str) -> dict[str, Any]:
     return parsed
 
 
+def tokens_of(data: dict[str, Any]) -> ResourceUsage | None:
+    """Jetons d'une réponse *chat completions*, lus **comme l'adaptateur
+    Mistral** (``_completion_from_chat``) : ``tokens_in``/``tokens_out``, et les
+    jetons lus en cache quand la réponse les rend (``prompt_tokens_details``).
+    Une seule lecture : un compte que l'adaptateur sait lire ne se perd pas ici
+    (S29a — avant, seuls ``prompt_tokens``/``completion_tokens`` étaient lus, et
+    hors ``ResourceUsage``). ``None`` : aucun total rendu."""
+    return _completion_from_chat(data).usage()
+
+
+def responses_usage(responses: list[dict[str, Any]]) -> ResourceUsage | None:
+    """Somme des jetons de toutes les réponses reçues (rejetées comprises :
+    elles ont été payées) — l'``usage`` de l'étape de correction."""
+    total: ResourceUsage | None = None
+    for data in responses:
+        part = tokens_of(data)
+        if part is not None:
+            total = part if total is None else total.merged_with(part)
+    return total
+
+
 def usage_from(data: dict[str, Any]) -> Any:
     """``usage`` de l'API → ``saknussemm.core.schemas.Usage`` (ou ``None``).
 
-    Les jetons alimentent l'axe coût du rapport ; les perdre rendrait un run
-    payant indiscernable d'un run local. Le renommage n'est pas cosmétique :
-    l'API dit ``prompt``/``completion``, ``saknussemm`` dit ``input``/``output``,
-    et le modèle Pydantic **accepte en silence** un nom inconnu — donc une
-    traduction manquante ne lève pas, elle rend zéro jeton.
+    Lu par ``tokens_of`` : les jetons alimentent l'axe coût du rapport ; les
+    perdre rendrait un run payant indiscernable d'un run local. Le renommage
+    n'est pas cosmétique : ``saknussemm`` dit ``input``/``output``, et le modèle
+    Pydantic **accepte en silence** un nom inconnu — donc une traduction
+    manquante ne lève pas, elle rend zéro jeton. Sa ``Usage`` n'a pas de
+    compte de cache : celui-ci ne vit que dans ``ResourceUsage``.
 
     ``id`` de la réponse est repris dans ``response_ids`` : c'est ce qui permet
     à un rapport de nommer chaque réponse du fournisseur qui a contribué au run.
     """
-    raw = data.get("usage")
-    if not isinstance(raw, dict):
+    tokens = tokens_of(data)
+    if tokens is None:
         return None
     from saknussemm.core.schemas import (  # type: ignore[import-not-found]  # noqa: PLC0415, E501
         Usage,
@@ -117,8 +142,8 @@ def usage_from(data: dict[str, Any]) -> Any:
 
     response_id = data.get("id")
     return Usage(
-        input_tokens=int(raw.get("prompt_tokens") or 0),
-        output_tokens=int(raw.get("completion_tokens") or 0),
+        input_tokens=tokens.tokens_in or 0,
+        output_tokens=tokens.tokens_out or 0,
         response_ids=[str(response_id)] if response_id else [],
     )
 
@@ -209,6 +234,10 @@ class MistralStructuredClient:
         self.responses.append(data)
         return parse_chat_json(data, model), usage_from(data)
 
+    def usage(self) -> ResourceUsage | None:
+        """Jetons de toutes les réponses reçues (``responses_usage``)."""
+        return responses_usage(self.responses)
+
 
 __all__ = [
     "MISTRAL_BASE",
@@ -216,5 +245,7 @@ __all__ = [
     "parse_chat_json",
     "post_chat",
     "provider_errors",
+    "responses_usage",
+    "tokens_of",
     "usage_from",
 ]

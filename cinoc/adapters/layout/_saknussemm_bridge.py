@@ -1,4 +1,7 @@
-"""Pont ``CanonicalLayout`` → ``DocumentManifest`` de ``saknussemm``.
+"""Pont ``CanonicalLayout`` ⇄ ``saknussemm`` : la mise en page vers son
+``DocumentManifest`` (``layout_to_manifest``), et, au retour, les décisions de
+la bibliothèque reposées sur la mise en page (``apply_decisions``) et
+sérialisées (``decisions_json``).
 
 Isolé de l'adapter pour une raison de contrat : c'est **la** traduction entre
 deux modèles de mise en page, et elle a un coût mesurable. Vérifiée sur les deux
@@ -13,12 +16,11 @@ les ``HYP`` et les ``SUBS``. Avant qu'il le fasse, la même conversion perdait
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+import json
+from typing import Any
 
 from cinoc.domain.errors import AdapterStepError
-
-if TYPE_CHECKING:  # pragma: no cover
-    from cinoc.domain.layout import CanonicalLayout, Region
+from cinoc.domain.layout import CanonicalLayout, Line, Region
 
 
 def _flatten_regions(regions: tuple[Region, ...]) -> list[Region]:
@@ -201,4 +203,92 @@ def manifest_page_ids(manifest: Any) -> list[str]:
     return [page.page_id for page in manifest.pages]
 
 
-__all__ = ["layout_to_manifest", "manifest_page_ids"]
+def decisions_json(result: object, document_id: str) -> bytes:
+    """Sérialise ce que la bibliothèque a décidé, ligne par ligne.
+
+    Le **statut** distingue trois situations qu'un texte corrigé confond :
+    la ligne a changé, une garde a refusé un changement proposé, ou rien n'a
+    été proposé. Sans cette distinction, un correcteur prudent et un correcteur
+    inerte rendent le même artefact.
+    """
+    lignes = []
+    for outcome in result.report.lines:  # type: ignore[attr-defined]
+        decision = outcome.decision
+        propose = outcome.proposal.output_text if outcome.proposal else None
+        raison = decision.reason
+        lignes.append(
+            {
+                "document_id": document_id,
+                "page_id": outcome.page_id,
+                "line_id": outcome.line_id,
+                "status": decision.status,
+                "source_text": outcome.source_text,
+                "final_text": decision.final_text,
+                "proposed_text": propose,
+                "hyphen_role": outcome.hyphen_role,
+                "reason_code": raison.code if raison else None,
+                "reason_detail": raison.detail if raison else None,
+                "review_reasons": [
+                    {"code": reason.code, "detail": reason.detail}
+                    for reason in decision.review_reasons
+                ],
+            }
+        )
+    return json.dumps(
+        {"document_id": document_id, "lines": lignes}, ensure_ascii=False
+    ).encode("utf-8")
+
+
+def apply_decisions(
+    layout: CanonicalLayout,
+    decided: dict[tuple[str, str], str],
+    page_ids: list[str],
+) -> CanonicalLayout:
+    """Repose les textes décidés sur la mise en page, identités à l'appui.
+
+    Les mots sont **abandonnés sur une ligne modifiée** : leur géométrie décrit
+    des caractères qui ne sont plus là. Les garder ferait dire à l'artefact une
+    position que rien ne soutient — le contraire de ce que la structure sert à
+    porter. La confiance OCR décrivait aussi l'ancien texte : elle devient
+    inconnue sur une ligne modifiée, sans inventer de score pour la correction.
+    """
+
+    def region(reg: Region, page_id: str) -> Region:
+        lines = []
+        for line in reg.lines:
+            texte = decided.get((page_id, line.id or ""))
+            if texte is None or texte == line.text:
+                lines.append(line)
+                continue
+            lines.append(
+                Line(
+                    id=line.id,
+                    text=texte,
+                    geometry=line.geometry,
+                    baseline=line.baseline,
+                    words=(),
+                    confidence=None,
+                )
+            )
+        return reg.model_copy(
+            update={
+                "lines": tuple(lines),
+                "regions": tuple(region(r, page_id) for r in reg.regions),
+            }
+        )
+
+    pages = tuple(
+        page.model_copy(
+            update={"regions": tuple(region(r, page_ids[i]) for r in page.regions)}
+        )
+        for i, page in enumerate(layout.pages)
+    )
+    return layout.model_copy(update={"pages": pages})
+
+
+__all__ = [
+    "apply_decisions",
+    "decisions_json",
+    "layout_to_manifest",
+    "manifest_page_ids",
+]

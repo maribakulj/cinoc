@@ -10,7 +10,6 @@ fichier. Ignoré sans l'extra (``pip install 'cinoc[openai]'`` etc.) ; aucun ré
 
 from __future__ import annotations
 
-import functools
 import json
 from collections.abc import Callable
 from pathlib import Path
@@ -22,7 +21,7 @@ from cinoc.domain.artifacts import Artifact, ArtifactType, native_json_bytes
 from cinoc.pipeline.protocols import Module
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext
-from tests.adapters._native_fakes import SECRET, wire
+from tests.adapters._native_fakes import SECRET, real_sdk_transport, wire
 
 
 def _run(
@@ -83,43 +82,28 @@ def _handler(module: Any, body: dict[str, Any], seen: list[dict[str, str]]) -> A
 
 
 def test_openai(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    openai = pytest.importorskip("openai")
-    import httpx
+    pytest.importorskip("openai")
+    # openai 3.x transporte par ``httpx2`` (``DefaultHttpxClient``).
+    httpx2 = pytest.importorskip("httpx2")
 
     from cinoc.adapters.llm.openai import OpenAIAdapter, _completion_from_chat
 
     body, seen = wire("llm", "openai", "stop"), []
-    monkeypatch.setattr(
-        openai,
-        "OpenAI",
-        functools.partial(
-            openai.OpenAI,
-            http_client=httpx.Client(transport=_handler(httpx, body, seen)),
-            max_retries=0,
-        ),
-    )
+    real_sdk_transport(monkeypatch, "openai", _handler(httpx2, body, seen))
     module = OpenAIAdapter(model="m", label="o", role="zero_shot")
     artifacts = _run(tmp_path, monkeypatch, "OPENAI_API_KEY", module)
     _check(tmp_path, artifacts, body, seen, lambda n: _completion_from_chat(n).text)
 
 
 def test_anthropic(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    anthropic = pytest.importorskip("anthropic")
+    pytest.importorskip("anthropic")
     # anthropic 2.x transporte par ``httpx2`` et refuse un client ``httpx``.
     httpx2 = pytest.importorskip("httpx2")
 
     from cinoc.adapters.llm.anthropic import AnthropicAdapter, _completion_from_message
 
     body, seen = wire("llm", "anthropic", "end_turn"), []
-    monkeypatch.setattr(
-        anthropic,
-        "Anthropic",
-        functools.partial(
-            anthropic.Anthropic,
-            http_client=httpx2.Client(transport=_handler(httpx2, body, seen)),
-            max_retries=0,
-        ),
-    )
+    real_sdk_transport(monkeypatch, "anthropic", _handler(httpx2, body, seen))
     module = AnthropicAdapter(model="m", label="c", role="zero_shot")
     artifacts = _run(tmp_path, monkeypatch, "ANTHROPIC_API_KEY", module)
     _check(tmp_path, artifacts, body, seen, lambda n: _completion_from_message(n).text)
@@ -129,7 +113,7 @@ def test_anthropic(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 def test_mistralai(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, ocr: bool) -> None:
     # mistralai 3.x : le client vit dans ``mistralai.client`` et transporte par
     # ``httpx2`` (``client=`` en exige un).
-    mistralai = pytest.importorskip("mistralai.client")
+    pytest.importorskip("mistralai.client")
     httpx2 = pytest.importorskip("httpx2")
 
     from cinoc.adapters.llm.mistral import MistralAdapter, _completion_from_chat
@@ -139,14 +123,7 @@ def test_mistralai(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, ocr: bool) -
         wire("ocr", "mistral_ocr", "folio_b") if ocr else wire("llm", "mistral", "stop")
     )
     seen: list[dict[str, str]] = []
-    monkeypatch.setattr(
-        mistralai,
-        "Mistral",
-        functools.partial(
-            mistralai.Mistral,
-            client=httpx2.Client(transport=_handler(httpx2, body, seen)),
-        ),
-    )
+    real_sdk_transport(monkeypatch, "mistralai", _handler(httpx2, body, seen))
     module: Module = (
         MistralOCRAdapter(model="m", label="m")
         if ocr
@@ -166,7 +143,7 @@ def test_mistral_ocr_blocks_reach_the_layout(
     granularité ``block``, et la réponse OCR 4 de la cassette garde ses blocs et
     leurs confiances au décodage — la 1.x les retirait (D-291) —, donc le
     sidecar les garde et le ``LAYOUT`` est publié."""
-    mistralai = pytest.importorskip("mistralai.client")
+    pytest.importorskip("mistralai.client")
     httpx2 = pytest.importorskip("httpx2")
 
     from cinoc.adapters.ocr._mistral_layout import layout_from_response
@@ -180,14 +157,7 @@ def test_mistral_ocr_blocks_reach_the_layout(
         requests.append(json.loads(request.content))
         return httpx2.Response(200, json=body)
 
-    monkeypatch.setattr(
-        mistralai,
-        "Mistral",
-        functools.partial(
-            mistralai.Mistral,
-            client=httpx2.Client(transport=httpx2.MockTransport(handle)),
-        ),
-    )
+    real_sdk_transport(monkeypatch, "mistralai", httpx2.MockTransport(handle))
     module = MistralOCRAdapter(model="m", label="m")
     artifacts = _run(tmp_path, monkeypatch, "MISTRAL_API_KEY", module)
     (sent,) = requests

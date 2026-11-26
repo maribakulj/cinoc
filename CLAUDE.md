@@ -34,7 +34,7 @@ avant d'écrire la moindre ligne.**
   4quinquies », D-260 → D-266) ; P5d (*installable et sûr*), P5e (*une mesure
   qui dit vrai*) et P5f (*une inférence tracée*) sont livrées. La
   **feuille de route session par session** (S1 → S35) de cette section dit
-  laquelle ouvrir ; S1-S28 sont livrées (restes de S28 rattachés à S29), la suivante est S29, et les arbitrages A1, A2, A3, A6, A9
+  laquelle ouvrir ; S1-S28 et S29a sont livrées, la suivante est S29b, et les arbitrages A1, A2, A3, A6, A9
   sont rendus (D-271). Née d'un audit sur le produit et non sur la CI : un
   `pip install cinoc` sans extra ne démarrait pas, et plusieurs chiffres
   affichés ne mesuraient pas ce qu'annonçait leur nom. Cette route **remplace**

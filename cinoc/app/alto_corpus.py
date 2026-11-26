@@ -38,9 +38,9 @@ from cinoc.domain.artifacts import ArtifactType
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.documents import DocumentRef, GroundTruthRef
 from cinoc.domain.errors import CinocError
+from cinoc.formats.images import IMAGE_SUFFIXES
 
 #: Extensions d'image cherchées à côté d'un ALTO (mêmes que ``transcription``).
-_IMAGE_EXT = (".png", ".jpg", ".jpeg", ".tif", ".tiff", ".jp2")
 
 
 def corpus_from_alto(
@@ -61,7 +61,7 @@ def corpus_from_alto(
         image = next(
             (
                 candidate
-                for suffix in _IMAGE_EXT
+                for suffix in IMAGE_SUFFIXES
                 if (candidate := xml.with_suffix(suffix)).is_file()
             ),
             None,
@@ -86,7 +86,7 @@ def corpus_from_alto(
     if not documents:
         raise CinocError(
             f"aucune paire ALTO + image dans {folder} "
-            f"(un ``<nom>.xml`` avec un ``<nom>{sorted(_IMAGE_EXT)[0]}`` à côté)."
+            f"(un ``<nom>.xml`` avec un ``<nom>{IMAGE_SUFFIXES[0]}`` à côté)."
         )
     return CorpusSpec(name=name or folder.name, documents=tuple(documents))
 

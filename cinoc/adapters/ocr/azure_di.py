@@ -46,7 +46,7 @@ from cinoc.adapters._resilience import (
     DEFAULT_OCR_TIMEOUT,
     BillingMeter,
     call_resilient,
-    register_close,
+    cut_on_cancel_hooks,
     request_timeout,
     step_deadline,
     validate_timeout,
@@ -136,10 +136,13 @@ def _invoke_azure_di(
     ctrl = control if control is not None else RunControl()
     content = b64encode(Path(image_path).read_bytes()).decode("ascii")
     analyze_url = endpoint.rstrip("/") + _ANALYZE_PATH
+    # Un arrêt coupe l'appel en vol (``cut_on_cancel_hooks``) : ``close()``
+    # d'un autre fil ne réveille pas une lecture bloquante.
     with httpx.Client(
-        timeout=request_timeout(deadline), transport=transport
+        timeout=request_timeout(deadline),
+        transport=transport,
+        event_hooks=cut_on_cancel_hooks(ctrl),
     ) as client:
-        register_close(ctrl, client)
         try:
             operation_url = call_resilient(
                 _PROVIDER,

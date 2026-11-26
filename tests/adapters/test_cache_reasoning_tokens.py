@@ -33,7 +33,7 @@ from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.usage import ResourceUsage
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext
-from tests.adapters._native_fakes import wire
+from tests.adapters._native_fakes import real_sdk_transport, wire
 
 
 def _parts(c: LLMCompletion) -> tuple[Any, ...]:
@@ -185,22 +185,14 @@ def test_openai_real_sdk_keeps_the_details(
 ) -> None:
     """openai 3.x décode ``prompt_tokens_details``/``completion_tokens_details``
     sans les perdre ni ajouter de 0 absent du corps (``exclude_unset``)."""
-    import functools
-
-    openai = pytest.importorskip("openai")
-    import httpx
+    pytest.importorskip("openai")
+    httpx2 = pytest.importorskip("httpx2")
 
     from cinoc.adapters.llm.openai import OpenAIAdapter
 
     body = wire("llm", "openai", "cached")
-    transport = httpx.MockTransport(lambda _r: httpx.Response(200, json=body))
-    monkeypatch.setattr(
-        openai,
-        "OpenAI",
-        functools.partial(
-            openai.OpenAI, http_client=httpx.Client(transport=transport)
-        ),
-    )
+    transport = httpx2.MockTransport(lambda _r: httpx2.Response(200, json=body))
+    real_sdk_transport(monkeypatch, "openai", transport)
     module = OpenAIAdapter(model="m", label="o", role="zero_shot")
     usage = _usage_through(module, tmp_path, monkeypatch, "OPENAI_API_KEY")
     assert usage == ResourceUsage(
@@ -211,24 +203,14 @@ def test_openai_real_sdk_keeps_the_details(
 def test_anthropic_real_sdk_keeps_the_cache_counts(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import functools
-
-    anthropic = pytest.importorskip("anthropic")
+    pytest.importorskip("anthropic")
     httpx2 = pytest.importorskip("httpx2")
 
     from cinoc.adapters.llm.anthropic import AnthropicAdapter
 
     body = wire("llm", "anthropic", "cached")
     transport = httpx2.MockTransport(lambda _r: httpx2.Response(200, json=body))
-    monkeypatch.setattr(
-        anthropic,
-        "Anthropic",
-        functools.partial(
-            anthropic.Anthropic,
-            http_client=httpx2.Client(transport=transport),
-            max_retries=0,
-        ),
-    )
+    real_sdk_transport(monkeypatch, "anthropic", transport)
     module = AnthropicAdapter(model="m", label="c", role="zero_shot")
     usage = _usage_through(module, tmp_path, monkeypatch, "ANTHROPIC_API_KEY")
     assert usage == ResourceUsage(
@@ -245,9 +227,7 @@ def test_mistral_real_sdk_keeps_the_cached_count(
 ) -> None:
     """mistralai 3.x : ``PromptTokensDetails.cached_tokens`` a un défaut 0 —
     absent du corps, il n'est pas inventé au dump (``exclude_unset``)."""
-    import functools
-
-    mistralai = pytest.importorskip("mistralai.client")
+    pytest.importorskip("mistralai.client")
     httpx2 = pytest.importorskip("httpx2")
 
     from cinoc.adapters.llm.mistral import MistralAdapter
@@ -256,11 +236,7 @@ def test_mistral_real_sdk_keeps_the_cached_count(
     transport = httpx2.MockTransport(
         lambda _r: httpx2.Response(200, json=next(bodies))
     )
-    monkeypatch.setattr(
-        mistralai,
-        "Mistral",
-        functools.partial(mistralai.Mistral, client=httpx2.Client(transport=transport)),
-    )
+    real_sdk_transport(monkeypatch, "mistralai", transport)
     module = MistralAdapter(model="m", label="p", role="zero_shot")
     first = _usage_through(module, tmp_path / "a", monkeypatch, "MISTRAL_API_KEY")
     assert first is not None and first.tokens_cache_read == 1024

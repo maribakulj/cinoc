@@ -56,7 +56,7 @@ from cinoc.adapters._native import sdk_native, served_model, validate_endpoint
 from cinoc.adapters._resilience import (
     DEFAULT_LLM_TIMEOUT,
     call_resilient,
-    register_close,
+    cut_on_cancel_hooks,
     request_timeout,
     step_deadline,
     validate_timeout,
@@ -221,18 +221,26 @@ def _openai_client(
                 "api_key_env) — absente ou vide."
             )
     try:
-        from openai import OpenAI, OpenAIError  # type: ignore[import-not-found]
+        from openai import (  # type: ignore[import-not-found]
+            DefaultHttpxClient,
+            OpenAI,
+            OpenAIError,
+        )
     except ImportError as exc:
         raise AdapterStepError(
             "openai : SDK non installé (pip install 'cinoc[openai]')."
         ) from exc
     kwargs = _request_kwargs(model, messages, settings)
+    ctrl = control if control is not None else RunControl()
+    # Le client HTTP du SDK, ses défauts compris, + la trace qui coupe l'appel
+    # en vol à l'arrêt (``cut_on_cancel_hooks``).
+    http = DefaultHttpxClient(event_hooks=cut_on_cancel_hooks(ctrl))
     try:
         # SDK openai typé strictement ; kwargs valides à l'exécution (tests live).
         # ``max_retries=0`` : une seule politique de retry, celle de Cinoc.
-        client = OpenAI(api_key=api_key, base_url=base_url, max_retries=0)
-        if control is not None:
-            register_close(control, client)
+        client = OpenAI(
+            api_key=api_key, base_url=base_url, max_retries=0, http_client=http
+        )
 
         def _create() -> Any:
             return client.chat.completions.create(  # type: ignore[call-overload]
@@ -242,7 +250,7 @@ def _openai_client(
         # Cap de concurrence (≤ N appels simultanés **par serveur**) + retry borné sur
         # 429/5xx/transport (Retry-After respecté), dans le délai de l'étape.
         response = call_resilient(
-            "openai", _create, deadline=deadline, endpoint=base_url, control=control
+            "openai", _create, deadline=deadline, endpoint=base_url, control=ctrl
         )
     except CinocError:
         raise  # délai, annulation : déjà typés
@@ -250,6 +258,8 @@ def _openai_client(
         raise AdapterStepError(
             f"openai a échoué ({model}) : {type(exc).__name__}: {exc}"
         ) from exc
+    finally:
+        http.close()
     return _completion_from_chat(sdk_native(response, "openai"))
 
 

@@ -72,6 +72,45 @@ def _sdk_response(body: dict[str, Any], api_key: str) -> SdkResponse:
 Next = Callable[[], dict[str, Any]]
 
 
+class FakeHttpClient:
+    """Client HTTP d'un faux SDK (``DefaultHttpxClient``, ``httpx2.Client``) :
+    reçoit les crochets de coupure (``cut_on_cancel_hooks``), n'envoie rien. La
+    coupure en vol se teste sur les vrais SDK (``test_cut_in_flight``)."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        self.kwargs = kwargs
+        self.closed = False
+
+    def close(self) -> None:
+        self.closed = True
+
+
+def real_sdk_transport(
+    monkeypatch: pytest.MonkeyPatch, sdk: str, transport: object
+) -> None:
+    """Sert un **vrai** SDK par ``transport`` (un ``httpx2.MockTransport``), en
+    gardant le client HTTP que l'adaptateur construit — crochets de coupure
+    compris : ``DefaultHttpxClient`` d'``openai``/``anthropic``, ``httpx2.Client``
+    pour ``mistralai`` (seul ``transport`` est ajouté)."""
+    import functools
+
+    module: Any = pytest.importorskip("httpx2" if sdk == "mistralai" else sdk)
+    name = "Client" if sdk == "mistralai" else "DefaultHttpxClient"
+    monkeypatch.setattr(
+        module, name, functools.partial(getattr(module, name), transport=transport)
+    )
+
+
+def fake_sdk_module(name: str, **attributes: object) -> types.ModuleType:
+    """Module factice d'un SDK (openai, anthropic) : ses attributs, plus le
+    ``DefaultHttpxClient`` que l'adaptateur construit."""
+    module = types.ModuleType(name)
+    module.DefaultHttpxClient = FakeHttpClient  # type: ignore[attr-defined]
+    for key, value in attributes.items():
+        setattr(module, key, value)
+    return module
+
+
 def install_fake_sdks(
     monkeypatch: pytest.MonkeyPatch, next_body: dict[str, Next]
 ) -> None:
@@ -107,12 +146,12 @@ def install_fake_sdks(
 
         return _Client
 
-    openai = types.ModuleType("openai")
-    openai.OpenAI = _client("openai", "create")  # type: ignore[attr-defined]
-    openai.OpenAIError = _Erreur  # type: ignore[attr-defined]
-    anthropic = types.ModuleType("anthropic")
-    anthropic.Anthropic = _client("anthropic", "create")  # type: ignore[attr-defined]
-    anthropic.AnthropicError = _Erreur  # type: ignore[attr-defined]
+    openai = fake_sdk_module(
+        "openai", OpenAI=_client("openai", "create"), OpenAIError=_Erreur
+    )
+    anthropic = fake_sdk_module(
+        "anthropic", Anthropic=_client("anthropic", "create"), AnthropicError=_Erreur
+    )
     for name, module in (("openai", openai), ("anthropic", anthropic)):
         monkeypatch.setitem(sys.modules, name, module)
     install_fake_mistralai(monkeypatch, _client("mistral", "complete"))
@@ -120,14 +159,18 @@ def install_fake_sdks(
 
 def install_fake_mistralai(monkeypatch: pytest.MonkeyPatch, client: type) -> None:
     """``mistralai`` 3.x factice : le client vit dans ``mistralai.client``
-    (depuis la 2.x), le paquet racine n'exporte plus ``Mistral``."""
+    (depuis la 2.x), le paquet racine n'exporte plus ``Mistral``. Avec lui,
+    ``httpx2`` (sa dépendance, dont l'adaptateur construit le client HTTP)."""
     racine = types.ModuleType("mistralai")
     racine.__path__ = []  # type: ignore[attr-defined]  # un paquet, pas un module
     sous = types.ModuleType("mistralai.client")
     sous.Mistral = client  # type: ignore[attr-defined]
     racine.client = sous  # type: ignore[attr-defined]
+    httpx2 = types.ModuleType("httpx2")
+    httpx2.Client = FakeHttpClient  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "mistralai", racine)
     monkeypatch.setitem(sys.modules, "mistralai.client", sous)
+    monkeypatch.setitem(sys.modules, "httpx2", httpx2)
 
 
 def install_fake_http(

@@ -35,7 +35,7 @@ from cinoc.adapters._resilience import (
     DEFAULT_OCR_TIMEOUT,
     BillingMeter,
     call_resilient,
-    register_close,
+    cut_on_cancel_hooks,
     request_timeout,
     step_deadline,
     validate_timeout,
@@ -152,10 +152,13 @@ def _invoke_google_vision(
     }
     ctrl = control if control is not None else RunControl()
     try:
+        # Un arrêt coupe l'appel en vol (``cut_on_cancel_hooks``) : ``close()``
+        # d'un autre fil ne réveille pas une lecture bloquante.
         with httpx.Client(
-            timeout=request_timeout(deadline), transport=transport
+            timeout=request_timeout(deadline),
+            transport=transport,
+            event_hooks=cut_on_cancel_hooks(ctrl),
         ) as client:
-            register_close(ctrl, client)
 
             def annotate() -> object:
                 response = client.post(

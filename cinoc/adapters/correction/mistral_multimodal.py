@@ -37,8 +37,10 @@ from typing import Any
 from cinoc.adapters.correction.mistral_structured import (
     parse_chat_json,
     post_chat,
+    responses_usage,
     usage_from,
 )
+from cinoc.domain.usage import ResourceUsage
 
 #: Mesuré, pas documenté : une neuvième image est refusée en 400/3051.
 MAX_IMAGES_PER_CALL = 8
@@ -119,6 +121,10 @@ class MistralMultimodalClient:
         )
         self.responses.append(data)
         return parse_chat_json(data, model), usage_from(data)
+
+    def usage(self) -> ResourceUsage | None:
+        """Jetons de toutes les réponses reçues (``responses_usage``)."""
+        return responses_usage(self.responses)
 
 
 __all__ = ["MAX_IMAGES_PER_CALL", "MistralMultimodalClient"]

@@ -49,6 +49,7 @@ from tests.adapters._native_fakes import (
     AZURE_ENDPOINT,
     OLLAMA_HOST,
     SdkResponse,
+    fake_sdk_module,
     install_fake_mistralai,
     wire,
 )
@@ -143,12 +144,17 @@ def _install(
     class _Erreur(Exception):
         pass
 
-    openai = types.ModuleType("openai")
-    openai.OpenAI = _client("openai", ("chat", "completions", "create"))  # type: ignore[attr-defined]
-    openai.OpenAIError = _Erreur  # type: ignore[attr-defined]
-    anthropic = types.ModuleType("anthropic")
-    anthropic.Anthropic = _client("anthropic", ("messages", "create"))  # type: ignore[attr-defined]
-    anthropic.AnthropicError = _Erreur  # type: ignore[attr-defined]
+    openai = fake_sdk_module(
+        "openai",
+        OpenAI=_client("openai", ("chat", "completions", "create")),
+        OpenAIError=_Erreur,
+    )
+    anthropic = fake_sdk_module(
+        "anthropic",
+        Anthropic=_client("anthropic", ("messages", "create")),
+        AnthropicError=_Erreur,
+    )
+
     class _Mistral:
         def __init__(self, **kwargs: Any) -> None:
             seen.setdefault("mistralai:init", []).append(kwargs)
