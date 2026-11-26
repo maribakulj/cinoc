@@ -15,6 +15,7 @@ from __future__ import annotations
 import unicodedata
 
 from cinoc.domain.artifacts import ArtifactType
+from cinoc.domain.evaluation import MetricCategory, MetricUnit
 from cinoc.evaluation.context import DocContext
 from cinoc.evaluation.errors import EvaluationError
 from cinoc.evaluation.metric import DocumentMetric, Observation, document_metric
@@ -34,6 +35,8 @@ def _is_diacritic(char: str) -> bool:
 @document_metric(
     name="diacritic_err",
     input_types=(ArtifactType.RAW_TEXT, ArtifactType.RAW_TEXT),
+    category=MetricCategory.EXPLORATORY,
+    unit=MetricUnit.CHARACTER,
     description="Taux d'erreur sur les caractères à diacritique (umlauts, accents).",
     higher_is_better=False,
     tags=frozenset({"text", "philology", "alignment"}),

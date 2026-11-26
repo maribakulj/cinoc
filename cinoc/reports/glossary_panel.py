@@ -14,7 +14,13 @@ deux cas.
 from __future__ import annotations
 
 from cinoc.reports.glossary import load_glossary
-from cinoc.reports.html import escape
+from cinoc.reports.html import escape, localized
+from cinoc.reports.metric_categories import (
+    category_label,
+    category_of,
+    unit_label,
+    unit_of,
+)
 
 #: Id du dialog (cible de l'ancre du chrome + du repli ``:target``).
 DIALOG_ID = "glossary-dialog"
@@ -24,6 +30,7 @@ _FIELDS: tuple[tuple[str, str, str], ...] = (
     ("definition", "Définition", "Definition"),
     ("measures", "Ce que ça mesure", "What it measures"),
     ("limits", "Limites", "Limits"),
+    ("oracle", "Oracle", "Oracle"),
 )
 _HEADINGS = {"fr": "Glossaire", "en": "Glossary"}
 _INTROS = {
@@ -39,9 +46,23 @@ def _field_label(idx: int, lang: str) -> str:
     return _FIELDS[idx][2] if lang == "en" else _FIELDS[idx][1]
 
 
-def _entry(term: dict[str, str], lang: str) -> str:
+def _declared(metric: str, lang: str) -> str:
+    """Catégorie et unité **déclarées au registre** (D-289) — pas recopiées
+    dans le YAML : la fiche les lit là où le calcul les porte."""
+    category, unit = category_of(metric), unit_of(metric)
+    if category is None or unit is None:
+        return ""
+    return (
+        f'<dt class="gl-k">{localized(lang, "Catégorie", "Category")}</dt>'
+        f'<dd class="gl-v">{escape(category_label(category, lang))}</dd>'
+        f'<dt class="gl-k">{localized(lang, "Unité", "Unit")}</dt>'
+        f'<dd class="gl-v">{escape(unit_label(unit, lang))}</dd>'
+    )
+
+
+def _entry(metric: str, term: dict[str, str], lang: str) -> str:
     title = term.get("title", "")
-    rows = "".join(
+    rows = _declared(metric, lang) + "".join(
         f'<dt class="gl-k">{escape(_field_label(i, lang))}</dt>'
         f'<dd class="gl-v">{escape(term[key])}</dd>'
         for i, (key, _, _) in enumerate(_FIELDS)
@@ -67,7 +88,9 @@ def glossary_dialog(present: set[str], lang: str) -> str:
     métrique présente n'a d'entrée de glossaire (pas de dialog, pas de lien chrome).
     """
     glossary = load_glossary(lang)
-    items = [_entry(glossary[m], lang) for m in sorted(present) if m in glossary]
+    items = [
+        _entry(m, glossary[m], lang) for m in sorted(present) if m in glossary
+    ]
     if not items:
         return ""
     heading = escape(_HEADINGS.get(lang, _HEADINGS["fr"]))

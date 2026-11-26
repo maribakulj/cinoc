@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from rapidfuzz.distance import Levenshtein
 
 from cinoc.domain.artifacts import ArtifactType
+from cinoc.domain.evaluation import MetricCategory, MetricUnit
 from cinoc.evaluation._alignment import opcodes
 from cinoc.evaluation.context import DocContext
 from cinoc.evaluation.errors import EvaluationError
@@ -128,6 +129,8 @@ def _text_pair(ctx: DocContext) -> tuple[str, str]:
 @document_metric(
     name="cer",
     input_types=(ArtifactType.RAW_TEXT, ArtifactType.RAW_TEXT),
+    category=MetricCategory.ESTABLISHED,
+    unit=MetricUnit.CHARACTER,
     description="Character Error Rate : distance d'édition / longueur de référence.",
     higher_is_better=False,
     tags=frozenset({"text", "edit_distance"}),
@@ -143,6 +146,8 @@ def cer(ctx: DocContext) -> Observation:
 @document_metric(
     name="cer_diplo",
     input_types=(ArtifactType.RAW_TEXT, ArtifactType.RAW_TEXT),
+    category=MetricCategory.ADAPTED,
+    unit=MetricUnit.CHARACTER,
     description="CER diplomatique : CER après repli ſ long→s (NFC), des deux côtés.",
     higher_is_better=False,
     tags=frozenset({"text", "edit_distance", "philology"}),
@@ -158,6 +163,8 @@ def cer_diplomatic(ctx: DocContext) -> Observation:
 @document_metric(
     name="wer",
     input_types=(ArtifactType.RAW_TEXT, ArtifactType.RAW_TEXT),
+    category=MetricCategory.ESTABLISHED,
+    unit=MetricUnit.WORD,
     description="Word Error Rate : distance d'édition au mot / nombre de mots de réf.",
     higher_is_better=False,
     tags=frozenset({"text", "edit_distance", "word"}),
@@ -174,6 +181,8 @@ def wer(ctx: DocContext) -> Observation:
 @document_metric(
     name="mer",
     input_types=(ArtifactType.RAW_TEXT, ArtifactType.RAW_TEXT),
+    category=MetricCategory.ESTABLISHED,
+    unit=MetricUnit.WORD,
     description="Match Error Rate : erreurs / (erreurs + correspondances), au mot.",
     higher_is_better=False,
     tags=frozenset({"text", "edit_distance", "word"}),
@@ -190,6 +199,8 @@ def mer(ctx: DocContext) -> Observation:
 @document_metric(
     name="del_rate",
     input_types=(ArtifactType.RAW_TEXT, ArtifactType.RAW_TEXT),
+    category=MetricCategory.ADAPTED,
+    unit=MetricUnit.WORD,
     description="Taux de suppression au mot : mots de réf. omis / mots de réf.",
     higher_is_better=False,
     tags=frozenset({"text", "word", "error_profile"}),
@@ -207,6 +218,8 @@ def deletion_rate(ctx: DocContext) -> Observation:
 @document_metric(
     name="ins_rate",
     input_types=(ArtifactType.RAW_TEXT, ArtifactType.RAW_TEXT),
+    category=MetricCategory.ADAPTED,
+    unit=MetricUnit.WORD,
     description="Taux d'insertion au mot : mots parasites ajoutés / mots de réf.",
     higher_is_better=False,
     tags=frozenset({"text", "word", "error_profile"}),
@@ -224,6 +237,8 @@ def insertion_rate(ctx: DocContext) -> Observation:
 @document_metric(
     name="char_accuracy",
     input_types=(ArtifactType.RAW_TEXT, ArtifactType.RAW_TEXT),
+    category=MetricCategory.ADAPTED,
+    unit=MetricUnit.CHARACTER,
     description="Exactitude caractère : 1 − CER, bornée [0, 1] (lecture ICDAR).",
     higher_is_better=True,
     tags=frozenset({"text", "edit_distance", "accuracy"}),
@@ -239,6 +254,8 @@ def char_accuracy(ctx: DocContext) -> Observation:
 @document_metric(
     name="word_accuracy",
     input_types=(ArtifactType.RAW_TEXT, ArtifactType.RAW_TEXT),
+    category=MetricCategory.ADAPTED,
+    unit=MetricUnit.WORD,
     description="Exactitude mot : 1 − WER, bornée [0, 1] (lecture ICDAR).",
     higher_is_better=True,
     tags=frozenset({"text", "edit_distance", "word", "accuracy"}),

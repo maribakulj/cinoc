@@ -10,15 +10,21 @@
 #   definition  : 2-3 phrases de définition formelle
 #   measures    : ce que la métrique mesure concrètement
 #   limits      : limites connues, pièges fréquents
+#   oracle      : la référence nommée, et ce contre quoi le calcul est vérifié
+#
+# Catégorie et unité ne sont PAS ici : elles sont déclarées au registre
+# (MetricSpec), et la fiche les y lit. La définition nomme l'unité que le
+# poids du calcul compte (verrouillé par test).
 
 cer:
   title: "CER — taux d'erreur caractère"
   definition: >-
-    Distance d'édition (substitutions + insertions + suppressions) entre la
-    sortie et la référence, comptée en points de code Unicode, rapportée à
-    la longueur de la référence. Les deux textes sont d'abord préparés par le
-    profil de la vue (défaut flat_text : NFC, invisibles retirés, tout blanc
-    réduit à une espace). 0 = transcription parfaite ; dépasse 1 si la sortie
+    Distance d'édition (substitutions + insertions + suppressions) entre
+    la sortie et la référence, comptée en caractères (points de code
+    Unicode), rapportée au nombre de caractères de la référence. Les
+    deux textes sont d'abord préparés par le profil de la vue (défaut
+    flat_text : NFC, invisibles retirés, tout blanc réduit à une
+    espace). 0 = transcription parfaite ; dépasse 1 si la sortie
     rallonge. Le CER par ligne applique la même formule à chaque ligne,
     plafonnée à 1.
   measures: >-
@@ -29,13 +35,19 @@ cer:
     autant qu'une faute courante. Dépend du profil : sous keep_line_breaks
     (vue « texte (lignes) »), un saut de ligne rendu par une espace compte
     une substitution ; à plat, non.
+  oracle: >-
+    Référence : CER de l'ISRI (ocreval), de jiwer et de dinglehopper.
+    Vérifié contre : jiwer 4.0.0 (cer), recalculé en CI, et dinglehopper
+    0.11.0 sur dix cas de convention (écarts de normalisation dits cas
+    par cas).
 
 cer_diplo:
   title: "CER diplomatique"
   definition: >-
-    CER calculé après le profil de la vue puis un repli minimal appliqué des
-    deux côtés : forme Unicode NFC, invisibles retirés, s long ſ replié en s.
-    Les autres variantes historiques (u/v, ligatures) restent distinctes.
+    Taux d'erreur caractère (CER) calculé après le profil de la vue puis
+    un repli minimal appliqué des deux côtés : forme Unicode NFC,
+    invisibles retirés, s long ſ replié en s. Les autres variantes
+    historiques (u/v, ligatures) restent distinctes.
   measures: >-
     La fidélité à la graphie du témoin, sans pénaliser le seul choix ſ/s
     ni une différence d'encodage Unicode invisible à l'œil.
@@ -44,6 +56,10 @@ cer_diplo:
     applique déjà NFC et retire les invisibles, l'écart entre les deux isole
     l'effet ſ ; sous une comparaison brute, il y mêle ces deux effets. À ne
     comparer qu'entre moteurs évalués sur la même vérité terrain.
+  oracle: >-
+    Référence : le CER, après un repli ſ → s (transcription
+    diplomatique). Variante : le repli est celui de Cinoc. Vérifié
+    contre : valeurs calculées à la main dans les tests.
 
 wer:
   title: "WER — taux d'erreur mot"
@@ -57,6 +73,10 @@ wer:
   limits: >-
     Très sensible à la segmentation en mots et à la ponctuation collée ;
     un WER élevé peut masquer un CER faible.
+  oracle: >-
+    Référence : WER de jiwer (distance d'édition au mot, mots découpés
+    sur les blancs). Vérifié contre : jiwer 4.0.0 (wer), recalculé en
+    CI.
 
 mer:
   title: "MER — match error rate"
@@ -69,6 +89,9 @@ mer:
   limits: >-
     Proche du WER sur texte propre ; diverge surtout en présence de longues
     insertions. Pour sa variante caractère, voir le cMER.
+  oracle: >-
+    Référence : MER de Morris, Maier et Green (2004), tel que jiwer le
+    calcule. Vérifié contre : jiwer 4.0.0 (mer), recalculé en CI.
 
 cmer:
   title: "cMER — match error rate caractère (HIPE)"
@@ -85,6 +108,10 @@ cmer:
     Dépend du profil de normalisation : le profil « hipe » plie casse,
     ponctuation et certaines formes patrimoniales (œ/oe, æ/ae) — comparer les
     vues hipe/heritage pour isoler cet effet.
+  oracle: >-
+    Référence : métrique de classement du scorer HIPE-OCRepair. Vérifié
+    contre : le scorer officiel (valeurs épinglées à 1e-9) et
+    jiwer.process_characters.
 
 numseq_strict:
   title: "Séquences numériques — restitution stricte"
@@ -99,6 +126,9 @@ numseq_strict:
     Détection par motifs conservateurs : les formes en toutes lettres
     (« mil cinq cens ») ne sont pas couvertes ; la précision prime sur le
     rappel.
+  oracle: >-
+    Référence : aucune — construction de Cinoc. Vérifié contre : valeurs
+    calculées à la main dans les tests.
 
 numseq_value:
   title: "Séquences numériques — restitution en valeur"
@@ -112,6 +142,9 @@ numseq_value:
   limits: >-
     Toujours supérieure ou égale à la restitution stricte ; un écart fort
     entre les deux signale un moteur qui modernise ou abrège les formes.
+  oracle: >-
+    Référence : aucune — construction de Cinoc. Vérifié contre : valeurs
+    calculées à la main dans les tests.
 
 del_rate:
   title: "Taux de suppressions"
@@ -123,6 +156,11 @@ del_rate:
   limits: >-
     Composante d'erreur seule : à lire avec le taux d'insertions pour
     diagnostiquer un déséquilibre.
+  oracle: >-
+    Référence : part des suppressions au mot, comme la rapporte sclite
+    (NIST). Variante : la répartition S/D/I d'un alignement à égalité de
+    coût est celle de Cinoc. Vérifié contre : valeurs calculées à la
+    main dans les tests.
 
 ins_rate:
   title: "Taux d'insertions"
@@ -136,6 +174,11 @@ ins_rate:
   limits: >-
     Composante d'erreur seule ; un taux élevé isolé oriente vers du bruit
     ou une hallucination plutôt qu'une mauvaise lecture.
+  oracle: >-
+    Référence : part des insertions au mot, comme la rapporte sclite
+    (NIST). Variante : la répartition S/D/I d'un alignement à égalité de
+    coût est celle de Cinoc. Vérifié contre : valeurs calculées à la
+    main dans les tests.
 
 diacritic_err:
   title: "Erreur sur les diacritiques"
@@ -151,6 +194,9 @@ diacritic_err:
     Non applicable aux écritures sans diacritiques. Sensible à la forme
     Unicode : sans profil de normalisation, un é composé face au même é
     décomposé compte comme une erreur.
+  oracle: >-
+    Référence : aucune — construction de Cinoc. Vérifié contre : valeurs
+    calculées à la main dans les tests.
 
 mufi_err:
   title: "Erreur MUFI (caractères médiévaux)"
@@ -162,6 +208,10 @@ mufi_err:
     écritures médiévales.
   limits: >-
     Non applicable si la vérité terrain ne contient aucun caractère MUFI.
+  oracle: >-
+    Référence : aucune — construction de Cinoc (la MUFI normalise des
+    caractères, pas une métrique). Vérifié contre : valeurs calculées à
+    la main dans les tests.
 
 hcpr:
   title: "Préservation des archaïsmes (HCPR)"
@@ -174,6 +224,9 @@ hcpr:
   limits: >-
     Visible seulement quand une liste archaïque est explicitement configurée
     (sinon redondant avec mufi_err) ; non applicable si la GT n'en porte aucun.
+  oracle: >-
+    Référence : aucune — construction de Cinoc. Vérifié contre : valeurs
+    calculées à la main dans les tests.
 
 air:
   title: "Apport net d'archaïsmes (AIR)"
@@ -186,6 +239,9 @@ air:
   limits: >-
     Non applicable si la sortie ne contient aucun caractère de la liste ;
     borne supérieure (un archaïsme légitime hors GT peut le faire monter).
+  oracle: >-
+    Référence : aucune — construction de Cinoc. Vérifié contre : valeurs
+    calculées à la main dans les tests.
 
 ner_f1:
   title: "F1 sur entités nommées (empan)"
@@ -203,6 +259,11 @@ ner_f1:
     qu'un appariement d'empans exacts et plus stricte qu'un simple
     recouvrement : « Montfort » lu « Montfert » au même endroit compte juste
     — c'est ce que mesure ner_f1_exact.
+  oracle: >-
+    Référence : le F1 d'entités des campagnes d'évaluation NER, qui
+    apparient les empans exactement (strict) ou par tout recouvrement
+    (souple). Variante : l'appariement par IoU ≥ 0,5 est propre à Cinoc. Vérifié contre : valeurs calculées à la main
+    dans les tests.
 
 ner_f1_exact:
   title: "F1 sur entités nommées (nom exact)"
@@ -216,6 +277,11 @@ ner_f1_exact:
   limits: >-
     Aucune tolérance : une casse ou un accent différent suffit à manquer le
     nom. Mêmes appariement et limites que ner_f1 (mesure conjointe OCR + NER).
+  oracle: >-
+    Référence : le F1 d'entités des campagnes d'évaluation NER.
+    Variante : appariement de ner_f1 (IoU ≥ 0,5), puis forme écrite
+    exacte. Vérifié contre : valeurs
+    calculées à la main dans les tests.
 
 unanchored_trigrams:
   title: "Texte non ancré (trigrammes)"
@@ -232,6 +298,10 @@ unanchored_trigrams:
     réordonné presque 0. Une insertion légitime (texte présent sur la page
     mais hors vérité terrain) la fait monter ; n'établit aucune intention du
     modèle.
+  oracle: >-
+    Référence : aucune — construction de Cinoc. Vérifié contre : valeurs
+    calculées à la main dans les tests. La page dupliquée (0,021) y est
+    figée comme limite.
 
 searchability:
   title: "Rappel plein-texte (tolérance selon la longueur)"
@@ -246,6 +316,11 @@ searchability:
   limits: >-
     Heuristique d'usage : ne remplace pas une évaluation de rappel sur des
     requêtes réelles. Une transposition coûte 2 éditions (Lucene la compte 1).
+  oracle: >-
+    Référence : la recherche floue de Lucene/Elasticsearch (fuzziness
+    AUTO). Variante : distance de Levenshtein (Lucene compte une
+    transposition 1). Non exécutée en test ; vérifié contre : valeurs
+    calculées à la main dans les tests.
 
 region_cer:
   title: "CER par région"
@@ -263,6 +338,11 @@ region_cer:
     Dépend de la qualité de la segmentation amont ; non applicable sans
     couche structurelle. Dépasse 1 quand la sortie invente plus de texte
     que la référence n'en porte.
+  oracle: >-
+    Référence : le CER, par région appariée. Variante : appariement par
+    identifiant sinon par géométrie, régions fantômes comptées en
+    insertions — propres à Cinoc. Vérifié contre : valeurs calculées à
+    la main dans les tests.
 
 fca:
   title: "FCA — exactitude flexible (limitée : lignes fusionnées → 0)"
@@ -282,19 +362,33 @@ fca:
     quelle que soit la qualité du texte (CER brut 0,105 sur un exemple où
     elle vaut 0). Sous le profil par défaut (flat_text), la vue a déjà réuni
     les lignes : il n'en reste qu'une, et la FCA vaut 1 − CER, sans sa
-    tolérance à l'ordre.
+    tolérance à l'ordre. Aucune vue par défaut ne la note : une spec qui
+    garde les lignes la demande.
+  oracle: >-
+    Référence : Flexible Character Accuracy de Clausner et al. Variante
+    : lignes appariées entières (algorithme hongrois), jamais coupées.
+    Le paquet de référence n'est pas exécuté ; vérifié contre : valeurs
+    calculées à la main dans les tests.
 
 region_detection:
   title: "Détection de régions"
   definition: >-
-    Mesure de recouvrement entre les régions détectées par la segmentation
-    et les régions de la vérité terrain de mise en page.
+    F1 des régions : une région détectée et une région de la vérité
+    terrain de mise en page sont appariées (glouton, chacune au plus une
+    fois) quand l'IoU de leurs boîtes englobantes, en coordonnées
+    relatives à la page, atteint 0,5 ; précision = appariées / régions
+    détectées, rappel = appariées / régions de référence.
   measures: >-
     La justesse de la segmentation (a-t-on trouvé les bons blocs, au bon
     endroit) indépendamment du texte.
   limits: >-
     Non applicable sans vérité terrain de mise en page ; sensible au seuil
     de recouvrement choisi.
+  oracle: >-
+    Référence : F1 de détection à IoU ≥ 0,5 (convention PASCAL VOC).
+    Variante : appariement glouton sur boîtes englobantes en coordonnées
+    relatives. Vérifié contre : valeurs calculées à la main dans les
+    tests. Plus un extrait ABBYY réel (BnL).
 
 significance_p:
   title: "p-valeur (test statistique)"
@@ -310,6 +404,10 @@ significance_p:
     Ne mesure ni l'ampleur ni l'importance pratique de l'écart ; sensible à
     la taille du corpus. Un Friedman dit qu'au moins un pipeline diffère :
     lesquels, seul le post-hoc de Nemenyi le dit.
+  oracle: >-
+    Référence : Wilcoxon signé-rangs et Friedman de scipy. Vérifié
+    contre : 5 005 tests tirés au hasard, recalculés sans le code de
+    Cinoc (test, p, correction de Holm, post-hoc).
 
 ece:
   title: "ECE — erreur de calibration attendue"
@@ -324,6 +422,9 @@ ece:
     disent rien du texte qu'un LLM a corrigé derrière lui) ; non applicable
     à une étape sans score de confiance. Dépend du découpage : dix bins
     [b/10 ; (b+1)/10[, le dernier fermé à 1,0.
+  oracle: >-
+    Référence : ECE à dix bins de Guo et al. (2017). Vérifié contre :
+    valeurs calculées à la main dans les tests.
 
 mce:
   title: "MCE — erreur de calibration maximale"
@@ -335,3 +436,150 @@ mce:
     donne que la moyenne.
   limits: >-
     Sensible aux bins peu peuplés ; à lire conjointement avec l'ECE.
+  oracle: >-
+    Référence : MCE à dix bins de Guo et al. (2017). Vérifié contre :
+    valeurs calculées à la main dans les tests.
+
+char_accuracy:
+  title: "Exactitude caractère"
+  definition: >-
+    1 − CER, bornée à [0, 1] : la part des caractères de la référence
+    que la sortie restitue, sous le profil de la vue.
+  measures: >-
+    La même fidélité caractère-à-caractère que le CER, lue « plus haut =
+    mieux ».
+  limits: >-
+    Redondante avec le CER, qu'elle recopie à la borne près : une sortie
+    qui rallonge assez pour dépasser un CER de 1 vaut 0, sans dire de
+    combien.
+  oracle: >-
+    Référence : l'exactitude caractère de l'ISRI, (n − erreurs) / n.
+    Variante : bornée à 0 par Cinoc. Vérifié contre : le CER, lui-même
+    vérifié contre jiwer.
+
+word_accuracy:
+  title: "Exactitude mot"
+  definition: >-
+    1 − WER, bornée à [0, 1] : calculée sur la distance d'édition au
+    mot, rapportée au nombre de mots de la référence.
+  measures: >-
+    La fidélité mot-à-mot du WER, lue « plus haut = mieux ».
+  limits: >-
+    Redondante avec le WER, à la borne près. Ce n'est pas l'exactitude
+    mot de l'ISRI, qui compte les mots correctement reconnus.
+  oracle: >-
+    Référence : l'exactitude mot (ISRI, ICDAR). Variante : 1 − WER
+    borné, propre à Cinoc. Vérifié contre : le WER, lui-même vérifié
+    contre jiwer.
+
+bow_precision:
+  title: "Sac de mots — précision"
+  definition: >-
+    Part des mots produits qui sont justes, sans tenir compte de leur
+    ordre : Σ min(compte référence, compte sortie) sur les mots
+    distincts, divisé par le nombre de mots de la sortie.
+  measures: >-
+    Ce qu'une recherche plein-texte trouverait d'exact dans la sortie :
+    une sortie bavarde perd en précision.
+  limits: >-
+    Mots découpés sur les blancs, ponctuation collée comprise ; aveugle
+    à l'ordre (un texte mélangé vaut 1).
+  oracle: >-
+    Référence : précision sur sac de mots (recherche d'information).
+    Variante : découpage sur les blancs, propre à Cinoc. Vérifié contre
+    : valeurs calculées à la main dans les tests.
+
+bow_recall:
+  title: "Sac de mots — rappel"
+  definition: >-
+    Part des mots de la référence retrouvés dans la sortie, sans tenir
+    compte de leur ordre : Σ min(compte référence, compte sortie) sur
+    les mots distincts, divisé par le nombre de mots de la référence.
+  measures: >-
+    Ce qu'une recherche plein-texte exacte retrouverait du document.
+  limits: >-
+    Mots découpés sur les blancs ; aveugle à l'ordre. Une lettre fausse
+    suffit à perdre le mot (voir searchability pour une recherche
+    tolérante).
+  oracle: >-
+    Référence : rappel sur sac de mots (recherche d'information).
+    Variante : découpage sur les blancs, propre à Cinoc. Vérifié contre
+    : valeurs calculées à la main dans les tests.
+
+bow_f1:
+  title: "Sac de mots — F1"
+  definition: >-
+    Moyenne harmonique de la précision et du rappel sur sac de mots ;
+    poids = nombre de mots de la référence.
+  measures: >-
+    L'équilibre entre mots justes produits et mots attendus retrouvés,
+    indépendamment de l'ordre.
+  limits: >-
+    Aveugle à l'ordre : un mot déplacé n'y coûte rien, là où le WER le
+    compte deux fois.
+  oracle: >-
+    Référence : F1 sur sac de mots (recherche d'information). Variante :
+    découpage sur les blancs, propre à Cinoc. Vérifié contre : valeurs
+    calculées à la main dans les tests.
+
+line_identity_cer:
+  title: "CER par ligne (appariement par identifiant)"
+  definition: >-
+    Distance d'édition des lignes appariées par leur identifiant,
+    rapportée au nombre de caractères de référence de ces lignes ; une
+    ligne de référence absente de la sortie compte entièrement fausse.
+  measures: >-
+    La qualité de transcription ligne à ligne quand l'appariement est
+    connu, sans la devinette d'un alignement de lignes.
+  limits: >-
+    Non applicable si un côté ne porte aucun identifiant de ligne ; une
+    ligne sans identifiant est ignorée. Lire avec la couverture.
+  oracle: >-
+    Référence : le CER, sur des lignes appariées par identité. Vérifié
+    contre : valeurs calculées à la main dans les tests.
+
+line_identity_coverage:
+  title: "Couverture des lignes (par identifiant)"
+  definition: >-
+    Part des lignes de la référence que la sortie porte sous le même
+    identifiant.
+  measures: >-
+    Les lignes perdues, fusionnées ou renommées — invisibles dans un
+    CER, qui ne distingue pas une ligne disparue d'une ligne mal lue.
+  limits: >-
+    Un simple comptage : une ligne présente mais fausse y compte juste.
+  oracle: >-
+    Référence : aucune — construction de Cinoc. Vérifié contre : valeurs
+    calculées à la main dans les tests.
+
+reading_order_tau:
+  title: "Désaccord d'ordre de lecture"
+  definition: >-
+    Distance de Kendall normalisée entre les ordres de lecture : part
+    des paires de blocs (régions) présents des deux côtés que la sortie
+    range dans l'ordre inverse de la référence ; poids = nombre de
+    régions communes.
+  measures: >-
+    L'ordonnancement seul, que le CER confond avec la lecture.
+  limits: >-
+    Ne regarde que les régions communes : à lire avec la couverture
+    d'ordre, sans quoi deux régions bien ordonnées sur trente paraissent
+    excellentes.
+  oracle: >-
+    Référence : distance de Kendall (1938). Variante : restreinte aux
+    régions appariées, propre à Cinoc. Vérifié contre : valeurs
+    calculées à la main dans les tests.
+
+reading_order_coverage:
+  title: "Couverture d'ordre de lecture"
+  definition: >-
+    Part des régions de l'ordre de lecture de la référence que la sortie
+    a ordonnées.
+  measures: >-
+    Le compagnon obligatoire du désaccord d'ordre : combien de régions
+    il a pu juger.
+  limits: >-
+    Un simple comptage, qui ne dit rien de la justesse de l'ordre.
+  oracle: >-
+    Référence : aucune — construction de Cinoc. Vérifié contre : valeurs
+    calculées à la main dans les tests.

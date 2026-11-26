@@ -29,7 +29,13 @@ from cinoc.domain.errors import (
     ProjectionError,
     RunCancelledError,
 )
-from cinoc.domain.evaluation import EvaluationSpec, EvaluationView, MetricSpec
+from cinoc.domain.evaluation import (
+    EvaluationSpec,
+    EvaluationView,
+    MetricCategory,
+    MetricSpec,
+    MetricUnit,
+)
 from cinoc.domain.pipeline import (
     INITIAL_STEP_ID,
     PipelineMode,
@@ -63,7 +69,9 @@ __all__ = [
     "DeadlineExceeded",
     "RunCancelledError",
     # Evaluation contracts
+    "MetricCategory",
     "MetricSpec",
+    "MetricUnit",
     "EvaluationView",
     "EvaluationSpec",
     "ProjectionSpec",

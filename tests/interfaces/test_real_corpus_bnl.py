@@ -224,7 +224,7 @@ def test_bnl_posthoc_shows_the_pair_that_differs(bnl_result: RunResult) -> None:
         if isinstance(a.payload, InferencePayload)
     }
     mer = payloads[("text", "mer")]
-    assert mer.test == "friedman" and mer.family_size == 10
+    assert mer.test == "friedman" and mer.family_size == 6
     assert mer.p_holm is not None and mer.p_holm < 0.05
     assert [(p.a, p.b) for p in mer.pairwise if p.significant] == [("easyocr", "fra")]
     assert len(mer.cd_groups) == 2 and set(mer.cd_groups[0]) & set(mer.cd_groups[1])

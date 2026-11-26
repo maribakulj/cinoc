@@ -134,17 +134,17 @@ _CANDIDATES = frozenset({ArtifactType.RAW_TEXT, ArtifactType.CORRECTED_TEXT})
 #: non enregistré ferait lever le runner (couche 3 ; verrouillé par test). Changer
 #: de profil n'allège **que** les colonnes de classement : les *collecteurs*
 #: (taxonomy, structured_data, NER…) restent indépendants de ``metric_names``, la
-#: donnée n'est jamais perdue. ``standard`` est le défaut **historique**
-#: (byte-identique à l'ancienne vue par défaut).
+#: donnée n'est jamais perdue. ``standard``, le défaut, n'a **aucune métrique
+#: exploratoire** (D-289 : ``unanchored_trigrams``, ``air`` restent au registre)
+#: ni ``fca`` (1 − CER à plat ; une spec qui garde les lignes peut la nommer).
 DEFAULT_METRIC_PROFILE = "standard"
 METRIC_PROFILES: dict[str, tuple[str, ...]] = {
     # ``cmer`` = MER caractère **borné [0,1]** (robuste aux modèles génératifs qui
     # font dépasser le CER ; cf. metrics/conformity) — calculé sur RAW_TEXT comme
     # CER, donc exposé d'office au socle (≠ réservé HIPE). Groupé « caractère ».
     "standard": (
-        "cer", "cmer", "char_accuracy", "word_accuracy", "fca", "wer", "mer",
-        "bow_precision", "bow_recall", "bow_f1",
-        "searchability", "unanchored_trigrams", "air",
+        "cer", "cmer", "char_accuracy", "word_accuracy", "wer", "mer",
+        "bow_precision", "bow_recall", "bow_f1", "searchability",
     ),
     "essentiel": ("cer", "wer", "mer"),
     "philologie": ("cer", "cer_diplo", "mer", "diacritic_err", "mufi_err", "air"),
@@ -160,9 +160,9 @@ def _text_views(
     base_metrics: tuple[str, ...] = METRIC_PROFILES[DEFAULT_METRIC_PROFILE],
 ) -> tuple[EvaluationView, ...]:
     # ``base_metrics`` vient du **profil de métriques** choisi (défaut
-    # ``standard``). ``air`` (apport net d'archaïsmes) y est d'office (Q4) ;
-    # ``hcpr`` (préservation) n'est **ajouté** que sur une liste **explicitement**
-    # configurée — sinon il doublonnerait ``mufi_err`` sur tout corpus médiéval.
+    # ``standard``). ``air`` (exploratoire, D-289) et ``hcpr`` ne sont **ajoutés**
+    # que sur une liste archaïque **explicitement** configurée — sinon ``hcpr``
+    # doublonnerait ``mufi_err`` sur tout corpus médiéval.
     # ``numseq_strict``/``numseq_value`` restent **hors** des profils (D-130) :
     # adaptatifs (``None`` sans séquences) → colonnes vides « — » sur tout corpus
     # sans dates/folios/montants. Ils restent **enregistrés** (utilisables par une
@@ -172,7 +172,8 @@ def _text_views(
     # classement scalaire par défaut s'allège.
     metric_names = base_metrics
     if with_hcpr:
-        metric_names = (*metric_names, "hcpr")
+        archaic = (m for m in ("air", "hcpr") if m not in metric_names)
+        metric_names = (*metric_names, *archaic)
     return text_views(
         corpus,
         candidate_types=_CANDIDATES,

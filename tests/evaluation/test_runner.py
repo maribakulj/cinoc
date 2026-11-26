@@ -13,7 +13,7 @@ from cinoc.domain.documents import DocumentRef, GroundTruthRef
 from cinoc.domain.evaluation import EvaluationSpec, EvaluationView
 from cinoc.domain.pipeline import PipelineSpec
 from cinoc.domain.run import RunManifest
-from cinoc.evaluation.analysis import DiagnosticsPayload
+from cinoc.evaluation.analysis import DiagnosticsPayload, InferencePayload
 from cinoc.evaluation.errors import EvaluationError
 from cinoc.evaluation.registry import MetricRegistry, register_default_metrics
 from cinoc.evaluation.result import RunResult
@@ -462,3 +462,54 @@ def test_inference_analyses_through_evaluate_run(tmp_path: Path) -> None:
     # Round-trip JSON : le payload structuré survit tel quel.
     reloaded = RunResult.model_validate_json(result.model_dump_json())
     assert reloaded.analyses == result.analyses
+
+
+def test_only_established_metrics_are_tested(tmp_path: Path) -> None:
+    """D-289 (réduit D-283) : la famille de Holm ne compte que les métriques
+    établies. ``cer_diplo`` (adaptée), ``unanchored_trigrams`` (exploratoire) et
+    ``char_accuracy`` (1 − CER borné, adaptée) sont notées, sans test : avant,
+    elles triplaient la famille et noyaient le CER dans la correction."""
+    gt_texts = ["abcdefgh", "ijklmnop", "qrstuvwx", "yzabcdef", "ghijklmn", "opqrstuv"]
+    documents = []
+    outputs: dict[str, dict[str, dict[str, dict[ArtifactType, Artifact]]]] = {
+        "alpha": {}, "beta": {}, "gamma": {},
+    }
+    for i, text in enumerate(gt_texts):
+        doc_id = f"d{i}"
+        documents.append(_doc(doc_id, _write(tmp_path / f"{doc_id}.gt.txt", text)))
+        for name, hyp in (("alpha", text), ("beta", "XY" + text[2:]),
+                          ("gamma", "X" + text[1:])):
+            path = _write(tmp_path / f"{doc_id}.{name}.txt", hyp)
+            outputs[name][doc_id] = {
+                "ocr": {ArtifactType.RAW_TEXT: _candidate(doc_id, path)}
+            }
+    view = TEXT_VIEW.model_copy(update={"metric_names": (
+        "cer", "cer_diplo", "unanchored_trigrams", "char_accuracy", "wer",
+    )})
+    result = evaluate_run(
+        corpus=CorpusSpec(name="c", documents=tuple(documents)),
+        evaluation=EvaluationSpec(views=(view,)),
+        pipeline_outputs=outputs,
+        registry=_registry(),
+        manifest=RunManifest(
+            run_id="r", corpus_name="c", n_documents=6,
+            pipeline_specs=tuple(
+                PipelineSpec(name=n, initial_inputs=(ArtifactType.IMAGE,))
+                for n in ("alpha", "beta", "gamma")
+            ),
+            code_version="1.0", started_at=FIXED, completed_at=FIXED,
+        ),
+    )
+    tested = {
+        a.payload.metric: a.payload
+        for a in result.analyses
+        if isinstance(a.payload, InferencePayload)
+    }
+    assert set(tested) == {"cer", "wer"}
+    assert {p.family_size for p in tested.values()} == {2}
+    assert {s.metric for s in result.cross_engine} == {
+        "text:cer:significance_p", "text:wer:significance_p",
+    }
+    # Toutes restent notées : le diagnostic ne perd rien.
+    aggregate = {s.metric for s in result.pipelines[0].aggregate}
+    assert aggregate == set(view.metric_names)

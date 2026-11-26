@@ -185,6 +185,8 @@ backlog inexistant. **Aucune logique ne change.**
 
 > **P5e 7 (D-285)** : `EvaluationView.normalization_profile` vaut par défaut `DEFAULT_NORMALIZATION_PROFILE` = `"flat_text"` (constante de `domain/evaluation.py`, vérifiée contre `NORMALIZATION_PROFILES` par la couche 2) ; `None` **explicite** = comparaison brute — le sens qu'avait `null` dans un JSON antérieur, donc rien n'est relu faux. Le nom est toujours sérialisé : un `RunResult` dit sous quelle convention son chiffre a été calculé. — *preuve : `tests/domain/test_evaluation.py::test_view_without_profile_gets_the_default_and_null_means_raw`*
 
+> **P5e 9 (D-289)** : `evaluation.py` gagne `MetricCategory` (`established` · `adapted` · `exploratory`) et `MetricUnit` (`character` · `word` · `character_trigram` · `line` · `region` · `entity` · `numeric_sequence` — ce que compte le **poids** de l'agrégat micro) ; `MetricSpec.category` et `MetricSpec.unit` sont **requis** : une métrique sans l'un ou l'autre n'est pas enregistrable. Consommateurs : le runner (famille de tests réduite aux établies), le rapport (classement, marques, fiche). Preuve : `tests/domain/test_evaluation.py::test_metric_spec_requires_category_and_unit`, `tests/reports/test_metric_cards.py`.
+
 > Tri-état : `[x]` fait **+ preuve** · `[ ]` à faire · `[~]` différé/réserve + raison.
 > Mise à jour dans le **même commit** que le code (règle d'or anti-dérive).
 > **Statut couche 1 : ✅ vert** (vérifié 2026-05-31).

@@ -15,6 +15,7 @@ from cinoc.evaluation.result import MetricScore
 from cinoc.reports._numbers import localize_decimal
 from cinoc.reports.glossary import load_glossary
 from cinoc.reports.html import escape, localized
+from cinoc.reports.metric_categories import category_mark
 
 
 def ordered_unique(values: Iterable[str]) -> tuple[str, ...]:
@@ -65,6 +66,11 @@ def col_max(rows: list[tuple[MetricScore, ...]], index: int) -> float:
 #: Métriques **calculées mais masquées de l'affichage** (toujours dans le JSON).
 #: ``mer`` (Match Error Rate) : redondant avec ``wer`` (aucun signal nouveau).
 _HIDDEN_METRICS: frozenset[str] = frozenset({"mer"})
+
+
+def is_displayed(metric: str) -> bool:
+    """Faux pour une métrique calculée mais masquée des tables (``mer``)."""
+    return metric not in _HIDDEN_METRICS
 
 
 def nonempty_metric_indices(rows: list[tuple[MetricScore, ...]]) -> list[int]:
@@ -218,7 +224,8 @@ def metric_short_label(metric: str) -> str:
 
 def metric_th(metric: str, lang: str, *, sortable: bool = False) -> str:
     """En-tête de colonne de métrique : libellé + **définition au survol** (E1,
-    depuis le glossaire) + **affordance de tri** (si ``sortable``).
+    depuis le glossaire) + **affordance de tri** (si ``sortable``) + la marque
+    d'une métrique adaptée ou exploratoire (D-289).
 
     Le tri est câblé client-side par ``report.js`` (réordonne des lignes déjà
     rendues) ; sans JS, l'en-tête reste un libellé avec son ``title``."""
@@ -230,7 +237,7 @@ def metric_th(metric: str, lang: str, *, sortable: bool = False) -> str:
     cls = "num-cell" + (" has-def" if title else "") + (" sortable" if sortable else "")
     arrow = ' <span class="th-sort" aria-hidden="true">↕</span>' if sortable else ""
     sort_attr = ' aria-sort="none"' if sortable else ""
-    label = escape(metric_short_label(metric))
+    label = escape(metric_short_label(metric)) + category_mark(metric, lang)
     return f'<th class="{cls}"{title_attr}{sort_attr}>{label}{arrow}</th>'
 
 
@@ -240,6 +247,7 @@ __all__ = [
     "col_max",
     "format_value",
     "group_header_row",
+    "is_displayed",
     "metric_short_label",
     "metric_th",
     "nonempty_metric_indices",

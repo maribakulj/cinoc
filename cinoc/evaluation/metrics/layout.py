@@ -20,6 +20,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 from cinoc.domain.artifacts import ArtifactType
+from cinoc.domain.evaluation import MetricCategory, MetricUnit
 from cinoc.domain.layout import CanonicalLayout, Region
 from cinoc.evaluation.context import DocContext
 from cinoc.evaluation.errors import EvaluationError
@@ -77,6 +78,8 @@ def _layout_pair(ctx: DocContext) -> tuple[CanonicalLayout, CanonicalLayout]:
 @document_metric(
     name="region_cer",
     input_types=(ArtifactType.LAYOUT, ArtifactType.LAYOUT),
+    category=MetricCategory.ADAPTED,
+    unit=MetricUnit.CHARACTER,
     description=(
         "CER par région agrégé à la page (micro) sur le CanonicalLayout ; le "
         "texte des régions fantômes de l'hypothèse compte en insertions."
@@ -265,6 +268,8 @@ def correspondance(
 @document_metric(
     name="region_detection",
     input_types=(ArtifactType.LAYOUT, ArtifactType.LAYOUT),
+    category=MetricCategory.ADAPTED,
+    unit=MetricUnit.REGION,
     description="F1 des régions appariées par IoU de boîte (≥0.5), coords relatives.",
     higher_is_better=True,
     tags=frozenset({"structure", "layout", "geometry", "detection"}),
@@ -298,6 +303,8 @@ def _lines_by_id(layout: CanonicalLayout) -> dict[str, str]:
 @document_metric(
     name="line_identity_cer",
     input_types=(ArtifactType.LAYOUT, ArtifactType.LAYOUT),
+    category=MetricCategory.ADAPTED,
+    unit=MetricUnit.CHARACTER,
     description="CER par ligne appariée par IDENTITÉ (et non par alignement).",
     higher_is_better=False,
     tags=frozenset({"structure", "edit_distance", "layout", "identity"}),
@@ -339,6 +346,8 @@ def line_identity_cer(ctx: DocContext) -> Observation | None:
 @document_metric(
     name="line_identity_coverage",
     input_types=(ArtifactType.LAYOUT, ArtifactType.LAYOUT),
+    category=MetricCategory.EXPLORATORY,
+    unit=MetricUnit.LINE,
     description="Part des lignes de référence retrouvées par identifiant.",
     higher_is_better=True,
     tags=frozenset({"structure", "layout", "identity", "coverage"}),
@@ -386,6 +395,8 @@ def _ordres(ctx: DocContext) -> tuple[list[str], list[str]]:
 @document_metric(
     name="reading_order_tau",
     input_types=(ArtifactType.LAYOUT, ArtifactType.LAYOUT),
+    category=MetricCategory.ADAPTED,
+    unit=MetricUnit.REGION,
     description=(
         "Désaccord d'ordre de lecture (Kendall normalisé) : part des paires de "
         "blocs rangées dans l'ordre inverse de la référence."
@@ -411,6 +422,8 @@ def reading_order_tau(ctx: DocContext) -> Observation | None:
 @document_metric(
     name="reading_order_coverage",
     input_types=(ArtifactType.LAYOUT, ArtifactType.LAYOUT),
+    category=MetricCategory.EXPLORATORY,
+    unit=MetricUnit.REGION,
     description="Part des blocs de la référence que l'hypothèse a ordonnés.",
     higher_is_better=True,
     tags=frozenset({"structure", "layout", "reading_order"}),

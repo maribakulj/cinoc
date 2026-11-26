@@ -15,6 +15,7 @@ Même mécanique que ``diacritic_err`` : alignement caractère ``rapidfuzz``
 from __future__ import annotations
 
 from cinoc.domain.artifacts import ArtifactType
+from cinoc.domain.evaluation import MetricCategory, MetricUnit
 from cinoc.evaluation.context import DocContext
 from cinoc.evaluation.errors import EvaluationError
 from cinoc.evaluation.metric import DocumentMetric, Observation, document_metric
@@ -47,6 +48,8 @@ def _is_mufi(char: str) -> bool:
 @document_metric(
     name="mufi_err",
     input_types=(ArtifactType.RAW_TEXT, ArtifactType.RAW_TEXT),
+    category=MetricCategory.EXPLORATORY,
+    unit=MetricUnit.CHARACTER,
     description="Taux d'erreur sur les caractères MUFI / médiévaux "
     "(PUA, abréviations latines, ſ/þ/ligatures…).",
     higher_is_better=False,

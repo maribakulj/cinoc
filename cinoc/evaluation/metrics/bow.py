@@ -17,6 +17,7 @@ from __future__ import annotations
 from collections import Counter
 
 from cinoc.domain.artifacts import ArtifactType
+from cinoc.domain.evaluation import MetricCategory, MetricUnit
 from cinoc.evaluation.context import DocContext
 from cinoc.evaluation.errors import EvaluationError
 from cinoc.evaluation.metric import DocumentMetric, Observation, document_metric
@@ -38,6 +39,8 @@ def _true_positives(ref: list[str], hyp: list[str]) -> int:
 @document_metric(
     name="bow_precision",
     input_types=(ArtifactType.RAW_TEXT, ArtifactType.RAW_TEXT),
+    category=MetricCategory.ADAPTED,
+    unit=MetricUnit.WORD,
     description="Bag-of-Words — précision : mots justes produits / mots produits.",
     higher_is_better=True,
     tags=frozenset({"text", "word", "search", "bag_of_words"}),
@@ -53,6 +56,8 @@ def bow_precision(ctx: DocContext) -> Observation:
 @document_metric(
     name="bow_recall",
     input_types=(ArtifactType.RAW_TEXT, ArtifactType.RAW_TEXT),
+    category=MetricCategory.ADAPTED,
+    unit=MetricUnit.WORD,
     description="Bag-of-Words — rappel : mots attendus retrouvés / mots attendus.",
     higher_is_better=True,
     tags=frozenset({"text", "word", "search", "bag_of_words"}),
@@ -68,6 +73,8 @@ def bow_recall(ctx: DocContext) -> Observation:
 @document_metric(
     name="bow_f1",
     input_types=(ArtifactType.RAW_TEXT, ArtifactType.RAW_TEXT),
+    category=MetricCategory.ADAPTED,
+    unit=MetricUnit.WORD,
     description="Bag-of-Words — F1 : moyenne harmonique précision/rappel des mots.",
     higher_is_better=True,
     tags=frozenset({"text", "word", "search", "bag_of_words"}),

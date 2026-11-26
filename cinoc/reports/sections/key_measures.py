@@ -1,6 +1,9 @@
 """Section Mesures clés : **socle chiffré neutre** par vue (couche 7).
 
-Le **headline** du rapport : les scores standard (CER/WER/FCA/exactitude/cMER)
+Le **headline** du rapport : les scores des métriques **établies** de la vue
+(CER, WER, cMER… — D-289 : seules celles-là sont classées et testées ; les
+adaptées et les exploratoires sont au diagnostic) et la **durée par page**
+(D-281, D11 : un moteur 25 fois plus lent ne se lisait qu'au mode détaillé),
 par moteur, en table **triable** (colonnes annotées du sens de lecture ↓/↑), un
 **dot plot classé** du CER avec **IC 95 % bootstrap** du CER micro affiché
 (calculé en couche evaluation — montre l'écart *et* son incertitude), et le
@@ -18,7 +21,12 @@ supprimé §6, anti-hallucination §12). Gatée sur ``cer``.
 from __future__ import annotations
 
 from cinoc.evaluation.analysis import InferencePayload
-from cinoc.evaluation.result import MetricScore, PipelineResult, RunResult
+from cinoc.evaluation.result import (
+    DocumentUsage,
+    MetricScore,
+    PipelineResult,
+    RunResult,
+)
 from cinoc.reports._numbers import localize_decimal
 from cinoc.reports.engine_badges import (
     engine_accent,
@@ -27,6 +35,7 @@ from cinoc.reports.engine_badges import (
     engine_order,
 )
 from cinoc.reports.html import escape, localized, view_label
+from cinoc.reports.metric_categories import higher_is_better, is_established
 from cinoc.reports.section import Html, SectionContext
 from cinoc.reports.sections._inference_text import (
     is_significant,
@@ -36,21 +45,32 @@ from cinoc.reports.sections._inference_text import (
     reason_text,
 )
 from cinoc.reports.sections._profile_text import convention_html
-from cinoc.reports.sections._tables import coverage, ordered_unique
+from cinoc.reports.sections._tables import coverage, is_displayed, ordered_unique
 from cinoc.reports.svg import dot_plot_ci
 
 _PRIMARY = "cer"
-#: Scores standard (ICDAR/HIPE) du headline : ``(clé, plus_haut_est_meilleur,
-#: libellé_fr, libellé_en)``. Ordre fixe ; seuls ceux présents dans la vue sont
-#: rendus. Le sens de lecture (↓/↑) est annoté en en-tête (donnée d'affichage).
-_HEADLINE: tuple[tuple[str, bool, str, str], ...] = (
-    ("cer", False, "CER", "CER"),
-    ("wer", False, "WER", "WER"),
-    ("fca", True, "FCA", "FCA"),
-    ("char_accuracy", True, "Exact. car.", "Char acc."),
-    ("word_accuracy", True, "Exact. mot", "Word acc."),
-    ("cmer", False, "cMER", "cMER"),
-)
+#: Libellé d'en-tête d'une métrique établie (le nom en capitales sinon).
+_LABELS: dict[str, str] = {"cmer": "cMER"}
+
+
+def _label(metric: str) -> str:
+    return _LABELS.get(metric, metric.upper())
+
+
+def _seconds_per_page(usage: tuple[DocumentUsage, ...]) -> dict[str, float]:
+    """Durée par page de chaque pipeline : Σ durées / n unités.
+
+    Sur les unités **produites** dont la durée est mesurée : une unité en
+    échec n'a rien mesuré, et la compter ferait passer une page perdue pour
+    une page rapide. Wall-clock de l'exécuteur, une fois par (pipeline ×
+    document) — les vues n'ont pas de coût propre.
+    """
+    totals: dict[str, list[float]] = {}
+    for unit in usage:
+        duration = unit.usage.duration_seconds
+        if unit.outcome != "failed" and duration is not None:
+            totals.setdefault(unit.pipeline, []).append(duration)
+    return {name: sum(values) / len(values) for name, values in totals.items()}
 
 
 def _score(pipeline: PipelineResult, metric: str) -> MetricScore | None:
@@ -88,13 +108,17 @@ class KeyMeasuresSection:
         views = ordered_unique(p.view for p in result.pipelines)
         multi = len(views) > 1
         specs = {v.name: v for v in result.manifest.view_specs}
+        durations = _seconds_per_page(result.usage)
         blocks: list[str] = []
         for view in views:
             pipes = [p for p in result.pipelines if p.view == view]
+            # Les établies seules (D-289), dans l'ordre de la vue.
             cols = [
-                (m, hib, fr, en)
-                for m, hib, fr, en in _HEADLINE
-                if any(_val(p, m) is not None for p in pipes)
+                s.metric
+                for s in pipes[0].aggregate
+                if is_established(s.metric)
+                and is_displayed(s.metric)
+                and any(_val(p, s.metric) is not None for p in pipes)
             ]
             if not cols:
                 continue
@@ -108,40 +132,64 @@ class KeyMeasuresSection:
                 head += convention_html(spec, lang)
             blocks.append(
                 head
-                + self._table(pipes, cols, order, lang)
+                + self._table(pipes, cols, durations, order, lang)
                 + self._dotplot(result, view, order, lang)
                 + self._significance(result, view, lang)
             )
         if not blocks:
             return None
         title = localized(lang, "Mesures clés", "Key measures")
+        time_fr = " — et durée par page" if durations else ""
+        time_en = " — and duration per page" if durations else ""
         caption = localized(
             lang,
-            "Scores standard par moteur (↓ = plus bas est meilleur · ↑ = plus haut "
-            "est meilleur). <strong>Triez</strong> par n'importe quelle colonne. "
-            "Aucun gagnant n'est déclaré : les chiffres et le test sont fournis, "
+            "Scores des métriques <strong>établies</strong> par moteur — les "
+            "seules classées et testées ; les métriques adaptées et "
+            f"exploratoires sont au diagnostic (« Comparaison »){time_fr} "
+            "(↓ = plus bas est meilleur · ↑ = plus haut est meilleur). "
+            "<strong>Triez</strong> par n'importe quelle colonne. Aucun gagnant "
+            "n'est déclaré : les chiffres et le test sont fournis, "
             "l'interprétation vous revient.",
-            "Standard scores per engine (↓ = lower is better · ↑ = higher is "
-            "better). <strong>Sort</strong> by any column. No winner is declared: "
-            "figures and the test are provided; interpretation is yours.",
+            "Scores of the <strong>established</strong> metrics per engine — the "
+            "only ones ranked and tested; adapted and exploratory metrics are "
+            f"diagnostic (“Engine comparison”){time_en} (↓ = lower is better · "
+            "↑ = higher is better). <strong>Sort</strong> by any column. No "
+            "winner is declared: figures and the test are provided; "
+            "interpretation is yours.",
         )
         return Html(
-            f"<h2>{title}</h2>\n<p class=\"muted\">{caption}</p>\n" + "".join(blocks)
+            f"<h2>{title}</h2>\n<p class=\"muted\">{caption}</p>\n"
+            + "".join(blocks)
+            + _duration_note(result, durations, lang)
         )
 
     @staticmethod
     def _table(
         pipes: list[PipelineResult],
-        cols: list[tuple[str, bool, str, str]],
+        cols: list[str],
+        durations: dict[str, float],
         order: dict[str, int],
         lang: str,
     ) -> str:
         th_engine = localized(lang, "Moteur", "Engine")
         headers = "".join(
             f'<th class="num-cell sortable" aria-sort="none">'
-            f'{escape(en if lang == "en" else fr)} {"↑" if hib else "↓"}</th>'
-            for _m, hib, fr, en in cols
+            f'{escape(_label(m))} {"↑" if higher_is_better(m) else "↓"}</th>'
+            for m in cols
         )
+        if durations:
+            tip = localized(
+                lang,
+                "Durée par page : Σ durées wall-clock des unités "
+                "produites / leur nombre (une unité en échec n'est pas comptée).",
+                "Duration per page: Σ wall-clock durations of the units "
+                "produced / their number (a failed unit is not counted).",
+            )
+            headers += (
+                f'<th class="num-cell sortable" aria-sort="none" '
+                f'title="{escape(tip)}">{localized(lang, "s/page", "s/page")} '
+                "↓</th>"
+            )
         ranked = sorted(
             pipes,
             key=lambda p: (
@@ -153,7 +201,7 @@ class KeyMeasuresSection:
         body: list[str] = []
         for p in ranked:
             cells = ""
-            for m, _hib, _fr, _en in cols:
+            for m in cols:
                 score = _score(p, m)
                 v = score.value if score is not None else None
                 cov = coverage(score, lang) if score is not None else ""
@@ -163,6 +211,15 @@ class KeyMeasuresSection:
                     disp = localize_decimal(f"{v:.4f}", lang)
                     cells += (
                         f'<td class="disp" data-sort="{v:.6f}">{disp}{cov}</td>'
+                    )
+            if durations:
+                seconds = durations.get(p.pipeline)
+                if seconds is None:
+                    cells += '<td class="disp muted">—</td>'
+                else:
+                    disp = localize_decimal(f"{seconds:.1f}", lang)
+                    cells += (
+                        f'<td class="disp" data-sort="{seconds:.6f}">{disp}</td>'
                     )
             badge = engine_cell(p.pipeline, order.get(p.pipeline, 0))
             body.append(f'<tr><td class="eng-cell">{badge}</td>{cells}</tr>')
@@ -260,6 +317,29 @@ class KeyMeasuresSection:
         posthoc = posthoc_text(payload, lang) if payload.test == "friedman" else ""
         tail = f" {posthoc}" if posthoc else ""
         return f'<p class="muted">{head}{txt}{tail}</p>\n'
+
+
+def _duration_note(
+    result: RunResult, durations: dict[str, float], lang: str
+) -> str:
+    """Ce que la durée ne dit pas encore, quand le run a une archive.
+
+    Une unité reprise d'une archive (``--resume-dir``) y garde la durée de sa
+    première exécution ; le ``RunResult`` ne distingue pas une unité reprise
+    d'une unité exécutée — il le dit plutôt que de la présenter comme mesurée
+    par ce run.
+    """
+    if not durations or result.manifest.artifacts_dir is None:
+        return ""
+    return '<p class="muted">' + localized(
+        lang,
+        "Durées : ce run a une archive de reprise. Une unité reprise de "
+        "l'archive y garde la durée mesurée à sa première exécution, que ce "
+        "rapport ne distingue pas encore d'une durée mesurée par ce run.",
+        "Durations: this run has a resume archive. A unit resumed from the "
+        "archive keeps the duration measured at its first execution, which "
+        "this report does not yet tell apart from one measured by this run.",
+    ) + "</p>\n"
 
 
 __all__ = ["KeyMeasuresSection"]

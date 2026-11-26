@@ -100,9 +100,10 @@ def test_table_is_sortable_with_def_headers() -> None:
     assert "un tri, pas un rang attribué" in html
 
 
-def test_air_and_hcpr_render_as_columns() -> None:
+def test_air_and_hcpr_render_as_diagnostic_columns() -> None:
     # Scalaires archaïques affichés comme colonnes by_engine (avec leur valeur),
-    # en-têtes porteurs de leur définition de glossaire.
+    # en-têtes porteurs de leur définition de glossaire — exploratoires, ils
+    # sont au diagnostic, marqués, sans tri (D-289).
     manifest = RunManifest(
         run_id="r",
         corpus_name="c",
@@ -127,7 +128,10 @@ def test_air_and_hcpr_render_as_columns() -> None:
     )
     html = EngineSection().render(result, SectionContext())
     assert html is not None
-    assert ">air " in html and ">hcpr " in html  # en-têtes de colonne (+ tri ↕)
+    ranking, diagnostic = html.split("<h3>Diagnostic</h3>")
+    assert ">air" not in ranking and ">hcpr" not in ranking
+    assert ">air<sup" in diagnostic and ">hcpr<sup" in diagnostic
+    assert "exploratoire" in diagnostic and "sortable" not in diagnostic
     assert "0,2500" in html and "0,8000" in html  # valeurs rendues
     assert "Apport net" in html  # définition glossaire FR de air au survol
 

@@ -24,6 +24,7 @@ from collections import Counter
 from dataclasses import dataclass
 
 from cinoc.domain.artifacts import ArtifactType
+from cinoc.domain.evaluation import MetricCategory, MetricUnit
 from cinoc.evaluation.context import DocContext
 from cinoc.evaluation.errors import EvaluationError
 from cinoc.evaluation.metric import DocumentMetric, Observation, document_metric
@@ -177,6 +178,8 @@ def _global_score(ctx: DocContext, *, strict: bool) -> Observation | None:
 @document_metric(
     name="numseq_strict",
     input_types=(ArtifactType.RAW_TEXT, ArtifactType.RAW_TEXT),
+    category=MetricCategory.EXPLORATORY,
+    unit=MetricUnit.NUMERIC_SEQUENCE,
     description=(
         "Part des séquences numériques de la GT (années, folios, montants, "
         "régnal) restituées sous leur forme exacte."
@@ -191,6 +194,8 @@ def numseq_strict(ctx: DocContext) -> Observation | None:
 @document_metric(
     name="numseq_value",
     input_types=(ArtifactType.RAW_TEXT, ArtifactType.RAW_TEXT),
+    category=MetricCategory.EXPLORATORY,
+    unit=MetricUnit.NUMERIC_SEQUENCE,
     description=(
         "Part des séquences numériques de la GT dont l'équivalent est restitué "
         "(forme libre : « f. 12r » vaut « fol. 12r »)."

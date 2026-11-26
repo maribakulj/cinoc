@@ -26,6 +26,7 @@ from __future__ import annotations
 from rapidfuzz.distance import Levenshtein
 
 from cinoc.domain.artifacts import ArtifactType
+from cinoc.domain.evaluation import MetricCategory, MetricUnit
 from cinoc.evaluation.context import DocContext
 from cinoc.evaluation.metric import DocumentMetric, Observation, document_metric
 
@@ -51,6 +52,8 @@ def _search_tolerance(word: str) -> int:
 @document_metric(
     name="searchability",
     input_types=(ArtifactType.RAW_TEXT, ArtifactType.RAW_TEXT),
+    category=MetricCategory.ADAPTED,
+    unit=MetricUnit.WORD,
     description=(
         "Part des mots de la référence retrouvables dans l'hypothèse par "
         "recherche plein-texte tolérante, à une distance de Levenshtein "
@@ -86,6 +89,8 @@ def _ngrams(text: str) -> list[str]:
 @document_metric(
     name="unanchored_trigrams",
     input_types=(ArtifactType.RAW_TEXT, ArtifactType.RAW_TEXT),
+    category=MetricCategory.EXPLORATORY,
+    unit=MetricUnit.CHARACTER_TRIGRAM,
     description=(
         "Part des trigrammes de caractères de l'hypothèse absents de la "
         "référence (1 - ancrage) ; aveugle à un texte dupliqué ou réordonné."
