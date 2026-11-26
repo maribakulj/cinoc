@@ -63,7 +63,9 @@ def _q(local: str) -> str:
 
 
 def _number(value: float) -> str:
-    return str(int(value)) if value.is_integer() else str(value)
+    # ``float(...)`` : la valeur peut arriver en ``int`` (coordonnées entières de
+    # ``CanonicalLayout``), et ``int.is_integer`` n'existe qu'à partir de 3.12.
+    return str(int(value)) if float(value).is_integer() else str(value)
 
 
 class _Ids:
