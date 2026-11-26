@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 import sys
 import types
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 
@@ -204,7 +204,28 @@ def cut_network(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(httpx, "Client", client)
 
 
+class OllamaStream:
+    """La réponse **diffusée** d'un faux client Ollama (``client.stream``) :
+    le corps non diffusé rendu en un seul morceau NDJSON, ``done`` posé — ce
+    que le vrai serveur envoie en dernier."""
+
+    def __init__(self, response: Any) -> None:
+        self._response = response
+
+    def __enter__(self) -> OllamaStream:
+        return self
+
+    def __exit__(self, *_: object) -> None: ...
+
+    def raise_for_status(self) -> None:
+        self._response.raise_for_status()
+
+    def iter_lines(self) -> Iterator[str]:
+        yield json.dumps({"done": True, **self._response.json()})
+
+
 __all__ = [
+    "OllamaStream",
     "AZURE_ENDPOINT",
     "CASSETTES",
     "KEY_ENV",

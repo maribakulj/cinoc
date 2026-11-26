@@ -34,7 +34,7 @@ def crop_region(
         from PIL import Image  # type: ignore[import-not-found]
     except ImportError as exc:
         raise AdapterStepError(
-            "crop_region : Pillow non installé (pip install 'cinoc[tesseract]')."
+            "crop_region : Pillow non installé (pip install 'cinoc[images]')."
         ) from exc
     try:
         with Image.open(page_image.uri) as image:

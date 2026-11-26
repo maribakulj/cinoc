@@ -44,6 +44,7 @@ from cinoc.domain.pipeline import PipelineSpec, PipelineStep
 from cinoc.domain.run_spec import RunSpec
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext
+from tests.adapters._native_fakes import OllamaStream
 
 _ADAPTERS = (OpenAIAdapter, MistralAdapter, OllamaAdapter, AnthropicAdapter)
 
@@ -194,6 +195,11 @@ def test_ollama_payload_carries_options(
         def post(self, url: str, json: dict[str, Any]) -> _Reponse:  # noqa: A002
             envoye["payload"] = json
             return _Reponse()
+
+        def stream(
+            self, method: str, url: str, json: dict[str, Any], **_: Any  # noqa: A002
+        ) -> OllamaStream:
+            return OllamaStream(self.post(url, json))
 
     import httpx
 

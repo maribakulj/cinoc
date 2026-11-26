@@ -5,12 +5,15 @@ d'openai** — même contrat ``RAW_TEXT`` → ``CORRECTED_TEXT``, sortie identiq
 aucun cas particulier. Transport ``httpx`` (extra), importé paresseusement et
 **isolé** dans ``_invoke_ollama`` (→ mockable, CI sans serveur).
 
-C'est l'**implémentation de référence de l'annulation câblée** : ``_invoke_ollama``
-enregistre ``client.close`` via ``RunControl.register_cancel_handle`` ; un
-``trigger_cancel`` ferme la connexion et **interrompt la requête en vol**. La
-distinction « annulation vs vraie panne réseau » se fait en sondant
-``is_cancelled`` (``_fail_or_cancel``) — pas par une heuristique de message
-fragile (dette de l'implémentation source, corrigée au portage).
+C'est l'**implémentation de référence de l'arrêt en vol** (D-300). L'appel est
+**diffusé** (``stream: true``) et l'arrêt du run est sondé entre deux morceaux ;
+avant le premier (encodage de l'image), ``cut_on_cancel`` coupe le socket —
+``client.close()`` d'un autre fil ne réveillait pas la lecture bloquante, et un
+« Arrêter » attendait la fin de la génération (~115 s sur CPU, D-299). Le corps
+reconstitué est celui du mode non diffusé : texte, jetons et sidecar natif
+inchangés. La distinction « annulation vs vraie panne réseau » se fait en
+sondant ``is_cancelled`` (``_fail_or_cancel``) — pas par une heuristique de
+message fragile (dette de l'implémentation source, corrigée au portage).
 
 Réglages (``InferenceSettings``) passés dans ``options`` : ``temperature``,
 ``top_p``, ``seed``, ``max_tokens`` → ``num_predict``, et ``num_ctx`` **explicite**.
@@ -36,13 +39,16 @@ au lieu de le doubler.
 
 from __future__ import annotations
 
+import json
 import logging
+from collections.abc import Iterable
 from typing import Any, ClassVar, NoReturn
 
 from cinoc.adapters._native import public_endpoint, served_model, validate_endpoint
 from cinoc.adapters._resilience import (
     DEFAULT_LLM_TIMEOUT,
     call_resilient,
+    cut_on_cancel,
     request_timeout,
     step_deadline,
     validate_timeout,
@@ -149,8 +155,8 @@ def _fail_or_cancel(
 ) -> NoReturn:
     """Traduit un échec d'appel ollama.
 
-    Si l'annulation a été déclenchée, le ``client.close`` enregistré a fait
-    échouer la requête en vol : on lève alors ``RunCancelledError`` (via
+    Si l'annulation a été déclenchée, le socket coupé (``cut_on_cancel``) a
+    fait échouer la requête en vol : on lève alors ``RunCancelledError`` (via
     ``raise_if_cancelled``). Si la deadline de l'étape est écoulée, le délai
     passé au client s'est déclenché → ``DeadlineExceeded``. Sinon c'est une
     vraie panne → ``AdapterStepError``. Sonder ``is_cancelled`` est **fiable**,
@@ -163,6 +169,54 @@ def _fail_or_cancel(
             f"ollama ({model}) : délai dépassé ({type(exc).__name__})."
         ) from exc
     raise AdapterStepError(f"ollama a échoué ({model}) : {exc}") from exc
+
+
+def _read_stream(
+    lines: Iterable[str], *, control: RunControl, deadline: Deadline, model: str
+) -> dict[str, Any]:
+    """Morceaux NDJSON de ``/api/chat`` (``stream: true``) → le corps que
+    rendrait ``stream: false`` : le **dernier** morceau (``done``, raison
+    d'arrêt, jetons, durées) dont le message porte le texte **concaténé**.
+    Mêmes clés, même texte, mêmes jetons (vérifié contre le vrai serveur) : le
+    sidecar natif ne change pas de forme.
+
+    Entre deux morceaux, l'arrêt du run et la deadline de l'étape sont sondés :
+    un arrêt coupe la génération en une fraction de seconde au lieu d'attendre
+    sa fin (D-299). Un morceau ``error`` est rendu tel quel
+    (``_completion_from_chat`` le lève, comme l'erreur en HTTP 200 du mode
+    non diffusé).
+    """
+    parts: dict[str, list[str]] = {}
+    last: dict[str, Any] | None = None
+    for line in lines:
+        control.raise_if_cancelled()
+        if deadline.is_expired():
+            raise DeadlineExceeded(f"ollama ({model}) : délai dépassé en génération.")
+        if not line.strip():
+            continue
+        try:
+            chunk = json.loads(line)
+        except ValueError as exc:
+            raise AdapterStepError(
+                f"ollama ({model}) : morceau de réponse illisible : {exc}"
+            ) from exc
+        if not isinstance(chunk, dict):
+            raise AdapterStepError(f"ollama ({model}) : morceau de réponse illisible.")
+        if chunk.get("error"):
+            return chunk
+        message = chunk.get("message")
+        if isinstance(message, dict):
+            for key in ("content", "thinking"):
+                if isinstance(message.get(key), str):
+                    parts.setdefault(key, []).append(message[key])
+        last = chunk
+        if chunk.get("done"):
+            break
+    if last is None or not last.get("done"):
+        raise AdapterStepError(f"ollama ({model}) : réponse interrompue avant la fin.")
+    message = dict(last.get("message") or {})
+    message.update({key: "".join(values) for key, values in parts.items()})
+    return {**last, "message": message}
 
 
 def _invoke_ollama(
@@ -183,24 +237,33 @@ def _invoke_ollama(
     demande: dict[str, object] = {"role": "user", "content": prompt}
     if image_b64 is not None:
         demande["images"] = [image_b64]
+    # **En flux** : seule forme où un arrêt peut couper une génération en
+    # cours (le corps reconstitué est celui du mode non diffusé).
     payload = {
         "model": model,
         "messages": [demande],
-        "stream": False,
+        "stream": True,
         "options": options,
     }
     client = httpx.Client(timeout=request_timeout(deadline))
-    # Annulation câblée : fermer le client interrompt la requête en vol.
-    control.register_cancel_handle(client.close)
+    # Annulation câblée : couper le socket réveille la lecture en attente — y
+    # compris avant le premier morceau (encodage de l'image, ~30 s par page
+    # sur CPU), là où aucun sondage n'a lieu.
+    trace = cut_on_cancel(control)
 
     def _post() -> Any:
         # **/api/chat** (et non /api/generate) : applique le gabarit de chat du
         # modèle. Indispensable pour les modèles *instruct*, qui échouent sur
         # /api/generate (complétion brute). C'est l'endpoint qu'utilise
         # ``ollama run``.
-        response = client.post(f"{host}/api/chat", json=payload)
-        response.raise_for_status()
-        return response.json()
+        with client.stream(
+            "POST", f"{host}/api/chat", json=payload, extensions={"trace": trace}
+        ) as response:
+            response.raise_for_status()
+            return _read_stream(
+                response.iter_lines(), control=control, deadline=deadline,
+                model=model,
+            )
 
     try:
         # Sous le créneau du serveur, **sans retry** (voir le module).

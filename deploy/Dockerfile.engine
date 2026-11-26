@@ -71,7 +71,8 @@ RUN useradd --create-home --uid 1000 cinoc
 WORKDIR /home/cinoc/app
 
 # ── Dépendances Python d'abord (cache de couche) ───────────────────────────────
-# requirements.txt fige le cœur + l'extra [serve] + pytesseract (wrapper du binaire).
+# requirements.txt fige le cœur + l'extra [serve] + Pillow (le binaire est lancé
+# par Cinoc lui-même : aucun wrapper Python).
 COPY requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 

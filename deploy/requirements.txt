@@ -24,8 +24,9 @@ httpcore>=1,<2
 # Épinglé par majeure, comme l'extra [mistral] du pyproject (3.x : `Mistral`
 # vit dans `mistralai.client`, et Mistral OCR y demande les blocs).
 mistralai>=3,<4
-# Socle OCR gratuit (Tesseract) : wrapper Python pur du binaire ``tesseract``.
-# **Effectif uniquement dans l'image moteur** (deploy/Dockerfile.engine, qui bake
-# le binaire + les langues). Dans la vitrine lecture seule (sans binaire), il reste
-# **inerte** : importé paresseusement, jamais exécuté → tesseract y est indisponible.
-pytesseract>=0.3.10,<1
+# Socle OCR gratuit (Tesseract) : **aucun paquet Python** — Cinoc lance le binaire
+# lui-même (D-300 ; ``pytesseract`` retiré). Le binaire et ses langues sont bakés
+# par l'image moteur (deploy/Dockerfile.engine) ; la vitrine n'en a pas.
+# Pillow : vignettes du rapport, découpe des blocs (hybride), prétraitement. Il
+# arrivait jusqu'ici **par** pytesseract, qui en dépend ; il est désormais nommé.
+Pillow>=10,<14

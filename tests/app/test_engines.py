@@ -19,24 +19,12 @@ def test_precomputed_always_available() -> None:
     assert st["precomputed"][0] is True
 
 
-def test_tesseract_needs_binary_and_module() -> None:
-    common = {"get_env": lambda _n: None}
-    # ni binaire ni module
-    st = _statuses(has_binary=lambda _n: None, has_module=lambda _n: False, **common)
+def test_tesseract_needs_only_its_binary() -> None:
+    """Cinoc lance le binaire lui-même (D-300) : aucun module Python requis."""
+    common = {"get_env": lambda _n: None, "has_module": lambda _n: False}
+    st = _statuses(has_binary=lambda _n: None, **common)
     assert st["tesseract"][0] is False and "binaire" in st["tesseract"][1]
-    # binaire présent mais pytesseract absent
-    st = _statuses(
-        has_binary=lambda _n: "/usr/bin/tesseract",
-        has_module=lambda _n: False,
-        **common,
-    )
-    assert st["tesseract"][0] is False and "pytesseract" in st["tesseract"][1]
-    # les deux présents
-    st = _statuses(
-        has_binary=lambda _n: "/usr/bin/tesseract",
-        has_module=lambda _n: True,
-        **common,
-    )
+    st = _statuses(has_binary=lambda _n: "/usr/bin/tesseract", **common)
     assert st["tesseract"][0] is True
 
 
