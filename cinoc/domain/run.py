@@ -5,10 +5,12 @@ version du code, quand, et avec quelles dépendances. Sérialisé en
 ``run_manifest.json`` ; combiné aux JSONL de résultats, il permet de
 reconstituer un run sans objets Python live.
 
-Garantie de reproductibilité : à ``code_version`` + ``pipeline_specs`` +
-``view_specs`` + ``dependencies_lock`` + ``system_binaries_lock``
-identiques, ré-exécuter donne les mêmes résultats (au déterminisme près
-des adapters externes).
+Garantie de reproductibilité : à ``pipeline_specs`` + ``adapter_kwargs``
+(réglages effectifs) + ``module_versions`` + ``system_binaries_lock``
+identiques, ré-exécuter donne les mêmes sorties (au déterminisme près des
+moteurs externes, et au modèle servi près — ``served_models`` dit lequel) ;
+à ``code_version`` + ``dependencies_lock`` + ``unicode_version`` identiques en
+plus, les mêmes métriques.
 """
 
 from __future__ import annotations
@@ -38,8 +40,11 @@ class RunManifest(BaseModel):
         Specs complètes des pipelines (steps, params, inputs_from…),
         incluses intégralement pour reproductibilité.
     adapter_kwargs:
-        ``{adapter_name: kwargs}`` capturés. Les valeurs sensibles
-        (api_key) n'y figurent pas — elles viennent de l'environnement.
+        ``{adapter_name: réglages effectifs}`` — les kwargs saisis complétés de
+        ce que le module déclare appliquer (``effective_settings()`` : modèle
+        demandé, prompt, défauts, endpoint lu dans l'environnement). C'est
+        exactement ce que hache l'empreinte de l'étape. Les valeurs secrètes
+        n'y figurent pas (``<secret>``).
     view_specs:
         Vues d'évaluation appliquées.
     failure_policy:
@@ -49,8 +54,21 @@ class RunManifest(BaseModel):
     code_version:
         Version du code.
     dependencies_lock / system_binaries_lock:
-        Snapshots ``{paquet: version}`` et ``{binaire: version}`` —
-        indispensables à la reproductibilité.
+        Snapshots ``{distribution: version}`` (``cinoc`` et ses dépendances
+        installées, SDK des moteurs compris) et ``{binaire: version}`` (ceux
+        que les modules du run enveloppent ; ceux de l'archive pour un run
+        ``--offline``, qui n'exécute rien) — indispensables à la
+        reproductibilité.
+    unicode_version:
+        Version de la base Unicode de l'interpréteur
+        (``unicodedata.unidata_version``) : la normalisation NFC/NFD, la
+        casse et les catégories de caractères en dépendent, donc les métriques.
+    served_models:
+        ``{adapter_name: (modèle servi, …)}`` — ce que les fournisseurs disent
+        avoir servi (``response.model``), triés, sur toutes les unités ; absent
+        pour un module dont la réponse ne le dit pas. Distinct du modèle
+        **demandé** (``adapter_kwargs``) : un alias change de cible sans
+        prévenir. Une observation, pas un réglage : hors de l'empreinte.
     artifacts_dir:
         Dossier où les artefacts produits ont été **conservés** — le cache de
         reprise, quand un a été demandé. ``None`` sinon : le workspace d'un run
@@ -80,7 +98,9 @@ class RunManifest(BaseModel):
     completed_at: datetime
     dependencies_lock: dict[str, str] = Field(default_factory=dict)
     system_binaries_lock: dict[str, str] = Field(default_factory=dict)
+    unicode_version: str | None = Field(default=None, max_length=32)
     module_versions: dict[str, str] = Field(default_factory=dict)
+    served_models: dict[str, tuple[str, ...]] = Field(default_factory=dict)
     metadata: dict[str, str] = Field(default_factory=dict)
     artifacts_dir: str | None = Field(default=None, max_length=4096)
 

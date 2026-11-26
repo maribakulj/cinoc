@@ -123,3 +123,18 @@ def test_english_labels() -> None:
     assert html is not None
     assert "Methodology & reproducibility" in html
     assert "Méthodologie" not in html
+
+
+def test_served_models_and_unicode_database_are_shown_in_both_languages() -> None:
+    """Le modèle **servi** et la base Unicode (S9) rejoignent les verrous."""
+    manifest = _manifest(
+        served_models={"openai:c0": ("gpt-4o-mini-2024-07-18",)},
+        unicode_version="15.1.0",
+    )
+    fr = MethodologySection().render(_result(manifest), SectionContext())
+    en = MethodologySection().render(_result(manifest), SectionContext(lang="en"))
+    assert fr is not None and en is not None
+    assert "Modèles servis" in fr and "Base Unicode" in fr
+    assert "Served models" in en and "Unicode database" in en
+    for html in (fr, en):
+        assert "gpt-4o-mini-2024-07-18" in html and "15.1.0" in html

@@ -13,6 +13,7 @@ from cinoc.domain.documents import DocumentRef, GroundTruthRef
 from cinoc.domain.evaluation import EvaluationSpec, EvaluationView
 from cinoc.domain.pipeline import PipelineSpec, PipelineStep
 from cinoc.domain.run_spec import RunSpec
+from cinoc.pipeline.fingerprint import ModuleIdentity
 from cinoc.pipeline.types import StepOutput
 
 
@@ -117,30 +118,41 @@ def test_second_run_executes_nothing_and_scores_identically(tmp_path: Path) -> N
     )
 
 
-def test_code_version_change_invalidates_cache(tmp_path: Path) -> None:
+def test_code_version_change_keeps_the_cache(tmp_path: Path) -> None:
+    """La version du paquet n'est plus dans la clé (S9) : une correction de
+    métrique ne rejoue aucune inférence."""
     calls: list[str] = []
     store = ResumeStore(tmp_path / "cache")
     spec = _spec(tmp_path)
     run(spec, registry=_registry(calls), code_version="1.0", resume_store=store)
     run(spec, registry=_registry(calls), code_version="2.0", resume_store=store)
-    assert calls == ["d1", "d1"]  # nouvelle version → ré-exécution
+    assert calls == ["d1"]
+
+
+def test_module_version_change_invalidates_cache(tmp_path: Path) -> None:
+    calls: list[str] = []
+    store = ResumeStore(tmp_path / "cache")
+    spec = _spec(tmp_path)
+    run(spec, registry=_registry(calls), code_version="1.0", resume_store=store)
+    bumped = ModuleRegistry()
+    bumped.register_builder(
+        "counting",
+        lambda kwargs: type("_Bumped", (_CountingOCR,), {"version": "1.1"})(calls),
+    )
+    run(spec, registry=bumped, code_version="1.0", resume_store=store)
+    assert calls == ["d1", "d1"]  # module relevé → ré-exécution
 
 
 def test_image_content_change_invalidates_cache(tmp_path: Path) -> None:
     spec = _spec(tmp_path)
     document = spec.corpus.documents[0]
+    identities = {"counting:eng": ModuleIdentity("1.0")}
     key_before = unit_key(
-        code_version="1.0",
-        pipeline=spec.pipelines[0],
-        adapter_kwargs={},
-        document=document,
+        pipeline=spec.pipelines[0], identities=identities, document=document
     )
     Path(document.image_uri).write_bytes(b"\x89PNG autre contenu")
     key_after = unit_key(
-        code_version="1.0",
-        pipeline=spec.pipelines[0],
-        adapter_kwargs={},
-        document=document,
+        pipeline=spec.pipelines[0], identities=identities, document=document
     )
     assert key_before != key_after
 

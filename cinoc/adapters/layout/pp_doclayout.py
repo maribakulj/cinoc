@@ -108,6 +108,12 @@ class PPDocLayoutSegmenter:
     def version(self) -> str:
         return _VERSION
 
+    def effective_settings(self) -> dict[str, str]:
+        """La variante du modèle (``PP-DocLayout-L`` / ``-S``…) : la fabrique la
+        prend à ``CINOC_PPDOCLAYOUT_MODEL`` quand la spec ne la nomme pas —
+        écrite ici, elle entre au manifeste et dans l'empreinte de l'étape."""
+        return {"model": self._model}
+
     @property
     def input_types(self) -> frozenset[ArtifactType]:
         return frozenset({ArtifactType.IMAGE})

@@ -35,6 +35,23 @@ from cinoc.reports.section import Html, SectionContext
 #: Paramètres masqués : ils n'apprennent rien sur ce que fait la brique.
 #: ``label`` ne sert qu'à nommer les fichiers du workspace.
 _BRUIT = frozenset({"label", "source_label"})
+#: Au-delà, une valeur (un prompt, désormais écrit défaut compris) est abrégée
+#: dans le tableau ; elle reste entière au manifeste et dans son infobulle.
+_VALEUR_MAX = 60
+
+
+def _valeur(v: object) -> str:
+    # ``None`` = réglage **non transmis** au fournisseur (manifeste, D-277) :
+    # « — », pas le ``None`` de Python.
+    if v is None:
+        return "—"
+    texte = str(v)
+    if len(texte) <= _VALEUR_MAX:
+        return escape(texte)
+    return (
+        f'<span title="{escape(texte)}">'
+        f"{escape(texte[: _VALEUR_MAX - 1])}…</span>"
+    )
 
 
 def _params(kwargs: dict[str, Any]) -> str:
@@ -42,11 +59,7 @@ def _params(kwargs: dict[str, Any]) -> str:
     utiles = {k: v for k, v in sorted(kwargs.items()) if k not in _BRUIT}
     if not utiles:
         return ""
-    # ``None`` = réglage **non transmis** au fournisseur (manifeste, D-277) :
-    # « — », pas le ``None`` de Python.
-    return " · ".join(
-        f"{escape(k)}={'—' if v is None else escape(str(v))}" for k, v in utiles.items()
-    )
+    return " · ".join(f"{escape(k)}={_valeur(v)}" for k, v in utiles.items())
 
 
 def _flux(step: dict[str, Any], rang: int, precedent: str | None) -> str:

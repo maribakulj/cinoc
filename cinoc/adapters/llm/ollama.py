@@ -26,14 +26,17 @@ from __future__ import annotations
 
 from typing import ClassVar, NoReturn
 
+from cinoc.adapters._native import public_endpoint, served_model
 from cinoc.adapters.llm._base import (
     DEFAULT_MAX_TOKENS,
     DEFAULT_SEED,
     DEFAULT_TEMPERATURE,
+    EffectiveSettings,
     InferenceSettings,
     LLMCompletion,
     StopReason,
     default_prompt_for_role,
+    llm_effective_settings,
     llm_input_types,
     llm_output_types,
     normalize_llm_content,
@@ -105,6 +108,7 @@ def _completion_from_chat(data: object, model: str) -> LLMCompletion:
         usage_tokens(counts.get("eval_count")),
         stop_reason_from(counts.get("done_reason"), _STOP_REASONS),
         native=data,
+        model=served_model(data),
     )
 
 
@@ -250,13 +254,22 @@ class OllamaAdapter:
     def version(self) -> str:
         return _VERSION
 
-    def inference_settings(self) -> dict[str, float | int | None]:
-        """Réglages **effectifs** (défauts compris), recopiés au manifeste.
+    def effective_settings(self) -> EffectiveSettings:
+        """Réglages **effectifs** (défauts compris) : manifeste et empreinte.
 
         ``max_tokens`` part comme ``options.num_predict`` : le même nom que chez
         les trois autres fournisseurs, pour que deux manifestes se comparent.
+        ``host`` est la cible (un autre serveur peut servir un autre modèle sous
+        le même nom), écrite sans identifiants ni *query string*.
         """
-        return {**self._settings.as_manifest(), "num_ctx": self._num_ctx}
+        return llm_effective_settings(
+            model=self._model,
+            role=self._role,
+            prompt=self._prompt,
+            settings=self._settings,
+            num_ctx=self._num_ctx,
+            host=public_endpoint(self._host),
+        )
 
     @property
     def input_types(self) -> frozenset[ArtifactType]:

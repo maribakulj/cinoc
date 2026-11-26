@@ -219,7 +219,12 @@ def _run_config(
     check: bool = False,
     alto_dir: str | None = None,
     analyses: str | None = None,
+    offline: bool = False,
 ) -> int:
+    if offline and not resume_dir:
+        raise CinocError(
+            "--offline re-note une archive : il exige --resume-dir <archive>."
+        )
     if repeat > 1 and resume_dir:
         raise CinocError(
             "--repeat et --resume-dir s'excluent : rejouer un cache de reprise "
@@ -267,6 +272,7 @@ def _run_config(
             resume_store=resume_store,
             artifact_sink=artifact_sink,
             max_workers=max_workers,
+            offline=offline,
         )
 
     results, variance = run_repeatedly(_once, repeat)
@@ -465,6 +471,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.check,
                 args.alto_dir,
                 args.analyses,
+                args.offline,
             )
         if args.command == "correct":
             return run_correction(

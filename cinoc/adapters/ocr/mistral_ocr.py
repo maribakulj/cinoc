@@ -16,7 +16,7 @@ from base64 import b64encode
 from pathlib import Path
 from typing import Any
 
-from cinoc.adapters._native import sdk_native
+from cinoc.adapters._native import sdk_native, served_model
 from cinoc.adapters.ocr._base import run_remote_image_to_text
 from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.deadline import Deadline
@@ -103,6 +103,12 @@ class MistralOCRAdapter:
     def version(self) -> str:
         return _VERSION
 
+    def effective_settings(self) -> dict[str, str]:
+        """Le modèle **demandé**, défaut compris : manifeste et empreinte. Le
+        modèle servi (``mistral-ocr-latest`` → ``mistral-ocr-2505``) est lu dans
+        chaque réponse."""
+        return {"model": self._model}
+
     @property
     def input_types(self) -> frozenset[ArtifactType]:
         return frozenset({ArtifactType.IMAGE})
@@ -128,6 +134,7 @@ class MistralOCRAdapter:
                 model=self._model, image_path=image_uri, deadline=context.deadline
             ),
             extract=_text_from_response,
+            served=served_model,
         )
 
 

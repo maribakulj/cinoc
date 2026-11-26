@@ -15,22 +15,30 @@ répond 400, le SDK lève ``BadRequestError`` (un ``OpenAIError``), traduit en
 ``AdapterStepError`` → l'unité échoue avec le message de l'API (motif
 ``engine``), le run continue, et ``call_resilient`` ne rejoue pas un 400.
 ``temperature=None`` (API Python) ne l'envoie pas.
+
+Cible : ``OPENAI_BASE_URL`` (le contournement d'aujourd'hui pour un serveur
+OpenAI-compatible, vLLM…) est lue **à la construction**, transmise au client et
+écrite dans les réglages effectifs (``base_url``) — donc au manifeste et dans
+l'empreinte de l'étape : un autre endpoint n'est plus pris pour le même modèle.
+Sans elle, l'URL par défaut du SDK, écrite aussi.
 """
 
 from __future__ import annotations
 
 from typing import Any, ClassVar
 
-from cinoc.adapters._native import sdk_native
+from cinoc.adapters._native import endpoint_from_env, sdk_native, served_model
 from cinoc.adapters._resilience import call_resilient
 from cinoc.adapters.llm._base import (
     DEFAULT_MAX_TOKENS,
     DEFAULT_SEED,
     DEFAULT_TEMPERATURE,
+    EffectiveSettings,
     InferenceSettings,
     LLMCompletion,
     StopReason,
     default_prompt_for_role,
+    llm_effective_settings,
     llm_input_types,
     llm_output_types,
     normalize_llm_content,
@@ -55,6 +63,9 @@ from cinoc.pipeline.types import RunContext, StepOutput
 #: ne change pas.
 _VERSION = "2.1"
 _DEFAULT_MODEL = "gpt-4o-mini"
+#: Endpoint lu dans l'environnement par le SDK openai ; défaut = celui du SDK.
+_BASE_URL_ENV = "OPENAI_BASE_URL"
+_DEFAULT_BASE_URL = "https://api.openai.com/v1"
 
 #: ``finish_reason`` (SDK openai 3.59 : ``stop``, ``length``, ``tool_calls``,
 #: ``content_filter``, ``function_call``) → raison normalisée. Les appels
@@ -80,8 +91,9 @@ def _completion_from_chat(response: object) -> LLMCompletion:
     tokens_in = usage_tokens(wire_field(usage, "prompt_tokens"))
     tokens_out = usage_tokens(wire_field(usage, "completion_tokens"))
     choices = wire_field(response, "choices")
+    model = served_model(response)
     if not isinstance(choices, list) or not choices:
-        return LLMCompletion("", tokens_in, tokens_out, native=response)
+        return LLMCompletion("", tokens_in, tokens_out, native=response, model=model)
     choice = choices[0]
     return LLMCompletion(
         normalize_llm_content(wire_field(wire_field(choice, "message"), "content")),
@@ -89,6 +101,7 @@ def _completion_from_chat(response: object) -> LLMCompletion:
         tokens_out,
         stop_reason_from(wire_field(choice, "finish_reason"), _STOP_REASONS),
         native=response,
+        model=model,
     )
 
 
@@ -116,6 +129,7 @@ def _openai_client(
     messages: list[dict[str, object]],
     deadline: Deadline,
     settings: InferenceSettings,
+    base_url: str = _DEFAULT_BASE_URL,
 ) -> LLMCompletion:
     """Appel ``chat.completions`` partagé (texte ou multimodal)."""
     import os
@@ -135,7 +149,7 @@ def _openai_client(
         kwargs["timeout"] = timeout
     try:
         # SDK openai typé strictement ; kwargs valides à l'exécution (tests live).
-        client = OpenAI(api_key=api_key)
+        client = OpenAI(api_key=api_key, base_url=base_url)
 
         def _create() -> Any:
             return client.chat.completions.create(**kwargs)  # type: ignore[call-overload]
@@ -151,10 +165,15 @@ def _openai_client(
 
 
 def _invoke_openai(
-    *, model: str, prompt: str, deadline: Deadline, settings: InferenceSettings
+    *,
+    model: str,
+    prompt: str,
+    deadline: Deadline,
+    settings: InferenceSettings,
+    base_url: str = _DEFAULT_BASE_URL,
 ) -> LLMCompletion:
     return _openai_client(
-        model, [{"role": "user", "content": prompt}], deadline, settings
+        model, [{"role": "user", "content": prompt}], deadline, settings, base_url
     )
 
 
@@ -166,6 +185,7 @@ def _invoke_openai_vision(
     image_b64: str,
     deadline: Deadline,
     settings: InferenceSettings,
+    base_url: str = _DEFAULT_BASE_URL,
 ) -> LLMCompletion:
     content = [
         {"type": "text", "text": prompt},
@@ -175,7 +195,7 @@ def _invoke_openai_vision(
         },
     ]
     return _openai_client(
-        model, [{"role": "user", "content": content}], deadline, settings
+        model, [{"role": "user", "content": content}], deadline, settings, base_url
     )
 
 
@@ -214,6 +234,9 @@ class OpenAIAdapter:
         self._prompt = (
             prompt if prompt is not None else default_prompt_for_role(self._role)
         )
+        self._base_url, self._public_base_url = endpoint_from_env(
+            _BASE_URL_ENV, _DEFAULT_BASE_URL
+        )
 
     @property
     def name(self) -> str:
@@ -223,9 +246,16 @@ class OpenAIAdapter:
     def version(self) -> str:
         return _VERSION
 
-    def inference_settings(self) -> dict[str, float | int | None]:
-        """Réglages **effectifs** (défauts compris), recopiés au manifeste."""
-        return self._settings.as_manifest()
+    def effective_settings(self) -> EffectiveSettings:
+        """Réglages **effectifs** (défauts et endpoint compris) : manifeste et
+        empreinte de l'étape."""
+        return llm_effective_settings(
+            model=self._model,
+            role=self._role,
+            prompt=self._prompt,
+            settings=self._settings,
+            base_url=self._public_base_url,
+        )
 
     @property
     def input_types(self) -> frozenset[ArtifactType]:
@@ -248,6 +278,7 @@ class OpenAIAdapter:
                 prompt=prompt,
                 deadline=context.deadline,
                 settings=self._settings,
+                base_url=self._base_url,
             )
 
         def vision_invoke(
@@ -260,6 +291,7 @@ class OpenAIAdapter:
                 image_b64=image_b64,
                 deadline=context.deadline,
                 settings=self._settings,
+                base_url=self._base_url,
             )
 
         return run_llm_step(

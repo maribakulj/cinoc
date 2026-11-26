@@ -19,7 +19,9 @@ et mistralai 1.12.4 : le dump est égal au corps reçu.
 
 from __future__ import annotations
 
+import os
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 from cinoc.adapters._workspace import workspace_artifact_path
 from cinoc.domain.artifacts import (
@@ -79,4 +81,49 @@ def native_artifact(
     )
 
 
-__all__ = ["native_artifact", "sdk_native"]
+def served_model(body: object) -> str | None:
+    """Le modèle que le fournisseur dit avoir **servi** : ``model`` du corps.
+
+    OpenAI, Anthropic, Mistral (chat et OCR) et Ollama le rendent au premier
+    niveau de leur réponse ; c'est l'identifiant résolu (``gpt-4o-mini`` demandé,
+    ``gpt-4o-mini-2024-07-18`` servi). Absent, vide ou d'un autre type → ``None`` :
+    rien n'est supposé.
+    """
+    value = body.get("model") if isinstance(body, dict) else None
+    return value if isinstance(value, str) and value else None
+
+
+def public_endpoint(url: str) -> str:
+    """Une URL de cible, **sans** identifiants ni *query string* (une URL peut
+    porter un jeton) : schéma, hôte, port et chemin — ce qui désigne la cible.
+    C'est la forme écrite au manifeste et hachée dans l'empreinte de l'étape."""
+    parts = urlsplit(url)
+    host = parts.hostname or ""
+    try:
+        port = parts.port
+    except ValueError:  # port illisible : on garde l'hôte, le client refusera
+        port = None
+    if port is not None:
+        host = f"{host}:{port}"
+    return urlunsplit((parts.scheme, host, parts.path, "", "")) or url
+
+
+def endpoint_from_env(env: str, default: str) -> tuple[str, str]:
+    """``(URL à appeler, URL à écrire)`` pour un endpoint réglable par
+    l'environnement (``OPENAI_BASE_URL``…).
+
+    Lue **une fois**, à la construction du module, et transmise explicitement
+    au client : un SDK qui relirait l'environnement à chaque appel pourrait
+    viser une autre cible que celle inscrite au manifeste.
+    """
+    url = os.environ.get(env, "").strip() or default
+    return url, public_endpoint(url)
+
+
+__all__ = [
+    "endpoint_from_env",
+    "native_artifact",
+    "public_endpoint",
+    "sdk_native",
+    "served_model",
+]

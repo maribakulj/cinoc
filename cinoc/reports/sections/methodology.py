@@ -129,8 +129,20 @@ class MethodologySection:
                 m.module_versions,
             )
             + _locks(
+                localized(lang, "Modèles servis", "Served models"),
+                {name: ", ".join(models) for name, models in m.served_models.items()},
+            )
+            + _locks(
                 localized(lang, "Dépendances", "Dependencies"),
                 m.dependencies_lock,
+            )
+            + _locks(
+                localized(lang, "Base Unicode", "Unicode database"),
+                (
+                    {"unicodedata": m.unicode_version}
+                    if m.unicode_version is not None
+                    else {}
+                ),
             )
         )
         env_html = (

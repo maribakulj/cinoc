@@ -37,6 +37,7 @@ from cinoc.app import run
 from cinoc.app.modules.registry import ModuleRegistry, register_default_modules
 from cinoc.app.orchestrator import PipelineOutputs
 from cinoc.app.resume import ResumeStore, unit_key
+from cinoc.app.run_manifest import module_identities
 from cinoc.app.run_planning import Competitor, plan_benchmark_run
 from cinoc.domain.artifacts import ArtifactType, latest_by_type
 from cinoc.domain.corpus import CorpusSpec
@@ -170,15 +171,26 @@ class _Run1:
                         ).read_bytes()
 
     def archived_steps(self, pipeline: PipelineSpec, doc: DocumentRef) -> list[Any]:
+        registry = _registry()
+        modules = {
+            step.adapter_name: registry.build(
+                step.adapter_name, self.spec.adapter_kwargs.get(step.adapter_name, {})
+            )
+            for step in pipeline.steps
+        }
         key = unit_key(
-            code_version="1.0",
             pipeline=pipeline,
-            adapter_kwargs=self.spec.adapter_kwargs,
+            identities=module_identities(self.spec, modules),
             document=doc,
         )
         assert key is not None
         index = json.loads((self.archive / key / "index.json").read_bytes())
         steps: list[Any] = index["steps"]
+        # Un fichier archivé est nommé relativement à son unité (format 3).
+        for entry in steps:
+            for artifact in entry["artifacts"].values():
+                if artifact.get("uri") and not Path(artifact["uri"]).is_absolute():
+                    artifact["uri"] = str(self.archive / key / artifact["uri"])
         return steps
 
 

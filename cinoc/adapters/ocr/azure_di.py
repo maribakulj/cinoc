@@ -16,6 +16,10 @@ Sidecar ``NATIVE_JSON`` : le corps de la **sonde terminale** (``succeeded``), le
 seul des appels d'une page qui porte le résultat — mots, polygones, confiances,
 lignes. La soumission (202) n'a pas de corps ; les sondes ``running`` ne disent
 que l'attente. Ni la clé (en-tête) ni l'``Operation-Location`` n'y entrent.
+
+L'endpoint (``AZURE_DOC_INTEL_ENDPOINT``) désigne la ressource — donc, possiblement,
+un autre déploiement : il est lu **à la construction** et écrit dans les réglages
+effectifs avec le modèle et la version d'API (manifeste, empreinte de l'étape).
 """
 
 from __future__ import annotations
@@ -27,6 +31,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from cinoc.adapters._native import public_endpoint
 from cinoc.adapters.ocr._base import run_remote_image_to_text
 from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.deadline import Deadline
@@ -178,6 +183,10 @@ class AzureDocIntelAdapter:
         if not label or not all(c.isalnum() or c in "_-" for c in label):
             raise AdapterStepError(f"azure_di : label invalide {label!r}.")
         self._label = label
+        #: Lu une fois : la cible inscrite est celle qu'on appelle. Absent → la
+        #: construction passe (le moteur reste listé), chaque page échoue en le
+        #: nommant.
+        self._endpoint = os.environ.get(_ENDPOINT_ENV, "").strip() or None
 
     @property
     def name(self) -> str:
@@ -186,6 +195,16 @@ class AzureDocIntelAdapter:
     @property
     def version(self) -> str:
         return _VERSION
+
+    def effective_settings(self) -> dict[str, str | None]:
+        """Ressource, modèle et version d'API : manifeste et empreinte."""
+        return {
+            "endpoint": (
+                public_endpoint(self._endpoint) if self._endpoint is not None else None
+            ),
+            "model": _MODEL,
+            "api_version": _API_VERSION,
+        }
 
     @property
     def input_types(self) -> frozenset[ArtifactType]:
@@ -203,7 +222,7 @@ class AzureDocIntelAdapter:
         control: RunControl,
     ) -> StepOutput:
         def call(image_uri: str) -> dict[str, Any]:
-            endpoint = os.environ.get(_ENDPOINT_ENV)
+            endpoint = self._endpoint
             key = os.environ.get(_KEY_ENV)
             if not endpoint:
                 raise AdapterStepError(f"{self.name} : {_ENDPOINT_ENV} manquant.")

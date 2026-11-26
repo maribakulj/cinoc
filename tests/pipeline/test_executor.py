@@ -200,6 +200,7 @@ def test_threads_workspace_uri_to_context() -> None:
     captured: dict[str, str | None] = {}
 
     class _Capture:
+        version = "1.0"
         input_types = frozenset({ArtifactType.IMAGE})
         output_types = frozenset({ArtifactType.RAW_TEXT})
 

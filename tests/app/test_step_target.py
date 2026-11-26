@@ -21,7 +21,7 @@ import yaml
 from cinoc.app import run
 from cinoc.app.loader import load_run_spec
 from cinoc.app.modules.registry import ModuleRegistry, register_default_modules
-from cinoc.app.resume import ResumeStore
+from cinoc.app.resume import CACHE_FORMAT, ResumeStore
 from cinoc.domain.errors import CinocError
 from cinoc.evaluation.result import MetricScore, RunResult
 from cinoc.interfaces.cli import main
@@ -228,7 +228,7 @@ def test_resume_cache_of_the_previous_format_is_re_executed(tmp_path: Path) -> N
 
     assert _cer(result, "etape1").support == 5
     for index in (tmp_path / "cache").glob("*/index.json"):
-        assert json.loads(index.read_text(encoding="utf-8"))["format"] == 2
+        assert json.loads(index.read_text(encoding="utf-8"))["format"] == CACHE_FORMAT
 
 
 def test_check_shows_the_scored_step(

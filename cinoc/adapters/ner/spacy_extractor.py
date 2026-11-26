@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import logging
+from importlib.metadata import PackageNotFoundError, version
 from typing import Any
 
 from cinoc.adapters._workspace import workspace_artifact_path
@@ -84,23 +85,25 @@ class SpacyNerExtractor:
         return frozenset({ArtifactType.ENTITIES})
 
     def system_binaries(self) -> dict[str, str]:
-        """Versions spaCy + modèle **si déjà chargés** (reproductibilité).
+        """Versions spaCy + modèle (reproductibilité), **sans rien charger**.
 
-        Best-effort sans effet de bord : ne déclenche aucun chargement — renvoie
-        ``{}`` tant que le modèle n'a pas tourné. Fusionné au ``RunManifest`` par
-        l'orchestrateur (duck-typing, comme le binaire tesseract).
+        Lues dans les métadonnées des distributions installées — spaCy et son
+        modèle sont des paquets pip (``fr_core_news_sm``) —, donc connues avant
+        la première page : elles entrent dans l'empreinte de l'étape (clé de
+        reprise) autant qu'au manifeste. Un modèle déjà chargé fait foi
+        (``nlp.meta``, chargeur injecté compris). Rien d'installé → ``{}``.
         """
-        if self._nlp is None:
-            return {}
         out: dict[str, str] = {}
+        for distribution, key in (
+            ("spacy", "spacy"),
+            (self._model, f"spacy_model:{self._model}"),
+        ):
+            try:
+                out[key] = version(distribution)
+            except PackageNotFoundError:
+                continue
         if self._model_version is not None:
             out[f"spacy_model:{self._model}"] = self._model_version
-        try:
-            import spacy  # type: ignore[import-not-found]
-
-            out["spacy"] = str(spacy.__version__)
-        except ImportError:
-            pass
         return out
 
     def _load(self) -> Any:
