@@ -36,7 +36,7 @@ from cinoc.adapters.ocr.mistral_ocr import _text_from_response
 from cinoc.app import run
 from cinoc.app.modules.registry import ModuleRegistry, register_default_modules
 from cinoc.app.orchestrator import PipelineOutputs
-from cinoc.app.resume import ResumeStore, unit_key
+from cinoc.app.resume import ResumeStore, declared_inputs, unit_key
 from cinoc.app.run_manifest import module_identities
 from cinoc.app.run_planning import Competitor, plan_benchmark_run
 from cinoc.domain.artifacts import ArtifactType, latest_by_type
@@ -182,6 +182,7 @@ class _Run1:
             pipeline=pipeline,
             identities=module_identities(self.spec, modules),
             document=doc,
+            inputs=declared_inputs(pipeline, modules, doc),
         )
         assert key is not None
         index = json.loads((self.archive / key / "index.json").read_bytes())

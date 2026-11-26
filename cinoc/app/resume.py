@@ -15,6 +15,14 @@ entre machines). La clé **dérive** de la provenance : ``parameters_hash`` de
 chaque artefact est l'empreinte de son étape. La version du paquet n'y entre
 plus : une correction de métrique ne rejoue aucune inférence.
 
+S'y ajoute le **contenu des fichiers d'entrée** que chaque module déclare lire
+pour l'unité (hook facultatif ``unit_inputs(document)``, comme
+``system_binaries``/``effective_settings``) : une brique ``precomputed`` ne lit
+pas l'image mais ``<stem>.<label>.txt`` posé à côté, et une sortie corrigée sous
+la même image était resservie périmée. Un fichier déclaré mais absent est haché
+« absent » : qu'il apparaisse ou disparaisse invalide l'unité. Seul son **nom**
+entre dans la clé, pas son dossier : l'archive et son corpus se déplacent.
+
 Ce qui est persisté est l'exécution **étape par étape** (``by_step`` + la
 consommation de chaque étape) : une vue qui note une étape intermédiaire se
 note encore sur un run rechargé. L'``usage`` mesuré au run d'origine est
@@ -39,7 +47,7 @@ from __future__ import annotations
 import json
 import logging
 import shutil
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from hashlib import sha256
 from pathlib import Path
 from typing import cast, get_args
@@ -51,6 +59,7 @@ from cinoc.domain.documents import DocumentRef
 from cinoc.domain.pipeline import PipelineSpec
 from cinoc.domain.usage import FailureReason, ResourceUsage, UnitOutcome
 from cinoc.pipeline.fingerprint import ModuleIdentity, canonical_json, step_fingerprint
+from cinoc.pipeline.protocols import Module
 from cinoc.pipeline.types import DocumentExecution
 
 logger = logging.getLogger(__name__)
@@ -70,6 +79,41 @@ _OUTCOMES = frozenset(get_args(UnitOutcome))
 _REASONS = frozenset(get_args(FailureReason))
 #: Binaires des unités de l'archive, ``{adapter_name: {binaire: version}}``.
 _BINARIES = "binaries.json"
+#: Haché d'un fichier d'entrée déclaré qui n'existe pas (ou n'est pas un fichier).
+ABSENT = "absent"
+#: Haché d'un fichier d'entrée qui existe mais ne se lit pas.
+UNREADABLE = "illisible"
+
+
+def declared_inputs(
+    pipeline: PipelineSpec, modules: Mapping[str, Module], document: DocumentRef
+) -> dict[str, tuple[Path, ...]]:
+    """``{adapter_name: fichiers}`` que les modules du pipeline lisent pour
+    ``document``, par le hook **facultatif** ``unit_inputs(document)``.
+
+    Détecté par duck-typing, hors du ``Module`` Protocol, comme
+    ``system_binaries``/``effective_settings`` : un module qui ne lit que ses
+    artefacts d'entrée n'a rien à déclarer.
+    """
+    found: dict[str, tuple[Path, ...]] = {}
+    for name in sorted({step.adapter_name for step in pipeline.steps}):
+        probe = getattr(modules[name], "unit_inputs", None)
+        if callable(probe):
+            found[name] = tuple(Path(path) for path in probe(document))
+    return found
+
+
+def _file_digest(path: Path, digests: dict[Path, str]) -> str:
+    """Haché du contenu de ``path`` (mémoïsé pour le run), ou un marqueur."""
+    if path not in digests:
+        if not path.is_file():
+            digests[path] = ABSENT
+        else:
+            try:
+                digests[path] = compute_content_hash(path.read_bytes())
+            except OSError:
+                digests[path] = UNREADABLE
+    return digests[path]
 
 
 def unit_key(
@@ -77,12 +121,17 @@ def unit_key(
     pipeline: PipelineSpec,
     identities: Mapping[str, ModuleIdentity],
     document: DocumentRef,
+    inputs: Mapping[str, Sequence[Path]],
+    digests: dict[Path, str] | None = None,
 ) -> str | None:
     """Empreinte d'une unité d'exécution ; ``None`` si l'image est illisible.
 
     Dérivée des empreintes d'étape — les ``parameters_hash`` que l'exécuteur
     estampille, calculés par la même fonction sur les mêmes identités.
-    ``identities`` doit couvrir **chaque** module du pipeline.
+    ``identities`` doit couvrir **chaque** module du pipeline ; ``inputs``
+    (:func:`declared_inputs`) dit quels fichiers chacun lit pour l'unité, et
+    leur contenu entre dans la clé. ``digests`` mémoïse ces hachés le temps
+    d'un run (un sidecar commun au corpus n'est lu qu'une fois).
     """
     if document.image_uri is None:
         return None
@@ -90,12 +139,20 @@ def unit_key(
         image_bytes = Path(document.image_uri).read_bytes()
     except OSError:
         return None
+    memo = digests if digests is not None else {}
     payload = canonical_json(
         {
             "format": CACHE_FORMAT,
             "pipeline": pipeline.model_dump(mode="json", exclude={"steps"}),
             "steps": [
                 step_fingerprint(step, identities[step.adapter_name])
+                for step in pipeline.steps
+            ],
+            "inputs": [
+                [
+                    [path.name, _file_digest(path, memo)]
+                    for path in inputs.get(step.adapter_name, ())
+                ]
                 for step in pipeline.steps
             ],
             "document_id": document.id,
@@ -273,4 +330,11 @@ class ResumeStore:
             logger.warning("[resume] binaires non inscrits : %s", exc)
 
 
-__all__ = ["CACHE_FORMAT", "ResumeStore", "unit_key"]
+__all__ = [
+    "ABSENT",
+    "CACHE_FORMAT",
+    "UNREADABLE",
+    "ResumeStore",
+    "declared_inputs",
+    "unit_key",
+]

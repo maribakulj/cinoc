@@ -18,6 +18,7 @@ from pathlib import Path
 import pytest
 import yaml
 
+from cinoc.adapters.ocr.precomputed import PrecomputedTextAdapter
 from cinoc.app import run
 from cinoc.app.loader import load_run_spec
 from cinoc.app.modules.registry import ModuleRegistry, register_default_modules
@@ -193,7 +194,9 @@ def test_report_says_which_step_a_view_scores(
     assert html.count(label) == 1  # la vue sans cible ne l'affiche pas
 
 
-def test_resume_cache_keeps_every_step(tmp_path: Path) -> None:
+def test_resume_cache_keeps_every_step(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Le cache de reprise garde ``by_step`` : une vue qui cible l'étape 1 se
     note encore sur un run rechargé, sans réexécution."""
     store = ResumeStore(tmp_path / "cache")
@@ -201,10 +204,13 @@ def test_resume_cache_keeps_every_step(tmp_path: Path) -> None:
     _images(config)
     first = _run(config, store)
 
-    # Les sorties précalculées disparaissent : seul le cache peut répondre.
-    for moteur in ("tesseract", "pero"):
-        for sortie in (tmp_path / "examples" / "corpus").glob(f"*.{moteur}.txt"):
-            sortie.unlink()
+    # Le module pré-calculé ne peut plus s'exécuter : seul le cache peut
+    # répondre. (Effacer ses sorties ne le prouverait plus : elles sont des
+    # entrées de l'unité, leur disparition l'invalide — D-280.)
+    def refuse(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("le cache aurait dû répondre")
+
+    monkeypatch.setattr(PrecomputedTextAdapter, "execute", refuse)
     second = _run(config, store)
 
     assert _cer(second, "etape1").value == _cer(first, "etape1").value

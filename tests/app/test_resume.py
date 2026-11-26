@@ -148,11 +148,17 @@ def test_image_content_change_invalidates_cache(tmp_path: Path) -> None:
     document = spec.corpus.documents[0]
     identities = {"counting:eng": ModuleIdentity("1.0")}
     key_before = unit_key(
-        pipeline=spec.pipelines[0], identities=identities, document=document
+        pipeline=spec.pipelines[0],
+        identities=identities,
+        document=document,
+        inputs={},
     )
     Path(document.image_uri).write_bytes(b"\x89PNG autre contenu")
     key_after = unit_key(
-        pipeline=spec.pipelines[0], identities=identities, document=document
+        pipeline=spec.pipelines[0],
+        identities=identities,
+        document=document,
+        inputs={},
     )
     assert key_before != key_after
 

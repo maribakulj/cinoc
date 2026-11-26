@@ -30,7 +30,7 @@ from urllib.parse import urlsplit
 from cinoc.adapters.corpus._http import CorpusHttpError, download
 from cinoc.adapters.layout.crop import crop_region
 from cinoc.app.modules.registry import ModuleRegistry
-from cinoc.app.resume import ResumeStore, unit_key
+from cinoc.app.resume import ResumeStore, declared_inputs, unit_key
 from cinoc.app.run_manifest import (
     SECRET_PLACEHOLDER,
     build_manifest,
@@ -232,6 +232,7 @@ def run(
         # conservée, jamais remplacée par un dict vide qui se lirait « absent ».
         results: dict[tuple[str, str], DocumentExecution] = {}
         secrets = secret_values(spec.adapter_kwargs)
+        digests: dict[Path, str] = {}  # fichiers d'entrée, hachés une fois
         pending: list[tuple[PipelineSpec, DocumentRef, str | None]] = []
         for pipeline in spec.pipelines:
             for document in documents:
@@ -246,7 +247,11 @@ def run(
                     continue
                 key = (
                     unit_key(
-                        pipeline=pipeline, identities=identities, document=document
+                        pipeline=pipeline,
+                        identities=identities,
+                        document=document,
+                        inputs=declared_inputs(pipeline, modules, document),
+                        digests=digests,
                     )
                     if resume_store is not None
                     else None
@@ -478,8 +483,10 @@ def _refuse_missing(
     raise ArchiveIncompleteError(
         f"relecture hors ligne : {len(names)} unité(s) absente(s) de l'archive "
         f"{where} — {shown}. Une unité manque si elle n'a jamais été produite, "
-        "si l'un de ses fichiers a disparu, ou si elle l'a été sous une autre "
-        "empreinte (version d'un module, binaire, réglage ou endpoint "
+        "si l'un de ses fichiers a disparu, si un fichier d'entrée lu par un "
+        "module a changé, est apparu ou a disparu (sortie pré-calculée, ALTO "
+        "voisin, sidecar OCR), ou si elle l'a été sous une autre empreinte "
+        "(version d'un module, binaire, réglage ou endpoint "
         f"différents).{detail} Rien n'a été "
         "exécuté ; relancez sans --offline pour les produire."
     )
