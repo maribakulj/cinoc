@@ -6,11 +6,11 @@ title:
   en: Correct an existing ALTO
 description:
   fr: >-
-    Fait entrer un ALTO déjà là et le corrige **dans** sa mise en page : chaque
+    Fait entrer un ALTO déjà là et le corrige dans sa propre mise en page : chaque
     ligne garde son identifiant, donc le rapport dit ce qui a été changé et ce
     que le correcteur a refusé de changer.
   en: >-
-    Takes an existing ALTO and corrects it *inside* its layout: every line keeps
+    Takes an existing ALTO and corrects it within its own layout: every line keeps
     its identifier, so the report can say what changed and what the corrector
     refused to change.
 steps:

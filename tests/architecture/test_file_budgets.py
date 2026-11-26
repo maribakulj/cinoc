@@ -39,19 +39,6 @@ FILE_BUDGETS: dict[str, int] = {
     # design system > éclatement ; grandit avec les composants (axe 2). Budget
     # re-basé au courant (611 LOC, refonte mise en page R1→R5) + ~15 %.
     "reports/html.py": 730,
-    # Planification de run **benchmark** (couche 6) : **source unique** des specs
-    # texte à partir des choix UI/CLI — catalogue moteurs par rôle, profils de
-    # métriques, vues d'évaluation par type de GT, composition des pipelines par
-    # concurrent (OCR/zero-shot/chaîne LLM-VLM + étape NER optionnelle). La
-    # planification de run **structure** (segmentation + hybride *autonome*
-    # seg→reco→ALTO) vit dans ``app/structure_planning.py`` (extraite au seuil de
-    # découpe). Ce fichier garde le **benchmark**, dont le mode **hybride comme
-    # concurrent** (segmenteur → reconnaissance par bloc → texte scoré CER/WER,
-    # comparé côte à côte avec un pipeline à plat) — concern benchmark, distinct
-    # du run structure autonome. Budget re-basé au courant (~727 LOC) + ~5 %.
-    # S22 (D-294) : +11 — le modèle du moteur OCR amont d'une chaîne
-    # (``ocr_model``) et le refus d'un concurrent sans modèle, faute de défaut.
-    "app/run_planning.py": 775,
     # Helpers SVG **serveur** déterministes (un par type de graphe : dispersion,
     # Venn, barres, calibration, heatmap, radar, bulles, box plot, camembert,
     # haltère, colonnes groupées, bump). Cohésion d'un même contrat de rendu

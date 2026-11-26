@@ -57,10 +57,12 @@ def test_ocr_alto_declares_no_ground_truth(dossier: Path) -> None:
 
 
 def test_ground_truth_adds_the_structure_view(dossier: Path) -> None:
+    """Un ALTO transcrit juge la structure ; il ne juge pas le texte à plat — la
+    vue ``texte`` n'aurait aucune GT ``RAW_TEXT`` à lire, donc rien à noter."""
     spec = plan_correction_run(corpus_from_alto(dossier), "r")
     noms = [v.name for v in spec.evaluation.views]
-    assert noms == ["texte", "structure"]
-    structure = spec.evaluation.views[1]
+    assert noms == ["structure"]
+    structure = spec.evaluation.views[0]
     assert "line_identity_cer" in structure.metric_names
     assert "line_identity_coverage" in structure.metric_names
 

@@ -489,14 +489,18 @@
     // schéma que le POST /api/runs). Export = blob JSON téléchargé (état courant,
     // 0 réseau) ; import = validé côté serveur (POST /api/runs/config) AVANT de
     // repeupler — un fichier malformé est rejeté net, jamais appliqué en silence.
-    function collectConfig() {
-      var cfg = { competitors: payloadCompetitors() };
+    // Options de notation : les mêmes pour toute forme de run (D-297).
+    function withScoring(cfg) {
       var corpusId = currentCorpusId();
       if (corpusId) cfg.corpus_id = corpusId;
       if (normalization && normalization.value) cfg.normalization = normalization.value;
       if (charExclude && charExclude.value) cfg.char_exclude = charExclude.value;
       if (metricProfile && metricProfile.value) cfg.metric_profile = metricProfile.value;
       return cfg;
+    }
+
+    function collectConfig() {
+      return withScoring({ competitors: payloadCompetitors() });
     }
 
     function exportConfig() {
@@ -724,24 +728,17 @@
     }
 
     launchBtn.addEventListener("click", function () {
-      var payload = { competitors: payloadCompetitors() };
-      var corpusId = currentCorpusId();
       var recipes = recipeEntries();
-      if (recipes.length) {
-        // Deux constructeurs encore distincts : un seul en S25-S26 (PLAN_UI §7).
-        var why = recipes.length < queue.length ? "mixed" : !corpusId && "noCorpus";
-        if (why) { resultEl.textContent = queueList.dataset[why] || why; return; }
-        launchAndFollow("/api/runs/recipe", {
-          corpus_id: corpusId,
-          entries: recipes.map(function (e) { return e.request; }),
-        }, launchBtn);
+      if (!recipes.length) {
+        launchAndFollow("/api/runs", collectConfig(), launchBtn);
         return;
       }
-      if (corpusId) payload.corpus_id = corpusId;
-      if (normalization && normalization.value) payload.normalization = normalization.value;
-      if (charExclude && charExclude.value) payload.char_exclude = charExclude.value;
-      if (metricProfile && metricProfile.value) payload.metric_profile = metricProfile.value;
-      launchAndFollow("/api/runs", payload, launchBtn);
+      // Deux constructeurs encore distincts : un seul en S26 (PLAN_UI §7).
+      var why = recipes.length < queue.length ? "mixed" : !currentCorpusId() && "noCorpus";
+      if (why) { resultEl.textContent = queueList.dataset[why] || why; return; }
+      launchAndFollow("/api/runs/recipe", withScoring({
+        entries: recipes.map(function (e) { return e.request; }),
+      }), launchBtn);
     });
 
     // Post-correction structurée : une **autre forme de run** (un ALTO déjà là
@@ -772,10 +769,9 @@
           resultEl.textContent = correctBtn.dataset.noCorpus || "";
           return;
         }
-        var payload = {
-          corpus_id: corpusId,
+        var payload = withScoring({
           producer: correctProducer ? correctProducer.value : "rules",
-        };
+        });
         if (correctModel && correctModel.value.trim()) {
           payload.model = correctModel.value.trim();
         }

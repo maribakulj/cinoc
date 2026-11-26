@@ -57,6 +57,7 @@ from cinoc.interfaces._list_command import (
     run_list_prompts,
     run_list_recipes,
 )
+from cinoc.interfaces._recipe_spec import scoring_options, spec_loader
 from cinoc.interfaces._run_summary import unit_summary
 from cinoc.reports import default_report_renderer, render_comparison
 from cinoc.reports.csv_export import run_result_csv
@@ -248,6 +249,7 @@ def _run_config(
     alto_dir: str | None = None,
     analyses: str | None = None,
     offline: bool = False,
+    load: Callable[[str | Path], RunSpec] = load_run_spec,
 ) -> int:
     if offline and not resume_dir:
         raise CinocError(
@@ -261,7 +263,7 @@ def _run_config(
     registry = ModuleRegistry()
     register_default_modules(registry)
     discover_plugins(registry, enabled=True)  # CLI local : code de confiance
-    spec = load_run_spec(config_path)
+    spec = load(config_path)  # une spec, ou un corpus + recettes (--recipe)
     # L'option de lancement prime sur la spec : répondre à une question
     # ponctuelle ne doit pas demander d'éditer un fichier partagé.
     spec = appliquer_analyses(spec, analyses)
@@ -513,6 +515,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.alto_dir,
                 args.analyses,
                 args.offline,
+                spec_loader(args),
             )
         if args.command == "correct":
             return run_correction(
@@ -524,6 +527,7 @@ def main(argv: list[str] | None = None) -> int:
                 ocr_sidecar=args.ocr_sidecar,
                 ground_truth=args.ground_truth,
                 repeat=args.repeat,
+                options=scoring_options(args),
             )
         if args.command == "history":
             return _run_history(

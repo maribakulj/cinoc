@@ -17,6 +17,7 @@ from pathlib import Path
 from cinoc.app import resolve_code_version
 from cinoc.app import run as run_orchestrator
 from cinoc.app.correction_planning import corpus_from_alto, plan_correction_run
+from cinoc.app.evaluation_views import EvaluationOptions
 from cinoc.app.modules import (
     ModuleRegistry,
     discover_plugins,
@@ -65,6 +66,7 @@ def run_correction(
     ocr_sidecar: str,
     ground_truth: bool,
     repeat: int,
+    options: EvaluationOptions | None = None,
 ) -> int:
     """Post-correction **structurée** d'un dossier d'ALTO existants.
 
@@ -84,6 +86,7 @@ def run_correction(
         model=model,
         host=host,
         ocr_sidecar=ocr_sidecar,
+        options=options,
     )
 
     # Les images sont à côté des ALTO : le ``RunResult`` les y rapporte (D-282).

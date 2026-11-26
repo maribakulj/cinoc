@@ -43,6 +43,7 @@ from cinoc.app.engines import (
     StatusProvider,
     instance_status,
 )
+from cinoc.app.evaluation_views import EvaluationOptions
 from cinoc.app.jobs import JobRunner
 from cinoc.app.models import ModelChoiceError, check_spec_models
 from cinoc.app.modules import ModuleRegistry, register_default_modules
@@ -69,26 +70,37 @@ from cinoc.domain.run_spec import RunSpec
 from cinoc.interfaces.web.security.csrf import csrf_protect
 
 
-class LaunchRequest(BaseModel):
+class ScoringFields(BaseModel):
+    """Les options de notation de la page — **les mêmes** pour le composeur,
+    les recettes et la correction (une seule politique de vues, D-297)."""
+
+    normalization: str | None = Field(default=None, max_length=128)
+    #: Caractères filtrés des deux côtés (GT/hyp) avant le calcul.
+    char_exclude: str | None = Field(default=None, max_length=512)
+    #: Colonnes de classement de la vue ``texte`` ; inconnu → 422 (plan).
+    metric_profile: str | None = Field(default=None, max_length=64)
+    #: Mode **détaillé** (analyses) ; rapide par défaut, comme en CLI.
+    detailed_analyses: bool = False
+
+    def options(self) -> EvaluationOptions:
+        return EvaluationOptions(
+            normalization=self.normalization,
+            char_exclude=self.char_exclude,
+            metric_profile=self.metric_profile,
+            detailed_analyses=self.detailed_analyses,
+        )
+
+
+class LaunchRequest(ScoringFields):
     """Corps (optionnel) : des concurrents + un corpus, ou rien (démonstration)."""
 
     model_config = ConfigDict(extra="forbid")
 
     competitors: tuple[Competitor, ...] = ()
     corpus_id: str | None = None
-    normalization: str | None = None
-    #: Caractères filtrés des deux côtés (GT/hyp) avant le calcul des métriques.
-    char_exclude: str | None = Field(default=None, max_length=512)
-    #: Nom d'un profil de métriques (``standard``/``essentiel``/``philologie``) :
-    #: choisit les colonnes de classement de la vue ``text``. Inconnu → 422 (plan).
-    metric_profile: str | None = Field(default=None, max_length=64)
-    #: Mode **détaillé** : produit les analyses en plus des métriques. Faux par
-    #: défaut, comme en ligne de commande — les analyses pèsent 98 % du temps
-    #: d'évaluation et personne ne les demandait.
-    detailed_analyses: bool = False
 
 
-class RecipeRequest(BaseModel):
+class RecipeRequest(ScoringFields):
     """Lancer une **file de recettes** : des formes nommées, sur un corpus du
     dépôt, comparées dans un seul run.
 
@@ -123,13 +135,11 @@ class SpecRequest(BaseModel):
     spec: str = Field(min_length=1, max_length=200_000)
 
 
-class CorrectionRequest(BaseModel):
+class CorrectionRequest(ScoringFields):
     """Corps d'un run de **post-correction structurée** : un corpus, un producteur.
 
-    Pas un ``Competitor`` : la correction n'est pas un moteur de plus dans la
-    file du composeur, c'est une **autre forme de run** (ALTO déjà là → corrigé),
-    planifiée par ``plan_correction_run``. Elle a donc sa route, comme la
-    segmentation a la sienne.
+    Pas un ``Competitor`` : c'est une **autre forme de run** (ALTO déjà là →
+    corrigé), planifiée par ``plan_correction_run`` — d'où sa route.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -310,10 +320,7 @@ def build_runs_router(
                 req.competitors,
                 corpus,
                 run_id,
-                normalization=req.normalization,
-                char_exclude=req.char_exclude,
-                metric_profile=req.metric_profile,
-                detailed_analyses=req.detailed_analyses,
+                options=req.options(),
             )
         except RunPlanningError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -457,7 +464,10 @@ def build_runs_router(
         corpus = _corpus_du_depot(payload.corpus_id)
         try:
             spec = plan_recipe_run(
-                corpus, payload.entries, run_id=f"web-rec-{uuid.uuid4().hex[:12]}"
+                corpus,
+                payload.entries,
+                run_id=f"web-rec-{uuid.uuid4().hex[:12]}",
+                options=payload.options(),
             )
         except RecipeError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -537,6 +547,7 @@ def build_runs_router(
                 producer=payload.producer,
                 model=payload.model or "",
                 host=payload.host,
+                options=payload.options(),
             )
         except CinocError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc

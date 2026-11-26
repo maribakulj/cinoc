@@ -30,11 +30,10 @@ from typing import Annotated
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, ValidationError
 
-from cinoc.app.text_views import text_views
+from cinoc.app.evaluation_views import EvaluationOptions, plan_evaluation
 from cinoc.domain.artifacts import ArtifactType
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.errors import CinocError
-from cinoc.domain.evaluation import EvaluationSpec, EvaluationView
 from cinoc.domain.pipeline import INITIAL_STEP_ID, PipelineSpec, PipelineStep
 from cinoc.domain.run_spec import RunSpec
 
@@ -392,54 +391,12 @@ def describe(recipe: Recipe, lang: str = "fr") -> str:
     return recipe.title.get(lang) or recipe.title.get("fr") or recipe.name
 
 
-def default_evaluation(
-    pipelines: Sequence[PipelineSpec], corpus: CorpusSpec
-) -> EvaluationSpec:
-    """Vues d'évaluation déduites de ce que le pipeline **produit réellement**.
-
-    Une recette décrit une forme, pas une façon de la noter. Plutôt que d'imposer
-    une vue fixe — qui serait vide sur la moitié des recettes — on regarde les
-    types de sortie : du texte se note en texte, une mise en page en structure,
-    des entités en entités. Un type qu'aucune étape ne produit ne donne pas de
-    vue : une vue vide vaut moins que pas de vue. Le texte se note sous les
-    vues texte par défaut (``text_views`` : ``texte``, plus ``texte (lignes)``
-    quand la GT du corpus a des lignes).
-    """
-    produits = {
-        t for pipeline in pipelines for etape in pipeline.steps
-        for t in etape.output_types
-    }
-    vues: list[EvaluationView] = []
-    candidats_texte = produits & {RAW, CORR}
-    if candidats_texte:
-        vues.extend(
-            text_views(
-                corpus,
-                candidate_types=frozenset(candidats_texte),
-                metric_names=("cer", "wer"),
-            )
-        )
-    if LAYOUT in produits:
-        vues.append(
-            EvaluationView(
-                name="structure",
-                candidate_types=frozenset({LAYOUT}),
-                metric_names=("region_cer", "reading_order_tau"),
-            )
-        )
-    if ENTITIES in produits:
-        vues.append(
-            EvaluationView(
-                name="entites",
-                candidate_types=frozenset({ENTITIES}),
-                metric_names=("ner_f1", "ner_f1_exact"),
-            )
-        )
-    return EvaluationSpec(views=tuple(vues))
-
-
 def plan_recipe_run(
-    corpus: CorpusSpec, entries: Sequence[RecipeEntry], *, run_id: str
+    corpus: CorpusSpec,
+    entries: Sequence[RecipeEntry],
+    *,
+    run_id: str | None,
+    options: EvaluationOptions | None = None,
 ) -> RunSpec:
     """``RunSpec`` d'une **file** de recettes, sur un corpus donné : un run, un
     pipeline par entrée, comparés dans le même rapport.
@@ -451,7 +408,7 @@ def plan_recipe_run(
     Deux entrées qui emploient la **même** brique aux **mêmes** réglages la
     partagent (une lecture, pas deux) ; aux réglages différents — deux modèles
     sous ``vlm_seul`` —, la seconde prend un libellé à part, sinon ses réglages
-    écraseraient ceux de la première.
+    écraseraient ceux de la première. Notation : ``plan_evaluation`` (D-297).
     """
     if not entries:
         raise RecipeError("file de recettes : au moins une recette requise.")
@@ -471,13 +428,88 @@ def plan_recipe_run(
                 update={"name": f"{pipeline.name} #{vus[pipeline.name]}"}
             )
         pipelines.append(pipeline)
+    try:
+        notation = plan_evaluation(pipelines, corpus, options)
+    except CinocError as exc:
+        raise RecipeError(str(exc)) from exc
     return RunSpec(
         corpus=corpus,
         pipelines=tuple(pipelines),
-        evaluation=default_evaluation(pipelines, corpus),
+        evaluation=notation.evaluation,
         adapter_kwargs=kwargs,
         run_id=run_id,
+        metadata=notation.metadata,
     )
+
+
+def recipe_entries(
+    names: Sequence[str],
+    *,
+    bricks: Sequence[str] = (),
+    settings: Sequence[str] = (),
+) -> tuple[RecipeEntry, ...]:
+    """La file d'une ligne de commande (``--recipe``, ``--brick``, ``--set``).
+
+    ``[N:]étape=brique`` et ``[N:]étape.réglage=valeur`` (valeur lue comme en
+    YAML : ``300`` est un entier). Sans ``N:``, chaque recette qui a l'étape ;
+    ``N:`` vise la N-ième. Une étape qu'aucune recette visée ne porte est
+    refusée — un réglage lu par personne serait ignoré en silence. Le reste est
+    vérifié comme pour la page (``plan_recipe_run``, ``check_spec_settings``).
+    """
+    if not names:
+        raise RecipeError("file de recettes : au moins une recette requise.")
+    recettes = [recipe_by_name(nom) for nom in names]
+    choix: list[dict[str, str]] = [{} for _ in recettes]
+    reglages: list[Settings] = [{} for _ in recettes]
+    for texte in bricks:
+        rangs, etape, brique = _affectation(texte, "--brick", len(recettes))
+        for i in _portees(recettes, rangs, etape, f"--brick {texte!r}"):
+            choix[i][etape] = brique
+    for texte in settings:
+        rangs, cle, brut = _affectation(texte, "--set", len(recettes))
+        etape, point, reglage = cle.partition(".")
+        if not point or not reglage:
+            raise RecipeError(
+                f"--set {texte!r} : forme attendue [N:]étape.réglage=valeur."
+            )
+        valeur = yaml.safe_load(brut) if brut.strip() else ""
+        if not isinstance(valeur, (str, int, float, bool)):
+            raise RecipeError(f"--set {texte!r} : une valeur simple est attendue.")
+        for i in _portees(recettes, rangs, etape, f"--set {texte!r}"):
+            reglages[i].setdefault(etape, {})[reglage] = valeur
+    return tuple(
+        RecipeEntry(recipe=nom, choices=choix[i], params=reglages[i])
+        for i, nom in enumerate(names)
+    )
+
+
+def _affectation(texte: str, quoi: str, n: int) -> tuple[list[int], str, str]:
+    """``[N:]clé=valeur`` → (rangs, clé, valeur) ; rang lu avant le ``=``."""
+    tete, egal, valeur = texte.partition("=")
+    rang, deux_points, cle = tete.rpartition(":")
+    if not egal or not cle:
+        raise RecipeError(f"{quoi} {texte!r} : forme attendue [N:]clé=valeur.")
+    if not deux_points:
+        return list(range(n)), cle, valeur
+    if not rang.isdigit() or not 1 <= int(rang) <= n:
+        raise RecipeError(
+            f"{quoi} {texte!r} : rang {rang!r} hors de la file (1 à {n})."
+        )
+    return [int(rang) - 1], cle, valeur
+
+
+def _portees(
+    recettes: Sequence[Recipe], rangs: list[int], etape: str, ou: str
+) -> list[int]:
+    """Les recettes visées qui ont l'étape ; aucune → refus nommé."""
+    portees = [i for i in rangs if etape in {s.id for s in recettes[i].steps}]
+    if not portees:
+        connues = sorted({s.id for i in rangs for s in recettes[i].steps})
+        raise RecipeError(
+            f"{ou} : aucune recette visée n'a d'étape {etape!r} "
+            f"(étapes : {connues})."
+        )
+    return portees
 
 
 def _sans_collision(
@@ -552,7 +584,6 @@ __all__ = [
     "RecipeError",
     "RecipeStep",
     "Role",
-    "default_evaluation",
     "describe",
     "load_recipes",
     "plan_from_recipe",
@@ -560,5 +591,6 @@ __all__ = [
     "referenced_kinds",
     "spec_for_corpus",
     "recipe_by_name",
+    "recipe_entries",
     "roles",
 ]
