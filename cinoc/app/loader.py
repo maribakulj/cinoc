@@ -15,7 +15,7 @@ from pathlib import Path
 import yaml
 from pydantic import ValidationError
 
-from cinoc.app.security import validated_path
+from cinoc.app.security import PathSecurityError, validated_path
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.documents import DocumentRef
 from cinoc.domain.errors import CinocError
@@ -24,6 +24,31 @@ from cinoc.domain.run_spec import RunSpec
 
 class RunSpecError(CinocError):
     """Le fichier de run est illisible ou ne décrit pas un ``RunSpec`` valide."""
+
+
+class _Identifier(str):
+    """Une chaîne qui s'écrit **toujours** entre guillemets en YAML.
+
+    ``0009`` n'est pas un entier pour PyYAML (YAML 1.1 : chiffre non octal),
+    qui l'écrit donc nu — mais un lecteur YAML 1.2 y lit l'entier 9, et
+    ``0003`` est un octal pour qui suit 1.1. Un identifiant de document ne
+    doit dépendre d'aucune de ces règles (pilote D-281, D21).
+    """
+
+
+def _represent_identifier(
+    dumper: yaml.representer.BaseRepresenter, value: object
+) -> yaml.Node:
+    return dumper.represent_scalar("tag:yaml.org,2002:str", str(value), style="'")
+
+
+class _CorpusDumper(yaml.SafeDumper):
+    """``SafeDumper`` qui cite les identifiants (``_Identifier``)."""
+
+    yaml_representers = {
+        **yaml.SafeDumper.yaml_representers,
+        _Identifier: _represent_identifier,
+    }
 
 
 def load_run_spec(
@@ -66,12 +91,21 @@ def _secure_document(document: DocumentRef, base: Path) -> DocumentRef:
     # chargement donne une erreur claire (RunSpecError) au lieu d'un OSError
     # opaque en plein run. L'image, elle, n'est pas exigée ici — certains modules
     # (precomputed) ne la lisent pas, et tesseract signale clairement son absence.
-    ground_truths = tuple(
-        truth.model_copy(
-            update={"uri": str(validated_path(truth.uri, base, must_exist=True))}
+    try:
+        ground_truths = tuple(
+            truth.model_copy(
+                update={"uri": str(validated_path(truth.uri, base, must_exist=True))}
+            )
+            for truth in document.ground_truths
         )
-        for truth in document.ground_truths
-    )
+    except PathSecurityError as exc:
+        # Le chemin seul (« 0000.gt.txt ») ne dit pas contre quoi il a été
+        # cherché : un bloc ``corpus:`` collé dans un fichier de run d'un autre
+        # dossier échouait sans que le message dise pourquoi (D-281, D21).
+        raise PathSecurityError(
+            f"vérité terrain du document {document.id!r} : {exc} Les chemins "
+            f"relatifs se lisent depuis le dossier du fichier de run ({base})."
+        ) from exc
     return document.model_copy(
         update={"image_uri": image_uri, "ground_truths": ground_truths}
     )
@@ -99,21 +133,23 @@ def dump_corpus_spec(spec: CorpusSpec, path: str | Path) -> Path:
     ]
     charge = {
         "corpus": {
-            "name": spec.name,
+            "name": _Identifier(spec.name),
             "documents": documents,
             **({"metadata": dict(spec.metadata)} if spec.metadata else {}),
         }
     }
     cible.parent.mkdir(parents=True, exist_ok=True)
     cible.write_text(
-        yaml.safe_dump(charge, allow_unicode=True, sort_keys=False),
+        yaml.dump(
+            charge, Dumper=_CorpusDumper, allow_unicode=True, sort_keys=False
+        ),
         encoding="utf-8",
     )
     return cible
 
 
 def _relative_document(document: DocumentRef, base: Path) -> dict[str, object]:
-    entree: dict[str, object] = {"id": document.id}
+    entree: dict[str, object] = {"id": _Identifier(document.id)}
     if document.image_uri is not None:
         entree["image_uri"] = _portable_uri(document.image_uri, base)
     if document.ground_truths:

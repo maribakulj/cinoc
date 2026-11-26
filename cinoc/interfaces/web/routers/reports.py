@@ -44,12 +44,17 @@ _FACSIMILE_PX = 1100
 
 
 def build_reports_router(
-    reports_dir: Path, *, alto_store: AltoStore | None = None
+    reports_dir: Path,
+    *,
+    alto_store: AltoStore | None = None,
+    image_root: Path | None = None,
 ) -> APIRouter:
     """Construit le routeur des rapports (monté par ``create_app``).
 
     ``alto_store`` (optionnel) sert les exports ALTO persistés d'un run via
     ``/reports/{name}/alto.zip`` ; absent → l'endpoint répond ``404``.
+    ``image_root`` : racine contre laquelle se relisent les références d'image
+    relatives d'un ``RunResult`` (celle que le ``JobRunner`` a donnée au run).
     """
     router = APIRouter()
 
@@ -74,10 +79,12 @@ def build_reports_router(
             images=build_served_hrefs(
                 result,
                 lambda doc: f"/reports/{quoted}/image/{quote(doc, safe='')}",
+                image_root=image_root,
             ),
             facsimiles=build_served_hrefs(
                 result,
                 lambda doc: f"/reports/{quoted}/facsimile/{quote(doc, safe='')}",
+                image_root=image_root,
             ),
         )
 
@@ -96,7 +103,7 @@ def build_reports_router(
             result = load_run_result(path)
         except (PathSecurityError, RunResultError) as exc:
             raise HTTPException(status_code=404, detail="rapport introuvable") from exc
-        ref = image_ref_for(result, document_id)
+        ref = image_ref_for(result, document_id, image_root=image_root)
         if ref is None:
             raise HTTPException(status_code=404, detail="document sans image")
         raw = thumbnail_bytes(ref, max_px=max_px)
@@ -140,6 +147,7 @@ def build_reports_router(
             render=default_report_renderer().render,
             title=f"Cinoc — {result.manifest.run_id}",
             lang=report_lang,
+            image_root=image_root,
         )
         # ``name`` est déjà validé (resolve_report) → sûr en nom de fichier.
         return Response(

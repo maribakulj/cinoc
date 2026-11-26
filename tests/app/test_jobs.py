@@ -53,6 +53,31 @@ def test_run_completes_and_writes_result(tmp_path: Path) -> None:
     assert load_run_result(result_path).manifest.run_id == "web-ok"
 
 
+def test_web_result_carries_no_server_path(tmp_path: Path) -> None:
+    """D-282 : un ``RunResult`` du web se publie (Hub) — il ne cite ni le
+    dossier des corpus déposés ni le workspace du job."""
+    registry = ModuleRegistry()
+    register_default_modules(registry)
+    uploads = tmp_path / "uploads"
+    (uploads / "c1").mkdir(parents=True)
+    corpus = write_demo_corpus(uploads / "c1")
+    runner = JobRunner(
+        store=JobStore(),
+        registry=registry,
+        reports_dir=tmp_path / "reports",
+        code_version="1.0",
+        archive_dir=tmp_path / "archives",
+        paths_root=uploads,
+    )
+    job_id = runner.launch(lambda _ws: demo_run_spec(corpus, run_id="web-rel"))
+    assert runner.join(job_id, timeout=30)
+    texte = (tmp_path / "reports" / "web-rel.json").read_text(encoding="utf-8")
+    assert str(tmp_path) not in texte
+    result = load_run_result(tmp_path / "reports" / "web-rel.json")
+    assert {d.image_ref for d in result.documents} >= {"c1/folio_001.png"}
+    assert result.manifest.artifacts_dir == job_id
+
+
 def test_domain_error_marks_failed(tmp_path: Path) -> None:
     runner = _runner(tmp_path)
 

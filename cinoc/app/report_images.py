@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Protocol
 
 from cinoc.adapters.images import thumbnail_data_uri, thumbnail_to_file
+from cinoc.app.portable_paths import resolve_image_ref
 from cinoc.app.security import safe_stem
 from cinoc.evaluation.result import RunResult
 
@@ -77,16 +78,19 @@ def _worst_first_doc_ids(result: RunResult) -> list[str]:
 
 
 def _ordered_refs(
-    result: RunResult, *, max_docs: int | None
+    result: RunResult, *, max_docs: int | None, image_root: Path | None = None
 ) -> list[tuple[str, str]]:
-    """``[(document_id, image_ref)]`` pires-d'abord, plafonné (``None`` = sans cap).
+    """``[(document_id, image)]`` pires-d'abord, plafonné (``None`` = sans cap).
 
-    Partage la sélection entre saveurs : un document → sa première référence ; tri
-    pires-CER d'abord (déterministe) ; troncature au plafond si demandé."""
+    Partage la sélection entre saveurs : un document → sa première référence,
+    lue contre ``image_root`` (``portable_paths``) ; tri pires-CER d'abord
+    (déterministe) ; troncature au plafond si demandé."""
     refs: dict[str, str] = {}
     for d in result.documents:
         if d.image_ref and d.document_id not in refs:
-            refs[d.document_id] = d.image_ref
+            resolved = resolve_image_ref(d.image_ref, image_root)
+            if resolved is not None:
+                refs[d.document_id] = resolved
     if not refs:
         return []
     selected = [doc for doc in _worst_first_doc_ids(result) if doc in refs]
@@ -96,11 +100,20 @@ def _ordered_refs(
 
 
 def build_thumbnails(
-    result: RunResult, *, max_px: int = 280, max_docs: int = _DEFAULT_MAX_DOCS
+    result: RunResult,
+    *,
+    max_px: int = 280,
+    max_docs: int = _DEFAULT_MAX_DOCS,
+    image_root: Path | None = None,
 ) -> dict[str, str]:
-    """``{document_id: data-URI}`` des vignettes résolues (plafonné, pires-d'abord)."""
+    """``{document_id: data-URI}`` des vignettes résolues (plafonné, pires-d'abord).
+
+    ``image_root`` : racine contre laquelle se lisent les références relatives
+    (le ``paths_root`` du run) — commun à toutes les saveurs ci-dessous."""
     out: dict[str, str] = {}
-    for doc_id, ref in _ordered_refs(result, max_docs=max_docs):
+    for doc_id, ref in _ordered_refs(
+        result, max_docs=max_docs, image_root=image_root
+    ):
         uri = thumbnail_data_uri(ref, max_px=max_px)
         if uri is not None:
             out[doc_id] = uri
@@ -112,12 +125,15 @@ def build_facsimiles(
     *,
     max_px: int = _FACSIMILE_MAX_PX,
     max_docs: int = _FACSIMILE_MAX_DOCS,
+    image_root: Path | None = None,
 ) -> dict[str, str]:
     """``{document_id: data-URI}`` des **fac-similés medium** (détail document).
 
     Même résolution que ``build_thumbnails`` mais plus grands et plus plafonnés
     (le détail montre une image, pas une grille)."""
-    return build_thumbnails(result, max_px=max_px, max_docs=max_docs)
+    return build_thumbnails(
+        result, max_px=max_px, max_docs=max_docs, image_root=image_root
+    )
 
 
 def _build_sidecar(
@@ -127,6 +143,7 @@ def _build_sidecar(
     max_px: int,
     suffix: str,
     max_docs: int | None,
+    image_root: Path | None,
 ) -> dict[str, str]:
     """``{document_id: href relatif}`` ; écrit un dérivé JPEG par document image.
 
@@ -134,7 +151,9 @@ def _build_sidecar(
     ``suffix`` — la résolution (``thumbnail_to_file``) est la même, appelée
     directement (pas d'indirection ``resolve``)."""
     out: dict[str, str] = {}
-    for doc_id, ref in _ordered_refs(result, max_docs=max_docs):
+    for doc_id, ref in _ordered_refs(
+        result, max_docs=max_docs, image_root=image_root
+    ):
         stem = safe_stem(doc_id, suffix=suffix, fallback="doc")
         href = thumbnail_to_file(ref, assets_dir, stem, max_px=max_px)
         if href is not None:
@@ -148,6 +167,7 @@ def build_sidecar_thumbnails(
     *,
     max_px: int = 280,
     max_docs: int | None = None,
+    image_root: Path | None = None,
 ) -> dict[str, str]:
     """``{document_id: href relatif}`` ; écrit les vignettes dans ``assets_dir``.
 
@@ -159,6 +179,7 @@ def build_sidecar_thumbnails(
         max_px=max_px,
         suffix="",
         max_docs=max_docs,
+        image_root=image_root,
     )
 
 
@@ -168,6 +189,7 @@ def build_sidecar_facsimiles(
     *,
     max_px: int = _FACSIMILE_MAX_PX,
     max_docs: int | None = None,
+    image_root: Path | None = None,
 ) -> dict[str, str]:
     """``{document_id: href}`` des **fac-similés** écrits dans ``assets_dir``."""
     return _build_sidecar(
@@ -176,6 +198,7 @@ def build_sidecar_facsimiles(
         max_px=max_px,
         suffix=_FACSIMILE_SUFFIX,
         max_docs=max_docs,
+        image_root=image_root,
     )
 
 
@@ -186,6 +209,7 @@ def write_report_bundle(
     render: ReportHtmlRenderer,
     title: str = "Cinoc — rapport",
     lang: str = "fr",
+    image_root: Path | None = None,
 ) -> Path:
     """Écrit un **bundle dossier** : ``out_dir/report.html`` + ``report-assets/``.
 
@@ -197,8 +221,8 @@ def write_report_bundle(
     synthétique (dégradé gracieux, pas de crash)."""
     out = Path(out_dir)
     assets = out / "report-assets"
-    images = build_sidecar_thumbnails(result, assets)
-    facsimiles = build_sidecar_facsimiles(result, assets)
+    images = build_sidecar_thumbnails(result, assets, image_root=image_root)
+    facsimiles = build_sidecar_facsimiles(result, assets, image_root=image_root)
     html = render(result, title=title, lang=lang, images=images, facsimiles=facsimiles)
     out.mkdir(parents=True, exist_ok=True)
     report = out / "report.html"
@@ -212,6 +236,7 @@ def build_report_zip(
     render: ReportHtmlRenderer,
     title: str = "Cinoc — rapport",
     lang: str = "fr",
+    image_root: Path | None = None,
 ) -> bytes:
     """Bundle dossier **en mémoire** : un ZIP de ``report.html`` + ``report-assets/``.
 
@@ -222,7 +247,9 @@ def build_report_zip(
     ``reports``). Déterministe : entrées triées. Dégradé gracieux sans Pillow
     (HTML + aperçu synthétique, aucun asset)."""
     with tempfile.TemporaryDirectory() as tmp:
-        write_report_bundle(result, tmp, render=render, title=title, lang=lang)
+        write_report_bundle(
+            result, tmp, render=render, title=title, lang=lang, image_root=image_root
+        )
         buffer = io.BytesIO()
         root = Path(tmp)
         with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
@@ -233,7 +260,10 @@ def build_report_zip(
 
 
 def build_served_hrefs(
-    result: RunResult, url_for: Callable[[str], str]
+    result: RunResult,
+    url_for: Callable[[str], str],
+    *,
+    image_root: Path | None = None,
 ) -> dict[str, str]:
     """``{document_id: href}`` — saveur **servie**, sans plafond ni octets.
 
@@ -249,12 +279,14 @@ def build_served_hrefs(
     """
     return {
         doc_id: url_for(doc_id)
-        for doc_id, _ in _ordered_refs(result, max_docs=None)
+        for doc_id, _ in _ordered_refs(result, max_docs=None, image_root=image_root)
     }
 
 
-def image_ref_for(result: RunResult, document_id: str) -> str | None:
-    """Référence d'image d'un document, ou ``None``.
+def image_ref_for(
+    result: RunResult, document_id: str, *, image_root: Path | None = None
+) -> str | None:
+    """Image d'un document (lue contre ``image_root``), ou ``None``.
 
     Résolue **depuis le ``RunResult``**, jamais depuis l'URL : l'identifiant reçu
     par la route sert de clé de recherche, pas de chemin. Un identifiant inventé
@@ -262,7 +294,7 @@ def image_ref_for(result: RunResult, document_id: str) -> str | None:
     """
     for document in result.documents:
         if document.document_id == document_id and document.image_ref:
-            return document.image_ref
+            return resolve_image_ref(document.image_ref, image_root)
     return None
 
 

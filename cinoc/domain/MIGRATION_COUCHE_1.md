@@ -181,6 +181,8 @@ backlog inexistant. **Aucune logique ne change.**
 
 > **P5f 2 + 2b (D-279)** : `RunManifest` gagne `served_models` (`{adapter_name: (modèle servi, …)}` — une observation, hors de l'empreinte) et `unicode_version` (`unicodedata.unidata_version`, dont dépendent normalisation et métriques) ; `adapter_kwargs` y devient les réglages **effectifs** (ceux que hache l'empreinte de l'étape), `dependencies_lock` est enfin rempli, `system_binaries_lock` est celui de la clé (sondé avant la première page ; celui de l'archive hors ligne). `ProvenanceRecord.parameters_hash` est l'**empreinte de l'étape** (`pipeline.fingerprint.step_fingerprint` : brique, version du module, réglages effectifs — modèle, prompt, défauts, endpoint —, binaires), et non plus le seul haché de `step.params` ; `served_models` s'y ajoute, hors de `is_compatible_with`. Preuves : `tests/app/test_archive_rescore.py`.
 
+> **S10b (D-282)** : les champs ensemblistes sérialisés **triés** en JSON — `EvaluationView.candidate_types` (par valeur) et `MetricSpec.tags` (`field_serializer(when_used="json")`) ; le mode Python garde le `frozenset`. Le format ne change pas (une liste), seul l'ordre devient stable : pas de version de schéma. Preuves : `tests/domain/test_evaluation.py::test_set_fields_serialize_sorted_whatever_the_hash_seed` (8 graines de hachage) · `tests/interfaces/test_run_determinism.py`.
+
 > Tri-état : `[x]` fait **+ preuve** · `[ ]` à faire · `[~]` différé/réserve + raison.
 > Mise à jour dans le **même commit** que le code (règle d'or anti-dérive).
 > **Statut couche 1 : ✅ vert** (vérifié 2026-05-31).

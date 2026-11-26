@@ -72,6 +72,7 @@ class JobRunner:
         segmentation_store: SegmentationStore | None = None,
         alto_store: AltoStore | None = None,
         archive_dir: Path | None = None,
+        paths_root: Path | None = None,
     ) -> None:
         self._store = store
         self._registry = registry
@@ -92,6 +93,9 @@ class JobRunner:
         #: Archive par job (cache de reprise du run). ``None`` → les sorties
         #: meurent avec le workspace, sidecars compris.
         self._archive_dir = archive_dir
+        #: Racine des corpus déposés : le ``RunResult`` publié y rapporte ses
+        #: chemins au lieu de citer ceux du serveur (``app.portable_paths``).
+        self._paths_root = paths_root
         self._controls: dict[str, RunControl] = {}
         self._threads: dict[str, threading.Thread] = {}
         self._lock = threading.Lock()
@@ -159,6 +163,7 @@ class JobRunner:
                         if self._archive_dir is not None
                         else None
                     ),
+                    paths_root=self._paths_root,
                 )
                 self._reports_dir.mkdir(parents=True, exist_ok=True)
                 run_id = result.manifest.run_id

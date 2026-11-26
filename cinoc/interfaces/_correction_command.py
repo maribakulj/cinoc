@@ -84,11 +84,17 @@ def run_correction(
         ocr_sidecar=ocr_sidecar,
     )
 
+    # Les images sont à côté des ALTO : le ``RunResult`` les y rapporte (D-282).
+    root = Path(alto_dir)
+
     def _once(index: int) -> RunResult:
         if repeat > 1:
             print(f"run {index + 1}/{repeat}…", flush=True)
         return run_orchestrator(
-            spec, registry=registry, code_version=resolve_code_version()
+            spec,
+            registry=registry,
+            code_version=resolve_code_version(),
+            paths_root=root,
         )
 
     results, variance = run_repeatedly(_once, repeat)
@@ -98,8 +104,8 @@ def run_correction(
         default_report_renderer().render(
             results[-1],
             title=f"Cinoc — correction de {corpus.name}",
-            images=build_thumbnails(results[-1]),
-            facsimiles=build_facsimiles(results[-1]),
+            images=build_thumbnails(results[-1], image_root=root),
+            facsimiles=build_facsimiles(results[-1], image_root=root),
         ),
         encoding="utf-8",
     )

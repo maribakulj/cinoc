@@ -94,7 +94,12 @@ def test_an_import_writes_a_corpus_that_cinoc_run_can_read(
     )
     spec = load_run_spec(dest / "run.yaml")
     assert [d.id for d in spec.corpus.documents] == ["page_1", "page_2"]
-    assert "2 document(s)" in capsys.readouterr().out
+    sortie = capsys.readouterr().out
+    assert "2 document(s)" in sortie
+    # Le conseil dit contre quoi se lisent les chemins (D-281, D21) : coller le
+    # bloc ailleurs « sans le dire » échouait sur un chemin introuvable.
+    assert f"relatifs à son dossier ({dest})" in sortie
+    assert "colle son" not in sortie
 
 
 def test_the_written_corpus_survives_being_moved(
