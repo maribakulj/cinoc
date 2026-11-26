@@ -20,6 +20,11 @@ Deux détails qui ne sont pas des détails :
   ``ProviderPermanentError``. La recouvrabilité de ``saknussemm`` est une liste
   blanche : une exception brute est traitée comme un bug et **fait échouer** le
   run au lieu d'être réessayée en boucle.
+
+Chaque corps reçu est gardé dans ``responses`` (ordre d'appel), **avant** d'être
+lu — une réponse rejetée (hors schéma) a été payée, et c'est elle qui explique
+la nouvelle tentative. L'étape de correction l'écrit en sidecar ``NATIVE_JSON``.
+Le corps seul : la clé voyage en en-tête, jamais dans la réponse.
 """
 
 from __future__ import annotations
@@ -170,6 +175,8 @@ class MistralStructuredClient:
 
     def __init__(self, *, timeout: float = 300.0) -> None:
         self._timeout = timeout
+        #: Corps reçus, dans l'ordre d'appel (cf. docstring du module).
+        self.responses: list[dict[str, Any]] = []
 
     async def complete_structured(
         self,
@@ -199,6 +206,7 @@ class MistralStructuredClient:
             model=model,
             timeout=self._timeout,
         )
+        self.responses.append(data)
         return parse_chat_json(data, model), usage_from(data)
 
 

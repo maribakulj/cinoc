@@ -132,7 +132,9 @@ def test_builds_azure_di_module() -> None:
     module = _registry().build("azure_di:c0", {"label": "c0", "lang": "fra"})
     assert module.name == "azure_di:c0"
     assert module.input_types == frozenset({ArtifactType.IMAGE})
-    assert module.output_types == frozenset({ArtifactType.RAW_TEXT})
+    assert module.output_types == frozenset(
+        {ArtifactType.RAW_TEXT, ArtifactType.NATIVE_JSON}
+    )
 
 
 def test_builds_google_vision_module() -> None:
@@ -141,7 +143,9 @@ def test_builds_google_vision_module() -> None:
     module = _registry().build("google_vision:c0", {"label": "c0", "lang": "fra"})
     assert module.name == "google_vision:c0"
     assert module.input_types == frozenset({ArtifactType.IMAGE})
-    assert module.output_types == frozenset({ArtifactType.RAW_TEXT})
+    assert module.output_types == frozenset(
+        {ArtifactType.RAW_TEXT, ArtifactType.NATIVE_JSON}
+    )
 
 
 def test_builds_anthropic_with_role() -> None:
@@ -150,7 +154,9 @@ def test_builds_anthropic_with_role() -> None:
     )
     assert module.name == "anthropic:claude"
     assert module.input_types == frozenset({ArtifactType.IMAGE})
-    assert module.output_types == frozenset({ArtifactType.RAW_TEXT})
+    assert module.output_types == frozenset(
+        {ArtifactType.RAW_TEXT, ArtifactType.NATIVE_JSON}
+    )
 
 
 def test_builds_openai_with_vision_role() -> None:

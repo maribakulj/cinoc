@@ -177,6 +177,8 @@ backlog inexistant. **Aucune logique ne change.**
 
 > **P5e 1b (D-276)** : `artifacts.py` gagne l'alias `StepArtifacts` (`{id d'étape: {type: artefact}}`, ordre d'exécution, entrées initiales sous `INITIAL_STEP_ID`) et `latest_by_type` (le pool = une lecture de `by_step`, partagée par les couches 3, 4 et 6 — la couche 4 ne peut importer que `domain`) ; `EvaluationView.target_step` (`None` = l'étape la plus aval qui produit un type candidat), omise du JSON quand `None` (sérialiseur *wrap*) ; `RunSpec` refuse au chargement une cible inconnue d'un pipeline du run et une étape visée qui **déclare** plusieurs types candidats (erreur `CinocError`, message nommant vue, étape, pipeline et étapes connues). Preuves : `tests/domain/test_run_spec.py`, `tests/app/test_step_target.py`.
 
+> **P5f 3 (D-278)** : `ArtifactType.NATIVE_JSON` (réponse native brute d'un moteur distant, sidecar JSON ; enveloppes `{"regions": …}` pour un fan-out et `{"responses": …}` pour la correction structurée, documentées sur la valeur) et `native_json_bytes` (forme canonique : JSON UTF-8, clés triées, séparateurs compacts, `allow_nan=False`) — en `domain` parce que la couche 4 (fan-out) et la couche 5 (adaptateurs) écrivent le même payload, comme `compute_content_hash`. `EvaluationView` refuse `native_json` dans `candidate_types` (`CinocError` au chargement) : une réponse native n'est pas une sortie à noter. Preuves : `tests/evaluation/test_native_json_never_scored.py`, `tests/adapters/test_native_json.py::test_native_json_bytes_is_canonical`.
+
 > Tri-état : `[x]` fait **+ preuve** · `[ ]` à faire · `[~]` différé/réserve + raison.
 > Mise à jour dans le **même commit** que le code (règle d'or anti-dérive).
 > **Statut couche 1 : ✅ vert** (vérifié 2026-05-31).

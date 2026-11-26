@@ -16,6 +16,9 @@ Deux détails qui ne sont pas des détails :
   ``ProviderPermanentError``. La recouvrabilité de ``saknussemm`` est une liste
   blanche : une exception brute est traitée comme un bug et **fait échouer** le
   run au lieu d'être réessayée en boucle.
+
+Chaque corps reçu est gardé dans ``responses`` (ordre d'appel), avant d'être
+lu : l'étape de correction l'écrit en sidecar ``NATIVE_JSON``.
 """
 
 from __future__ import annotations
@@ -41,6 +44,8 @@ class OllamaStructuredClient:
         self._host = host.rstrip("/")
         self._num_ctx = num_ctx
         self._timeout = timeout
+        #: Corps reçus, dans l'ordre d'appel (réponses rejetées comprises).
+        self.responses: list[Any] = []
 
     async def complete_structured(
         self,
@@ -90,6 +95,7 @@ class OllamaStructuredClient:
                 f"ollama injoignable ({model}) : {exc}"
             ) from exc
 
+        self.responses.append(data)
         content = (data.get("message") or {}).get("content") or ""
         # ``done_reason: length`` : le serveur a coupé (``num_ctx`` épuisé).
         # Rejouer couperait à l'identique : permanente, jamais rejouée par

@@ -1,0 +1,39 @@
+{
+ "scenario": "native_json_mistral_ocr",
+ "sdk": "mistralai 1.12.4 — mistralai.models.OCRResponse",
+ "note": "Réponses **synthétiques** (aucune clé ni réseau dans l'environnement de capture), écrites au format du fil de l'API `POST /v1/ocr` puis validées contre le modèle de réponse du SDK installé (mistralai 1.12.4, OCRResponse.model_validate) ; le dump du modèle (`model_dump(mode='json', by_alias=True, exclude_unset=True)`) est égal au corps. Une réponse par page du corpus d'essai.",
+ "responses": {
+  "folio_a": {
+   "pages": [
+    {
+     "index": 0,
+     "markdown": "# Le Petit Journal\n\nLe Petit Journal, 12 mars 1894. — On annonce de Boulogne-sur-Mer qu'une partie de la falaise s'est effondrée hier soir, emportant deux maisons.",
+     "images": [],
+     "dimensions": {"dpi": 200, "height": 2200, "width": 1700},
+     "header": null,
+     "footer": null
+    }
+   ],
+   "model": "mistral-ocr-2505",
+   "usage_info": {"pages_processed": 1, "doc_size_bytes": 48213},
+   "document_annotation": null
+  },
+  "folio_b": {
+   "pages": [
+    {
+     "index": 0,
+     "markdown": "Le Petit Journal, 12 mars 1894. — On annonce de Boulogne-fur-Mer qu'une partie de la falaise s'eft effondrée hier soir, emportant deux maifons.\n\n![img-0.jpeg](img-0.jpeg)",
+     "images": [
+      {"id": "img-0.jpeg", "top_left_x": 120, "top_left_y": 940, "bottom_right_x": 1580, "bottom_right_y": 1810}
+     ],
+     "dimensions": {"dpi": 200, "height": 2200, "width": 1700},
+     "header": null,
+     "footer": null
+    }
+   ],
+   "model": "mistral-ocr-2505",
+   "usage_info": {"pages_processed": 1, "doc_size_bytes": 51877},
+   "document_annotation": null
+  }
+ }
+}

@@ -16,6 +16,7 @@ import pytest
 
 from cinoc.adapters.ocr.google_vision import (
     GoogleVisionAdapter,
+    _extract_text,
     _invoke_google_vision,
 )
 from cinoc.domain.artifacts import Artifact, ArtifactType
@@ -63,7 +64,9 @@ def test_satisfies_module_protocol() -> None:
     assert isinstance(adapter, Module)
     assert adapter.name == "google_vision:gv"
     assert adapter.input_types == frozenset({ArtifactType.IMAGE})
-    assert adapter.output_types == frozenset({ArtifactType.RAW_TEXT})
+    assert adapter.output_types == frozenset(
+        {ArtifactType.RAW_TEXT, ArtifactType.NATIVE_JSON}
+    )
 
 
 def test_rejects_bad_label() -> None:
@@ -77,7 +80,7 @@ def test_execute_writes_text(
     monkeypatch.setenv("GOOGLE_VISION_API_KEY", "k")
     monkeypatch.setattr(
         "cinoc.adapters.ocr.google_vision._invoke_google_vision",
-        lambda **_: "texte reconnu",
+        lambda **_: {"responses": [{"fullTextAnnotation": {"text": "texte reconnu"}}]},
     )
     out = GoogleVisionAdapter(label="gv").execute(
         {ArtifactType.IMAGE: _image(tmp_path)}, {}, _ctx(tmp_path), RunControl()
@@ -120,12 +123,12 @@ def test_invoke_parses_full_text_and_builds_request(tmp_path: Path) -> None:
         seen["has_content"] = bool(body["requests"][0]["image"]["content"])
         return httpx.Response(200, json=_CASSETTE)
 
-    text = _invoke_google_vision(
+    text = _extract_text(_invoke_google_vision(
         image_path=str(image),
         deadline=Deadline.infinite(),
         api_key="test-key",
         transport=_transport(handler),
-    )
+    ))
     # Valeur dérivée main : fullTextAnnotation.text strippé (2 lignes conservées).
     assert text == "Bonjour le monde\nseconde ligne"
     # Requête bien formée : endpoint annotate, clé en query, feature document, image.
@@ -142,12 +145,12 @@ def test_invoke_blank_page_returns_empty(tmp_path: Path) -> None:
     def handler(_request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json={"responses": [{}]})
 
-    text = _invoke_google_vision(
+    text = _extract_text(_invoke_google_vision(
         image_path=str(image),
         deadline=Deadline.infinite(),
         api_key="k",
         transport=_transport(handler),
-    )
+    ))
     assert text == ""
 
 
@@ -161,12 +164,12 @@ def test_invoke_api_error_raises(tmp_path: Path) -> None:
         )
 
     with pytest.raises(AdapterStepError, match="quota dépassé"):
-        _invoke_google_vision(
+        _extract_text(_invoke_google_vision(
             image_path=str(image),
             deadline=Deadline.infinite(),
             api_key="k",
             transport=_transport(handler),
-        )
+        ))
 
 
 def test_invoke_http_status_error_raises(tmp_path: Path) -> None:
@@ -177,9 +180,9 @@ def test_invoke_http_status_error_raises(tmp_path: Path) -> None:
         return httpx.Response(403, json={"error": {"message": "clé invalide"}})
 
     with pytest.raises(AdapterStepError, match="statut HTTP 403"):
-        _invoke_google_vision(
+        _extract_text(_invoke_google_vision(
             image_path=str(image),
             deadline=Deadline.infinite(),
             api_key="bad",
             transport=_transport(handler),
-        )
+        ))

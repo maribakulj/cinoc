@@ -16,6 +16,7 @@ Distinctions clés pour les vues d'évaluation :
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from collections.abc import Mapping
 from enum import StrEnum
@@ -75,6 +76,21 @@ class ArtifactType(StrEnum):
     #: Confidences OCR au niveau token (sidecar JSON).
     CONFIDENCES = "confidences"
 
+    #: **Réponse native brute** d'un moteur distant (sidecar JSON) : le corps que
+    #: l'API a rendu, avant toute conversion en texte — sérialisé par
+    #: :func:`native_json_bytes` (clés triées), sans en-tête, URL ni clé.
+    #:
+    #: Le texte n'est qu'une **lecture** de cette réponse ; une autre lecture
+    #: (un meilleur protocole, une projection vers ``LAYOUT``) se refait depuis
+    #: le sidecar sans re-payer l'appel. Une étape qui appelle plusieurs fois par
+    #: page le dit par une enveloppe : ``{"regions": [{"region_id", "response"}]}``
+    #: pour un fan-out (ordre de lecture), ``{"responses": [...]}`` pour la
+    #: correction structurée (ordre d'appel). **Jamais noté** : une vue qui le
+    #: déclarerait candidat est refusée (``EvaluationView``). Ne voyage pas dans
+    #: le ``RunResult`` ; il vit dans le dossier d'artefacts du run
+    #: (``RunManifest.artifacts_dir``) quand il en a un.
+    NATIVE_JSON = "native_json"
+
     #: **Décisions ligne à ligne** d'une étape de post-correction : ce qu'elle a
     #: changé, ce qu'elle a refusé de changer, et **pourquoi**. Sidecar JSON.
     #:
@@ -105,6 +121,22 @@ def compute_content_hash(payload: bytes) -> str:
     compatible avec ``Artifact.content_hash``.
     """
     return hashlib.sha256(payload).hexdigest()
+
+
+def native_json_bytes(response: object) -> bytes:
+    """Forme **canonique** d'un payload ``NATIVE_JSON`` : JSON UTF-8, clés triées.
+
+    Une seule sérialisation pour tous les producteurs (adaptateurs, fan-out) :
+    deux réponses égales donnent les mêmes octets, donc le même ``content_hash``.
+    ``TypeError``/``ValueError`` si ``response`` n'est pas une valeur JSON.
+    """
+    return json.dumps(
+        response,
+        sort_keys=True,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode("utf-8")
 
 
 # Identifiant stable et filesystem-safe (utilisable comme nom de fichier
@@ -217,4 +249,5 @@ __all__ = [
     "StepArtifacts",
     "compute_content_hash",
     "latest_by_type",
+    "native_json_bytes",
 ]

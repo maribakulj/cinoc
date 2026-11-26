@@ -1,0 +1,56 @@
+{
+ "scenario": "native_json_azure_di",
+ "api": "Azure AI Document Intelligence REST 2024-11-30 — prebuilt-read, GET analyzeResults/{resultId}",
+ "note": "Réponses **synthétiques** au format documenté de l'API REST (corps de la sonde terminale `status: succeeded` ; la soumission rend 202 sans corps). Aucune clé ni réseau dans l'environnement de capture. Une réponse par page du corpus d'essai.",
+ "responses": {
+  "folio_a": {
+   "status": "succeeded",
+   "createdDateTime": "2026-11-26T09:00:00Z",
+   "lastUpdatedDateTime": "2026-11-26T09:00:02Z",
+   "analyzeResult": {
+    "apiVersion": "2024-11-30",
+    "modelId": "prebuilt-read",
+    "stringIndexType": "textElements",
+    "content": "Le Petit Journal, 12 mars 1894. — On annonce de Boulogne-sur-Mer\nqu'une partie de la falaise s'est effondrée hier soir, emportant deux maisons.",
+    "pages": [
+     {
+      "pageNumber": 1,
+      "angle": 0,
+      "width": 1700,
+      "height": 2200,
+      "unit": "pixel",
+      "words": [
+       {"content": "Le", "polygon": [102, 210, 140, 210, 140, 248, 102, 248], "confidence": 0.995, "span": {"offset": 0, "length": 2}},
+       {"content": "Petit", "polygon": [150, 210, 240, 210, 240, 248, 150, 248], "confidence": 0.993, "span": {"offset": 3, "length": 5}}
+      ],
+      "lines": [
+       {"content": "Le Petit Journal, 12 mars 1894. — On annonce de Boulogne-sur-Mer", "polygon": [102, 210, 1590, 210, 1590, 250, 102, 250], "spans": [{"offset": 0, "length": 66}]},
+       {"content": "qu'une partie de la falaise s'est effondrée hier soir, emportant deux maisons.", "polygon": [102, 260, 1600, 260, 1600, 300, 102, 300], "spans": [{"offset": 67, "length": 78}]}
+      ],
+      "spans": [{"offset": 0, "length": 145}]
+     }
+    ],
+    "paragraphs": [],
+    "styles": [],
+    "contentFormat": "text"
+   }
+  },
+  "folio_b": {
+   "status": "succeeded",
+   "createdDateTime": "2026-11-26T09:00:03Z",
+   "lastUpdatedDateTime": "2026-11-26T09:00:05Z",
+   "analyzeResult": {
+    "apiVersion": "2024-11-30",
+    "modelId": "prebuilt-read",
+    "stringIndexType": "textElements",
+    "content": "Le Petit Journal, 12 mars 1894. On annonce de Boulogne-sur-Mer\nqu'une partie de la falaise s'est effondree hier soir, emportant deux maisons",
+    "pages": [
+     {"pageNumber": 1, "angle": 0.3, "width": 1700, "height": 2200, "unit": "pixel", "words": [], "lines": [], "spans": [{"offset": 0, "length": 140}]}
+    ],
+    "paragraphs": [],
+    "styles": [],
+    "contentFormat": "text"
+   }
+  }
+ }
+}

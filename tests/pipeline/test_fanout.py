@@ -554,3 +554,119 @@ def test_a_cut_region_is_reported_not_swallowed(tmp_path: Any) -> None:
     ]
     # La sortie coupée est gardée : c'est une lecture réelle, signalée.
     assert all(r.lines for r in rempli.pages[0].regions)
+
+
+class _Distant:
+    """Reconnaisseur distant : texte + réponse native, **au même chemin** pour
+    chaque région (comme un adaptateur réel, qui nomme ses fichiers par page)."""
+
+    name = "distant"
+    version = "1.0"
+    input_types = frozenset({ArtifactType.IMAGE})
+    output_types = frozenset({ArtifactType.RAW_TEXT, ArtifactType.NATIVE_JSON})
+
+    def __init__(self, tmp_path: Any) -> None:
+        self._dir = tmp_path
+
+    def execute(
+        self,
+        inputs: dict[ArtifactType, Artifact],
+        params: dict[str, Any],
+        context: RunContext,
+        control: RunControl,
+    ) -> Any:
+        from cinoc.domain.artifacts import native_json_bytes
+        from cinoc.pipeline.types import StepOutput
+
+        region = inputs[ArtifactType.IMAGE].region_id
+        if region == "r2":
+            raise AdapterStepError("région illisible")
+        texte = self._dir / "page.distant.txt"
+        texte.write_text(f"texte de {region}", encoding="utf-8")
+        native = self._dir / "page.distant.native.json"
+        native.write_bytes(native_json_bytes({"id": f"rep-{region}", "n": 1}))
+        return StepOutput(
+            artifacts={
+                ArtifactType.RAW_TEXT: Artifact(
+                    id=f"t:{region}", document_id="d",
+                    type=ArtifactType.RAW_TEXT, uri=str(texte),
+                ),
+                ArtifactType.NATIVE_JSON: Artifact(
+                    id=f"n:{region}", document_id="d",
+                    type=ArtifactType.NATIVE_JSON, uri=str(native),
+                ),
+            }
+        )
+
+
+def test_the_fanout_keeps_the_native_response_of_every_region(tmp_path: Any) -> None:
+    """Un appel par région : le sidecar de l'étape les garde **tous**, dans
+    l'ordre de lecture, chacun rattaché à sa région — la sortie du reconnaisseur
+    n'était lue que pour son texte, et la réponse de chaque bloc se perdait."""
+    import json
+    from pathlib import Path
+
+    from cinoc.domain.artifacts import native_json_bytes
+    from cinoc.pipeline.fanout import execute_region_fanout
+
+    regions = tuple(
+        Region(
+            id=f"r{i}",
+            geometry=Geometry(bbox=BBox(x=0, y=0, width=10, height=10)),
+        )
+        for i in (1, 2, 3)
+    )
+    layout = CanonicalLayout(
+        pages=(LayoutPage(width=100, height=100, regions=regions),)
+    )
+    source = tmp_path / "seg.layout.json"
+    source.write_text(layout.model_dump_json(), encoding="utf-8")
+    sortie = execute_region_fanout(
+        layout_artifact=Artifact(
+            id="l", document_id="d", type=ArtifactType.LAYOUT, uri=str(source)
+        ),
+        page_image=Artifact(
+            id="i", document_id="d", type=ArtifactType.IMAGE,
+            uri=str(tmp_path / "p.png"),
+        ),
+        recognizer=_Distant(tmp_path),
+        context=_contexte(tmp_path),
+        control=RunControl(),
+    )
+    native = sortie.artifacts[ArtifactType.NATIVE_JSON]
+    data = Path(native.uri or "").read_bytes()
+    # r2 a échoué : rien à garder pour elle, et rien d'inventé.
+    attendu = {
+        "regions": [
+            {"region_id": "r1", "response": {"id": "rep-r1", "n": 1}},
+            {"region_id": "r3", "response": {"id": "rep-r3", "n": 1}},
+        ]
+    }
+    assert json.loads(data) == attendu
+    assert data == native_json_bytes(attendu)
+
+
+def test_a_fanout_without_native_responses_publishes_none(tmp_path: Any) -> None:
+    from cinoc.pipeline.fanout import execute_region_fanout
+
+    region = Region(
+        id="r1", geometry=Geometry(bbox=BBox(x=0, y=0, width=10, height=10))
+    )
+    layout = CanonicalLayout(
+        pages=(LayoutPage(width=100, height=100, regions=(region,)),)
+    )
+    source = tmp_path / "seg.layout.json"
+    source.write_text(layout.model_dump_json(), encoding="utf-8")
+    sortie = execute_region_fanout(
+        layout_artifact=Artifact(
+            id="l", document_id="d", type=ArtifactType.LAYOUT, uri=str(source)
+        ),
+        page_image=Artifact(
+            id="i", document_id="d", type=ArtifactType.IMAGE,
+            uri=str(tmp_path / "p.png"),
+        ),
+        recognizer=_Coupe(tmp_path),
+        context=_contexte(tmp_path),
+        control=RunControl(),
+    )
+    assert set(sortie.artifacts) == {ArtifactType.LAYOUT}

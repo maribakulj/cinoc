@@ -17,6 +17,7 @@ Le recognizer reçoit une IMAGE **cadrée par région**. Deux modes :
 
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import Callable, Mapping
 from pathlib import Path
@@ -25,6 +26,7 @@ from cinoc.domain.artifacts import (
     Artifact,
     ArtifactType,
     compute_content_hash,
+    native_json_bytes,
 )
 from cinoc.domain.errors import AdapterStepError
 from cinoc.domain.layout import CanonicalLayout, LayoutPage, Line, Region
@@ -72,6 +74,7 @@ def run_region_fanout(
     params: Mapping[str, ParamValue] | None = None,
     cropper: RegionCropper | None = None,
     truncations: list[str] | None = None,
+    natives: list[dict[str, object]] | None = None,
 ) -> tuple[CanonicalLayout, ResourceUsage]:
     """Remplit ``layout`` (régions seules) par reconnaissance région par région.
 
@@ -83,15 +86,19 @@ def run_region_fanout(
     OCR (pipeline réel). ``truncations``, si fourni, reçoit une ligne par région
     dont la reconnaissance est **coupée** (``StepOutput.truncation``) : sa sortie
     est gardée, et la coupure remonte à l'étape au lieu d'être avalée.
+    ``natives``, si fourni, reçoit ``{"region_id", "response"}`` pour chaque
+    région dont le reconnaisseur a publié une réponse native (``NATIVE_JSON``),
+    dans l'ordre de lecture.
     """
     step_params = dict(params) if params is not None else {}
     coupures = truncations if truncations is not None else []
+    reponses = natives if natives is not None else []
     usage = ResourceUsage()
     pages: list[LayoutPage] = []
     for page in layout.pages:
         filled_page, page_usage = _fill_page(
             page, page_image, recognizer, context, control, step_params, cropper,
-            coupures,
+            coupures, reponses,
         )
         pages.append(filled_page)
         usage = usage.merged_with(page_usage)
@@ -108,13 +115,14 @@ def _fill_page(
     params: dict[str, ParamValue],
     cropper: RegionCropper | None,
     truncations: list[str],
+    natives: list[dict[str, object]],
 ) -> tuple[LayoutPage, ResourceUsage]:
     usage = ResourceUsage()
     filled: list[Region] = []
     for region in page.regions:
         filled_region, region_usage = _fill_region(
             region, page, page_image, recognizer, context, control, params, cropper,
-            truncations,
+            truncations, natives,
         )
         filled.append(filled_region)
         usage = usage.merged_with(region_usage)
@@ -176,6 +184,7 @@ def _fill_region(
     params: dict[str, ParamValue],
     cropper: RegionCropper | None,
     truncations: list[str] | None = None,
+    natives: list[dict[str, object]] | None = None,
 ) -> tuple[Region, ResourceUsage | None]:
     """Remplit une région de ses lignes — **en descendant** dans ses enfants.
 
@@ -196,7 +205,7 @@ def _fill_region(
         for enfant in region.regions:
             rempli, usage_enfant = _fill_region(
                 enfant, page, page_image, recognizer, context, control, params,
-                cropper, truncations,
+                cropper, truncations, natives,
             )
             enfants.append(rempli)
             usage = usage.merged_with(usage_enfant)
@@ -212,6 +221,7 @@ def _fill_region(
             {ArtifactType.IMAGE: region_image}, par_region, context, control
         )
         lignes = _lignes_reconnues(output.artifacts, region)
+        native = _read_native(output.artifacts, region)
     except AdapterStepError as exc:
         logger.warning(
             "[fanout] région %r non reconnue (ignorée) : %s", region.id, exc
@@ -219,7 +229,30 @@ def _fill_region(
         return region, None
     if output.truncation is not None and truncations is not None:
         truncations.append(f"région {region.id!r} : {output.truncation}")
+    if native is not None and natives is not None:
+        natives.append({"region_id": region.id, "response": native})
     return region.model_copy(update={"lines": lignes}), output.usage
+
+
+def _read_native(
+    outputs: Mapping[ArtifactType, Artifact], region: Region
+) -> object | None:
+    """La réponse native d'**une** région, lue tout de suite.
+
+    Un reconnaisseur nomme ses fichiers par page, pas par région : la région
+    suivante écrasera ce sidecar. Il se lit donc ici, comme le texte, sinon
+    seule la réponse de la dernière région survivrait.
+    """
+    artifact = outputs.get(ArtifactType.NATIVE_JSON)
+    if artifact is None or artifact.uri is None:
+        return None
+    try:
+        response: object = json.loads(Path(artifact.uri).read_bytes())
+    except (OSError, ValueError) as exc:
+        raise AdapterStepError(
+            f"fanout : réponse native illisible pour la région {region.id!r} : {exc}"
+        ) from exc
+    return response
 
 
 def _lignes_reconnues(
@@ -318,6 +351,11 @@ def execute_region_fanout(
     fan-out, **persiste** le ``LAYOUT`` rempli (JSON) dans le workspace et
     renvoie le ``StepOutput`` attendu par ``PipelineExecutor`` (qui estampille
     ensuite la provenance) — ``usage`` somme les jetons des N reconnaissances.
+
+    Un reconnaisseur distant fait **un appel par région** : le sidecar
+    ``NATIVE_JSON`` de l'étape les réunit tous, ``{"regions": [{"region_id",
+    "response"}]}`` dans l'ordre de lecture (une région en échec n'y figure pas).
+    Aucun sidecar si aucune région n'en a publié.
     """
     if layout_artifact.uri is None:
         raise AdapterStepError("fanout : artefact LAYOUT d'entrée sans URI.")
@@ -328,6 +366,7 @@ def execute_region_fanout(
     except (OSError, ValueError) as exc:
         raise AdapterStepError(f"fanout : LAYOUT d'entrée illisible : {exc}") from exc
     coupures: list[str] = []
+    reponses: list[dict[str, object]] = []
     filled, usage = run_region_fanout(
         layout=layout,
         page_image=page_image,
@@ -337,6 +376,7 @@ def execute_region_fanout(
         params=params,
         cropper=cropper,
         truncations=coupures,
+        natives=reponses,
     )
     payload = filled.model_dump_json().encode("utf-8")
     out_dir = (
@@ -344,7 +384,8 @@ def execute_region_fanout(
         if context.workspace_uri
         else Path(layout_artifact.uri).parent
     )
-    out_path = out_dir / f"{context.document_id.replace('/', '_')}.filled.layout.json"
+    stem = context.document_id.replace("/", "_")
+    out_path = out_dir / f"{stem}.filled.layout.json"
     out_path.write_bytes(payload)
     artifacts = {
         ArtifactType.LAYOUT: Artifact(
@@ -355,6 +396,17 @@ def execute_region_fanout(
             content_hash=compute_content_hash(payload),
         )
     }
+    if reponses:
+        natif = native_json_bytes({"regions": reponses})
+        natif_path = out_dir / f"{stem}.fanout.native.json"
+        natif_path.write_bytes(natif)
+        artifacts[ArtifactType.NATIVE_JSON] = Artifact(
+            id=f"{context.document_id}:fanout:native_json",
+            document_id=context.document_id,
+            type=ArtifactType.NATIVE_JSON,
+            uri=str(natif_path),
+            content_hash=compute_content_hash(natif),
+        )
     return StepOutput(
         artifacts=artifacts, usage=usage, truncation="; ".join(coupures) or None
     )

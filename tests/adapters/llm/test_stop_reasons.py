@@ -7,9 +7,10 @@ mesurait la coupure, et rien ne le disait.
 
 Les réponses viennent des cassettes ``tests/fixtures/cassettes/llm/`` — le corps
 de l'API tel qu'il arrive sur le fil, validé contre le modèle de réponse du SDK
-(voir la note de chaque cassette). Pour OpenAI, Anthropic et Mistral, le JSON est
-relu en objets à attributs, la forme que rendent les SDK ; pour Ollama (httpx
-direct), le dict est rendu tel quel par un faux client. Aucun réseau, aucune clé.
+(voir la note de chaque cassette). Les conversions lisent ce **corps** (le dump du
+modèle du SDK, celui que garde le sidecar ``NATIVE_JSON``, D-278) ; pour Ollama
+(httpx direct), le dict est rendu tel quel par un faux client. Aucun réseau,
+aucune clé.
 """
 
 from __future__ import annotations
@@ -17,7 +18,6 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -46,12 +46,6 @@ def _wire(provider: str, scenario: str) -> dict[str, Any]:
     return response
 
 
-def _sdk(provider: str, scenario: str) -> Any:
-    """Le corps de la cassette relu en objets à attributs (forme des SDK)."""
-    raw = json.dumps(_wire(provider, scenario))
-    return json.loads(raw, object_hook=lambda d: SimpleNamespace(**d))
-
-
 # --------------------------------------------------------------------------- #
 # Fonctions pures : réponse native → raison d'arrêt normalisée
 # --------------------------------------------------------------------------- #
@@ -78,7 +72,7 @@ def test_the_native_stop_reason_is_normalised(
     convert: Callable[[Any], LLMCompletion],
     expected: str,
 ) -> None:
-    completion = convert(_sdk(provider, scenario))
+    completion = convert(_wire(provider, scenario))
     assert completion.stop_reason == expected
 
 
@@ -96,7 +90,7 @@ def test_ollama_done_reason_is_normalised(scenario: str, expected: str) -> None:
 
 def test_a_cut_response_keeps_its_text_and_tokens() -> None:
     """Coupée n'est pas vide : le texte reçu et les jetons payés restent."""
-    completion = openai_completion(_sdk("openai", "length"))
+    completion = openai_completion(_wire("openai", "length"))
     assert completion.text.endswith("emportant")
     assert (completion.tokens_in, completion.tokens_out) == (812, 32)
 
@@ -106,29 +100,23 @@ def test_a_cut_response_keeps_its_text_and_tokens() -> None:
     [
         (
             openai_completion,
-            SimpleNamespace(
-                usage=None,
-                choices=[
-                    SimpleNamespace(
-                        message=SimpleNamespace(content="x"), finish_reason="tool_calls"
-                    )
+            {
+                "usage": None,
+                "choices": [
+                    {"message": {"content": "x"}, "finish_reason": "tool_calls"}
                 ],
-            ),
+            },
         ),
         (
             _completion_from_message,
-            SimpleNamespace(usage=None, content=[], stop_reason="pause_turn"),
+            {"usage": None, "content": [], "stop_reason": "pause_turn"},
         ),
         (
             mistral_completion,
-            SimpleNamespace(
-                usage=None,
-                choices=[
-                    SimpleNamespace(
-                        message=SimpleNamespace(content="x"), finish_reason=None
-                    )
-                ],
-            ),
+            {
+                "usage": None,
+                "choices": [{"message": {"content": "x"}, "finish_reason": None}],
+            },
         ),
     ],
 )
@@ -186,7 +174,7 @@ def _mock_provider(
         "anthropic": _completion_from_message,
         "mistral": mistral_completion,
     }[provider]
-    completion = convert(_sdk(provider, scenario))
+    completion = convert(_wire(provider, scenario))
     monkeypatch.setattr(
         f"cinoc.adapters.llm.{provider}._invoke_{provider}_vision",
         lambda **_: completion,

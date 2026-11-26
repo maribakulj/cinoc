@@ -266,14 +266,15 @@ def test_only_the_vision_producer_asks_for_the_image() -> None:
     Exiger l'IMAGE partout refuserait des pipelines valides ; ne la déclarer
     nulle part la ferait arriver vide chez celui qui la découpe.
     """
-    texte = SaknussemmCorrector(label="x", producer="rules")
+    texte = SaknussemmCorrector(label="x", producer="mistral", model="m")
     vision = SaknussemmCorrector(label="x", producer="mistral_vision", model="m")
     assert texte.input_types == frozenset({ArtifactType.LAYOUT})
     assert vision.input_types == frozenset(
         {ArtifactType.LAYOUT, ArtifactType.IMAGE}
     )
     # Les sorties, elles, ne changent pas : regarder l'image ne produit pas un
-    # artefact de plus, seulement un meilleur texte.
+    # artefact de plus, seulement un meilleur texte (les deux interrogent un
+    # modèle, donc publient tous deux sa réponse native).
     assert vision.output_types == texte.output_types
 
 

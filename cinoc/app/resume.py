@@ -18,6 +18,12 @@ consommation de chaque étape) : une vue qui note une étape intermédiaire se
 note encore sur un run rechargé. L'``usage`` mesuré au run d'origine est
 restauré avec les artefacts (les ressources réellement consommées pour produire
 le résultat — un coût de re-lecture de cache serait un mensonge économique).
+
+Les sidecars voyagent comme le reste : la réponse native d'un moteur distant
+(``NATIVE_JSON``) est copiée sous ``<étape>.native_json.json`` et rechargée avec
+son étape ; un fichier disparu rend l'unité incomplète, donc ré-exécutée. C'est
+ce qui fait du dossier de reprise l'endroit où ces réponses survivent au run
+(``RunManifest.artifacts_dir``).
 """
 
 from __future__ import annotations

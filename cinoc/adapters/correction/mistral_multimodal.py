@@ -51,6 +51,8 @@ class MistralMultimodalClient:
 
     def __init__(self, *, timeout: float = 300.0) -> None:
         self._timeout = timeout
+        #: Corps reçus, dans l'ordre d'appel — comme ``MistralStructuredClient``.
+        self.responses: list[dict[str, Any]] = []
 
     def _content_blocks(
         self, user_payload: dict[str, Any], images: list[Any]
@@ -115,6 +117,7 @@ class MistralMultimodalClient:
             model=model,
             timeout=self._timeout,
         )
+        self.responses.append(data)
         return parse_chat_json(data, model), usage_from(data)
 
 
