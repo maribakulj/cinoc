@@ -104,10 +104,18 @@ def to_canonical_layout(
     même aire : voir ``_sans_redondance``), **trie** par position (haut→bas puis
     gauche→droite) pour un ordre de lecture **déterministe** indépendant de l'ordre
     de détection, et numérote les régions ``r1..rN``. Le ``label`` du modèle devient
-    le ``region_type`` neutre (``None`` si vide).
+    le ``region_type`` neutre (``None`` si vide), son **score** la
+    ``Region.confidence`` — il était jeté après le seuil. Un score hors [0, 1]
+    n'est pas une confiance : refusé plutôt que borné en silence.
     """
     kept = _sans_redondance([r for r in detection.regions if r.score >= min_score])
     ordered = sorted(kept, key=lambda r: (r.y, r.x))
+    for r in ordered:
+        if not 0.0 <= r.score <= 1.0:
+            raise AdapterStepError(
+                f"segmentation : score de détection hors [0, 1] ({r.score!r}, "
+                f"région {r.label!r})."
+            )
     regions = tuple(
         Region(
             id=f"r{index + 1}",
@@ -115,6 +123,7 @@ def to_canonical_layout(
             geometry=Geometry(
                 bbox=BBox(x=r.x, y=r.y, width=r.width, height=r.height)
             ),
+            confidence=r.score,
         )
         for index, r in enumerate(ordered)
     )

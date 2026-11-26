@@ -187,6 +187,8 @@ backlog inexistant. **Aucune logique ne change.**
 
 > **P5e 9 (D-289)** : `evaluation.py` gagne `MetricCategory` (`established` · `adapted` · `exploratory`) et `MetricUnit` (`character` · `word` · `character_trigram` · `line` · `region` · `entity` · `numeric_sequence` — ce que compte le **poids** de l'agrégat micro) ; `MetricSpec.category` et `MetricSpec.unit` sont **requis** : une métrique sans l'un ou l'autre n'est pas enregistrable. Consommateurs : le runner (famille de tests réduite aux établies), le rapport (classement, marques, fiche). Preuve : `tests/domain/test_evaluation.py::test_metric_spec_requires_category_and_unit`, `tests/reports/test_metric_cards.py`.
 
+> **P5f 4 (D-291)** : `layout.py` — `Region.confidence: float | None` (∈ [0, 1], NaN et ∞ refusés, `None` par défaut ; un `CanonicalLayout` JSON antérieur se relit) : confiance **dans la région** (son existence, son étiquette), distincte de `Line.confidence` (son texte). Consommateurs : `adapters/layout/_base.to_canonical_layout` (score de détection, jeté jusque-là) et la projection Mistral OCR (`block_type_confidence_score`). Non affichée (le SVG de segmentation n'a pas de locale). Preuve : `tests/domain/test_region_confidence.py`.
+
 > Tri-état : `[x]` fait **+ preuve** · `[ ]` à faire · `[~]` différé/réserve + raison.
 > Mise à jour dans le **même commit** que le code (règle d'or anti-dérive).
 > **Statut couche 1 : ✅ vert** (vérifié 2026-05-31).

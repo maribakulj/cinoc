@@ -1,0 +1,171 @@
+{
+ "scenario": "mistral_ocr_markdown_layout",
+ "statut": "construite, à confirmer sur une réponse réelle",
+ "sdk": "mistralai 3.9.0 — mistralai.client.models.OCRResponse (les deux réponses) ; mistralai 1.12.4 — mistralai.models.OCRResponse (« markdown » seule)",
+ "note": "Réponses **construites** (aucune clé : arbitrage A6), au format du fil de `POST /v1/ocr` d'après les modèles du SDK mistralai 3.9.0 (OCRPageObject.blocks, OCRBlockConfidenceScores) et la documentation « Basic OCR » de Mistral (blocs : OCR 4 et suivants, `include_blocks`, `confidence_scores_granularity='block'`, modèle d'exemple `mistral-ocr-4-1`). Validées contre OCRResponse.model_validate ; le dump (`model_dump(mode='json', by_alias=True, exclude_unset=True)`) est égal au corps sous 3.9.0. Sous 1.12.4 (SDK épinglé `<2`), « markdown » se relit à l'identique mais « blocs » perd `blocks` et `confidence_scores` au décodage : le sidecar d'un run actuel n'en porte jamais.",
+ "ground_truth": "LE PETIT JOURNAL\nSupplément illustré — Dimanche 12 mars 1894\nOn annonce de Boulogne-sur-Mer qu'une partie de la falaise s'est effondrée hier soir.\nVille Pertes\nBoulogne 2 maisons\nWimereux 1 grange\nPrix : 5 centimes\nAbonnements : voir page 4\nImprimerie du Petit Journal",
+ "responses": {
+  "markdown": {
+   "pages": [
+    {
+     "index": 0,
+     "markdown": "# LE PETIT JOURNAL\n\n**Supplément illustré** — Dimanche 12 mars 1894\n\n![img-0.jpeg](img-0.jpeg)\n\nOn annonce de *Boulogne-sur-Mer* qu'une partie de la falaise s'est effondrée hier soir.\n\n| Ville | Pertes |\n|---|---:|\n| Boulogne | 2 maisons |\n| Wimereux | 1 grange |\n\n- Prix : 5 centimes\n- Abonnements : [voir page 4](#p4)\n\nImprimerie du *Petit Journal*",
+     "images": [
+      {
+       "id": "img-0.jpeg",
+       "top_left_x": 300,
+       "top_left_y": 320,
+       "bottom_right_x": 1400,
+       "bottom_right_y": 1100
+      }
+     ],
+     "dimensions": {
+      "dpi": 200,
+      "height": 2200,
+      "width": 1700
+     },
+     "tables": [],
+     "hyperlinks": [],
+     "header": null,
+     "footer": null
+    }
+   ],
+   "model": "mistral-ocr-2512",
+   "usage_info": {
+    "pages_processed": 1,
+    "doc_size_bytes": 61442
+   },
+   "document_annotation": null
+  },
+  "blocs": {
+   "pages": [
+    {
+     "index": 0,
+     "markdown": "# LE PETIT JOURNAL\n\n**Supplément illustré** — Dimanche 12 mars 1894\n\n![img-0.jpeg](img-0.jpeg)\n\nOn annonce de *Boulogne-sur-Mer* qu'une partie de la falaise s'est effondrée hier soir.\n\n| Ville | Pertes |\n|---|---:|\n| Boulogne | 2 maisons |\n| Wimereux | 1 grange |\n\n- Prix : 5 centimes\n- Abonnements : [voir page 4](#p4)\n\nImprimerie du *Petit Journal*",
+     "images": [
+      {
+       "id": "img-0.jpeg",
+       "top_left_x": 300,
+       "top_left_y": 320,
+       "bottom_right_x": 1400,
+       "bottom_right_y": 1100
+      }
+     ],
+     "dimensions": {
+      "dpi": 200,
+      "height": 2200,
+      "width": 1700
+     },
+     "tables": [],
+     "hyperlinks": [],
+     "header": null,
+     "footer": null,
+     "confidence_scores": {
+      "average_page_confidence_score": 0.9761,
+      "minimum_page_confidence_score": 0.6204
+     },
+     "blocks": [
+      {
+       "type": "title",
+       "top_left_x": 240,
+       "top_left_y": 120,
+       "bottom_right_x": 1460,
+       "bottom_right_y": 220,
+       "content": "# LE PETIT JOURNAL",
+       "confidence_scores": {
+        "average_content_confidence_score": 0.9981,
+        "minimum_content_confidence_score": 0.9902,
+        "block_type_confidence_score": 0.9999
+       }
+      },
+      {
+       "type": "text",
+       "top_left_x": 240,
+       "top_left_y": 240,
+       "bottom_right_x": 1460,
+       "bottom_right_y": 300,
+       "content": "**Supplément illustré** — Dimanche 12 mars 1894",
+       "confidence_scores": {
+        "average_content_confidence_score": 0.9874,
+        "minimum_content_confidence_score": 0.8113,
+        "block_type_confidence_score": 0.9641
+       }
+      },
+      {
+       "type": "image",
+       "top_left_x": 300,
+       "top_left_y": 320,
+       "bottom_right_x": 1400,
+       "bottom_right_y": 1100,
+       "content": "",
+       "confidence_scores": {
+        "average_content_confidence_score": null,
+        "minimum_content_confidence_score": null,
+        "block_type_confidence_score": 0.9987
+       },
+       "image_id": "img-0.jpeg"
+      },
+      {
+       "type": "text",
+       "top_left_x": 240,
+       "top_left_y": 1120,
+       "bottom_right_x": 1460,
+       "bottom_right_y": 1260,
+       "content": "On annonce de *Boulogne-sur-Mer* qu'une partie de la falaise s'est effondrée hier soir.",
+       "confidence_scores": {
+        "average_content_confidence_score": 0.9712,
+        "minimum_content_confidence_score": 0.6204,
+        "block_type_confidence_score": 0.9935
+       }
+      },
+      {
+       "type": "table",
+       "top_left_x": 240,
+       "top_left_y": 1280,
+       "bottom_right_x": 1460,
+       "bottom_right_y": 1500,
+       "content": "| Ville | Pertes |\n|---|---:|\n| Boulogne | 2 maisons |\n| Wimereux | 1 grange |",
+       "confidence_scores": {
+        "average_content_confidence_score": 0.9533,
+        "minimum_content_confidence_score": 0.7021,
+        "block_type_confidence_score": 0.9876
+       }
+      },
+      {
+       "type": "list",
+       "top_left_x": 240,
+       "top_left_y": 1520,
+       "bottom_right_x": 1460,
+       "bottom_right_y": 1640,
+       "content": "- Prix : 5 centimes\n- Abonnements : [voir page 4](#p4)",
+       "confidence_scores": {
+        "average_content_confidence_score": 0.965,
+        "minimum_content_confidence_score": 0.881,
+        "block_type_confidence_score": 0.942
+       }
+      },
+      {
+       "type": "footer",
+       "top_left_x": 240,
+       "top_left_y": 2100,
+       "bottom_right_x": 1460,
+       "bottom_right_y": 2160,
+       "content": "Imprimerie du *Petit Journal*",
+       "confidence_scores": {
+        "average_content_confidence_score": 0.9902,
+        "minimum_content_confidence_score": 0.97,
+        "block_type_confidence_score": 0.8812
+       }
+      }
+     ]
+    }
+   ],
+   "model": "mistral-ocr-4-1",
+   "usage_info": {
+    "pages_processed": 1,
+    "doc_size_bytes": 61442
+   },
+   "document_annotation": null
+  }
+ }
+}

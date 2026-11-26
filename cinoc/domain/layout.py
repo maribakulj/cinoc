@@ -96,6 +96,13 @@ class Region(BaseModel):
     geometry: Geometry | None = None
     lines: tuple[Line, ...] = ()
     regions: tuple[Region, ...] = ()
+    #: Confiance **dans la région elle-même** — son existence et son étiquette,
+    #: pas son texte (le texte a ``Line.confidence``) : le score d'un
+    #: détecteur, la confiance de type de bloc d'un OCR qui segmente. ``None``
+    #: quand la source n'en donne pas — jamais un défaut fabriqué. Dans [0, 1].
+    confidence: float | None = Field(
+        default=None, ge=0.0, le=1.0, allow_inf_nan=False
+    )
 
 
 class LayoutPage(BaseModel):
