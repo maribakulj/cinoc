@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from cinoc.adapters.corpus.iiif import parse_manifest
 
 V2 = {
@@ -48,8 +50,9 @@ def test_v2_direct_and_service_urls() -> None:
     assert len(images) == 2  # le canvas sans image est ignoré
     assert images[0].image_url == "https://ex.org/img/1.jpg"
     assert images[0].label == "f. 1"
-    # via service IIIF Image API → construction de l'URL d'image
-    assert images[1].image_url == "https://ex.org/iiif/2/full/max/0/default.jpg"
+    # via service IIIF Image API sans version déclarée, identifiant ``@id`` (forme
+    # 2.x) → syntaxe 2.x : ``full`` est valide de 2.0 à 2.1, ``max`` dès 2.1 seulement
+    assert images[1].image_url == "https://ex.org/iiif/2/full/full/0/default.jpg"
 
 
 def test_v3_direct_and_service_and_language_map() -> None:
@@ -57,6 +60,7 @@ def test_v3_direct_and_service_and_language_map() -> None:
     assert len(images) == 2
     assert images[0].image_url == "https://ex.org/p1.jpg"
     assert images[0].label == "Page 1"  # map de langue v3 aplatie
+    # identifiant ``id`` (forme 3.0) → syntaxe 3.0
     assert images[1].image_url == "https://ex.org/iiif/p2/full/max/0/default.jpg"
     assert images[1].label == "Page 2"
 
@@ -99,3 +103,83 @@ def test_v3_label_nested_list_is_stringified() -> None:
 def test_empty_manifest_yields_no_images() -> None:
     assert parse_manifest({"@context": "…/presentation/3/…", "type": "Manifest"}) == ()
     assert parse_manifest({}) == ()
+
+
+def _v2_with(resource: dict[str, object]) -> dict[str, object]:
+    return {
+        "@context": "http://iiif.io/api/presentation/2/context.json",
+        "sequences": [
+            {"canvases": [{"label": "p", "images": [{"resource": resource}]}]}
+        ],
+    }
+
+
+# Formes de service relevées sur des manifestes réels (audit de substitution) :
+# la requête « image entière » dépend de la version de l'Image API déclarée.
+_GALLICA_SVC = "https://gallica.bnf.fr/iiif/ark:/12148/bpt6k5619759j/f1"
+_NGA_SVC = (
+    "https://media.nga.gov/iiif/public/objects/1/0/6/3/8/2/106382-primary-0-nativeres.ptif"
+)
+
+
+@pytest.mark.parametrize(
+    ("resource", "expected"),
+    [
+        # Gallica : Image API 1.1 (@context image/1, profil Stanford) → ``native``.
+        (
+            {
+                "@id": f"{_GALLICA_SVC}/full/full/0/native.jpg",
+                "service": {
+                    "@context": "http://iiif.io/api/image/1/context.json",
+                    "@id": _GALLICA_SVC,
+                    "profile": "http://library.stanford.edu/iiif/image-api/1.1/compliance.html#level2",
+                },
+            },
+            f"{_GALLICA_SVC}/full/full/0/native.jpg",
+        ),
+        # NGA : Image API 2 → ``full/full`` (identique à l'URL directe).
+        (
+            {
+                "@id": f"{_NGA_SVC}/full/full/0/default.jpg",
+                "service": {
+                    "@context": "http://iiif.io/api/image/2/context.json",
+                    "@id": _NGA_SVC,
+                    "profile": "http://iiif.io/api/image/2/level2.json",
+                },
+            },
+            f"{_NGA_SVC}/full/full/0/default.jpg",
+        ),
+        # Image API 3 typée → ``full/max`` ; profil nu ``level1`` = forme 3.0.
+        (
+            {"id": "https://ex.org/a/full/600,/0/default.jpg",
+             "service": [{"id": "https://ex.org/a", "type": "ImageService3"}]},
+            "https://ex.org/a/full/max/0/default.jpg",
+        ),
+        (
+            {"service": [{"@id": "https://ex.org/b/", "profile": "level1"}]},
+            "https://ex.org/b/full/max/0/default.jpg",
+        ),
+        # Bodleian : ``@id`` = base du service → l'image est construite par lui.
+        (
+            {
+                "@id": "https://ex.org/svc",
+                "service": {
+                    "@context": "http://iiif.io/api/image/2/context.json",
+                    "@id": "https://ex.org/svc",
+                },
+            },
+            "https://ex.org/svc/full/full/0/default.jpg",
+        ),
+        # Sans service : l'URL directe, sauf un ``info.json``.
+        ({"@id": "https://ex.org/plain.png"}, "https://ex.org/plain.png"),
+    ],
+)
+def test_full_image_url_follows_image_api_version(
+    resource: dict[str, object], expected: str
+) -> None:
+    (image,) = parse_manifest(_v2_with(resource))
+    assert image.image_url == expected
+
+
+def test_direct_info_json_without_service_is_skipped() -> None:
+    assert parse_manifest(_v2_with({"@id": "https://ex.org/svc/info.json"})) == ()

@@ -86,7 +86,7 @@ corriger · **S** supprimer · **E** extraire.
 | `pricing.json` | `litellm.model_cost` | EUR, datée, tarifs à la page : aucun équivalent. Divergence déjà visible sur mistral-small | **C** ; LiteLLM en test hors CI de dérive des prix |
 | Tesseract | pytesseract (déjà), tesserocr | **L'OCR est calculé 2 à 3 fois par page** (`image_to_string`, `image_to_data`, `image_to_alto_xml`). Un seul appel du binaire avec plusieurs renderers : même texte, mêmes mots, même ALTO, **2,7-3,9× plus rapide**, confidences plus précises. tesserocr embarque une autre libtesseract (5.5.4 contre 5.3.4 système) : texte différent, manifeste faux | **C+** : un appel, `OMP_THREAD_LIMIT=1` |
 | Azure DI, Google Vision | SDK officiels (4 Mo + azure-core ; 46 Mo + grpcio) | Pile HTTP unique et cassettes : légitime | **C** (ajouter le retry) |
-| `iiif.py` | iiif-prezi3 3.1, iiif-prezi (2019), piffle | iiif-prezi3 ne lit que la v3, rejette 7/12 manifestes réels, **accepte en silence** une v2 à 0 canvas, impose `requests`. **Deux bugs Cinoc** : Bodleian v2 → l'`@id` du service est pris pour l'image (303 vers `info.json`) : **corpus de JSON déguisés en images** ; Wellcome v3 → vignette 742×1024 au lieu de 2569×3543 : **OCR sur 12× moins de pixels** | **C+** |
+| `iiif.py` | iiif-prezi3 3.1, iiif-prezi (2019), piffle | iiif-prezi3 ne lit que la v3, rejette 7/12 manifestes réels, **accepte en silence** une v2 à 0 canvas, impose `requests`. **Deux bugs Cinoc** : Bodleian v2 → l'`@id` du service est pris pour l'image (303 vers `info.json`) : **corpus de JSON déguisés en images** ; Wellcome v3 → vignette 742×1024 au lieu de 2569×3543 : **OCR sur 12× moins de pixels** | **C+** — corrigé (D-274) : service d'images d'abord, requête selon la version de l'Image API, octets magiques vérifiés au téléchargement |
 | `_http.py` (anti-SSRF) | advocate (2020, requests), httpx-secure (async seulement) | Seul client synchrone à IP épinglée + IPv4 embarquée (NAT64) + plafond. Deux trous trouvés et **fermés** (D-263) | **C** |
 | `escriptorium.py` | escriptorium-connector 0.2.6 | Exige `pydantic<2`, `lxml<5` : incompatible | **C** |
 | `mistralai<2` | — | PyPI en est à 3.9 : plafond à revoir avec le SDK | à P5f item 8 |
@@ -134,8 +134,8 @@ l'extra `hipe-oracle`), crowd-kit et LiteLLM hors CI.
 | 1 | Segmenteur distant : validation SSRF puis seconde résolution DNS | sécurité | **corrigé** (D-263) |
 | 2 | Auth renvoyée sur redirection vers un autre port / https → http | sécurité | **corrigé** (D-263) |
 | 3 | ALTO et PAGE écrits invalides au XSD officiel | conformité | **corrigé** : ALTO (D-272), PAGE (D-273) |
-| 4 | IIIF v2 : URL du service prise pour l'image (corpus corrompu) | intégrité des données | → P5d item 7 |
-| 5 | IIIF v3 : vignette au lieu de l'image pleine résolution | biais de mesure | → P5d item 7 |
+| 4 | IIIF v2 : URL du service prise pour l'image (corpus corrompu) | intégrité des données | **corrigé** (D-274) : service d'abord, `info.json` jamais retenu, téléchargement refusé s'il n'est pas une image |
+| 5 | IIIF v3 : vignette au lieu de l'image pleine résolution | biais de mesure | **corrigé** (D-274) — la v2 du même manifeste Wellcome avait le même défaut |
 | 6 | Vote multi-moteurs : pas un ROVER, dépend du nom des sources | justesse | → P5e item 11 |
 | 7 | Taxonomie et hallucinations sur `difflib` sous-optimal | justesse | → P5e item 11 |
 | 8 | Pires lignes appariées par index | justesse | → P5e item 11 |
