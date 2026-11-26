@@ -48,6 +48,14 @@ publier, et son moment, appartiennent au mainteneur.
 
 ### Corrigé
 
+- **Un rapport de la CLI servi par `cinoc serve` retrouve ses images.** Un
+  `RunResult` écrit ses images relatives au dossier de sa spec, et la vitrine
+  les cherchait dans le dossier des corpus déposés : le rapport retombait sur
+  l'aperçu synthétique. Un rapport déposé (`--reports-dir`) se relit
+  désormais contre son dossier de dépôt — écrire `--json` à côté de la spec
+  suffit —, et le serveur ne lit aucune image hors de cette racine, absolu
+  compris. `cinoc corpus import zip --dest corpus` (dossier relatif) écrivait
+  des chemins absolus sous un message qui les disait relatifs : corrigé.
 - **Tesseract lit chaque page une seule fois, et « Arrêter » coupe l'appel en
   cours.** Le texte, les confidences et l'ALTO sortaient de deux ou trois
   passes d'OCR par page ; Cinoc lance désormais le binaire lui-même, une fois,

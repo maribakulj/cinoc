@@ -26,6 +26,7 @@ from fastapi.responses import HTMLResponse, Response
 
 from cinoc.adapters.images import thumbnail_bytes
 from cinoc.app.alto_store import AltoStore
+from cinoc.app.portable_paths import confine_image_refs
 from cinoc.app.report_images import (
     build_report_zip,
     build_served_hrefs,
@@ -33,7 +34,8 @@ from cinoc.app.report_images import (
 )
 from cinoc.app.results import RunResultError, load_run_result
 from cinoc.app.security import PathSecurityError
-from cinoc.interfaces.web.catalog import resolve_report
+from cinoc.evaluation.result import RunResult
+from cinoc.interfaces.web.catalog import report_image_root, resolve_report
 from cinoc.reports import default_report_renderer
 
 #: Tailles servies : la vignette de galerie et le fac-similé de détail. Mêmes
@@ -48,25 +50,42 @@ def build_reports_router(
     *,
     alto_store: AltoStore | None = None,
     image_root: Path | None = None,
+    deposit_dir: Path | None = None,
 ) -> APIRouter:
     """Construit le routeur des rapports (monté par ``create_app``).
 
     ``alto_store`` (optionnel) sert les exports ALTO persistés d'un run via
     ``/reports/{name}/alto.zip`` ; absent → l'endpoint répond ``404``.
     ``image_root`` : racine contre laquelle se relisent les références d'image
-    relatives d'un ``RunResult`` (celle que le ``JobRunner`` a donnée au run).
+    relatives d'un ``RunResult`` du serveur (celle que le ``JobRunner`` a donnée
+    au run). ``deposit_dir`` : le dossier des rapports **déposés**
+    (``--reports-dir``), racine des leurs (``report_image_root``, D-305).
     """
     router = APIRouter()
+
+    def _load(name: str) -> tuple[RunResult, Path | None]:
+        """Le ``RunResult`` servi et la racine de ses images, **confinées** à
+        elle : un JSON déposé ne fait lire au serveur aucun fichier hors de sa
+        racine (``confine_image_refs``). Lève ``PathSecurityError`` (introuvable
+        ou hors zone) et ``RunResultError`` (illisible)."""
+        path = resolve_report(reports_dir, name)
+        result = load_run_result(path)
+        root = image_root
+        if deposit_dir is not None and image_root is not None:
+            root = report_image_root(
+                path, deposit_dir=deposit_dir, uploads_dir=image_root
+            )
+        if root is not None:
+            result = confine_image_refs(result, root)
+        return result, root
 
     @router.get("/reports/{name}", response_class=HTMLResponse)
     def get_report(name: str, lang: str = "fr") -> str:
         try:
-            path = resolve_report(reports_dir, name)
+            result, root = _load(name)
         except PathSecurityError as exc:
             # introuvable OU hors zone → même réponse (pas de fuite).
             raise HTTPException(status_code=404, detail="rapport introuvable") from exc
-        try:
-            result = load_run_result(path)
         except RunResultError as exc:
             raise HTTPException(status_code=500, detail="rapport illisible") from exc
         # Langue du glossaire pédagogique (fr par défaut ; en seul autre porté).
@@ -79,12 +98,12 @@ def build_reports_router(
             images=build_served_hrefs(
                 result,
                 lambda doc: f"/reports/{quoted}/image/{quote(doc, safe='')}",
-                image_root=image_root,
+                image_root=root,
             ),
             facsimiles=build_served_hrefs(
                 result,
                 lambda doc: f"/reports/{quoted}/facsimile/{quote(doc, safe='')}",
-                image_root=image_root,
+                image_root=root,
             ),
         )
 
@@ -99,11 +118,10 @@ def build_reports_router(
         retombe sur son aperçu synthétique.
         """
         try:
-            path = resolve_report(reports_dir, name)
-            result = load_run_result(path)
+            result, root = _load(name)
         except (PathSecurityError, RunResultError) as exc:
             raise HTTPException(status_code=404, detail="rapport introuvable") from exc
-        ref = image_ref_for(result, document_id, image_root=image_root)
+        ref = image_ref_for(result, document_id, image_root=root)
         if ref is None:
             raise HTTPException(status_code=404, detail="document sans image")
         raw = thumbnail_bytes(ref, max_px=max_px)
@@ -134,11 +152,9 @@ def build_reports_router(
         ``report.html`` + ``report-assets/`` (images réelles, hors-ligne). Rendu
         à la demande depuis le ``RunResult`` sauvé — rien de pré-écrit."""
         try:
-            path = resolve_report(reports_dir, name)
+            result, root = _load(name)
         except PathSecurityError as exc:
             raise HTTPException(status_code=404, detail="rapport introuvable") from exc
-        try:
-            result = load_run_result(path)
         except RunResultError as exc:
             raise HTTPException(status_code=500, detail="rapport illisible") from exc
         report_lang = "en" if lang == "en" else "fr"
@@ -147,7 +163,7 @@ def build_reports_router(
             render=default_report_renderer().render,
             title=f"Cinoc — {result.manifest.run_id}",
             lang=report_lang,
-            image_root=image_root,
+            image_root=root,
         )
         # ``name`` est déjà validé (resolve_report) → sûr en nom de fichier.
         return Response(

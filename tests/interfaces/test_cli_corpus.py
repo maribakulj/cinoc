@@ -166,6 +166,28 @@ def test_a_zip_corpus_needs_no_network(tmp_path: Path) -> None:
     assert (tmp_path / "c" / "corpus.yaml").exists()
 
 
+def test_a_relative_destination_still_writes_relative_paths(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``--dest corpus`` (relatif, le cas de toute personne qui suit le
+    README) écrivait des chemins **absolus** sous un message qui les disait
+    relatifs : l'importeur rend des chemins résolus, que ``relative_to`` ne
+    savait pas rapporter à un dossier non résolu (parcours S33, D-305)."""
+    archive = tmp_path / "pages.zip"
+    with zipfile.ZipFile(archive, "w") as zf:
+        zf.writestr("page_1.png", b"\x89PNG\r\n\x1a\n stub")
+        zf.writestr("page_1.gt.txt", "bonjour")
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["corpus", "import", "zip", "pages.zip", "--dest", "corpus"]) == 0
+
+    texte = (tmp_path / "corpus" / "corpus.yaml").read_text(encoding="utf-8")
+    assert str(tmp_path) not in texte
+    document = yaml.safe_load(texte)["corpus"]["documents"][0]
+    assert document["image_uri"] == "page_1.png"
+    assert document["ground_truths"][0]["uri"] == "page_1.gt.txt"
+
+
 def test_a_local_zip_is_not_held_to_the_public_upload_quota(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

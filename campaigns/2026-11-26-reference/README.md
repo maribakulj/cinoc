@@ -17,7 +17,10 @@ recoupée par dinglehopper**, l'estimation du coût Mistral. Restent :
   mainteneur**.
 
 > Les chiffres de ce dossier sont ceux d'une campagne **non publiée** et, pour
-> le VLM, d'un modèle de 3 B sur CPU : ils ne sont **pas** à citer.
+> le VLM, d'un modèle de 3 B sur CPU : ils ne sont **pas** à citer. Le README du
+> dépôt en montre cinq lignes comme **exemple partiel**, dites telles (un run,
+> sans répétition, non publié) et relues dans ces `RunResult` par
+> `tests/guardrails/test_readme_result.py` (S33, D-305).
 
 ## Fichiers
 

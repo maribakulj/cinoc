@@ -1,0 +1,2 @@
+The first page of a small corpus,
+printed to be read by Tesseract.

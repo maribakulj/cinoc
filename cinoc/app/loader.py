@@ -158,7 +158,9 @@ def dump_corpus_spec(spec: CorpusSpec, path: str | Path) -> Path:
     aucun sens.
     """
     cible = Path(path)
-    base = cible.parent
+    # Résolue : l'importeur rend des chemins résolus, et ``--dest corpus``
+    # (relatif) les laissait absolus faute de pouvoir les y rapporter (D-305).
+    base = cible.parent.resolve()
     documents = [
         _relative_document(document, base) for document in spec.documents
     ]
@@ -199,7 +201,7 @@ def _portable_uri(uri: str, base: Path) -> str:
         return uri
     chemin = Path(uri)
     try:
-        return chemin.relative_to(base).as_posix()
+        return chemin.resolve().relative_to(base).as_posix()
     except ValueError:
         # Hors du dossier du YAML (l'utilisateur a choisi deux emplacements
         # sans rapport) : on garde l'absolu plutôt qu'une chaîne de « .. »
