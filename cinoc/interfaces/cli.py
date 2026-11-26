@@ -58,7 +58,7 @@ from cinoc.interfaces._list_command import (
     run_list_recipes,
 )
 from cinoc.interfaces._recipe_spec import scoring_options, spec_loader
-from cinoc.interfaces._run_summary import unit_summary
+from cinoc.interfaces._run_summary import print_progress, unit_summary
 from cinoc.interfaces._serve_command import serve_command
 from cinoc.reports import default_report_renderer, render_comparison
 from cinoc.reports.csv_export import run_result_csv
@@ -312,6 +312,7 @@ def _run_config(
             max_workers=max_workers,
             offline=offline,
             paths_root=root,
+            on_progress=print_progress,
         )
 
     results, variance = run_repeatedly(_once, repeat)
@@ -430,6 +431,7 @@ def _run_hybrid(
         registry=registry,
         code_version=resolve_code_version(),
         artifact_sink=_sink,
+        on_progress=print_progress,
     )
     quoi = "LAYOUT" if segment_only else "ALTO"
     print(f"{len(written)} {quoi} écrit(s) dans {out_dir}")

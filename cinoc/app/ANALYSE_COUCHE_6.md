@@ -305,6 +305,7 @@ cinoc/app/
 - [x] **S34a (D-307)** : `data_dir.resolve_data_dir` rend un `DataDir` (`path`, `ephemeral`) — dossier **par utilisateur** de la plate-forme (`user_data_dir`) hors mode public, avant le temporaire ; `CorpusStore` écrit et relit `corpus.yaml` par corpus. — *preuve : `tests/app/test_data_dir.py`, `tests/interfaces/web/test_data_survives_restart.py`*
 - [x] **S34a (D-307)** : `corpus_upload.truths_beside` — une règle de vérité déposée (ZIP et `cinoc correct`) ; `alto_corpus.corpus_from_alto(pipeline=, ocr_sidecar=)` part des images, l'ALTO corrigé n'est vérité que sous sidecar ; `truth_summary` ; `write_alto_files` et `AltoStore.save` nomment par `alto_file_name` et refusent une collision. — *preuve : `tests/app/test_alto_correction_truth.py`, `tests/app/test_alto_naming.py`*
 - [x] **S34a (D-307)** : `alto_corpus.refuse_self_reference`, appelé par `spec_coherence.check` et `plan_recipe_run` — toute spec (recette, spec à la main, CLI ou web) qui lit un ALTO contre la vérité extraite de lui-même est refusée. — *preuve : `tests/interfaces/test_guide_score_alto.py::test_without_a_transcription_the_run_is_refused`*
+- [x] **S34a (D-307)** : `orchestrator.UnitProgress` — le rappel de progression porte l'unité (pipeline, document, issue) en plus du compte ; `JobRunner` n'en lit que le compte (SSE inchangé). — *preuve : `tests/app/test_orchestrator_parallel.py::test_progress_ticks_once_per_unit`*
 
 ---
 

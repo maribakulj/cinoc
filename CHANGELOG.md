@@ -48,6 +48,15 @@ publier, et son moment, appartiennent au mainteneur.
 
 ### Corrigé
 
+- **`cinoc run` n'est plus muet.** Un run VLM de sept minutes ne disait rien
+  jusqu'au rapport. Une ligne par unité terminée (`[3/16] pipeline · document —
+  fait`), sur la sortie d'erreur, aussi pour `cinoc correct` et `cinoc hybrid` ;
+  c'est le compte que la vitrine diffuse en SSE.
+
+- **`cinoc list engines` ne dit plus que `saknussemm` manque à PyPI.**
+  `pip install "cinoc[saknussemm]"` l'installe depuis PyPI (0.9.0) ; le
+  message, qui envoyait chercher un dépôt, donne cette commande.
+
 - **Noter un ALTO d'un autre outil, sans moteur.** Le README le promettait
   par `precomputed`, qui ne lit que du texte. Le guide donne la spec
   (`alto_source` → `layout_to_text`), exécutée telle quelle par la suite et sur

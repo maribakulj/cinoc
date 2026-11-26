@@ -326,6 +326,7 @@ cinoc/interfaces/
 - [x] **S34a (D-307)** : `cinoc serve` (`_serve_command.py`) résout le dossier de données une fois, le transmet par `CINOC_DATA_DIR` et l'affiche ; corpus déposés et exports ALTO sous ce dossier hors mode public (`create_app`), temporaires en mode public. — *preuve : `test_serve_says_where_its_data_lives`, `test_data_survives_restart`*
 - [x] **S34a (D-307)** : `cinoc correct --pipeline` (sous-parseur dans `_correction_command.py`) dit avant le run ce que mesurent les chiffres ; parcours 3 installé sans copie ni renommage. — *preuve : `tests/interfaces/test_correction_command.py`, `tests/installed/test_journeys.py::test_an_existing_alto_is_corrected`*
 - [x] **S34a (D-307)** : `cinoc list engines <brique>` affiche consomme → produit (lu sur les rôles de recette), les réglages requis avec leur ligne `adapter_kwargs` ; un rôle de recette nomme ses briques, un nom inconnu reçoit le plus proche (`closest_hint`). La spec « noter un ALTO » du guide est exécutée (arbre et roue installée). — *preuve : `tests/app/test_module_params.py`, `tests/interfaces/test_guide_score_alto.py`, `test_a_bare_install_scores_an_existing_alto`*
+- [x] **S34a (D-307)** : `cinoc run`, `correct`, `hybrid` impriment une ligne par unité terminée sur la sortie d'erreur (`_run_summary.print_progress`). — *preuve : `tests/interfaces/test_cli_progress.py`*
 
 ---
 

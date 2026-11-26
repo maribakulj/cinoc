@@ -22,7 +22,7 @@ import re
 import threading
 from collections.abc import Callable, Mapping
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path, PurePosixPath
 from tempfile import TemporaryDirectory
 from urllib.parse import urlsplit
@@ -84,9 +84,22 @@ PipelineOutputs = Mapping[str, Mapping[str, StepArtifacts]]
 #: workspace (les URI sont encore lisibles). La couche 6 (app) le fournit ;
 #: l'orchestrateur l'invoque sans rien connaître de sa cible (un store, etc.).
 ArtifactSink = Callable[[PipelineOutputs, RunManifest], None]
-#: Callback de progression : ``(unités traitées, total)``. Émis après chaque
-#: document (succès **ou** échec isolé). Une unité = un (concurrent × document).
-ProgressCallback = Callable[[int, int], None]
+@dataclass(frozen=True)
+class UnitProgress:
+    """Une unité (concurrent × document) **terminée** : où en est le run, et ce
+    qu'elle a donné. Le web en tire sa barre (SSE), la CLI une ligne (D-307)."""
+
+    done: int
+    total: int
+    pipeline: str
+    document_id: str
+    #: ``ok`` / ``truncated`` / ``failed`` (issue de l'unité), ou ``resumed`` :
+    #: relue de l'archive, pas exécutée.
+    outcome: str
+
+
+#: Callback de progression, émis après chaque unité (succès **ou** échec isolé).
+ProgressCallback = Callable[[UnitProgress], None]
 
 
 #: Variable d'environnement (ops) : nombre de threads d'exécution par défaut.
@@ -123,13 +136,15 @@ class _ProgressCounter:
         self._done = 0
         self._lock = threading.Lock()
 
-    def tick(self) -> None:
+    def tick(self, pipeline: str, document_id: str, outcome: str) -> None:
         if self._callback is None:
             return
         with self._lock:
             self._done += 1
             done = self._done
-        self._callback(done, self._total)
+        self._callback(
+            UnitProgress(done, self._total, pipeline, document_id, outcome)
+        )
 
 
 def run(
@@ -256,7 +271,7 @@ def run(
                     results[(pipeline.name, document.id)] = DocumentExecution.failed(
                         "infrastructure", message
                     )
-                    progress.tick()
+                    progress.tick(pipeline.name, document.id, "failed")
                     continue
                 key = (
                     unit_key(
@@ -277,7 +292,7 @@ def run(
                 if cached is not None:
                     results[(pipeline.name, document.id)] = cached
                     resumed.add((pipeline.name, document.id))
-                    progress.tick()
+                    progress.tick(pipeline.name, document.id, "resumed")
                 else:
                     pending.append((pipeline, document, key))
         if offline and pending:
@@ -335,7 +350,7 @@ def run(
                                 # Archivé (l'archive dit ce qui a échoué), mais
                                 # une reprise normale le retentera.
                                 saves.append((key, results[unit]))
-                            progress.tick()
+                            progress.tick(*unit, "failed")
                             continue
                         if execution.message is not None:
                             # Une coupure se signale par un message (étape,
@@ -350,7 +365,7 @@ def run(
                         results[unit] = execution
                         if key is not None:
                             saves.append((key, execution))
-                        progress.tick()
+                        progress.tick(*unit, execution.outcome)
                 except RunCancelledError:
                     # Annulation coopérative : on cesse de planifier (les unités
                     # non démarrées sont annulées) et on propage — le run s'arrête.
@@ -571,5 +586,7 @@ __all__ = [
     "ArtifactSink",
     "OrchestrationError",
     "PipelineOutputs",
+    "ProgressCallback",
+    "UnitProgress",
     "run",
 ]

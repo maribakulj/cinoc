@@ -37,7 +37,7 @@ from cinoc.adapters.storage.publisher import NoopPublisher, ResultPublisher
 from cinoc.app.alto_store import AltoStore
 from cinoc.app.history import record_run
 from cinoc.app.modules.registry import ModuleRegistry
-from cinoc.app.orchestrator import PipelineOutputs
+from cinoc.app.orchestrator import PipelineOutputs, UnitProgress
 from cinoc.app.orchestrator import run as run_orchestrator
 from cinoc.app.results import dump_run_result
 from cinoc.app.resume import ResumeStore
@@ -149,8 +149,8 @@ class JobRunner:
             with TemporaryDirectory(prefix="cinoc-job-") as workspace:
                 spec = build_spec(Path(workspace))
 
-                def _on_progress(done: int, total: int) -> None:
-                    self._store.progress(job_id, done, total)
+                def _on_progress(unit: UnitProgress) -> None:
+                    self._store.progress(job_id, unit.done, unit.total)
 
                 result = run_orchestrator(
                     spec,

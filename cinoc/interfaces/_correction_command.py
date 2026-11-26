@@ -33,7 +33,7 @@ from cinoc.app.recipe_queue import RecipeEntry, plan_recipe_run
 from cinoc.app.report_images import build_facsimiles, build_thumbnails
 from cinoc.app.variance import VarianceSummary, run_repeatedly
 from cinoc.evaluation.result import RunResult
-from cinoc.interfaces._run_summary import unit_summary
+from cinoc.interfaces._run_summary import print_progress, unit_summary
 from cinoc.reports import default_report_renderer
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -199,6 +199,7 @@ def run_correction(
             registry=registry,
             code_version=resolve_code_version(),
             paths_root=root,
+            on_progress=print_progress,
         )
 
     results, variance = run_repeatedly(_once, repeat)
