@@ -324,7 +324,7 @@ def list_mistral_models(*, timeout: float = 5.0) -> tuple[str, ...]:
     if not api_key:
         return ()
     try:
-        from mistralai import Mistral  # type: ignore[import-not-found]
+        from mistralai.client import Mistral  # type: ignore[import-not-found]
     except ImportError:
         return ()
     try:

@@ -15,6 +15,7 @@ relativement à l'horloge du process receveur.
 
 from __future__ import annotations
 
+import math
 import time
 from typing import Any
 
@@ -68,7 +69,15 @@ class Deadline:
                 "Pour une deadline déjà expirée en test, utiliser "
                 "``Deadline.at_monotonic(0.0)``.",
             )
-        return cls(expires_at_monotonic=time.monotonic() + float(budget))
+        now = time.monotonic()
+        expires = now + float(budget)
+        # ``(now + b) - now`` peut arrondir au-dessus de ``b`` : tant que
+        # l'horloge n'a pas avancé (Windows rend volontiers deux fois la même
+        # valeur), le temps restant dépasserait le budget. On recule
+        # l'échéance d'un ulp jusqu'à ce que l'invariant tienne.
+        while expires - now > budget:
+            expires = math.nextafter(expires, -math.inf)
+        return cls(expires_at_monotonic=expires)
 
     @classmethod
     def at_monotonic(cls, expires_at: float) -> Deadline:
