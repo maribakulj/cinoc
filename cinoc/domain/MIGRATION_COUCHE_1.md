@@ -189,6 +189,8 @@ backlog inexistant. **Aucune logique ne change.**
 
 > **P5f 4 (D-291)** : `layout.py` — `Region.confidence: float | None` (∈ [0, 1], NaN et ∞ refusés, `None` par défaut ; un `CanonicalLayout` JSON antérieur se relit) : confiance **dans la région** (son existence, son étiquette), distincte de `Line.confidence` (son texte). Consommateurs : `adapters/layout/_base.to_canonical_layout` (score de détection, jeté jusque-là) et la projection Mistral OCR (`block_type_confidence_score`). Non affichée (le SVG de segmentation n'a pas de locale). Preuve : `tests/domain/test_region_confidence.py`.
 
+> **P5f 5 + 7 (D-292)** : `usage.py` — `ResourceUsage.billed_pages` (pages facturées à la page, tentatives facturables comprises ; `None` = non compté, sommé par `merged_with`) ; `FailureReason` : `cancelled` couvre aussi le **délai propre d'une étape** (« arrêtée (délai) », D3 du pilote — aucun motif créé). `errors.py` — `AdapterStepError(…, billed=ResourceUsage | None)` : ce qu'une étape a fait facturer avant d'échouer (jetons d'une réponse refusée, page soumise) ; docstring de `DeadlineExceeded` : un délai d'étape dépassé en est un. *Preuve : `tests/adapters/test_resilience.py`, `tests/app/test_resumed_units.py`, `tests/evaluation/test_economics.py`.*
+
 > Tri-état : `[x]` fait **+ preuve** · `[ ]` à faire · `[~]` différé/réserve + raison.
 > Mise à jour dans le **même commit** que le code (règle d'or anti-dérive).
 > **Statut couche 1 : ✅ vert** (vérifié 2026-05-31).

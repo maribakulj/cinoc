@@ -79,6 +79,15 @@ class RunControl:
         worker). ``raise_if_cancelled`` est la variante qui lève."""
         return self._cancel.is_set()
 
+    def wait(self, seconds: float) -> bool:
+        """Attend au plus ``seconds`` — **interrompu** par l'annulation.
+
+        Rend ``True`` si l'annulation est survenue (pendant ou avant). C'est
+        l'attente d'un retry ou d'une sonde : un arrêt demandé pendant un
+        backoff de 30 s ne doit pas attendre 30 s.
+        """
+        return self._cancel.wait(max(0.0, seconds))
+
     def raise_if_cancelled(self) -> None:
         """Lève ``RunCancelledError`` si l'annulation a été demandée."""
         if self._cancel.is_set():

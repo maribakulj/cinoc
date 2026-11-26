@@ -33,7 +33,7 @@ from collections.abc import Callable, Mapping, MutableMapping
 from cinoc.adapters._workspace import workspace_artifact_path
 from cinoc.domain.artifacts import Artifact, ArtifactType, compute_content_hash
 from cinoc.domain.confidence import ConfidenceToken
-from cinoc.domain.errors import AdapterStepError
+from cinoc.domain.errors import AdapterStepError, DeadlineExceeded
 from cinoc.pipeline.fanout import REGION_TYPE_PARAM
 from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
@@ -127,6 +127,25 @@ def _config(*, oem: int, psm: int, dpi: int | None) -> str:
     return f"{options} --dpi {dpi}" if dpi is not None else options
 
 
+def _tesseract_failure(
+    what: str, image_path: str, exc: BaseException
+) -> AdapterStepError:
+    """L'erreur de pytesseract, typée par ce qu'elle dit.
+
+    pytesseract signale un délai dépassé par un ``RuntimeError`` **nu**
+    (« Tesseract process timeout ») — ses autres erreurs sont des
+    ``TesseractError`` (une sous-classe) ou ``TesseractNotFoundError``. Le délai
+    est celui de l'étape (``timeout``, borné par la deadline) : sous contention,
+    une page de 2 s en dépasse 120 (pilote D-281, D3). C'est
+    ``DeadlineExceeded`` — motif « arrêtée (délai) » —, pas un moteur en panne.
+    """
+    if type(exc) is RuntimeError:
+        return DeadlineExceeded(f"{what} : délai dépassé sur {image_path!r} ({exc}).")
+    return AdapterStepError(
+        f"{what} a échoué sur {image_path!r} : {type(exc).__name__}: {exc}"
+    )
+
+
 def _invoke_tesseract(  # pragma: no cover -- binaire requis (cf. marqueur 'live')
     *, image_path: str, lang: str, psm: int, oem: int, timeout: float,
     dpi: int | None = None,
@@ -150,9 +169,7 @@ def _invoke_tesseract(  # pragma: no cover -- binaire requis (cf. marqueur 'live
         pytesseract.TesseractError,
         RuntimeError,
     ) as exc:
-        raise AdapterStepError(
-            f"tesseract a échoué sur {image_path!r} : {type(exc).__name__}: {exc}"
-        ) from exc
+        raise _tesseract_failure("tesseract", image_path, exc) from exc
     return str(text).strip()
 
 
@@ -186,10 +203,7 @@ def invoke_tesseract_alto(  # pragma: no cover -- binaire requis ('live')
         pytesseract.TesseractError,
         RuntimeError,
     ) as exc:
-        raise AdapterStepError(
-            f"tesseract ALTO a échoué sur {image_path!r} : "
-            f"{type(exc).__name__}: {exc}"
-        ) from exc
+        raise _tesseract_failure("tesseract ALTO", image_path, exc) from exc
     return bytes(xml)
 
 

@@ -65,7 +65,7 @@ def test_satisfies_module_protocol() -> None:
     assert adapter.name == "google_vision:gv"
     assert adapter.input_types == frozenset({ArtifactType.IMAGE})
     assert adapter.output_types == frozenset(
-        {ArtifactType.RAW_TEXT, ArtifactType.NATIVE_JSON}
+        {ArtifactType.RAW_TEXT, ArtifactType.NATIVE_JSON, ArtifactType.CONFIDENCES}
     )
 
 

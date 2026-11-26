@@ -18,6 +18,11 @@ transmis) : le banc ne prétend pas avoir fixé ce qu'il ne pouvait pas fixer.
 Cible : ``ANTHROPIC_BASE_URL``, que le SDK lit en silence, est lue à la
 construction, transmise au client et écrite dans les réglages effectifs
 (``base_url``, défaut du SDK compris) — manifeste et empreinte de l'étape.
+
+Délai fini (``timeout``, défaut 600 s, retries compris), passé à **chaque**
+appel ; client construit avec ``max_retries=0`` (le SDK retentait deux fois
+sous chacune des cinq tentatives de Cinoc) : la seule politique de retry est
+``call_resilient``.
 """
 
 from __future__ import annotations
@@ -25,7 +30,14 @@ from __future__ import annotations
 from typing import Any, ClassVar
 
 from cinoc.adapters._native import endpoint_from_env, sdk_native, served_model
-from cinoc.adapters._resilience import call_resilient
+from cinoc.adapters._resilience import (
+    DEFAULT_LLM_TIMEOUT,
+    call_resilient,
+    register_close,
+    request_timeout,
+    step_deadline,
+    validate_timeout,
+)
 from cinoc.adapters.llm._base import (
     DEFAULT_MAX_TOKENS,
     EffectiveSettings,
@@ -46,7 +58,7 @@ from cinoc.adapters.llm._base import (
 )
 from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.deadline import Deadline
-from cinoc.domain.errors import AdapterStepError
+from cinoc.domain.errors import AdapterStepError, CinocError
 from cinoc.domain.pipeline import PipelineMode
 from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
@@ -112,6 +124,7 @@ def _anthropic_client(
     deadline: Deadline,
     settings: InferenceSettings,
     base_url: str = _DEFAULT_BASE_URL,
+    control: RunControl | None = None,
 ) -> LLMCompletion:
     """Appel ``messages.create`` partagé (texte ou multimodal)."""
     import os
@@ -128,22 +141,26 @@ def _anthropic_client(
         raise AdapterStepError(
             "anthropic : SDK non installé (pip install 'cinoc[anthropic]')."
         ) from exc
-    client_kwargs: dict[str, object] = {"api_key": api_key, "base_url": base_url}
-    timeout = deadline.as_sdk_timeout()
-    if timeout is not None:
-        client_kwargs["timeout"] = timeout
     try:
         # SDK anthropic typé strictement ; dicts valides à l'exécution (tests live).
-        client = Anthropic(**client_kwargs)  # type: ignore[arg-type]
+        # ``max_retries=0`` : une seule politique de retry, celle de Cinoc.
+        client = Anthropic(api_key=api_key, base_url=base_url, max_retries=0)
+        if control is not None:
+            register_close(control, client)
 
         def _create() -> Any:
             return client.messages.create(
-                **_request_kwargs(model, content, settings)  # type: ignore[arg-type]
+                **_request_kwargs(model, content, settings),  # type: ignore[arg-type]
+                timeout=request_timeout(deadline),
             )
 
         # Cap de concurrence (≤ N appels Anthropic simultanés) + retry borné sur
-        # 429/5xx (Retry-After respecté) — par défaut, sans configuration UI.
-        response = call_resilient("anthropic", _create)
+        # 429/5xx/transport (Retry-After respecté), dans le délai de l'étape.
+        response = call_resilient(
+            "anthropic", _create, deadline=deadline, control=control
+        )
+    except CinocError:
+        raise  # délai, annulation : déjà typés
     except (AnthropicError, ValueError) as exc:
         # ``ValueError`` : le SDK refuse **avant** l'envoi une requête sans flux
         # dont ``max_tokens`` laisse prévoir plus de 10 minutes (~21 000 jetons,
@@ -161,8 +178,9 @@ def _invoke_anthropic(
     deadline: Deadline,
     settings: InferenceSettings,
     base_url: str = _DEFAULT_BASE_URL,
+    control: RunControl | None = None,
 ) -> LLMCompletion:
-    return _anthropic_client(model, prompt, deadline, settings, base_url)
+    return _anthropic_client(model, prompt, deadline, settings, base_url, control)
 
 
 def _invoke_anthropic_vision(
@@ -174,6 +192,7 @@ def _invoke_anthropic_vision(
     deadline: Deadline,
     settings: InferenceSettings,
     base_url: str = _DEFAULT_BASE_URL,
+    control: RunControl | None = None,
 ) -> LLMCompletion:
     content = [
         {"type": "text", "text": prompt},
@@ -186,7 +205,7 @@ def _invoke_anthropic_vision(
             },
         },
     ]
-    return _anthropic_client(model, content, deadline, settings, base_url)
+    return _anthropic_client(model, content, deadline, settings, base_url, control)
 
 
 class AnthropicAdapter:
@@ -212,8 +231,10 @@ class AnthropicAdapter:
         top_p: float | None = None,
         seed: int | None = None,
         max_tokens: int = DEFAULT_MAX_TOKENS,
+        timeout: object = DEFAULT_LLM_TIMEOUT,
     ) -> None:
         self._label = validate_llm_label(label, "AnthropicAdapter")
+        self._timeout = validate_timeout(timeout, "AnthropicAdapter")
         # Réglages que l'API refuse (voir la docstring du module).
         refuses = {"temperature": temperature, "top_p": top_p, "seed": seed}
         for key, value in refuses.items():
@@ -271,13 +292,16 @@ class AnthropicAdapter:
         context: RunContext,
         control: RunControl,
     ) -> StepOutput:
+        deadline = step_deadline(context.deadline, self._timeout)
+
         def text_invoke(prompt: str) -> LLMCompletion:
             return _invoke_anthropic(
                 model=self._model,
                 prompt=prompt,
-                deadline=context.deadline,
+                deadline=deadline,
                 settings=self._settings,
                 base_url=self._base_url,
+                control=control,
             )
 
         def vision_invoke(
@@ -288,9 +312,10 @@ class AnthropicAdapter:
                 prompt=prompt,
                 media_type=media_type,
                 image_b64=image_b64,
-                deadline=context.deadline,
+                deadline=deadline,
                 settings=self._settings,
                 base_url=self._base_url,
+                control=control,
             )
 
         return run_llm_step(

@@ -50,7 +50,7 @@ from pathlib import Path
 
 from cinoc.adapters.layout._base import layout_step_output, read_layout
 from cinoc.domain.artifacts import Artifact, ArtifactType
-from cinoc.domain.errors import AdapterStepError
+from cinoc.domain.errors import AdapterStepError, DeadlineExceeded
 from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
@@ -139,7 +139,8 @@ def _lancer_sous_processus(
             argv, cwd=atelier, capture_output=True, timeout=delai, check=False
         )
     except subprocess.TimeoutExpired as exc:
-        raise AdapterStepError(
+        # Le délai de l'étape, pas une panne du processeur (D3, D-281).
+        raise DeadlineExceeded(
             f"{source} : {nom} n'a pas rendu la main en {delai:.0f}s."
         ) from exc
     if fini.returncode != 0:

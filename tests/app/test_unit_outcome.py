@@ -31,7 +31,8 @@ from cinoc.domain.evaluation import EvaluationSpec, EvaluationView
 from cinoc.domain.pipeline import PipelineSpec, PipelineStep
 from cinoc.domain.run_spec import RunSpec
 from cinoc.evaluation.result import MetricScore, RunResult
-from cinoc.interfaces.cli import EXIT_UNITS_FAILED, main
+from cinoc.interfaces._run_summary import EXIT_UNITS_FAILED
+from cinoc.interfaces.cli import main
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
 from cinoc.reports.renderer import default_report_renderer

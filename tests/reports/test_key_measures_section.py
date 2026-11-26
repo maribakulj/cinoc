@@ -299,7 +299,9 @@ def test_only_established_metrics_enter_the_headline() -> None:
     assert "établies" in html and "au diagnostic" in html
 
 
-def _with_usage(*, archive: str | None) -> RunResult:
+def _with_usage(
+    *, archive: str | None, resumed: tuple[tuple[str, str], ...] = ()
+) -> RunResult:
     from cinoc.domain.usage import ResourceUsage
     from cinoc.evaluation.result import DocumentUsage
 
@@ -314,6 +316,10 @@ def _with_usage(*, archive: str | None) -> RunResult:
         # Une unité en échec n'a rien mesuré : elle ne fait pas une page rapide.
         DocumentUsage(document_id="d2", pipeline="tesseract",
                       usage=ResourceUsage(), outcome="failed", reason="engine"),
+    )
+    usage = tuple(
+        u.model_copy(update={"resumed": (u.pipeline, u.document_id) in resumed})
+        for u in usage
     )
     manifest = base.manifest.model_copy(update={"artifacts_dir": archive})
     return base.model_copy(update={"usage": usage, "manifest": manifest})
@@ -334,18 +340,46 @@ def test_duration_per_page_is_a_default_column() -> None:
     assert english is not None and ">63.5<" in english
 
 
-def test_a_resumed_run_says_its_durations_may_be_inherited() -> None:
-    """D10 : une unité reprise garde la durée de sa première exécution — le
-    ``RunResult`` ne dit pas lesquelles ; le rapport le dit plutôt que de les
-    présenter comme mesurées par ce run."""
+def test_a_run_with_an_archive_but_nothing_resumed_has_no_inheritance_note() -> None:
+    """Le ``RunResult`` dit maintenant quelles unités sont reprises (D10) : une
+    archive sans reprise n'appelle plus de note générique."""
     html = KeyMeasuresSection().render(
         _with_usage(archive="archive"), SectionContext()
     )
-    assert html is not None and "archive de reprise" in html
-    english = KeyMeasuresSection().render(
-        _with_usage(archive="archive"), SectionContext(lang="en")
+    assert html is not None and "↺" not in html and "première exécution" not in html
+
+
+def test_a_resumed_unit_s_duration_is_not_presented_as_measured() -> None:
+    """D10 (pilote D-281) : une unité reprise garde la durée de sa première
+    exécution. La cellule est marquée, et la note sépare, par pipeline, ce que
+    ce run a mesuré de ce qu'il a relu."""
+    html = KeyMeasuresSection().render(
+        _with_usage(archive="archive", resumed=(("pero", "d1"),)),
+        SectionContext(),
     )
-    assert english is not None and "resume archive" in english
+    assert html is not None
+    assert ">63,5 ↺<" in html  # la valeur reste, marquée
+    assert ">2,5<" in html  # tesseract : rien de repris, rien de marqué
+    assert "1 mesurée(s) par ce run (67,0 s/page)" in html
+    assert "1 reprise(s) de l'archive (60,0 s/page" in html
+    assert "première exécution" in html
+    english = KeyMeasuresSection().render(
+        _with_usage(archive="archive", resumed=(("pero", "d1"),)),
+        SectionContext(lang="en"),
+    )
+    assert english is not None and "1 resumed from the archive" in english
+
+
+def test_an_offline_rescore_measures_no_duration() -> None:
+    """Re-notation ``--offline`` : tout est repris, rien n'est mesuré — le
+    rapport le dit au lieu d'afficher des durées comme celles de ce run."""
+    every = (("pero", "d1"), ("pero", "d2"), ("tesseract", "d1"), ("tesseract", "d2"))
+    html = KeyMeasuresSection().render(
+        _with_usage(archive="archive", resumed=every), SectionContext()
+    )
+    assert html is not None
+    assert "aucune durée n'est mesurée par ce run" in html
+    assert ">63,5 ↺<" in html and ">2,5 ↺<" in html
 
 
 def test_no_duration_column_without_measured_durations() -> None:

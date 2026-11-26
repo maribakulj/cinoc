@@ -25,6 +25,7 @@ from cinoc.app.modules import (
 from cinoc.app.report_images import build_facsimiles, build_thumbnails
 from cinoc.app.variance import VarianceSummary, run_repeatedly
 from cinoc.evaluation.result import RunResult
+from cinoc.interfaces._run_summary import unit_summary
 from cinoc.reports import default_report_renderer
 
 
@@ -69,7 +70,8 @@ def run_correction(
 
     Corrige **dans** la mise en page : chaque ligne garde son identifiant, donc
     l'appariement avant/après est connu et le rapport peut dire ce qui a été
-    changé, ce qui a été **refusé**, et pourquoi.
+    changé, ce qui a été **refusé**, et pourquoi. Code de sortie : celui de
+    ``cinoc run`` (``0``, ou ``3`` si une unité a échoué, rapport écrit).
     """
     corpus = corpus_from_alto(alto_dir, ground_truth=ground_truth)
     registry = ModuleRegistry()
@@ -110,4 +112,6 @@ def run_correction(
         encoding="utf-8",
     )
     print(f"{len(corpus.documents)} document(s) corrigé(s) — rapport : {output}")
-    return 0
+    # Même bilan et même code de sortie que ``cinoc run`` (code 3 si une unité
+    # a échoué) : une correction qui perd des pages ne sort plus en 0.
+    return unit_summary(results)

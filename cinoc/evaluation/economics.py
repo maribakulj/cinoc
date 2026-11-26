@@ -18,6 +18,15 @@ jamais en exécutant la source). Modèle de coût simple et auditable :
   ``basis`` le dit. Jamais par simple préfixe (``gpt-4o`` demandé,
   ``gpt-4o-mini-…`` servi : inconnu). Sinon coût ``None`` + motif dans
   ``basis`` (jamais un zéro silencieux) ;
+- **pages facturées** : la somme des ``billed_pages`` des unités — chaque
+  tentative facturable (fan-out par région, tentative coupée après envoi) —,
+  et une page par unité produite quand elle n'est pas comptée (JSON antérieur) ;
+- **ce qui a été payé n'est pas ce qui a été traité** : une unité en échec ne
+  compte ni comme page traitée ni dans la durée, mais ce qu'elle a fait
+  facturer (jetons d'une réponse refusée, page soumise dont la sonde s'est
+  perdue) entre dans le coût ;
+- **unités reprises** : comptées (``n_resumed``) — leur durée et leurs jetons
+  sont ceux de leur première exécution (D10) ;
 - **débit effectif** : pages/h corrigé du temps de relecture des erreurs
   résiduelles (Σ cer·poids erreurs estimées × ``time_per_error_seconds``) ;
 - **péremption** : ``valid_until`` de la table comparé à ``completed_at`` du
@@ -78,17 +87,27 @@ def pareto_front(
     return tuple(name for name, _, _ in sorted(front, key=lambda p: (p[1], p[2], p[0])))
 
 
-def _page_rate(
+def _page_rates(
     spec: PipelineSpec, pricing: Mapping[str, Any]
-) -> float | None:
-    """Tarif €/1000 pages cumulé des étages facturés à la page, sinon ``None``."""
+) -> list[float]:
+    """Tarifs €/1000 pages des étages facturés à la page (un par ``kind``)."""
     table = pricing.get("cloud_page_kinds", {})
-    rates = [
+    return [
         float(table[kind]["eur_per_1k_pages"])
-        for kind in {step.adapter_name.split(":", 1)[0] for step in spec.steps}
+        for kind in sorted({step.adapter_name.split(":", 1)[0] for step in spec.steps})
         if kind in table
     ]
-    return sum(rates) if rates else None
+
+
+def _billed_pages(units: Sequence[DocumentUsage]) -> int:
+    """Pages facturées : les ``billed_pages`` comptés, sinon une par unité
+    **produite** (l'ancien compte, pour un JSON qui ne les portait pas)."""
+    return sum(
+        u.usage.billed_pages
+        if u.usage.billed_pages is not None
+        else (0 if u.outcome == "failed" else 1)
+        for u in units
+    )
 
 
 #: Suffixes de date d'un instantané, **attestés** : ``-AAAA-MM-JJ`` (SDK openai
@@ -128,7 +147,7 @@ def _cloud_model_keys(
     Un *kind cloud* (facturé au jeton) = un fournisseur listé dans
     ``default_models`` de la table — la source datée fait foi (pas de liste
     codée en dur qui dériverait quand la table gagne un fournisseur). Les kinds
-    **à la page** vivent dans ``cloud_page_kinds`` (cf. ``_page_rate``) ; le
+    **à la page** vivent dans ``cloud_page_kinds`` (cf. ``_page_rates``) ; le
     reste (``local_kinds``) : temps machine seul.
 
     Modèle : le(s) **servi(s)** quand le manifeste les connaît — plusieurs si un
@@ -229,31 +248,36 @@ def economics_analysis(
     rows: list[PipelineEconomics] = []
     for name in sorted(specs):
         # Une unité en échec n'a rien produit ni rien mesuré : la compter
-        # gonflerait le débit (des pages « traitées » en zéro seconde).
-        entries = [
-            u for u in usage if u.pipeline == name and u.outcome != "failed"
-        ]
+        # gonflerait le débit (des pages « traitées » en zéro seconde). Ce
+        # qu'elle a fait facturer, en revanche, est payé (``paid``).
+        paid = [u for u in usage if u.pipeline == name]
+        entries = [u for u in paid if u.outcome != "failed"]
         if not entries:
             continue
         duration = sum(u.usage.duration_seconds or 0.0 for u in entries)
-        tokens_in = sum(u.usage.tokens_in or 0 for u in entries) or None
-        tokens_out = sum(u.usage.tokens_out or 0 for u in entries) or None
+        tokens_in = sum(u.usage.tokens_in or 0 for u in paid) or None
+        tokens_out = sum(u.usage.tokens_out or 0 for u in paid) or None
         n_documents = len(entries)
         keys = _cloud_model_keys(
             specs[name], manifest.adapter_kwargs, table, manifest.served_models
         )
         token_cost, basis, note = _token_cost(keys, tokens_in, tokens_out, table)
-        page_rate = _page_rate(specs[name], table)
-        page_cost = (
-            n_documents / 1000.0 * page_rate if page_rate is not None else 0.0
-        )
-        if page_rate is not None:
+        rates = _page_rates(specs[name], table)
+        pages = _billed_pages(paid) if rates else None
+        page_cost: float | None = 0.0
+        if len(rates) > 1:
+            # Les pages comptées sont réunies par unité : à plusieurs étages
+            # facturés à la page, on ne sait pas lesquelles vont à quel tarif.
+            page_cost = None
+            basis = f"pages non ventilables : {len(rates)} étages à la page"
+        elif rates and pages is not None:
+            page_cost = pages / 1000.0 * rates[0]
             basis = basis + "+pages" if token_cost is not None else basis
         if note is not None:
             basis = f"{basis} — {note}"
         cost = (
             duration / 3600.0 * rate + token_cost + page_cost
-            if token_cost is not None
+            if token_cost is not None and page_cost is not None
             else None
         )
         scores = series.get(name, ())
@@ -282,6 +306,8 @@ def economics_analysis(
                 duration_seconds=duration,
                 tokens_in=tokens_in,
                 tokens_out=tokens_out,
+                billed_pages=pages,
+                n_resumed=sum(u.resumed for u in paid),
                 cost_eur=cost,
                 basis=basis,
                 cer=cer,

@@ -29,14 +29,18 @@ from cinoc.pipeline.types import RunContext, StepOutput
 
 @dataclass(frozen=True)
 class DetectedRegion:
-    """Une région détectée : étiquette, boîte (pixels) et score de confiance."""
+    """Une région détectée : étiquette, boîte (pixels) et score de confiance.
+
+    ``score`` ``None`` = le détecteur n'en a pas donné : il reste absent
+    (``Region.confidence=None``), jamais lu 0,0.
+    """
 
     label: str
     x: int
     y: int
     width: int
     height: int
-    score: float
+    score: float | None
 
 
 @dataclass(frozen=True)
@@ -88,7 +92,8 @@ def _sans_redondance(regions: list[DetectedRegion]) -> list[DetectedRegion]:
     n'a donc ni ``if`` par modèle, ni exception à justifier plus tard.
     """
     garde: list[DetectedRegion] = []
-    for r in sorted(regions, key=lambda r: -r.score):
+    # Un score inconnu passe après tout score connu (rang, pas valeur).
+    for r in sorted(regions, key=lambda r: (r.score is None, -(r.score or 0.0))):
         if any(_iou(r, g) >= REDONDANCE_IOU for g in garde):
             continue
         garde.append(r)
@@ -106,12 +111,20 @@ def to_canonical_layout(
     de détection, et numérote les régions ``r1..rN``. Le ``label`` du modèle devient
     le ``region_type`` neutre (``None`` si vide), son **score** la
     ``Region.confidence`` — il était jeté après le seuil. Un score hors [0, 1]
-    n'est pas une confiance : refusé plutôt que borné en silence.
+    n'est pas une confiance : refusé plutôt que borné en silence. Un score
+    **absent** reste absent (``confidence=None``) ; il ne passe qu'un seuil nul
+    — on ne garde pas une détection dont on ignore si elle passe le seuil.
     """
-    kept = _sans_redondance([r for r in detection.regions if r.score >= min_score])
+    kept = _sans_redondance(
+        [
+            r
+            for r in detection.regions
+            if (r.score >= min_score if r.score is not None else min_score <= 0.0)
+        ]
+    )
     ordered = sorted(kept, key=lambda r: (r.y, r.x))
     for r in ordered:
-        if not 0.0 <= r.score <= 1.0:
+        if r.score is not None and not 0.0 <= r.score <= 1.0:
             raise AdapterStepError(
                 f"segmentation : score de détection hors [0, 1] ({r.score!r}, "
                 f"région {r.label!r})."

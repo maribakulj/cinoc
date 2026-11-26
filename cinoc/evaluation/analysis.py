@@ -145,6 +145,13 @@ class PipelineEconomics(BaseModel):
     duration_seconds: float | None = Field(default=None, ge=0)
     tokens_in: int | None = Field(default=None, ge=0)
     tokens_out: int | None = Field(default=None, ge=0)
+    #: Pages facturées à la page, **tentatives facturables comprises** (une
+    #: par requête d'image : fan-out, tentative coupée après envoi), unités en
+    #: échec comprises ; ``None`` sans étage facturé à la page.
+    billed_pages: int | None = Field(default=None, ge=0)
+    #: Unités **relues de l'archive** : leur durée et leurs jetons sont ceux de
+    #: leur première exécution, pas une mesure de ce run (D10).
+    n_resumed: int = Field(default=0, ge=0)
     cost_eur: float | None = Field(default=None, ge=0)
     #: « machine » · « machine+jetons » · « tarif inconnu : <kind:model> » ;
     #: suivi de « — tarif de l'alias demandé : <kind/alias> pour <servi> » quand

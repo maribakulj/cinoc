@@ -79,6 +79,12 @@ def _timeout_optionnel(
     return float(valeur) if isinstance(valeur, (int, float)) else defaut
 
 
+def _timeout_saisi(kwargs: Mapping[str, ParamValue]) -> dict[str, ParamValue]:
+    """``timeout`` saisi, transmis tel quel à un moteur distant (qui le
+    valide) ; absent → le défaut fini de l'adaptateur (P5f 7)."""
+    return {"timeout": kwargs["timeout"]} if "timeout" in kwargs else {}
+
+
 def _build_precomputed(kwargs: Mapping[str, ParamValue]) -> Module:
     label = kwargs.get("source_label")
     if not isinstance(label, str):
@@ -115,7 +121,9 @@ def _build_mistral_ocr(kwargs: Mapping[str, ParamValue]) -> Module:
     from cinoc.adapters.ocr.mistral_ocr import MistralOCRAdapter
 
     return MistralOCRAdapter(
-        label=label, model=str(kwargs.get("model", "mistral-ocr-latest"))
+        label=label,
+        model=str(kwargs.get("model", "mistral-ocr-latest")),
+        **_timeout_saisi(kwargs),
     )
 
 
@@ -159,7 +167,7 @@ def _build_google_vision(kwargs: Mapping[str, ParamValue]) -> Module:
 
     # `lang` (passé par le planificateur à tout moteur OCR) est ignoré : Vision
     # détecte la langue en `DOCUMENT_TEXT_DETECTION` (pas de hint fragile à mapper).
-    return GoogleVisionAdapter(label=label)
+    return GoogleVisionAdapter(label=label, **_timeout_saisi(kwargs))
 
 
 def _build_azure_di(kwargs: Mapping[str, ParamValue]) -> Module:
@@ -172,7 +180,7 @@ def _build_azure_di(kwargs: Mapping[str, ParamValue]) -> Module:
 
     # `lang` (passé par le planificateur à tout moteur OCR) ignoré : le modèle
     # `prebuilt-read` détecte la langue (pas de paramètre de langue à mapper).
-    return AzureDocIntelAdapter(label=label)
+    return AzureDocIntelAdapter(label=label, **_timeout_saisi(kwargs))
 
 
 def _build_tesseract(kwargs: Mapping[str, ParamValue]) -> Module:
@@ -205,7 +213,9 @@ def _build_tesseract(kwargs: Mapping[str, ParamValue]) -> Module:
 #: Réglages d'inférence communs aux quatre fournisseurs LLM/VLM, transmis tels
 #: quels : c'est l'adapter qui les valide (type, bornes) et les écrit au
 #: manifeste, défauts compris. Un réglage absent garde le défaut de l'adapter.
-_INFERENCE_KEYS = ("temperature", "top_p", "seed", "max_tokens")
+#: ``timeout`` (délai de l'étape, retries compris) n'est pas écrit au
+#: manifeste par l'adapter : il ne change aucune sortie produite.
+_INFERENCE_KEYS = ("temperature", "top_p", "seed", "max_tokens", "timeout")
 
 
 def _inference(kwargs: Mapping[str, ParamValue], *extra: str) -> dict[str, Any]:

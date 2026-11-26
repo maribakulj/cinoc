@@ -407,7 +407,9 @@ def run_llm_step(
     (``StepOutput.truncation``, d'où l'unité ``truncated``) ; ``refusal`` ou
     ``error`` → ``AdapterStepError`` (unité ``failed``, motif ``engine``) — un
     refus filtré n'est pas une transcription, même partielle. ``stop`` et
-    ``unknown`` passent : sans preuve de coupure, rien n'est affirmé.
+    ``unknown`` passent : sans preuve de coupure, rien n'est affirmé. Les
+    jetons d'une réponse écartée ont été facturés : ils accompagnent l'erreur
+    (``AdapterStepError.billed``).
     """
     control.raise_if_cancelled()
     if context.workspace_uri is None:
@@ -438,15 +440,24 @@ def run_llm_step(
     else:  # text_only
         ocr_text = load_ocr_text(inputs, name)
         completion = text_invoke(build_prompt(prompt, ocr_text))
+    usage = (
+        ResourceUsage(
+            tokens_in=completion.tokens_in, tokens_out=completion.tokens_out
+        )
+        if completion.tokens_in is not None or completion.tokens_out is not None
+        else None
+    )
     if completion.stop_reason in ("refusal", "error"):
         cause = (
             "refusée par le fournisseur"
             if completion.stop_reason == "refusal"
             else "interrompue par une erreur du fournisseur"
         )
+        # Écartée, mais facturée : ses jetons accompagnent l'erreur (économie).
         raise AdapterStepError(
             f"{name} : réponse {cause} (raison d'arrêt {completion.stop_reason!r}) "
-            "— sortie écartée."
+            "— sortie écartée.",
+            billed=usage,
         )
     artifacts = write_text_artifact(
         context.workspace_uri,
@@ -464,13 +475,6 @@ def run_llm_step(
             label=label,
             adapter_name=name,
         )
-    usage = (
-        ResourceUsage(
-            tokens_in=completion.tokens_in, tokens_out=completion.tokens_out
-        )
-        if completion.tokens_in is not None or completion.tokens_out is not None
-        else None
-    )
     served = (completion.model,) if completion.model else ()
     truncation = None
     if completion.stop_reason == "length":

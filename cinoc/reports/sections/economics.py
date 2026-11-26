@@ -48,6 +48,15 @@ def _block(
     for row in payload.pipelines:
         badge = engine_cell(row.pipeline, order.get(row.pipeline, 0))
         dur = _fmt(row.duration_seconds, lang, "{:.1f}")
+        if row.n_resumed:
+            dur += " ↺"  # durées relues de l'archive (note sous le tableau)
+        basis = escape(row.basis)
+        if row.billed_pages is not None:
+            basis += localized(
+                lang,
+                f" ({row.billed_pages} p. facturée(s))",
+                f" ({row.billed_pages} billed p.)",
+            )
         pph = _fmt(row.pages_per_hour, lang, "{:.1f}")
         pph_eff = _fmt(row.pages_per_hour_effective, lang, "{:.1f}")
         rows.append(
@@ -57,7 +66,7 @@ def _block(
             f'<td class="disp">{_fmt_int(row.tokens_in)}</td>'
             f'<td class="disp">{_fmt_int(row.tokens_out)}</td>'
             f'<td class="disp">{_fmt(row.cost_eur, lang)}</td>'
-            f'<td class="eng-cell">{escape(row.basis)}</td>'
+            f'<td class="eng-cell">{basis}</td>'
             f'<td class="disp">{pph}</td>'
             f'<td class="disp">{pph_eff}</td>'
             "</tr>"
@@ -105,6 +114,21 @@ def _block(
             f'<th class="num-cell">{th_per_avoided}</th>'
             f"</tr></thead>\n<tbody>{items}</tbody>\n</table>\n"
         )
+    resumed = [r for r in payload.pipelines if r.n_resumed]
+    inherited = ""
+    if resumed:
+        names = ", ".join(
+            f"{escape(r.pipeline)} : {r.n_resumed}/{r.n_documents}" for r in resumed
+        )
+        inherited = localized(
+            lang,
+            f'<p class="muted">↺ Unités relues de l\'archive ({names}) : leur durée '
+            "et leurs jetons sont ceux de leur première exécution, pas une "
+            "mesure de ce run.</p>\n",
+            f'<p class="muted">↺ Units read from the archive ({names}): their '
+            "duration and tokens are those of their first execution, not a "
+            "measurement of this run.</p>\n",
+        )
     pareto = ""
     if payload.pareto_cost or payload.pareto_speed:
         cost_names = ", ".join(escape(n) for n in payload.pareto_cost) or "—"
@@ -127,14 +151,17 @@ def _block(
         lang,
         '<p class="muted">Coûts <strong>indicatifs</strong> : temps machine '
         f"(durée mesurée × {rate} "
-        f"{escape(payload.currency)}/h) + jetons cloud au tarif de la table "
+        f"{escape(payload.currency)}/h) + jetons cloud et pages facturées au "
+        "tarif de la table — chaque tentative facturable comptée, unités en "
+        "échec comprises — "
         f"(valable jusqu'au {escape(payload.pricing_valid_until)}). Le débit "
         "effectif est une <strong>simulation</strong>, pas une mesure : il "
         "retire un temps de relecture supposé (hypothèse : "
         f"{tpe} s par erreur caractère).</p>\n",
         '<p class="muted">Costs are <strong>indicative</strong>: machine time '
         f"(measured duration × {rate} "
-        f"{escape(payload.currency)}/h) + cloud tokens at the table's rate "
+        f"{escape(payload.currency)}/h) + cloud tokens and billed pages at the "
+        "table's rate — every billable attempt counted, failed units included "
         f"(valid until {escape(payload.pricing_valid_until)}). Effective "
         "throughput is a <strong>simulation</strong>, not a measurement: it "
         "subtracts an assumed proofreading time (assumption: "
@@ -169,6 +196,7 @@ def _block(
         f'<th class="num-cell">{th_pages_per_hour}</th>'
         f'<th class="num-cell">{th_pages_per_hour_eff}</th></tr></thead>\n'
         f"<tbody>{''.join(rows)}</tbody>\n</table>\n"
+        + inherited
         + pareto
         + marginal
     )

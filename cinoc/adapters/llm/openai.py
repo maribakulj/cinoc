@@ -21,6 +21,11 @@ OpenAI-compatible, vLLM…) est lue **à la construction**, transmise au client 
 écrite dans les réglages effectifs (``base_url``) — donc au manifeste et dans
 l'empreinte de l'étape : un autre endpoint n'est plus pris pour le même modèle.
 Sans elle, l'URL par défaut du SDK, écrite aussi.
+
+Délai fini (``timeout``, défaut 600 s, retries compris), passé à **chaque**
+appel ; client construit avec ``max_retries=0`` — le SDK retentait deux fois
+sous chacune des cinq tentatives de Cinoc —, la seule politique de retry est
+``call_resilient`` (429, 5xx, transport).
 """
 
 from __future__ import annotations
@@ -28,7 +33,14 @@ from __future__ import annotations
 from typing import Any, ClassVar
 
 from cinoc.adapters._native import endpoint_from_env, sdk_native, served_model
-from cinoc.adapters._resilience import call_resilient
+from cinoc.adapters._resilience import (
+    DEFAULT_LLM_TIMEOUT,
+    call_resilient,
+    register_close,
+    request_timeout,
+    step_deadline,
+    validate_timeout,
+)
 from cinoc.adapters.llm._base import (
     DEFAULT_MAX_TOKENS,
     DEFAULT_SEED,
@@ -51,7 +63,7 @@ from cinoc.adapters.llm._base import (
 )
 from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.deadline import Deadline
-from cinoc.domain.errors import AdapterStepError
+from cinoc.domain.errors import AdapterStepError, CinocError
 from cinoc.domain.pipeline import PipelineMode
 from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
@@ -130,6 +142,7 @@ def _openai_client(
     deadline: Deadline,
     settings: InferenceSettings,
     base_url: str = _DEFAULT_BASE_URL,
+    control: RunControl | None = None,
 ) -> LLMCompletion:
     """Appel ``chat.completions`` partagé (texte ou multimodal)."""
     import os
@@ -144,19 +157,25 @@ def _openai_client(
             "openai : SDK non installé (pip install 'cinoc[openai]')."
         ) from exc
     kwargs = _request_kwargs(model, messages, settings)
-    timeout = deadline.as_sdk_timeout()
-    if timeout is not None:
-        kwargs["timeout"] = timeout
     try:
         # SDK openai typé strictement ; kwargs valides à l'exécution (tests live).
-        client = OpenAI(api_key=api_key, base_url=base_url)
+        # ``max_retries=0`` : une seule politique de retry, celle de Cinoc.
+        client = OpenAI(api_key=api_key, base_url=base_url, max_retries=0)
+        if control is not None:
+            register_close(control, client)
 
         def _create() -> Any:
-            return client.chat.completions.create(**kwargs)  # type: ignore[call-overload]
+            return client.chat.completions.create(  # type: ignore[call-overload]
+                **kwargs, timeout=request_timeout(deadline)
+            )
 
         # Cap de concurrence (≤ N appels OpenAI simultanés) + retry borné sur
-        # 429/5xx (Retry-After respecté) — par défaut, sans configuration UI.
-        response = call_resilient("openai", _create)
+        # 429/5xx/transport (Retry-After respecté), dans le délai de l'étape.
+        response = call_resilient(
+            "openai", _create, deadline=deadline, control=control
+        )
+    except CinocError:
+        raise  # délai, annulation : déjà typés
     except OpenAIError as exc:
         raise AdapterStepError(
             f"openai a échoué ({model}) : {type(exc).__name__}: {exc}"
@@ -171,9 +190,15 @@ def _invoke_openai(
     deadline: Deadline,
     settings: InferenceSettings,
     base_url: str = _DEFAULT_BASE_URL,
+    control: RunControl | None = None,
 ) -> LLMCompletion:
     return _openai_client(
-        model, [{"role": "user", "content": prompt}], deadline, settings, base_url
+        model,
+        [{"role": "user", "content": prompt}],
+        deadline,
+        settings,
+        base_url,
+        control,
     )
 
 
@@ -186,6 +211,7 @@ def _invoke_openai_vision(
     deadline: Deadline,
     settings: InferenceSettings,
     base_url: str = _DEFAULT_BASE_URL,
+    control: RunControl | None = None,
 ) -> LLMCompletion:
     content = [
         {"type": "text", "text": prompt},
@@ -195,7 +221,12 @@ def _invoke_openai_vision(
         },
     ]
     return _openai_client(
-        model, [{"role": "user", "content": content}], deadline, settings, base_url
+        model,
+        [{"role": "user", "content": content}],
+        deadline,
+        settings,
+        base_url,
+        control,
     )
 
 
@@ -222,8 +253,10 @@ class OpenAIAdapter:
         top_p: float | None = None,
         seed: int | None = DEFAULT_SEED,
         max_tokens: int = DEFAULT_MAX_TOKENS,
+        timeout: object = DEFAULT_LLM_TIMEOUT,
     ) -> None:
         self._label = validate_llm_label(label, "OpenAIAdapter")
+        self._timeout = validate_timeout(timeout, "OpenAIAdapter")
         self._settings = InferenceSettings.build(
             temperature=temperature, top_p=top_p, seed=seed, max_tokens=max_tokens
         )
@@ -272,13 +305,16 @@ class OpenAIAdapter:
         context: RunContext,
         control: RunControl,
     ) -> StepOutput:
+        deadline = step_deadline(context.deadline, self._timeout)
+
         def text_invoke(prompt: str) -> LLMCompletion:
             return _invoke_openai(
                 model=self._model,
                 prompt=prompt,
-                deadline=context.deadline,
+                deadline=deadline,
                 settings=self._settings,
                 base_url=self._base_url,
+                control=control,
             )
 
         def vision_invoke(
@@ -289,9 +325,10 @@ class OpenAIAdapter:
                 prompt=prompt,
                 media_type=media_type,
                 image_b64=image_b64,
-                deadline=context.deadline,
+                deadline=deadline,
                 settings=self._settings,
                 base_url=self._base_url,
+                control=control,
             )
 
         return run_llm_step(

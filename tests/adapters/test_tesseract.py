@@ -470,3 +470,39 @@ def test_bound_openmp_sets_default_and_keeps_explicit_value() -> None:
     pose = {"OMP_THREAD_LIMIT": "4"}
     bound_openmp(pose)
     assert pose == {"OMP_THREAD_LIMIT": "4"}
+
+
+# --- D3 (pilote D-281) : un délai dépassé n'est pas une panne du moteur ---
+
+
+@pytest.mark.parametrize("invoke", ["_invoke_tesseract", "invoke_tesseract_alto"])
+def test_a_process_timeout_is_a_deadline_not_an_engine_fault(
+    invoke: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Sous contention, 19 pages sur 20 dépassaient les 120 s et étaient
+    classées motif ``engine`` (« moteur ») : pytesseract lève un
+    ``RuntimeError('Tesseract process timeout')`` nu. C'est un délai dépassé —
+    motif ``cancelled`` (« arrêtée (délai) ») —, pas un moteur en panne ; une
+    vraie erreur du binaire (``TesseractError``) reste ``engine``."""
+    pytesseract = pytest.importorskip("pytesseract")
+    from cinoc.adapters.ocr import tesseract as module
+    from cinoc.domain.errors import DeadlineExceeded
+    from cinoc.pipeline.executor import failure_reason
+
+    def timeout(*_: object, **__: object) -> str:
+        raise RuntimeError("Tesseract process timeout")
+
+    def broken(*_: object, **__: object) -> str:
+        raise pytesseract.TesseractError(1, "image illisible")
+
+    name = "image_to_string" if invoke == "_invoke_tesseract" else "image_to_alto_xml"
+    call = getattr(module, invoke)
+    kwargs = {"image_path": "p.png", "lang": "fra", "psm": 6, "oem": 3, "timeout": 1.0}
+    monkeypatch.setattr(pytesseract, name, timeout)
+    with pytest.raises(DeadlineExceeded) as raised:
+        call(**kwargs)
+    assert failure_reason(raised.value) == "cancelled"
+    monkeypatch.setattr(pytesseract, name, broken)
+    with pytest.raises(AdapterStepError) as other:
+        call(**kwargs)
+    assert failure_reason(other.value) == "engine"

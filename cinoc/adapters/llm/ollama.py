@@ -20,6 +20,12 @@ prompt **en silence** — le modèle répond alors à une page qu'il n'a vue qu'
 partie. ``done_reason`` (``stop`` · ``length``) est lu : une sortie coupée par
 ``num_predict`` se voit. Une entrée rognée par ``num_ctx``, elle, ne laisse
 aucune raison d'arrêt : seul un ``num_ctx`` suffisant la prévient.
+
+Délai fini (``timeout``, défaut 600 s) : l'appel tournait **sans aucun délai**
+(``httpx.Client(timeout=None)`` sous une deadline infinie). Un délai dépassé est
+``DeadlineExceeded`` (motif « arrêtée (délai) »), pas une panne du moteur. Pas
+de retry : un serveur local qui répond une erreur ne la répare pas en 30 s, et
+il n'y a pas de quota à ménager.
 """
 
 from __future__ import annotations
@@ -27,6 +33,12 @@ from __future__ import annotations
 from typing import ClassVar, NoReturn
 
 from cinoc.adapters._native import public_endpoint, served_model
+from cinoc.adapters._resilience import (
+    DEFAULT_LLM_TIMEOUT,
+    request_timeout,
+    step_deadline,
+    validate_timeout,
+)
 from cinoc.adapters.llm._base import (
     DEFAULT_MAX_TOKENS,
     DEFAULT_SEED,
@@ -48,7 +60,7 @@ from cinoc.adapters.llm._base import (
 )
 from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.deadline import Deadline
-from cinoc.domain.errors import AdapterStepError
+from cinoc.domain.errors import AdapterStepError, DeadlineExceeded
 from cinoc.domain.pipeline import PipelineMode
 from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
@@ -112,16 +124,27 @@ def _completion_from_chat(data: object, model: str) -> LLMCompletion:
     )
 
 
-def _fail_or_cancel(control: RunControl, model: str, exc: Exception) -> NoReturn:
+def _fail_or_cancel(
+    control: RunControl,
+    model: str,
+    exc: Exception,
+    deadline: Deadline | None = None,
+) -> NoReturn:
     """Traduit un échec d'appel ollama.
 
     Si l'annulation a été déclenchée, le ``client.close`` enregistré a fait
     échouer la requête en vol : on lève alors ``RunCancelledError`` (via
-    ``raise_if_cancelled``). Sinon c'est une vraie panne → ``AdapterStepError``.
-    Sonder ``is_cancelled`` est **fiable**, là où l'implémentation source
-    devinait par le message d'exception (heuristique fragile, D-A).
+    ``raise_if_cancelled``). Si la deadline de l'étape est écoulée, le délai
+    passé au client s'est déclenché → ``DeadlineExceeded``. Sinon c'est une
+    vraie panne → ``AdapterStepError``. Sonder ``is_cancelled`` est **fiable**,
+    là où l'implémentation source devinait par le message d'exception
+    (heuristique fragile, D-A).
     """
     control.raise_if_cancelled()
+    if deadline is not None and deadline.is_expired():
+        raise DeadlineExceeded(
+            f"ollama ({model}) : délai dépassé ({type(exc).__name__})."
+        ) from exc
     raise AdapterStepError(f"ollama a échoué ({model}) : {exc}") from exc
 
 
@@ -149,7 +172,7 @@ def _invoke_ollama(
         "stream": False,
         "options": options,
     }
-    client = httpx.Client(timeout=deadline.as_sdk_timeout())
+    client = httpx.Client(timeout=request_timeout(deadline))
     # Annulation câblée : fermer le client interrompt la requête en vol.
     control.register_cancel_handle(client.close)
     try:
@@ -161,7 +184,7 @@ def _invoke_ollama(
         response.raise_for_status()
         data = response.json()
     except httpx.HTTPError as exc:
-        _fail_or_cancel(control, model, exc)
+        _fail_or_cancel(control, model, exc, deadline)
     finally:
         client.close()
     return _completion_from_chat(data, model)
@@ -226,8 +249,10 @@ class OllamaAdapter:
         seed: int | None = DEFAULT_SEED,
         max_tokens: int = DEFAULT_MAX_TOKENS,
         num_ctx: int = DEFAULT_NUM_CTX,
+        timeout: object = DEFAULT_LLM_TIMEOUT,
     ) -> None:
         self._label = validate_llm_label(label, "OllamaAdapter")
+        self._timeout = validate_timeout(timeout, "OllamaAdapter")
         self._settings = InferenceSettings.build(
             temperature=temperature, top_p=top_p, seed=seed, max_tokens=max_tokens
         )
@@ -287,13 +312,14 @@ class OllamaAdapter:
         control: RunControl,
     ) -> StepOutput:
         options = _options(self._settings, self._num_ctx)
+        deadline = step_deadline(context.deadline, self._timeout)
 
         def text_invoke(prompt: str) -> LLMCompletion:
             return _invoke_ollama(
                 model=self._model,
                 prompt=prompt,
                 host=self._host,
-                deadline=context.deadline,
+                deadline=deadline,
                 control=control,
                 options=options,
             )
@@ -307,7 +333,7 @@ class OllamaAdapter:
                 model=self._model,
                 prompt=prompt,
                 host=self._host,
-                deadline=context.deadline,
+                deadline=deadline,
                 control=control,
                 options=options,
                 image_b64=image_b64,

@@ -673,3 +673,30 @@ def test_a_fanout_without_native_responses_publishes_none(tmp_path: Any) -> None
         control=RunControl(),
     )
     assert set(sortie.artifacts) == {ArtifactType.LAYOUT}
+
+
+def test_a_failing_region_keeps_what_it_got_billed(tmp_path: Any) -> None:
+    """P5f 7 : une région ignorée après un appel facturé (page soumise, sonde
+    perdue) n'est pas reconnue — mais elle a été payée, et le compte le dit."""
+    from cinoc.domain.usage import ResourceUsage
+
+    class _Facture(_Espion):
+        def execute(self, inputs, params, context, control):  # type: ignore[no-untyped-def]
+            raise AdapterStepError(
+                "sonde perdue", billed=ResourceUsage(billed_pages=1)
+            )
+
+    page = LayoutPage(width=100, height=100, regions=())
+    region = Region(
+        id="r1",
+        region_type="text",
+        geometry=Geometry(bbox=BBox(x=0, y=0, width=10, height=10)),
+    )
+    image = Artifact(
+        id="i", document_id="d", type=ArtifactType.IMAGE,
+        uri=str(tmp_path / "p.png"), content_hash="0" * 64,
+    )
+    _, usage = _fill_region(
+        region, page, image, _Facture(), _contexte(tmp_path), RunControl(), {}, None
+    )
+    assert usage is not None and usage.billed_pages == 1

@@ -242,6 +242,9 @@ def run(
         secrets = secret_values(spec.adapter_kwargs)
         digests: dict[Path, str] = {}  # fichiers d'entrée, hachés une fois
         pending: list[tuple[PipelineSpec, DocumentRef, str | None]] = []
+        # Unités relues de l'archive : leur durée est celle de leur première
+        # exécution, et le ``RunResult`` le dit (D10, pilote D-281).
+        resumed: set[tuple[str, str]] = set()
         for pipeline in spec.pipelines:
             for document in documents:
                 if document.id in unreachable:
@@ -273,6 +276,7 @@ def run(
                 )
                 if cached is not None:
                     results[(pipeline.name, document.id)] = cached
+                    resumed.add((pipeline.name, document.id))
                     progress.tick()
                 else:
                     pending.append((pipeline, document, key))
@@ -320,8 +324,12 @@ def run(
                                 document.id,
                                 message,
                             )
+                            # Ce que l'unité a fait facturer avant d'échouer
+                            # reste compté (P5f 7).
                             results[unit] = DocumentExecution.failed(
-                                failure_reason(exc), message
+                                failure_reason(exc),
+                                message,
+                                billed=getattr(exc, "billed", None),
                             )
                             if key is not None:
                                 # Archivé (l'archive dit ce qui a échoué), mais
@@ -375,6 +383,7 @@ def run(
                         outcome=execution.outcome,
                         reason=execution.reason,
                         message=execution.message,
+                        resumed=(pipeline.name, document.id) in resumed,
                     )
                 )
             pipeline_outputs[pipeline.name] = per_document
