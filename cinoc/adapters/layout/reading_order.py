@@ -25,10 +25,12 @@ from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
 
-_VERSION = "1.0"
+#: 2.0 : ``columns`` = ordre de Breuel (D-287) ; 1.0 regroupait par recouvrement
+#: et entrelaçait deux colonnes sous un titre large.
+_VERSION = "2.0"
 
 #: Stratégies d'ordonnancement. ``topdown`` est la ligne de base — celle qu'on
-#: veut battre ; ``columns`` regroupe d'abord en colonnes.
+#: veut battre ; ``columns`` suit l'ordre de Breuel (titres, colonnes, filets).
 STRATEGIES: tuple[str, ...] = ("topdown", "columns")
 
 
@@ -67,53 +69,100 @@ def ordonner_topdown(regions: list[Region]) -> list[str]:
     ]
 
 
-def ordonner_colonnes(regions: list[Region], *, tolerance: float = 0.5) -> list[str]:
-    """Colonnes d'abord, de gauche à droite ; blocs de haut en bas dans chacune.
+def ordonner_colonnes(regions: list[Region]) -> list[str]:
+    """Ordre de lecture de Breuel : tri topologique sous contraintes de colonnes.
 
-    Deux blocs appartiennent à la même colonne si leurs intervalles horizontaux
-    se recouvrent d'au moins ``tolerance`` fois la largeur du plus étroit. Le
-    recouvrement **relatif** est ce qui permet de traiter pareil une manchette
-    large et un filet étroit ; un seuil en pixels dépendrait de la résolution du
-    scan, ce qui ne veut rien dire d'une page à l'autre.
+    Portage de l'algorithme de T. M. Breuel (« Two geometric algorithms for
+    layout analysis », DAS 2002, §4 ; repris d'ocropus par kraken,
+    ``kraken.lib.segmentation._reading_order`` et ``topsort``, Apache-2.0), en
+    écriture gauche → droite. Un bloc ``u`` précède ``v`` :
+
+    - s'ils se recouvrent horizontalement, quand ``u`` commence plus haut ;
+    - sinon, quand ``u`` est entièrement à gauche de ``v`` **et** qu'aucun
+      troisième bloc ne les sépare — un bloc qui chevauche verticalement
+      l'étendue des deux et franchit horizontalement l'intervalle entre eux
+      (un titre, un filet pleine largeur).
+
+    Ces contraintes forment un ordre partiel ; un parcours en profondeur qui
+    place chaque bloc après ses prédécesseurs le complète. Un titre large se lit
+    donc avant ses deux colonnes, chacune entière, et un bloc pleine largeur au
+    milieu de la page ferme les colonnes du haut avant d'ouvrir celles du bas.
+
+    Seul écart à kraken : le parcours visite les blocs de haut en bas puis de
+    gauche à droite, et non dans l'ordre où le segmenteur les déclare — ce qui
+    reste libre entre deux blocs suit donc la ligne de base, et le résultat ne
+    lit que la géométrie. Coût en O(n³) sur le nombre de blocs de la page.
 
     Sans géométrie, on ne devine pas : l'ordre déclaré est rendu tel quel.
     """
-    boites = [(r, _boite(r)) for r in regions]
-    if any(b is None for _r, b in boites):
+    boites = [_boite(r) for r in regions]
+    if any(b is None for b in boites):
         return [r.id or "" for r in regions if r.id]
-
-    colonnes: list[list[tuple[Region, tuple[int, int, int, int]]]] = []
-    # Blocs traités de gauche à droite : une colonne se construit en rencontrant
-    # d'abord son bloc le plus à gauche.
-    for region, boite in sorted(boites, key=lambda rb: rb[1][0]):  # type: ignore[index,arg-type]
-        assert boite is not None
-        place = False
-        for colonne in colonnes:
-            if any(_recouvre(boite, autre, tolerance) for _r, autre in colonne):
-                colonne.append((region, boite))
-                place = True
-                break
-        if not place:
-            colonnes.append([(region, boite)])
-
-    colonnes.sort(key=lambda c: min(b[0] for _r, b in c))
-    ordre: list[str] = []
-    for colonne in colonnes:
-        for region, _b in sorted(colonne, key=lambda rb: (rb[1][1], rb[1][0])):
-            if region.id:
-                ordre.append(region.id)
-    return ordre
+    rects = sorted(
+        (
+            (b[1], b[0], b[0] + b[2], b[1] + b[3], region)
+            for b, region in zip(boites, regions, strict=True)
+            if b is not None
+        ),
+        key=lambda r: (r[0], r[1]),
+    )
+    # (y0, x0, x1, y1) de chaque bloc, dans l'ordre de visite.
+    cadres = [(y0, x0, x1, y1) for y0, x0, x1, y1, _r in rects]
+    avant: list[list[int]] = [
+        [i for i in range(len(cadres)) if i != j and _precede(cadres, i, j)]
+        for j in range(len(cadres))
+    ]
+    return [
+        rects[k][4].id or "" for k in _tri_topologique(avant) if rects[k][4].id
+    ]
 
 
-def _recouvre(
-    a: tuple[int, int, int, int], b: tuple[int, int, int, int], tolerance: float
+def _precede(cadres: list[tuple[int, int, int, int]], i: int, j: int) -> bool:
+    """Le bloc ``i`` précède-t-il ``j`` (contrainte de Breuel) ?"""
+    uy0, ux0, ux1, _uy1 = cadres[i]
+    vy0, vx0, vx1, _vy1 = cadres[j]
+    if ux0 < vx1 and ux1 > vx0:
+        return uy0 < vy0
+    if not ux1 < vx0:
+        return False
+    return not any(
+        _separe(cadres[k], cadres[i], cadres[j])
+        for k in range(len(cadres))
+        if k not in (i, j)
+    )
+
+
+def _separe(
+    w: tuple[int, int, int, int],
+    u: tuple[int, int, int, int],
+    v: tuple[int, int, int, int],
 ) -> bool:
-    """Les intervalles horizontaux se recouvrent-ils assez pour être une colonne ?"""
-    gauche = max(a[0], b[0])
-    droite = min(a[0] + a[2], b[0] + b[2])
-    commun = max(0, droite - gauche)
-    etroit = max(1, min(a[2], b[2]))
-    return commun / etroit >= tolerance
+    """``w`` s'interpose-t-il entre ``u`` (à gauche) et ``v`` (à droite) ?"""
+    if w[3] < min(u[0], v[0]) or w[0] > max(u[3], v[3]):
+        return False
+    return w[1] < u[2] and w[2] > v[1]
+
+
+def _tri_topologique(avant: list[list[int]]) -> list[int]:
+    """Chaque bloc après ses prédécesseurs (parcours en profondeur, itératif)."""
+    vu = [False] * len(avant)
+    ordre: list[int] = []
+    for depart in range(len(avant)):
+        if vu[depart]:
+            continue
+        vu[depart] = True
+        pile = [(depart, iter(avant[depart]))]
+        while pile:
+            noeud, suite = pile[-1]
+            for precedent in suite:
+                if not vu[precedent]:
+                    vu[precedent] = True
+                    pile.append((precedent, iter(avant[precedent])))
+                    break
+            else:
+                pile.pop()
+                ordre.append(noeud)
+    return ordre
 
 
 class ReadingOrderModule:

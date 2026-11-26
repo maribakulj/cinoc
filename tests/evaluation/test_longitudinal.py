@@ -1,4 +1,4 @@
-"""Longitudinal : OLS (valeurs main + oracle scipy) et Pettitt (valeurs main).
+"""Longitudinal : tendance (``linregress``, valeurs main + p) et Pettitt.
 
 Règle PLAN_PARITE §5.8b : OLS = algorithme à référence externe → parité
 ``scipy.stats.linregress`` (oracle **exécuté**) en plus des valeurs posées à la
@@ -52,14 +52,50 @@ class TestLinearTrend:
         assert trend.slope_per_day == pytest.approx(oracle.slope)
         assert trend.intercept == pytest.approx(oracle.intercept)
         assert trend.r_squared == pytest.approx(oracle.rvalue**2)
+        assert trend.p_value == pytest.approx(oracle.pvalue)
 
     def test_constant_series_convention(self) -> None:
-        # Série constante : pente nulle, R² = 1.0 (convention documentée —
-        # la « non-tendance » est parfaitement prédite, pas indéfinie).
-        trend = linear_trend(_points([0.2, 0.2, 0.2]))
+        # Série constante : pente nulle, aucune tendance à expliquer — R² = 0
+        # et p = 1, la valeur que rend ``linregress`` quand son calcul ne
+        # tombe pas sur ``nan`` (ce qu'il fait selon la constante : 0,1 sur
+        # 5 points). L'ancienne convention (R² = 1) disait « parfaitement
+        # prédite » à côté d'une pente qu'aucun test ne soutient.
+        for value in (0.1, 0.2, 0.3, 1 / 3):
+            for n in (3, 5, 12):
+                trend = linear_trend(_points([value] * n))
+                assert trend is not None
+                assert trend.slope_per_day == 0.0
+                assert trend.r_squared == 0.0
+                assert trend.p_value == 1.0
+                assert not trend.significant
+
+    def test_a_slope_carries_its_test(self) -> None:
+        """Défaut 10 de l'audit D-264 : une pente s'affichait sans test. Ici
+        p = 0,19 (``linregress``, test bilatéral de pente nulle) : la pente
+        existe, elle n'est **pas** significative au seuil 0,05."""
+        values = [0.30, 0.28, 0.31, 0.26, 0.29, 0.25]
+        trend = linear_trend(_points(values))
         assert trend is not None
-        assert trend.slope_per_day == 0.0
-        assert trend.r_squared == 1.0
+        oracle = stats.linregress(range(6), values)
+        assert trend.p_value == pytest.approx(oracle.pvalue)
+        assert trend.p_value == pytest.approx(0.1864, abs=1e-4)
+        assert trend.alpha == 0.05
+        assert not trend.significant
+
+    def test_a_clear_slope_is_significant(self) -> None:
+        trend = linear_trend(_points([0.30, 0.27, 0.25, 0.22, 0.20, 0.17]))
+        assert trend is not None
+        assert trend.p_value is not None and trend.p_value < 0.001
+        assert trend.significant
+
+    def test_two_points_give_a_slope_but_no_test(self) -> None:
+        """À deux points la droite passe par les deux : zéro degré de liberté,
+        aucun test possible — p absente, jamais « significative »."""
+        trend = linear_trend(_points([0.30, 0.20]))
+        assert trend is not None
+        assert trend.slope_per_day == pytest.approx(-0.10)
+        assert trend.p_value is None
+        assert not trend.significant
 
     def test_slope_is_per_day_with_intraday_spacing(self) -> None:
         # 2 points à 12 h d'écart, +0.1 → pente +0.2 par jour.

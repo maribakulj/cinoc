@@ -196,9 +196,14 @@ _STRINGS: dict[str, dict[str, str]] = {
         "history_stat_runs": "mesures",
         "history_trends_title": "Tendances",
         "history_trends_desc": "Évolution du CER par moteur au fil des runs "
-        "(échelle locale). Pente OLS par jour ; rupture signalée seulement si "
-        "le test de Pettitt est significatif (p ≤ 0,05).",
+        "(échelle locale). Pente par jour (moindres carrés) et son test : une "
+        "pente n'est une tendance que si elle est significative (p ≤ 0,05) ; "
+        "rupture signalée seulement si le test de Pettitt est significatif "
+        "(p ≤ 0,05).",
         "history_slope": "pente/j",
+        "history_trend_significant": "significative (p ≤ 0,05)",
+        "history_trend_not_significant": "non significative",
+        "history_trend_untested": "aucun test à 2 runs",
         "history_rupture": "rupture dès",
         "history_regressions_title": "Régressions",
         "history_regressions_desc": "Métriques dégradées entre les deux runs les "
@@ -445,9 +450,13 @@ _STRINGS: dict[str, dict[str, str]] = {
         "history_stat_runs": "records",
         "history_trends_title": "Trends",
         "history_trends_desc": "CER evolution per engine across runs "
-        "(local scale). OLS slope per day; a change point is flagged only "
-        "when the Pettitt test is significant (p ≤ 0.05).",
+        "(local scale). Slope per day (least squares) and its test: a slope "
+        "is a trend only when it is significant (p ≤ 0.05); a change point is "
+        "flagged only when the Pettitt test is significant (p ≤ 0.05).",
         "history_slope": "slope/day",
+        "history_trend_significant": "significant (p ≤ 0.05)",
+        "history_trend_not_significant": "not significant",
+        "history_trend_untested": "no test with 2 runs",
         "history_rupture": "change point at",
         "history_regressions_title": "Regressions",
         "history_regressions_desc": "Metrics that worsened between the two most "

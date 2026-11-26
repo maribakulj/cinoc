@@ -13,7 +13,8 @@ dans l'hypothèse selon le **premier** statut applicable :
 Les 4 premiers préservent la valeur. C'est l'**unique** comptage des romains
 (R1 : retiré de `structured_data`, qui n'en garde qu'un helper de **valeur**
 régnale, ré-exporté ici) ; les scores strict/valeur s'en dérivent sans double
-comptage. Détection greedy `\\b[IVXLCDMivxlcdmj]+\\b` + validation par parsing ;
+comptage. Détection greedy `\\b[IVXLCDMivxlcdmj]+\\b` + validation par la grammaire des
+chiffres (canonique ou additif médiéval, D-287) ;
 ``min_length=2`` par défaut (R2 : filtre les ``I``/``M`` isolés ambigus).
 Adaptatif : GT sans numéral → pas de payload.
 """
@@ -64,20 +65,26 @@ def _normalize_roman(text: str) -> str:
     return upper
 
 
+#: Grammaire d'un numéral : milliers, centaines, dizaines, unités, chacun un
+#: chiffre écrit soit en forme canonique (``IV``, ``IX``, ``VIII``…) soit en
+#: forme **additive médiévale** (``IIII``, ``VIIII`` — D-121), jusqu'à
+#: ``MMMM``. C'est la grammaire canonique (celle du paquet ``roman``) où chaque
+#: ``{0,3}`` devient ``{0,4}``.
+_ROMAN_GRAMMAR = re.compile(
+    r"M{0,4}(?:CM|CD|D?C{0,4})(?:XC|XL|L?X{0,4})(?:IX|IV|V?I{0,4})"
+)
+
+
 def _is_plausible_roman(text: str) -> bool:
-    """Validation **relâchée** : accepte ``IIII``/``VIIII`` (médiéval), rejette
-    les répétitions absurdes (``IIIII``, ``VV``) et les paires soustractives
-    non canoniques (``IL``, ``IC`` — faux positifs de mots comme « ici »).
+    """Validation **stricte** par la grammaire des chiffres : accepte les
+    formes canoniques et l'additif médiéval (``IIII``, ``VIIII``, ``XXXX``),
+    rejette tout le reste — répétitions (``IIIII``, ``VV``), paires
+    soustractives illégales (``IL``, ``IC`` — faux positifs de mots comme
+    « ici »), et les suites dont chaque paire est légale prise seule mais
+    qu'aucune écriture romaine ne produit (``IIV``, ``IXI``, ``VIV``,
+    ``XIIX`` — acceptées avant D-287, défaut 11 de l'audit D-264).
     """
-    for forbidden in ("VV", "LL", "DD", "IIIII", "XXXXX", "CCCCC", "MMMMMM"):
-        if forbidden in text:
-            return False
-    legal_subtractive = {"IV", "IX", "XL", "XC", "CD", "CM"}
-    for i in range(len(text) - 1):
-        a, b = text[i], text[i + 1]
-        if ROMAN_VALUES[a] < ROMAN_VALUES[b] and (a + b) not in legal_subtractive:
-            return False
-    return True
+    return _ROMAN_GRAMMAR.fullmatch(text) is not None
 
 
 def _parse_normalized(text: str) -> int | None:

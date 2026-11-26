@@ -1,4 +1,5 @@
-"""Vote par jeton : ce qu'il rattrape, et ce qu'il ne peut pas rattraper.
+"""Vote ROVER : ce qu'il rattrape, ce qu'il ne peut pas rattraper, et ce dont
+il ne dépend pas — le nom des sources.
 
 Le banc savait comparer des moteurs ; il ne savait pas en **combiner**. Ce que
 ces tests fixent, ce sont les deux moitiés de la promesse — le vote corrige les
@@ -9,7 +10,15 @@ méthode qui répare tout.
 
 from __future__ import annotations
 
-from cinoc.adapters.merge._vote import align_tokens, vote_tokens
+import itertools
+from pathlib import Path
+
+import jiwer
+
+from cinoc.adapters.merge._vote import vote_tokens
+
+_BNL_MINI = Path(__file__).parents[2] / "fixtures" / "reference_corpus" / "bnl_mini"
+_MOTEURS = ("deu", "deu_latf", "easyocr", "fra", "frk")
 
 
 def test_a_lone_error_is_outvoted() -> None:
@@ -54,11 +63,65 @@ def test_a_majority_of_absences_drops_the_token() -> None:
     assert fusion == "le soleil"
 
 
-def test_a_tie_is_broken_by_the_pivot_not_by_chance() -> None:
-    """Deux voix contre deux : le pivot tranche, et le pivot est choisi par un
-    ordre stable — sans quoi deux exécutions du même run divergeraient."""
+def test_a_tie_is_broken_by_content_not_by_source_names() -> None:
+    """Deux voix contre deux : le départage lit les mots (le plus long, puis le
+    plus grand dans l'ordre lexicographique), jamais le nom des sources — sans
+    quoi renommer un moteur changerait la fusion."""
     lectures = {"a": "le soleil", "b": "le soleil", "c": "la lune", "d": "la lune"}
-    assert vote_tokens(lectures) == "le soleil"
+    renommees = {"d": "le soleil", "c": "le soleil", "b": "la lune", "a": "la lune"}
+    assert vote_tokens(lectures) == vote_tokens(renommees) == "le soleil"
+
+
+def test_an_insertion_read_by_the_majority_survives() -> None:
+    """Un mot que la première source (par nom) n'a pas lu mais que les deux
+    autres lisent reste : l'ancien vote en étoile le perdait, la fusion
+    dépendait alors du nom des sources (« le soleil » ou « le grand soleil »)."""
+    textes = ("le soleil", "le grand soleil", "le grand soleil")
+    for noms in itertools.permutations("abc"):
+        lectures = dict(zip(noms, textes, strict=True))
+        assert vote_tokens(lectures) == "le grand soleil"
+
+
+def test_an_insertion_read_by_a_minority_is_dropped() -> None:
+    textes = ("le grand soleil", "le soleil", "le soleil")
+    for noms in itertools.permutations("abc"):
+        assert vote_tokens(dict(zip(noms, textes, strict=True))) == "le soleil"
+
+
+def _pages() -> list[str]:
+    return sorted(p.name.removesuffix(".gt.txt") for p in _BNL_MINI.glob("*.gt.txt"))
+
+
+def test_renaming_the_sources_changes_nothing_on_bnl_mini() -> None:
+    """Critère S15 : sur de l'OCR réel (``bnl_mini``, chaque triplet des cinq
+    moteurs, 30 pages), renommer les sources — ici en inversant l'ordre de
+    leurs noms — laisse chaque page fusionnée, donc le WER fusionné, identique.
+    L'ancien vote en étoile changeait de résultat sur les dix triplets (WER
+    fusionné de 0,2756 à 0,4002 pour ``deu``/``easyocr``/``fra``)."""
+    pages = _pages()
+    assert len(pages) == 30
+    verites = [
+        " ".join((_BNL_MINI / f"{p}.gt.txt").read_text(encoding="utf-8").split())
+        for p in pages
+    ]
+    for triplet in itertools.combinations(_MOTEURS, 3):
+        fusions = []
+        for noms in (("a", "b", "c"), ("c", "b", "a")):
+            fusions.append(
+                [
+                    vote_tokens(
+                        {
+                            nom: (_BNL_MINI / f"{p}.{moteur}.txt").read_text(
+                                encoding="utf-8"
+                            )
+                            for nom, moteur in zip(noms, triplet, strict=True)
+                        }
+                    )
+                    for p in pages
+                ]
+            )
+        assert fusions[0] == fusions[1], triplet
+        assert jiwer.wer(verites, fusions[0]) == jiwer.wer(verites, fusions[1])
 
 
 def test_the_result_does_not_depend_on_insertion_order() -> None:
@@ -80,14 +143,3 @@ def test_a_single_reading_passes_through() -> None:
 
 def test_no_reading_gives_nothing() -> None:
     assert vote_tokens({}) == ""
-
-
-def test_alignment_marks_absences_on_both_sides() -> None:
-    paires = align_tokens(["le", "grand", "soleil"], ["le", "soleil"])
-    assert ("grand", None) in paires
-    assert ("le", "le") in paires
-
-
-def test_alignment_handles_a_pure_insertion() -> None:
-    paires = align_tokens(["le", "soleil"], ["le", "beau", "soleil"])
-    assert (None, "beau") in paires

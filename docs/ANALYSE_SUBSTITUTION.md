@@ -46,7 +46,7 @@ corriger · **S** supprimer · **E** extraire.
 | `CanonicalLayout` | DoclingDocument (docling-core), PcGts d'OCR-D | Docling perd ids de ligne, 3 339 mots et leurs confiances, SUBS, polygones ; rabat les boîtes hors page. ocrd_page : generateDS mutable, non pydantic, sans JSON. Le modèle Cinoc est le plus fidèle des trois en aller-retour ALTO | **C** ; Docling au plus en exporteur |
 | `_geometry.py`, IoU | shapely 2.2 | IoU identique sur 20 000 paires ; Cinoc 10,7 ms, shapely 152 à 754 ms. Polygone ≠ bbox seulement en manuscrit (écart IoU ≤ 0,065) | **C** |
 | `ocrd_processor.py` | API `ocrd` (+327 Mo, 75 distributions) | Pas de DAG typé, pas de cache par contenu, pas d'annulation coopérative. L'adapter lance 3 processus par page (~4-7 s fixes) ; un METS par gabarit en fait 1 ; `ocrd process` enchaîne plusieurs processeurs | **I** amélioré (METS gabarit, chaîne de processeurs, arrêt à l'annulation) |
-| `reading_order.py` | Breuel (kraken, Apache-2.0), eynollah, docling | **Bug** : titre pleine largeur + deux colonnes → `columns` rend `T L1 R1 L2 R2`. Le test ne vérifie que le premier élément et la longueur | **C+** : porter Breuel (~35 LOC numpy, sans dépendre de kraken) |
+| `reading_order.py` | Breuel (kraken, Apache-2.0), eynollah, docling | **Bug** : titre pleine largeur + deux colonnes → `columns` rend `T L1 R1 L2 R2`. Le test ne vérifie que le premier élément et la longueur | **C+** : porter Breuel (~35 LOC numpy, sans dépendre de kraken) — **fait** (D-287, S15) : `columns` = ordre de Breuel en stdlib, titre + deux colonnes → `T L1 L2 R1 R2`, identique à kraken sur 500 pages tirées |
 | Code mort / doublons | — | `reading_order._feuilles` mort ; `to_text._feuilles` = `LayoutPage.leaf_regions` ; deux `_Counter` identiques | **S** (~30 LOC) |
 
 ### Métriques, alignement, normalisation (`evaluation/`, `formats/text/`)
@@ -54,12 +54,12 @@ corriger · **S** supprimer · **E** extraire.
 | Composant | Candidats | Preuve | Décision |
 |---|---|---|---|
 | CER/WER/MER/cMER (`metrics/text.py`) | jiwer 4.0, dinglehopper 0.11 | Déjà adossés à rapidfuzz. Identiques à jiwer (audit précédent) et à dinglehopper **160/160** en appel par chaînes. dinglehopper : ~270× plus lent, 370 Mo / 83 distributions (ocrd obligatoire), WER d'une autre définition | **C** ; dinglehopper en **oracle CI** (variante légère `--no-deps`, 107 Mo) |
-| 5 alignements `difflib` | `rapidfuzz.distance.Levenshtein.opcodes` | difflib est sous-optimal (425-616 éditions en excès sur le corpus) et **triple les lacunes** de la taxonomie face au WER affiché à côté (555 contre 168) ; signale comme hallucinations deux sorties simplement brouillées. Un helper de ~20 lignes : 55/55 tests passent (`merge=True`), 1,5-4× plus rapide | **R** (un helper ; `word_misses` fusionné avec `modernization_counts`) — **fait** (D-286, S14) : `evaluation._alignment`, `textual_fidelity.token_fates` ; sur `bnl_mini`, lacunes 555 → 168 = D du WER hors fusions/scissions |
+| 5 alignements `difflib` | `rapidfuzz.distance.Levenshtein.opcodes` | difflib est sous-optimal (425-616 éditions en excès sur le corpus) et **triple les lacunes** de la taxonomie face au WER affiché à côté (555 contre 168) ; signale comme hallucinations deux sorties simplement brouillées. Un helper de ~20 lignes : 55/55 tests passent (`merge=True`), 1,5-4× plus rapide | **R** (un helper ; `word_misses` fusionné avec `modernization_counts`) — **fait** (D-286, S14) : `evaluation._alignment`, `textual_fidelity.token_fates` ; sur `bnl_mini`, lacunes 555 → 168 = D du WER hors fusions/scissions ; le diff surligné du rapport (`text_diff.py`) aussi (D-287) : il surligne S + D et S + I, plus aucun `difflib` dans `cinoc/` |
 | `char_confusions` | `Levenshtein.editops` | Compte de substitutions = le S du CER (8 430 contre 7 024), 7× plus rapide | **R** (~−25 LOC) — **fait** (D-286) : 8 424 = S du CER sur `bnl_mini` |
 | `diagnostics.line_cers` | `lines.aligned_line_cers` (déjà au dépôt) | Lignes appariées par index : CER différent sur 1 131 des 2 340 lignes | **R** (~−17 LOC) — **fait** (D-286) : `_alignment.aligned_to_reference`, partagé avec la distribution par ligne |
 | Normalisation (15 profils) | dinglehopper (table SBB), cor-asv-ann, ftfy | 5 des 19 clés Cinoc couvertes ailleurs ; u/v, i/j, ꝑ, ꝓ, ꝗ, œ, æ, ß nulle part. cor-asv-ann **ne s'installe pas** (tensorflow 1.15) et mute sa propre table en mémoire. Le shim `nfc`/`diplomatic` de `from_dict` et `from_yaml` n'ont aucun consommateur | **C**, **S** du shim (~−20 LOC) |
 | NER (`ner_f1`) | nervaluate 1.2, HIPE-scorer, seqeval | Cinoc entre strict et fuzzy ; seule implémentation qui résiste à la dérive d'offsets OCR (reprojection R14) | **C** ; nervaluate seulement si un consommateur demande strict/partial |
-| `roman.py` | paquet `roman` 5.2 | Concordent sur les 3 999 formes canoniques ; `roman` refuse les formes médiévales (iiij). **Bug** : `IIV`, `IXI`, `VIV`, `XIIX` acceptés ; les 5 « numéraux » détectés au corpus sont des mots (`ci`, `dix`) | **C+** ; `roman` en oracle de test |
+| `roman.py` | paquet `roman` 5.2 | Concordent sur les 3 999 formes canoniques ; `roman` refuse les formes médiévales (iiij). **Bug** : `IIV`, `IXI`, `VIV`, `XIIX` acceptés ; les 5 « numéraux » détectés au corpus sont des mots (`ci`, `dix`) | **C+** ; `roman` en oracle de test — validation **faite** (D-287, S15) : grammaire des chiffres (canonique + additif médiéval), `IIV`/`IXI`/`VIV`/`XIIX` refusés ; la détection de mots (`ci`, `dix`) reste à P5e 8, l'oracle `roman` à P5e 10 |
 | FCA, bow, diacritiques, philologie, structured_data | — | Rien d'équivalent en Python ; FCA absente de dinglehopper | **C** |
 | `lines.percentile`, `kendall_distance` | `numpy.percentile`, `scipy.stats.kendalltau` | Identiques (0 écart) | **R** facultatif (~−22 LOC) |
 
@@ -70,12 +70,12 @@ corriger · **S** supprimer · **E** extraire.
 | Nemenyi (table q, rangs) | `scipy.stats.studentized_range`, `rankdata` ; scikit-posthocs (+175 Mo, 20 distributions) | scipy = scikit-posthocs sur 5 000 tirages ; la table maison diverge dès k = 30 (153 verdicts différents à k = 50) et **renvoie silencieusement la colonne α = 0,05 pour tout α ≠ 0,01** | **R** par scipy (~−60 LOC) |
 | Groupes d'indiscernables | barres CD (Demšar) | Sur BNL réel, le rapport implique 4 paires significatives là où il y en a 1 | **C+** (~15 LOC, barres chevauchantes) |
 | Holm (absent) | statsmodels (+98 Mo), `scipy.stats.false_discovery_control` (BH/BY seulement) | Holm maison = statsmodels à 0,0 près | **10 lignes maison** |
-| OLS (`linear_trend`) | `scipy.stats.linregress` | Identique à 4e-12 ; **aucune p-value aujourd'hui** : une pente non significative (p = 0,14) s'affiche comme tendance | **R** par scipy (gagne p et erreur-type) |
+| OLS (`linear_trend`) | `scipy.stats.linregress` | Identique à 4e-12 ; **aucune p-value aujourd'hui** : une pente non significative (p = 0,14) s'affiche comme tendance | **R** par scipy (gagne p et erreur-type) — **fait** (D-287, S15) : `linregress`, p et significativité affichées (FR/EN) ; l'erreur-type, sans consommateur, n'est pas exposée |
 | Pettitt | pyhomogeneity (abandonné 2020, p Monte-Carlo sans graine, p = 2,0) | Identique en asymptotique ; Cinoc en O(n²), formule par rangs en O(n) | **C** |
 | Jensen-Shannon | `scipy.spatial.distance.jensenshannon(base=2)**2` | Écart 1,6e-10 (attention : scipy rend la racine) | **R** (~−30 LOC) |
 | Bootstrap stdlib | `numpy.random.default_rng` | 27-31× plus rapide, bit-identique sur numpy 2.1→2.4 et Python 3.11→3.13. La vraie raison du choix stdlib est la parité avec Picarones, pas le déterminisme | **R** possible — exige d'amender D-067 et de refaire un golden (décision mainteneur) — **fait** (D-265 puis D-284 : golden recalculé contre `scipy.stats.bootstrap`) |
 | ECE/MCE | netcal, torchmetrics (exigent torch), sklearn | Convention de bornes différente : 2,9 % des jetons tesseract changent de bin | **C**, documenter la convention |
-| Vote multi-moteurs (`_vote.py`) | ROVER : SCTK (CTM horodaté), crowd-kit (+410 Mo) | **Ce n'est pas un ROVER** : alignement en étoile sur la première source alphabétique, insertions perdues, **résultat qui dépend du nom des sources**. WER fusionné 0,089 contre 0,048 pour un ROVER, à 3 moteurs | **C+** : vrai ROVER maison (~80 LOC stdlib), crowd-kit en oracle hors CI |
+| Vote multi-moteurs (`_vote.py`) | ROVER : SCTK (CTM horodaté), crowd-kit (+410 Mo) | **Ce n'est pas un ROVER** : alignement en étoile sur la première source alphabétique, insertions perdues, **résultat qui dépend du nom des sources**. WER fusionné 0,089 contre 0,048 pour un ROVER, à 3 moteurs | **C+** : vrai ROVER maison (~80 LOC stdlib), crowd-kit en oracle hors CI — **fait** (D-287, S15) : ROVER stdlib aux coûts et au vote de crowd-kit, ordre d'alignement tiré du contenu ; sur `bnl_mini`, fusion identique sous renommage sur les dix triplets (0/10 contre 10/10), WER fusionné moyen 0,3476 → 0,3146 |
 
 ### Adapters, LLM, corpus (`adapters/llm`, `ocr`, `correction`, `corpus`)
 
@@ -136,13 +136,13 @@ l'extra `hipe-oracle`), crowd-kit et LiteLLM hors CI.
 | 3 | ALTO et PAGE écrits invalides au XSD officiel | conformité | **corrigé** : ALTO (D-272), PAGE (D-273) |
 | 4 | IIIF v2 : URL du service prise pour l'image (corpus corrompu) | intégrité des données | **corrigé** (D-274) : service d'abord, `info.json` jamais retenu, téléchargement refusé s'il n'est pas une image |
 | 5 | IIIF v3 : vignette au lieu de l'image pleine résolution | biais de mesure | **corrigé** (D-274) — la v2 du même manifeste Wellcome avait le même défaut |
-| 6 | Vote multi-moteurs : pas un ROVER, dépend du nom des sources | justesse | → P5e item 11 |
+| 6 | Vote multi-moteurs : pas un ROVER, dépend du nom des sources | justesse | **corrigé** (D-287) : ROVER, résultat fonction des seuls textes |
 | 7 | Taxonomie et hallucinations sur `difflib` sous-optimal | justesse | **corrigé** (D-286) : alignement optimal partagé ; lacunes = D du WER hors fusions/scissions |
 | 8 | Pires lignes appariées par index | justesse | **corrigé** (D-286) : appariées par F15 |
 | 9 | Nemenyi : colonne α = 0,05 servie pour tout α ≠ 0,01 | justesse | → P5e item 4 |
-| 10 | Tendance OLS affichée sans test de significativité | justesse | → P5e item 11 |
-| 11 | Romains absurdes acceptés ; mots détectés comme romains | justesse | → P5e item 8 |
-| 12 | Ordre de lecture `columns` entrelace les colonnes sous un titre large | justesse | → P5e item 11 |
+| 10 | Tendance OLS affichée sans test de significativité | justesse | **corrigé** (D-287) : `linregress`, p-value et « significative / non significative » à l'écran |
+| 11 | Romains absurdes acceptés ; mots détectés comme romains | justesse | romains absurdes **corrigés** (D-287) ; mots détectés → P5e item 8 |
+| 12 | Ordre de lecture `columns` entrelace les colonnes sous un titre large | justesse | **corrigé** (D-287) : ordre de Breuel |
 | 13 | Clé de reprise aveugle aux binaires système | reproductibilité | → P5f item 2b |
 | 14 | PAGE : `<Word>` ignorés à la lecture | perte de données | **corrigé** (D-273) |
 | 15 | `alto_source` : lignes sans ID non vérifiées sous ComposedBlock | justesse | **corrigé** (D-273) |

@@ -4,7 +4,9 @@ Le runner distribue à chaque collecteur le **même** ``(référence, hypothèse
 normalisé. Tout ce qui, en couche 3, aligne deux séquences pour dire *quelles*
 erreurs (taxonomie, hallucinations, confusions, mots manqués, modernisation,
 pires lignes, WER) passe par ici, si bien qu'une analyse voit exactement les
-éditions que compte la métrique affichée à côté (D-286).
+éditions que compte la métrique affichée à côté (D-286). Le diff surligné
+du rapport (couche 7, ``reports/text_diff``) lit :func:`opcodes` aussi : il
+surligne les éditions du CER (D-287).
 
 **Alignement de Levenshtein de coût minimal** (``rapidfuzz``, déjà dépendance
 de la couche). ``difflib.SequenceMatcher``, utilisé auparavant par cinq

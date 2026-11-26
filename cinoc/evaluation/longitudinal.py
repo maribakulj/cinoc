@@ -3,13 +3,19 @@
 Sur l'historique des runs (PAS un payload ``RunResult`` — c'est du
 multi-runs), deux questions :
 
-- **Y a-t-il une tendance ?** ``linear_trend`` — régression OLS closed-form
-  (pur stdlib, portée telle quelle de la source) sur ``(temps, valeur)``,
-  pente exprimée **par jour**. Conventions documentées : série **constante**
-  → ``r_squared = 1.0`` (parfaitement prédite — l'absence de tendance est
-  certaine, pas indéfinie) ; < 2 points ou horodatages tous identiques →
-  ``None``. L'origine des x est le **premier point** (l'ordonnée à l'origine
-  est la valeur ajustée au premier run, pas à l'an 1).
+- **Y a-t-il une tendance ?** ``linear_trend`` — régression des moindres
+  carrés par ``scipy.stats.linregress`` sur ``(temps, valeur)``, pente
+  exprimée **par jour**, **avec son test** : p-value bilatérale de l'hypothèse
+  « pente nulle » (t de Student à n − 2 degrés de liberté), tendance
+  **significative seulement si p ≤ α** (D-287 ; l'OLS maison d'avant donnait
+  la même pente, à 4e-12, mais aucune p : une pente au hasard s'affichait
+  comme une tendance). Conventions : à **2 points**, aucun test possible
+  (zéro degré de liberté) → ``p_value = None``, jamais significative ; série
+  **constante** → pente 0, ``r_squared = 0.0``, ``p_value = 1.0`` (ce que rend
+  ``linregress`` quand il ne tombe pas sur ``nan``, ce qu'il fait selon la
+  constante) ; < 2 points ou horodatages tous identiques → ``None``.
+  L'origine des x est le **premier point** (l'ordonnée à l'origine est la
+  valeur ajustée au premier run, pas à l'an 1).
 - **Y a-t-il une rupture ?** ``pettitt`` — **vrai test de rupture**
   (Pettitt 1979, non paramétrique, fondé sur les rangs) : ``U_t = Σ_{i≤t}
   Σ_{j>t} sgn(x_j − x_i)``, ``K = max|U_t|``, approximation asymptotique
@@ -30,7 +36,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from statistics import fmean
 
-#: Seuil de signification par défaut du test de Pettitt.
+from scipy import stats  # type: ignore[import-untyped]
+
+#: Seuil de signification par défaut (pente et rupture).
 _DEFAULT_ALPHA = 0.05
 
 #: Secondes par jour (pente exprimée par jour).
@@ -39,12 +47,20 @@ _DAY_SECONDS = 86400.0
 
 @dataclass(frozen=True)
 class TrendResult:
-    """Régression linéaire d'une série temporelle (pente par **jour**)."""
+    """Régression linéaire d'une série temporelle (pente par **jour**).
+
+    ``p_value`` : test bilatéral de pente nulle (``None`` à 2 points, où aucun
+    test n'est possible) ; ``significant`` n'est vrai que si
+    ``p_value ≤ alpha`` — sinon la pente n'est pas une tendance établie.
+    """
 
     slope_per_day: float
     intercept: float
     r_squared: float
     n_points: int
+    p_value: float | None
+    alpha: float
+    significant: bool
 
 
 @dataclass(frozen=True)
@@ -71,45 +87,44 @@ class PettittResult:
 
 
 def linear_trend(
-    points: Sequence[tuple[datetime, float]],
+    points: Sequence[tuple[datetime, float]], *, alpha: float = _DEFAULT_ALPHA
 ) -> TrendResult | None:
-    """OLS sur ``(horodatage, valeur)`` ; ``None`` si la pente est indéfinie.
+    """Pente par jour de ``(horodatage, valeur)`` et son test ; ``None`` si
+    la pente est indéfinie.
 
     Horodatages **homogènes** requis (tous naïfs ou tous conscients du fuseau
-    — l'appelant normalise) ; l'ordre n'importe pas (OLS est invariant).
+    — l'appelant normalise) ; l'ordre n'importe pas (la régression est
+    invariante).
     """
     if len(points) < 2:
         return None
     origin = min(stamp for stamp, _ in points)
     xs = [(stamp - origin).total_seconds() / _DAY_SECONDS for stamp, _ in points]
     ys = [value for _, value in points]
-    x_mean = fmean(xs)
-    y_mean = fmean(ys)
-    sxx = sum((x - x_mean) ** 2 for x in xs)
-    if sxx == 0.0:
+    if all(x == xs[0] for x in xs):
         return None  # horodatages tous identiques : pente indéfinie.
-    sxy = sum((x - x_mean) * (y - y_mean) for x, y in zip(xs, ys, strict=True))
-    slope = sxy / sxx
-    intercept = y_mean - slope * x_mean
-    syy = sum((y - y_mean) ** 2 for y in ys)
-    if syy == 0.0 or all(y == ys[0] for y in ys):
-        # Série constante : R² mathématiquement indéfini → 1.0 (la
-        # « non-tendance » est parfaitement prédite ; convention source).
-        # Constance testée sur les valeurs en plus de ``syy == 0`` : la
-        # moyenne flottante d'une série constante n'est pas exactement la
-        # valeur (syy retombe alors sur une poussière non nulle).
-        r_squared = 1.0
-    else:
-        ss_res = sum(
-            (y - (slope * x + intercept)) ** 2
-            for x, y in zip(xs, ys, strict=True)
+    if all(y == ys[0] for y in ys):
+        # Testé sur les valeurs : ``linregress`` y rend r = 0 ou ``nan``
+        # selon la poussière flottante de la moyenne.
+        return TrendResult(
+            slope_per_day=0.0,
+            intercept=ys[0],
+            r_squared=0.0,
+            n_points=len(points),
+            p_value=1.0,
+            alpha=alpha,
+            significant=False,
         )
-        r_squared = max(0.0, 1.0 - ss_res / syy)
+    fit = stats.linregress(xs, ys)
+    p_value = float(fit.pvalue) if len(points) > 2 else None
     return TrendResult(
-        slope_per_day=slope,
-        intercept=intercept,
-        r_squared=r_squared,
+        slope_per_day=float(fit.slope),
+        intercept=float(fit.intercept),
+        r_squared=float(fit.rvalue) ** 2,
         n_points=len(points),
+        p_value=p_value,
+        alpha=alpha,
+        significant=p_value is not None and p_value <= alpha,
     )
 
 
