@@ -13,29 +13,37 @@
 cer:
   title: "CER — character error rate"
   definition: >-
-    Ratio of the character-level edit distance (substitutions + insertions +
-    deletions) to the length of the reference, expressed as a proportion.
-    0 = perfect transcription.
+    Edit distance (substitutions + insertions + deletions) between the
+    output and the reference, counted in Unicode code points, relative to
+    the reference length. Both texts are first prepared by the view's
+    profile (default flat_text: NFC, invisible characters removed, every
+    whitespace run reduced to one space). 0 = perfect transcription; above 1
+    if the output gets longer. The per-line CER applies the same formula to
+    each line, capped at 1.
   measures: >-
     Character-by-character fidelity between the engine output and the ground
-    truth, after the chosen normalization profile.
+    truth, under the view's convention.
   limits: >-
     Blind to error meaning: a mistake on a rare character weighs as much as a
-    common one. Depends on the normalization profile applied.
+    common one. Depends on the profile: under keep_line_breaks ("text
+    (lines)" view), a line break rendered as a space counts as one
+    substitution; flat, it does not.
 
 cer_diplo:
   title: "Diplomatic CER"
   definition: >-
-    CER computed after a minimal normalization applied to both sides: NFC
-    Unicode form, long s ſ folded to s, invisible characters removed. Other
-    historical variants (u/v, ligatures) remain distinct.
+    CER computed after the view's profile and then a minimal folding applied
+    to both sides: NFC Unicode form, invisible characters removed, long s ſ
+    folded to s. Other historical variants (u/v, ligatures) remain distinct.
   measures: >-
     Fidelity to the witness's spelling, without penalising the ſ/s choice
     alone or a Unicode encoding difference invisible to the eye.
   limits: >-
-    Less strict than raw CER, not more: the gap between the two mixes the
-    NFC effect, the ſ effect and invisible-character cleanup. Comparable only
-    across engines evaluated on the same ground truth.
+    Less strict than CER, not more. Under the default profile, which
+    already applies NFC and removes invisible characters, the gap between
+    the two isolates the ſ effect; under a raw comparison it mixes in those
+    two effects. Comparable only across engines evaluated on the same ground
+    truth.
 
 wer:
   title: "WER — word error rate"
@@ -262,8 +270,10 @@ ece:
     How trustworthy an engine's confidence scores are: a well-calibrated
     engine is right as often as it claims.
   limits: >-
-    Not applicable to engines without confidence scores; depends on the
-    confidence binning.
+    Measures the confidences of the step the view scores (an OCR's
+    confidences say nothing of the text an LLM corrected after it); not
+    applicable to a step without confidence scores. Depends on the binning:
+    ten bins [b/10, (b+1)/10), the last one closed at 1.0.
 
 mce:
   title: "MCE — maximum calibration error"

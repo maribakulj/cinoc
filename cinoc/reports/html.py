@@ -623,7 +623,11 @@ def localized(lang: str, fr: str, en: str) -> str:
 #: titres). Une vue absente d'ici porte déjà un nom lisible (ex. « référence OCR
 #: (pas une vérité-terrain manuelle) ») → affichée telle quelle.
 _VIEW_LABELS: dict[str, tuple[str, str]] = {
-    "text": ("Texte brut", "Plain text"),
+    # Ni « brut » ni « plain » : la vue texte est normalisée (profil par
+    # défaut, D-285) — son profil est écrit à côté du chiffre.
+    "texte": ("Texte", "Text"),
+    "texte (lignes)": ("Texte (lignes)", "Text (lines)"),
+    "text": ("Texte", "Text"),
     "diplomatic": ("Transcription diplomatique", "Diplomatic transcription"),
 }
 
@@ -631,8 +635,8 @@ _VIEW_LABELS: dict[str, tuple[str, str]] = {
 def view_label(view: str, lang: str) -> str:
     """Libellé humain d'une vue d'évaluation (repli sur le nom brut si inconnu).
 
-    Centralise la traduction du **nom interne** de vue (``"text"``) vers un
-    libellé lisible (« Texte brut »). Déterministe (même vue + langue → mêmes
+    Centralise la traduction du **nom interne** de vue (``"texte"``) vers un
+    libellé lisible (« Texte » / « Text »). Déterministe (même vue + langue → mêmes
     octets) ; n'échappe pas (l'appelant échappe au point d'insertion HTML)."""
     pair = _VIEW_LABELS.get(view)
     if pair is None:

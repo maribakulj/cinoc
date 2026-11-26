@@ -17,7 +17,7 @@ def _record(run_id: str, completed: str, value: float) -> HistoryRecord:
         corpus_name="c",
         code_version="1.0",
         pipeline="tess",
-        view="text",
+        view="texte",
         metric="cer",
         value=value,
     )

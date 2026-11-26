@@ -256,3 +256,33 @@ def test_test_not_computed_says_why() -> None:
         result.model_copy(update={"analyses": ()}), SectionContext(lang="en")
     )
     assert bare is not None and "test not computed." in bare
+
+
+def _with_views(*views: object) -> RunResult:
+    result = _result()
+    manifest = result.manifest.model_copy(update={"view_specs": views})
+    return result.model_copy(update={"manifest": manifest})
+
+
+def test_the_convention_is_written_next_to_the_figure() -> None:
+    """D-285 : un CER ne se lit pas sans sa normalisation. Nom du profil et
+    définition, dérivée de ses leviers, sous le titre de la vue, FR et EN ;
+    et ce qui rend le chiffre comparable aux outils de référence."""
+    from cinoc.domain.artifacts import ArtifactType
+    from cinoc.domain.evaluation import EvaluationView
+
+    texts = frozenset({ArtifactType.RAW_TEXT})
+    view = EvaluationView(name="text", candidate_types=texts)
+    fr = KeyMeasuresSection().render(_with_views(view), SectionContext())
+    en = KeyMeasuresSection().render(_with_views(view), SectionContext(lang="en"))
+    assert fr is not None and en is not None
+    assert "Normalisation <code>flat_text</code> : NFC, invisibles retirés" in fr
+    assert "saut de ligne compris" in fr and "« texte (lignes) »" in fr
+    assert "every whitespace run, line breaks included" in en
+    assert "“text (lines)”" in en and "saut de ligne" not in en
+    lines = view.model_copy(update={"normalization_profile": "keep_line_breaks"})
+    html = KeyMeasuresSection().render(_with_views(lines), SectionContext())
+    assert html is not None and "sauts de ligne comptés" in html
+    raw = view.model_copy(update={"normalization_profile": None})
+    html = KeyMeasuresSection().render(_with_views(raw), SectionContext())
+    assert html is not None and "aucune normalisation (comparaison brute)" in html

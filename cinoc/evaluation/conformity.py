@@ -2,10 +2,12 @@
 
 Post-passe **cross-vues** : contrairement aux autres analyses (une par vue), la
 conformité lit des résultats **déjà calculés** sur plusieurs vues — la vue de
-profil ``hipe`` (ancre, obligatoire), et si présentes une vue **brute** (sans
-profil) et une vue ``heritage`` pour les deltas de normalisation. Zéro
-re-scoring : tout vient des ``PipelineResult``/``RunDocumentResult`` produits
-par les passes par-vue (l'invariant « calculé une fois, lu ensuite »).
+profil ``hipe`` (ancre, obligatoire), et si présentes une vue **brute**
+(``normalization_profile: null`` explicite — une vue qui n'en nomme aucun reçoit
+le défaut ``flat_text``, D-285) et une vue ``heritage`` pour les deltas de
+normalisation. Zéro re-scoring : tout vient des ``PipelineResult`` /
+``RunDocumentResult`` produits par les passes par-vue (l'invariant « calculé
+une fois, lu ensuite »).
 
 Les vues sont reconnues par leur ``normalization_profile`` (jamais par leur
 nom) ; pour que les deltas isolent bien l'effet du profil, les vues comparées

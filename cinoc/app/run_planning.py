@@ -28,10 +28,15 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict, Field
 
 from cinoc.app.engines import EngineStatus, providers_for_mode
+from cinoc.app.text_views import text_views
 from cinoc.domain.artifacts import ArtifactType
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.errors import CinocError
-from cinoc.domain.evaluation import EvaluationSpec, EvaluationView
+from cinoc.domain.evaluation import (
+    DEFAULT_NORMALIZATION_PROFILE,
+    EvaluationSpec,
+    EvaluationView,
+)
 from cinoc.domain.pipeline import (
     INITIAL_STEP_ID,
     PipelineMode,
@@ -124,7 +129,7 @@ class Competitor(BaseModel):
 _CANDIDATES = frozenset({ArtifactType.RAW_TEXT, ArtifactType.CORRECTED_TEXT})
 
 #: **Profils de métriques** : bundles curés de colonnes scalaires pour la vue
-#: ``text`` (classement par défaut du rapport). Chaque nom ne référence que des
+#: ``texte`` (classement par défaut du rapport). Chaque nom ne référence que des
 #: métriques **enregistrées** pour la signature ``(RAW_TEXT, RAW_TEXT)`` — un nom
 #: non enregistré ferait lever le runner (couche 3 ; verrouillé par test). Changer
 #: de profil n'allège **que** les colonnes de classement : les *collecteurs*
@@ -146,13 +151,14 @@ METRIC_PROFILES: dict[str, tuple[str, ...]] = {
 }
 
 
-def _ocr_view(
+def _text_views(
+    corpus: CorpusSpec,
     normalization: str | None,
     char_exclude: str | None,
     *,
     with_hcpr: bool = False,
     base_metrics: tuple[str, ...] = METRIC_PROFILES[DEFAULT_METRIC_PROFILE],
-) -> EvaluationView:
+) -> tuple[EvaluationView, ...]:
     # ``base_metrics`` vient du **profil de métriques** choisi (défaut
     # ``standard``). ``air`` (apport net d'archaïsmes) y est d'office (Q4) ;
     # ``hcpr`` (préservation) n'est **ajouté** que sur une liste **explicitement**
@@ -167,11 +173,11 @@ def _ocr_view(
     metric_names = base_metrics
     if with_hcpr:
         metric_names = (*metric_names, "hcpr")
-    return EvaluationView(
-        name="text",
+    return text_views(
+        corpus,
         candidate_types=_CANDIDATES,
         metric_names=metric_names,
-        normalization_profile=normalization,
+        normalization=normalization,
         char_exclude=char_exclude,
     )
 
@@ -230,7 +236,8 @@ def _reference_view(
         },
         metric_names=("cer", "wer", "mer"),
         ignored_dimensions=("exactitude (la référence est elle-même un OCR)",),
-        normalization_profile=normalization,
+        # Non choisi → le défaut (D-285), pas la comparaison brute (``None``).
+        normalization_profile=normalization or DEFAULT_NORMALIZATION_PROFILE,
         char_exclude=char_exclude,
     )
 
@@ -245,23 +252,20 @@ def _views_for_corpus(
 ) -> tuple[EvaluationView, ...]:
     """Vues à évaluer selon les **types de GT présents**, sous ``normalization``.
 
-    GT manuelle ``RAW_TEXT`` → vue ``text`` ; référence ``REFERENCE_TEXT`` (OCR
-    Gallica) → vue *référence* distincte. Un corpus sans GT → vue ``text`` par
+    GT manuelle ``RAW_TEXT`` → vue ``texte`` ; référence ``REFERENCE_TEXT`` (OCR
+    Gallica) → vue *référence* distincte. Un corpus sans GT → vue ``texte`` par
     défaut (le run reste exécutable, simplement non scoré). ``char_exclude``
     filtre des caractères des deux côtés (GT/hyp) avant le calcul (runner couche 3).
-    ``with_hcpr`` ajoute la colonne ``hcpr`` à la vue ``text`` (liste archaïque
+    ``with_hcpr`` ajoute la colonne ``hcpr`` à la vue ``texte`` (liste archaïque
     configurée). ``base_metrics`` = colonnes scalaires du **profil de métriques**
-    choisi (n'affecte que la vue ``text``, pas la vue *référence* fixe).
+    choisi (n'affecte que la vue ``texte``, pas la vue *référence* fixe).
     """
     gt_types = {gt.type for doc in corpus.documents for gt in doc.ground_truths}
-    views: list[EvaluationView] = []
-    if ArtifactType.RAW_TEXT in gt_types:
-        views.append(
-            _ocr_view(
-                normalization, char_exclude,
-                with_hcpr=with_hcpr, base_metrics=base_metrics,
-            )
-        )
+    texts = _text_views(
+        corpus, normalization, char_exclude,
+        with_hcpr=with_hcpr, base_metrics=base_metrics,
+    )
+    views = list(texts) if ArtifactType.RAW_TEXT in gt_types else []
     if ArtifactType.REFERENCE_TEXT in gt_types:
         views.append(_reference_view(normalization, char_exclude))
     if ArtifactType.LAYOUT in gt_types:
@@ -269,12 +273,7 @@ def _views_for_corpus(
     if ArtifactType.ENTITIES in gt_types:
         views.append(_ner_view())
     if not views:
-        views.append(
-            _ocr_view(
-                normalization, char_exclude,
-                with_hcpr=with_hcpr, base_metrics=base_metrics,
-            )
-        )
+        views.extend(texts)
     return tuple(views)
 
 
@@ -645,7 +644,7 @@ def plan_benchmark_run(
     (reproductibilité) ; un nom inconnu est refusé (``RunPlanningError``).
 
     ``metric_profile`` (nom d'un :data:`METRIC_PROFILES`) choisit le **bundle de
-    colonnes scalaires** de la vue ``text`` (défaut ``standard``, byte-identique à
+    colonnes scalaires** de la vue ``texte`` (défaut ``standard``, byte-identique à
     l'historique) ; un nom inconnu est refusé (``RunPlanningError`` → 422). Il
     n'affecte **que** le classement par défaut — les collecteurs restent intacts.
     """

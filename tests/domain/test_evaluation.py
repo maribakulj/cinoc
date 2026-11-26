@@ -84,3 +84,24 @@ def test_set_fields_round_trip_from_sorted_json():
         tags=frozenset({"b", "a"}),
     ).model_dump(mode="json")["tags"]
     assert tags == ["a", "b"]
+
+
+def test_view_without_profile_gets_the_default_and_null_means_raw() -> None:
+    """D-271, D-285 : omis → ``flat_text`` ; ``null`` explicite → brute.
+
+    Le nom est toujours écrit au JSON : un ``RunResult`` dit sous quelle
+    convention son chiffre a été calculé, et un JSON d'avant (``null`` = la
+    comparaison brute d'alors) se relit avec le même sens.
+    """
+    from cinoc.domain.evaluation import DEFAULT_NORMALIZATION_PROFILE
+
+    types = frozenset({ArtifactType.RAW_TEXT})
+    default = EvaluationView(name="texte", candidate_types=types)
+    assert default.normalization_profile == DEFAULT_NORMALIZATION_PROFILE == "flat_text"
+    assert '"normalization_profile":"flat_text"' in default.model_dump_json()
+    raw = EvaluationView.model_validate(
+        {"name": "brut", "candidate_types": ["raw_text"], "normalization_profile": None}
+    )
+    assert raw.normalization_profile is None
+    assert '"normalization_profile":null' in raw.model_dump_json()
+    assert EvaluationView.model_validate_json(raw.model_dump_json()) == raw

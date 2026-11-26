@@ -134,6 +134,12 @@ class RunResult(BaseModel):
     #: micro affiché (``value``), plus celui d'une moyenne macro (``mean``).
     #: La version n'avait pas été publiée ; un payload qui porte ``mean`` est
     #: refusé (champ inconnu), le reste d'un JSON v5 se relit tel quel.
+    #: Toujours 5 (D-285) : une ligne de calibration nomme l'étape dont elle
+    #: mesure les confiances (``step``, requis) — un payload d'avant, qui
+    #: pouvait prêter à un pipeline corrigé l'ECE de son OCR, est refusé plutôt
+    #: que relu comme attribué. Le profil d'une vue qui n'en nomme aucun devient
+    #: ``flat_text`` ; le nom est toujours écrit, et un ``null`` d'un JSON
+    #: antérieur garde son sens (comparaison brute) : rien n'est relu faux.
     schema_version: int = 5
     manifest: RunManifest
     pipelines: tuple[PipelineResult, ...] = Field(default_factory=tuple)

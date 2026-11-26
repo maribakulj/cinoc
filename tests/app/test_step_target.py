@@ -114,7 +114,7 @@ def _single_engine_cer(engine: str) -> float:
         max_workers=1,
     )
     for entry in result.pipelines:
-        if entry.pipeline == engine and entry.view == "text":
+        if entry.pipeline == engine and entry.view == "texte":
             value = next(s for s in entry.aggregate if s.metric == "cer").value
             assert value is not None
             return value

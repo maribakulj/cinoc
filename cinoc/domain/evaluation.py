@@ -31,6 +31,14 @@ from cinoc.domain.artifacts import ArtifactType
 from cinoc.domain.errors import CinocError
 from cinoc.domain.projection import ProjectionSpec
 
+#: Profil de normalisation d'une vue qui n'en nomme aucun (D-271, D-285) :
+#: NFC, invisibles retirés, **tout blanc** — saut de ligne compris — réduit à une
+#: espace. Le nom vit ici parce que le champ en a besoin ; le profil lui-même
+#: est une donnée de la couche ``formats`` (``NORMALIZATION_PROFILES``), qui
+#: vérifie qu'il existe. La comparaison **brute** se demande explicitement :
+#: ``normalization_profile: null``.
+DEFAULT_NORMALIZATION_PROFILE = "flat_text"
+
 
 class MetricSpec(BaseModel):
     """Description déclarative d'une métrique enregistrable.
@@ -74,7 +82,12 @@ class EvaluationView(BaseModel):
 
     ``projection`` s'applique à tous les candidats ;
     ``projections_by_source_type`` permet une projection conditionnelle
-    par type source. ``char_exclude`` filtre des caractères APRÈS
+    par type source. ``normalization_profile`` nomme le profil appliqué des
+    deux côtés : omis, c'est :data:`DEFAULT_NORMALIZATION_PROFILE` (NFC,
+    invisibles retirés, blancs écrasés) ; ``None`` **explicite** demande la
+    comparaison brute (aucune normalisation). Le nom est toujours écrit dans
+    le ``RunResult`` : un lecteur sait quelle convention a produit le chiffre.
+    ``char_exclude`` filtre des caractères APRÈS
     ``normalization_profile``. ``ignored_dimensions`` est affiché pour
     signaler ce que la comparaison ne dit pas.
 
@@ -96,7 +109,9 @@ class EvaluationView(BaseModel):
     projections_by_source_type: dict[ArtifactType, ProjectionSpec] = Field(
         default_factory=dict,
     )
-    normalization_profile: str | None = Field(default=None, max_length=128)
+    normalization_profile: str | None = Field(
+        default=DEFAULT_NORMALIZATION_PROFILE, max_length=128
+    )
     char_exclude: str | None = Field(default=None, max_length=512)
     metric_names: tuple[str, ...] = Field(default_factory=tuple)
     ignored_dimensions: tuple[str, ...] = Field(default_factory=tuple)
@@ -214,4 +229,10 @@ class EvaluationSpec(BaseModel):
     failure_policy: FailurePolicy = "exclude"
 
 
-__all__ = ["EvaluationSpec", "EvaluationView", "FailurePolicy", "MetricSpec"]
+__all__ = [
+    "DEFAULT_NORMALIZATION_PROFILE",
+    "EvaluationSpec",
+    "EvaluationView",
+    "FailurePolicy",
+    "MetricSpec",
+]

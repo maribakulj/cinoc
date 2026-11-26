@@ -73,7 +73,6 @@ class ViewCollectors:
     ) -> None:
         #: ``None`` = toutes (défaut historique). Sinon, les ``kind`` voulus.
         self._actives = actives
-        self.diagnostics = DiagnosticsCollector()
         self.taxonomy = TaxonomyCollector()
         self.doc_hallucination = DocumentHallucinationCollector()
         self.doc_texts = DocumentTextsCollector()
@@ -84,9 +83,12 @@ class ViewCollectors:
         self.inter_engine = InterEngineCollector()
         self.word_errors = WordErrorCollector()
         self.entities = EntitiesCollector()
-        # Distribution par ligne : applicable seulement si la normalisation de
-        # la vue préserve les sauts de ligne (sonde comportementale).
+        # Tout ce qui se lit **par ligne** (distribution, pires lignes) n'est
+        # applicable que si la normalisation de la vue préserve les sauts de
+        # ligne (sonde comportementale) ; sous le défaut à plat, c'est la vue
+        # « texte (lignes) » qui le porte (D-285).
         preserves_newlines = newline_preserved(view)
+        self.diagnostics = DiagnosticsCollector(lines=preserves_newlines)
         self.lines = LinesCollector(enabled=preserves_newlines)
         self.doc_lines = DocumentLinesCollector(enabled=preserves_newlines)
 

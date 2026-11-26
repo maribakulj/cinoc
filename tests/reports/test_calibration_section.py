@@ -24,6 +24,7 @@ def _result() -> RunResult:
         pipelines=(
             PipelineCalibration(
                 pipeline="tess",
+                step="ocr",
                 n_tokens=2,
                 ece=0.4,
                 mce=0.7,
@@ -56,7 +57,11 @@ def test_renders_ece_mce_and_bins() -> None:
     html = CalibrationSection().render(_result(), SectionContext())
     assert html is not None
     assert "ECE 0,4000" in html and "MCE 0,7000" in html
-    assert "[0,9 ; 1,0[" in html
+    # Le dernier bin est fermé à 1,0 (une confiance de 1,0 y tombe) : il
+    # s'écrivait « [0,9 ; 1,0[ », ce qui l'excluait (D-285).
+    assert "[0,9 ; 1,0]" in html and "1,0[" not in html
+    # Les confiances sont attribuées à l'étape qu'elles mesurent (D9).
+    assert "tess · étape <code>ocr</code>" in html
     assert html == CalibrationSection().render(_result(), SectionContext())
 
 

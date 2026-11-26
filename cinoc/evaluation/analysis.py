@@ -254,7 +254,11 @@ class DiagnosticsPayload(BaseModel):
 
 
 class CalibrationBin(BaseModel):
-    """Bin de fiabilité : confiance moyenne vs exactitude observée."""
+    """Bin de fiabilité : confiance moyenne vs exactitude observée.
+
+    Bornes [``lower`` ; ``upper``[, sauf le dernier bin, fermé à 1,0
+    (cf. ``evaluation.calibration``).
+    """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -269,13 +273,18 @@ class PipelineCalibration(BaseModel):
     """Calibration des confidences d'un pipeline sur le corpus.
 
     ECE = Σ (n_b/N)·|acc_b − conf_b| ; MCE = max |acc_b − conf_b| sur les bins
-    non vides. « Correct » = le mot du jeton apparaît (multi-ensemble, exact)
-    dans la référence du document — proxy auditable, documenté.
+    non vides. « Correct » = le mot du jeton, préparé par la vue, apparaît
+    (multi-ensemble, exact) dans la référence préparée de même — proxy
+    auditable, documenté. ``step`` nomme l'étape dont les confiances sont
+    mesurées : celle que la vue note (D-285). Requis : un payload d'avant, qui
+    pouvait prêter à un pipeline corrigé l'ECE de son OCR, est refusé plutôt
+    que relu comme attribué.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     pipeline: str = Field(min_length=1, max_length=128)
+    step: str = Field(min_length=1, max_length=128)
     n_tokens: int = Field(ge=1)
     ece: float = Field(ge=0, le=1)
     mce: float = Field(ge=0, le=1)
