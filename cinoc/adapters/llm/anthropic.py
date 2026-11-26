@@ -61,6 +61,15 @@ from cinoc.adapters.llm._base import (
     validate_role,
     wire_field,
 )
+from cinoc.adapters.llm._listing import (
+    LISTING_TIMEOUT,
+    ModelInfo,
+    ModelListingError,
+    declared_flag,
+    declared_lifecycle,
+    declared_text,
+    require_model,
+)
 from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.deadline import Deadline
 from cinoc.domain.errors import AdapterStepError, CinocError
@@ -74,7 +83,6 @@ from cinoc.pipeline.types import RunContext, StepOutput
 #: 2.1 : la réponse native est publiée en sidecar (``NATIVE_JSON``) ; le texte
 #: ne change pas.
 _VERSION = "2.1"
-_DEFAULT_MODEL = "claude-haiku-4-5-20251001"
 #: L'endpoint d'Anthropic — celui de la table de tarifs (``pricing.json``).
 _DEFAULT_BASE_URL = "https://api.anthropic.com"
 #: Variable que le SDK lit quand on ne lui passe pas d'endpoint ; plus lue.
@@ -214,6 +222,108 @@ def _invoke_anthropic_vision(
     return _anthropic_client(model, content, deadline, settings, base_url, control)
 
 
+#: Taille de page maximale de ``GET /v1/models`` (documentée : 1 à 1 000).
+_LIST_PAGE = 1000
+
+
+def model_from_info(item: object) -> ModelInfo | None:
+    """Un élément de ``GET /v1/models`` (``ModelInfo`` de l'API) → modèle. **Pur.**
+
+    Vision = ``capabilities.image_input.supported`` ; cycle de vie =
+    ``lifecycle`` (``active``/``deprecated``/``retired``), ``deprecated_at``,
+    ``retires_at`` — chacun lu **s'il est donné**, inconnu sinon.
+    """
+    if not isinstance(item, dict):
+        return None
+    name = declared_text(item.get("id"))
+    if name is None:
+        return None
+    capabilities = item.get("capabilities")
+    image = capabilities.get("image_input") if isinstance(capabilities, dict) else None
+    supported = image.get("supported") if isinstance(image, dict) else None
+    return ModelInfo(
+        name=name,
+        vision=declared_flag(supported),
+        lifecycle=declared_lifecycle(item.get("lifecycle")),
+        deprecated_at=declared_text(item.get("deprecated_at")),
+        retires_at=declared_text(item.get("retires_at")),
+    )
+
+
+def models_from_listing(
+    items: object, aliases: dict[str, str] | None = None
+) -> tuple[ModelInfo, ...]:
+    """Éléments listés (toutes pages) → modèles triés par nom. **Pur.**
+
+    ``aliases`` : ``{alias: identifiant}`` résolus par ``GET /v1/models/{alias}``
+    — la liste ne nomme que les identifiants, l'API accepte aussi leurs alias.
+    """
+    found: dict[str, ModelInfo] = {}
+    for item in items if isinstance(items, list) else ():
+        model = model_from_info(item)
+        if model is not None:
+            found[model.name] = model
+    for alias, name in sorted((aliases or {}).items()):
+        if name in found and alias != name:
+            known = found[name]
+            found[name] = known.model_copy(
+                update={"aliases": tuple(sorted({*known.aliases, alias}))}
+            )
+    return tuple(found[name] for name in sorted(found))
+
+
+def list_models(
+    *, wanted: str | None = None, timeout: float = LISTING_TIMEOUT
+) -> tuple[ModelInfo, ...]:
+    """Les modèles que la clé permet, **demandés en direct** (``models.list``,
+    toutes pages), à l'endpoint d'Anthropic.
+
+    ``wanted`` absent de la liste est **résolu** (``models.retrieve`` accepte un
+    identifiant ou un alias) : un alias valide apparaît alors dans les
+    ``aliases`` de son modèle, au lieu d'être déclaré absent.
+    """
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise ModelListingError("clé ANTHROPIC_API_KEY absente")
+    try:
+        from anthropic import (  # type: ignore[import-not-found]
+            Anthropic,
+            AnthropicError,
+            NotFoundError,
+        )
+    except ImportError as exc:
+        raise ModelListingError(
+            "SDK anthropic non installé (extra [anthropic])"
+        ) from exc
+    try:
+        client = Anthropic(
+            api_key=api_key,
+            base_url=_DEFAULT_BASE_URL,
+            max_retries=0,
+            timeout=timeout,
+        )
+        items = [
+            sdk_native(model, "anthropic")
+            for model in client.models.list(limit=_LIST_PAGE)
+        ]
+        aliases: dict[str, str] = {}
+        names = {item.get("id") for item in items}
+        if wanted and wanted not in names:
+            try:
+                resolved = sdk_native(client.models.retrieve(wanted), "anthropic")
+            except NotFoundError:
+                resolved = {}
+            if isinstance(resolved.get("id"), str):
+                aliases[wanted] = resolved["id"]
+    except AnthropicError as exc:
+        status = getattr(exc, "status_code", None)
+        raise ModelListingError(
+            f"{_DEFAULT_BASE_URL} : {type(exc).__name__}"
+            + (f" ({status})" if status else "")
+        ) from exc
+    return models_from_listing(items, aliases)
+
+
 class AnthropicAdapter:
     """Adapter Anthropic multi-mode (post-correction texte/image, transcription)."""
 
@@ -230,7 +340,7 @@ class AnthropicAdapter:
         self,
         *,
         label: str,
-        model: str = _DEFAULT_MODEL,
+        model: str,
         role: str = "text_only",
         prompt: str | None = None,
         temperature: float | None = None,
@@ -253,7 +363,7 @@ class AnthropicAdapter:
         self._settings = InferenceSettings.build(
             temperature=None, top_p=None, seed=None, max_tokens=max_tokens
         )
-        self._model = model
+        self._model = require_model(model, "AnthropicAdapter")
         self._role: PipelineMode = validate_role(
             role, "AnthropicAdapter", self.SUPPORTED_MODES
         )
@@ -343,4 +453,9 @@ class AnthropicAdapter:
         )
 
 
-__all__ = ["AnthropicAdapter"]
+__all__ = [
+    "AnthropicAdapter",
+    "list_models",
+    "model_from_info",
+    "models_from_listing",
+]

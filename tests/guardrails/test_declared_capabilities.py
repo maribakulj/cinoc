@@ -80,7 +80,9 @@ def test_every_mode_is_either_planned_or_knowingly_spec_only() -> None:
     registre = ModuleRegistry()
     register_default_modules(registre)
     for mode in hors_composeur:
-        module = registre.build("openai:x", {"label": "x", "role": mode})
+        module = registre.build(
+            "openai:x", {"label": "x", "role": mode, "model": "m"}
+        )
         assert module.input_types, f"{mode} : aucune entrée déclarée"
 
 
@@ -131,7 +133,7 @@ def test_a_declared_mode_is_actually_planifiable() -> None:
     )
     for fournisseur in sorted(providers_for_mode("zero_shot")):
         spec = plan_benchmark_run(
-            (Competitor(engine=fournisseur, mode="zero_shot"),), corpus, "r"
+            (Competitor(engine=fournisseur, mode="zero_shot", model="m"),), corpus, "r"
         )(_P("/tmp"))
         assert spec.pipelines, f"{fournisseur} : zero_shot déclaré mais non planifiable"
 
@@ -229,7 +231,10 @@ def test_both_planners_accept_the_same_bricks() -> None:
                 plan_benchmark_run(
                     (
                         Competitor(
-                            engine=reconnaisseur, segmenter=segmenteur, **options
+                            engine=reconnaisseur,
+                            segmenter=segmenteur,
+                            model="m",
+                            **options,
                         ),
                     ),
                     corpus,
@@ -317,11 +322,14 @@ def test_the_allowed_source_tables_only_name_real_providers() -> None:
     fournisseur qui, lui, doit exister.
     """
     from cinoc.adapters.layout.saknussemm_correct import MODEL_PRODUCERS
-    from cinoc.app.models import _CANONICAL
+    from cinoc.app.models import model_providers
 
     reels = set(FOURNISSEURS)
-    assert set(_CANONICAL) <= reels, (
-        f"app/models.py suggère des modèles pour {set(_CANONICAL) - reels}, "
+    # ``mistral_ocr`` : un moteur OCR, pas un fournisseur LLM — même compte et
+    # même liste que ``mistral``.
+    listes = set(model_providers()) - {"mistral_ocr"}
+    assert listes <= reels, (
+        f"app/models.py liste des modèles pour {listes - reels}, "
         "qui n'est plus un fournisseur de cinoc."
     )
     producteurs = set(MODEL_PRODUCERS) - {"mistral_vision"}

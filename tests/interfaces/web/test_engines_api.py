@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from cinoc.interfaces.web.app import create_app
@@ -20,16 +21,50 @@ def _client(tmp_path: Path, *, public_mode: bool = False) -> TestClient:
     )
 
 
-def test_models_endpoint_lists_provider_models_with_vision(tmp_path: Path) -> None:
-    body = _client(tmp_path).get("/api/models/openai").json()
-    assert body["provider"] == "openai"
-    names = {m["name"]: m["vision"] for m in body["models"]}
-    assert "gpt-4o" in names and names["gpt-4o"] is True
+def test_models_endpoint_asks_the_provider(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """La route sert ``available_models`` — la fonction de ``cinoc list models``,
+    en direct —, sans cible réglable par le client."""
+    from cinoc.app.models import ModelInfo, ModelListing
+
+    asked: list[tuple[str, object]] = []
+
+    def fake(provider: str, settings: object = None, **_: object) -> ModelListing:
+        asked.append((provider, settings))
+        return ModelListing(
+            provider=provider,
+            models=(ModelInfo(name="qwen-test:3b", vision=True, digest="ab" * 32),),
+        )
+
+    monkeypatch.setattr("cinoc.interfaces.web.routers.engines.available_models", fake)
+    body = _client(tmp_path).get("/api/models/ollama?host=http://evil").json()
+    assert asked == [("ollama", None)]
+    assert body["unavailable"] is None
+    (model,) = body["models"]
+    assert (model["name"], model["vision"]) == ("qwen-test:3b", True)
 
 
-def test_models_endpoint_unknown_provider_is_empty(tmp_path: Path) -> None:
+def test_a_public_instance_asks_no_provider(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Un visiteur anonyme ne fait pas interroger la clé ni le serveur Ollama de
+    l'opérateur : aucun de ces moteurs n'est exécutable en mode public."""
+
+    def interdit(*_a: object, **_k: object) -> object:
+        raise AssertionError("fournisseur interrogé en mode public")
+
+    monkeypatch.setattr(
+        "cinoc.interfaces.web.routers.engines.available_models", interdit
+    )
+    body = _client(tmp_path, public_mode=True).get("/api/models/ollama").json()
+    assert body["models"] == [] and "mode public" in body["unavailable"]
+
+
+def test_models_endpoint_unknown_provider_says_why(tmp_path: Path) -> None:
     body = _client(tmp_path).get("/api/models/bogus").json()
-    assert body == {"provider": "bogus", "models": []}  # champ libre, pas d'erreur
+    assert body["provider"] == "bogus" and body["models"] == []
+    assert "fournisseur sans liste" in body["unavailable"]  # champ libre, pas 500
 
 
 def test_normalization_preview_named_and_custom(tmp_path: Path) -> None:

@@ -81,6 +81,13 @@ from cinoc.adapters.llm._base import (
     validate_role,
     wire_field,
 )
+from cinoc.adapters.llm._listing import (
+    LISTING_TIMEOUT,
+    ModelInfo,
+    ModelListingError,
+    declared_text,
+    require_model,
+)
 from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.deadline import Deadline
 from cinoc.domain.errors import AdapterStepError, CinocError
@@ -94,7 +101,6 @@ from cinoc.pipeline.types import RunContext, StepOutput
 #: 2.1 : la réponse native est publiée en sidecar (``NATIVE_JSON``) ; le texte
 #: ne change pas.
 _VERSION = "2.1"
-_DEFAULT_MODEL = "gpt-4o-mini"
 #: L'endpoint d'OpenAI — celui de la table de tarifs (``pricing.json``).
 _DEFAULT_BASE_URL = "https://api.openai.com/v1"
 _DEFAULT_KEY_ENV = "OPENAI_API_KEY"
@@ -308,6 +314,53 @@ def instance_key_env(base_url: object, api_key_env: object) -> str | None:
     return _endpoint(base_url, api_key_env)[1]
 
 
+def models_from_listing(items: object) -> tuple[ModelInfo, ...]:
+    """Éléments de ``GET /v1/models`` → modèles, triés par nom. **Pur.**
+
+    OpenAI ne déclare **ni la vision ni le cycle de vie** : ils restent
+    inconnus (``None``) ; ``shutdown_date``, quand l'API la donne, est l'arrêt
+    annoncé (``retires_at``). Un serveur OpenAI-compatible (vLLM, Ollama
+    ``/v1``) rend la même forme.
+    """
+    found: dict[str, ModelInfo] = {}
+    for item in items if isinstance(items, list) else ():
+        name = declared_text(item.get("id")) if isinstance(item, dict) else None
+        if name is not None:
+            found[name] = ModelInfo(
+                name=name, retires_at=declared_text(item.get("shutdown_date"))
+            )
+    return tuple(found[name] for name in sorted(found))
+
+
+def list_models(
+    *,
+    base_url: object = None,
+    api_key_env: object = None,
+    timeout: float = LISTING_TIMEOUT,
+) -> tuple[ModelInfo, ...]:
+    """Les modèles que l'endpoint d'une instance sert, **demandés en direct**
+    (``models.list``) — celui d'OpenAI par défaut, un serveur auto-hébergé sous
+    ``base_url``. Liste illisible → ``ModelListingError`` (raison, sans la clé
+    ni le message de l'API, qui peut en citer un fragment)."""
+    url, key_env = _endpoint(base_url, api_key_env)
+    api_key = _NO_KEY if key_env is None else os.environ.get(key_env, "")
+    if not api_key:
+        raise ModelListingError(f"clé {key_env} absente")
+    try:
+        from openai import OpenAI, OpenAIError  # type: ignore[import-not-found]
+    except ImportError as exc:
+        raise ModelListingError("SDK openai non installé (extra [openai])") from exc
+    try:
+        client = OpenAI(api_key=api_key, base_url=url, max_retries=0, timeout=timeout)
+        items = [sdk_native(model, "openai") for model in client.models.list()]
+    except OpenAIError as exc:
+        status = getattr(exc, "status_code", None)
+        raise ModelListingError(
+            f"{url} : {type(exc).__name__}" + (f" ({status})" if status else "")
+        ) from exc
+    return models_from_listing(items)
+
+
 class OpenAIAdapter:
     """Adapter OpenAI multi-mode (post-correction texte/image, transcription VLM)."""
 
@@ -324,7 +377,7 @@ class OpenAIAdapter:
         self,
         *,
         label: str,
-        model: str = _DEFAULT_MODEL,
+        model: str,
         role: str = "text_only",
         prompt: str | None = None,
         temperature: float | None = DEFAULT_TEMPERATURE,
@@ -341,7 +394,7 @@ class OpenAIAdapter:
         self._settings = InferenceSettings.build(
             temperature=temperature, top_p=top_p, seed=seed, max_tokens=max_tokens
         )
-        self._model = model
+        self._model = require_model(model, "OpenAIAdapter")
         self._role: PipelineMode = validate_role(
             role, "OpenAIAdapter", self.SUPPORTED_MODES
         )
@@ -435,4 +488,9 @@ class OpenAIAdapter:
         )
 
 
-__all__ = ["OpenAIAdapter", "instance_key_env"]
+__all__ = [
+    "OpenAIAdapter",
+    "instance_key_env",
+    "list_models",
+    "models_from_listing",
+]

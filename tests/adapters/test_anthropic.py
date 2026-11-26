@@ -58,7 +58,7 @@ def _mock_vision(monkeypatch: pytest.MonkeyPatch, text: str) -> None:
 
 
 def test_satisfies_module_protocol() -> None:
-    adapter = AnthropicAdapter(label="claude")
+    adapter = AnthropicAdapter(model="m", label="claude")
     assert isinstance(adapter, Module)
     assert adapter.name == "anthropic:claude"
     assert adapter.input_types == frozenset({ArtifactType.RAW_TEXT})
@@ -69,12 +69,12 @@ def test_satisfies_module_protocol() -> None:
 
 def test_invalid_label_rejected() -> None:
     with pytest.raises(AdapterStepError):
-        AnthropicAdapter(label="bad label")
+        AnthropicAdapter(model="m", label="bad label")
 
 
 def test_invalid_role_rejected() -> None:
     with pytest.raises(AdapterStepError):
-        AnthropicAdapter(label="claude", role="bogus")
+        AnthropicAdapter(model="m", label="claude", role="bogus")
 
 
 def test_text_only_corrects(
@@ -82,7 +82,7 @@ def test_text_only_corrects(
 ) -> None:
     (tmp_path / "ocr.txt").write_text("Helo", encoding="utf-8")
     _mock_text(monkeypatch, "Hello")
-    adapter = AnthropicAdapter(label="claude")
+    adapter = AnthropicAdapter(model="m", label="claude")
     out = adapter.execute(
         {ArtifactType.RAW_TEXT: _raw_text(tmp_path / "ocr.txt")},
         {},
@@ -99,7 +99,7 @@ def test_text_and_image_corrects(
 ) -> None:
     (tmp_path / "ocr.txt").write_text("Helo", encoding="utf-8")
     _mock_vision(monkeypatch, "Hello")
-    adapter = AnthropicAdapter(label="v", role="text_and_image")
+    adapter = AnthropicAdapter(model="m", label="v", role="text_and_image")
     out = adapter.execute(
         {
             ArtifactType.RAW_TEXT: _raw_text(tmp_path / "ocr.txt"),
@@ -116,7 +116,7 @@ def test_zero_shot_transcribes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _mock_vision(monkeypatch, "Transcribed")
-    adapter = AnthropicAdapter(label="v", role="zero_shot")
+    adapter = AnthropicAdapter(model="m", label="v", role="zero_shot")
     out = adapter.execute(
         {ArtifactType.IMAGE: _image(tmp_path / "doc1.png")},
         {},
@@ -130,7 +130,7 @@ def test_zero_shot_transcribes(
 
 
 def test_requires_workspace() -> None:
-    adapter = AnthropicAdapter(label="claude")
+    adapter = AnthropicAdapter(model="m", label="claude")
     ctx = RunContext(document_id="doc1", code_version="t", pipeline_name="p")
     with pytest.raises(AdapterStepError):
         adapter.execute(
@@ -142,7 +142,7 @@ def test_requires_workspace() -> None:
 
 
 def test_cancellation_raises(tmp_path: Path) -> None:
-    adapter = AnthropicAdapter(label="claude")
+    adapter = AnthropicAdapter(model="m", label="claude")
     control = RunControl()
     control.trigger_cancel()
     with pytest.raises(RunCancelledError):

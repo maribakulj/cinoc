@@ -159,6 +159,10 @@ def install_fake_http(
             return httpx.Response(200, json=next_body["azure_di"]())
         if "vision.googleapis.com" in url:
             return httpx.Response(200, json=next_body["google_vision"]())
+        if url == f"{OLLAMA_HOST}/api/tags":
+            # Sonde du digest (``OllamaAdapter.system_binaries``), avant la
+            # première page : elle ne consomme pas la file des réponses.
+            return httpx.Response(200, json={"models": []})
         if url.startswith(OLLAMA_HOST):
             return httpx.Response(200, json=next_body["ollama"]())
         raise AssertionError(f"requête inattendue : {url}")
@@ -177,14 +181,27 @@ def set_keys(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def cut_network(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Plus aucun SDK importable, plus aucun client HTTP : hors ligne."""
+    """Plus aucun SDK importable, plus aucun appel de moteur : hors ligne.
+
+    Seule passe la sonde du digest Ollama (``GET /api/tags``, que
+    ``system_binaries`` lit avant la première page pour la clé d'unité) :
+    ce n'est pas une inférence, et elle rend ici une liste vide — digest
+    inconnu, comme un serveur sans le modèle. Toute autre requête échoue.
+    """
     for name in ("openai", "anthropic", "mistralai", "mistralai.client"):
         monkeypatch.setitem(sys.modules, name, None)
+    real = httpx.Client
 
-    def refuse(**_: Any) -> httpx.Client:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET" and request.url.path == "/api/tags":
+            return httpx.Response(200, json={"models": []})
         raise AssertionError("appel réseau pendant une relecture hors ligne")
 
-    monkeypatch.setattr(httpx, "Client", refuse)
+    def client(**kwargs: Any) -> httpx.Client:
+        kwargs["transport"] = httpx.MockTransport(handler)
+        return real(**kwargs)
+
+    monkeypatch.setattr(httpx, "Client", client)
 
 
 __all__ = [

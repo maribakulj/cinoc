@@ -43,6 +43,7 @@ from cinoc.adapters._resilience import (
     step_deadline,
     validate_timeout,
 )
+from cinoc.adapters.llm._listing import require_model
 from cinoc.adapters.ocr._base import run_remote_image_to_text
 from cinoc.adapters.ocr._mistral_layout import layout_from_response
 from cinoc.domain.artifacts import Artifact, ArtifactType
@@ -63,7 +64,6 @@ _VERSION = "1.3"
 #: Granularité des confiances demandées : celle de la projection
 #: (``Region.confidence`` = ``block_type_confidence_score``).
 _CONFIDENCE_GRANULARITY = "block"
-_DEFAULT_MODEL = "mistral-ocr-latest"
 _MEDIA = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
           ".webp": "image/webp", ".tif": "image/tiff", ".tiff": "image/tiff"}
 
@@ -149,13 +149,13 @@ class MistralOCRAdapter:
         self,
         *,
         label: str,
-        model: str = _DEFAULT_MODEL,
+        model: str,
         timeout: object = DEFAULT_OCR_TIMEOUT,
     ) -> None:
         if not label or not all(c.isalnum() or c in "_-" for c in label):
             raise AdapterStepError(f"mistral_ocr : label invalide {label!r}.")
         self._label = label
-        self._model = model
+        self._model = require_model(model, "mistral_ocr")
         self._timeout = validate_timeout(timeout, "mistral_ocr")
 
     @property
@@ -167,7 +167,7 @@ class MistralOCRAdapter:
         return _VERSION
 
     def effective_settings(self) -> dict[str, str]:
-        """Le modèle **demandé**, défaut compris : manifeste et empreinte. Le
+        """Le modèle **demandé** (nommé par la spec) : manifeste et empreinte. Le
         modèle servi (``mistral-ocr-latest`` → ``mistral-ocr-2505``) est lu dans
         chaque réponse."""
         return {"model": self._model}

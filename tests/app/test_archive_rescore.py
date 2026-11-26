@@ -127,7 +127,7 @@ def _spec(tmp_path: Path) -> RunSpec:
     planned = plan_benchmark_run(
         (
             Competitor(engine="openai", mode="zero_shot", model="gpt-4o-mini"),
-            Competitor(engine="mistral_ocr"),
+            Competitor(model="m", engine="mistral_ocr"),
         ),
         _corpus(tmp_path / "corpus"),
         "s9",

@@ -44,6 +44,7 @@ from cinoc.app.engines import (
     instance_status,
 )
 from cinoc.app.jobs import JobRunner
+from cinoc.app.models import ModelChoiceError, check_spec_models
 from cinoc.app.modules import ModuleRegistry, register_default_modules
 from cinoc.app.recipes import (
     RecipeError,
@@ -396,6 +397,13 @@ def build_runs_router(
                     detail=f"brique indisponible en mode public : {kind!r} "
                     "(seul le socle gratuit est exécuté).",
                 )
+        # Aucun modèle par défaut : une instance sans modèle est refusée (422),
+        # le message liste les disponibles — après les gardes d'accès (403),
+        # pour qu'une spec refusée n'apprenne rien des fournisseurs.
+        try:
+            check_spec_models(spec, live=False)
+        except ModelChoiceError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
         # La disponibilité se juge **par instance** : une instance ``openai``
         # auto-hébergée (``base_url``) n'a pas besoin d'``OPENAI_API_KEY``. Une
         # brique hors catalogue moteur (projection, assembleur, vote…) n'a pas

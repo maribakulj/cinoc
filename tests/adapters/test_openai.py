@@ -68,23 +68,23 @@ def test_satisfies_module_protocol() -> None:
 
 def test_invalid_label_rejected() -> None:
     with pytest.raises(AdapterStepError):
-        OpenAIAdapter(label="bad label")
+        OpenAIAdapter(model="m", label="bad label")
 
 
 def test_invalid_role_rejected() -> None:
     with pytest.raises(AdapterStepError):
-        OpenAIAdapter(label="gpt", role="bogus")
+        OpenAIAdapter(model="m", label="gpt", role="bogus")
 
 
 def test_role_types() -> None:
-    ti = OpenAIAdapter(label="a", role="text_and_image")
+    ti = OpenAIAdapter(model="m", label="a", role="text_and_image")
     assert ti.input_types == frozenset(
         {ArtifactType.RAW_TEXT, ArtifactType.IMAGE}
     )
     assert ti.output_types == frozenset(
         {ArtifactType.CORRECTED_TEXT, ArtifactType.NATIVE_JSON}
     )
-    zs = OpenAIAdapter(label="b", role="zero_shot")
+    zs = OpenAIAdapter(model="m", label="b", role="zero_shot")
     assert zs.input_types == frozenset({ArtifactType.IMAGE})
     assert zs.output_types == frozenset(
         {ArtifactType.RAW_TEXT, ArtifactType.NATIVE_JSON}
@@ -96,7 +96,7 @@ def test_execute_produces_corrected_text(
 ) -> None:
     (tmp_path / "ocr.txt").write_text("Hello wrld", encoding="utf-8")
     _mock_text(monkeypatch, "Hello world")
-    adapter = OpenAIAdapter(label="gpt")
+    adapter = OpenAIAdapter(model="m", label="gpt")
     out = adapter.execute(
         {ArtifactType.RAW_TEXT: _raw_text(tmp_path / "ocr.txt")},
         {},
@@ -115,7 +115,7 @@ def test_text_and_image_produces_corrected_text(
 ) -> None:
     (tmp_path / "ocr.txt").write_text("Helo", encoding="utf-8")
     _mock_vision(monkeypatch, "Hello")
-    adapter = OpenAIAdapter(label="v", role="text_and_image")
+    adapter = OpenAIAdapter(model="m", label="v", role="text_and_image")
     out = adapter.execute(
         {
             ArtifactType.RAW_TEXT: _raw_text(tmp_path / "ocr.txt"),
@@ -134,7 +134,7 @@ def test_zero_shot_produces_raw_text(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _mock_vision(monkeypatch, "Transcribed text")
-    adapter = OpenAIAdapter(label="v", role="zero_shot")
+    adapter = OpenAIAdapter(model="m", label="v", role="zero_shot")
     out = adapter.execute(
         {ArtifactType.IMAGE: _image(tmp_path / "doc1.png")},
         {},
@@ -148,7 +148,7 @@ def test_zero_shot_produces_raw_text(
 
 
 def test_requires_workspace() -> None:
-    adapter = OpenAIAdapter(label="gpt")
+    adapter = OpenAIAdapter(model="m", label="gpt")
     ctx = RunContext(document_id="doc1", code_version="t", pipeline_name="p")
     with pytest.raises(AdapterStepError):
         adapter.execute(
@@ -160,19 +160,19 @@ def test_requires_workspace() -> None:
 
 
 def test_missing_input_raises(tmp_path: Path) -> None:
-    adapter = OpenAIAdapter(label="gpt")
+    adapter = OpenAIAdapter(model="m", label="gpt")
     with pytest.raises(AdapterStepError):
         adapter.execute({}, {}, _ctx(tmp_path), RunControl())
 
 
 def test_zero_shot_missing_image_raises(tmp_path: Path) -> None:
-    adapter = OpenAIAdapter(label="v", role="zero_shot")
+    adapter = OpenAIAdapter(model="m", label="v", role="zero_shot")
     with pytest.raises(AdapterStepError):
         adapter.execute({}, {}, _ctx(tmp_path), RunControl())
 
 
 def test_cancellation_raises(tmp_path: Path) -> None:
-    adapter = OpenAIAdapter(label="gpt")
+    adapter = OpenAIAdapter(model="m", label="gpt")
     control = RunControl()
     control.trigger_cancel()
     with pytest.raises(RunCancelledError):

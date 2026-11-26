@@ -17,11 +17,8 @@ Allowlist des avaleurs **légitimes** (chacun trace et continue ; aucun n'est un
 ``pass`` muet). Tous revus en Phase 6 — résolus, pas pendants :
 - ``app/modules/discovery.py`` / ``app/jobs.py`` : worker daemon / sink
   best-effort qui ne doit pas mourir ou faire échouer un run réussi en silence ;
-- ``adapters/llm/mistral.py`` : ``list_mistral_models`` (commodité UI) — le SDK
-  mistralai **enveloppe** ses erreurs HTTP dans ses propres types (≠ ollama qui
-  appelle httpx en direct et narrow donc proprement) ; un catch-all est ici la
-  **bonne** sémantique (« ne jamais casser la page du composeur ») et il **trace**
-  désormais (§7). Narrower laisserait fuir une erreur SDK non anticipée.
+(``adapters/llm/mistral.py`` en est sorti en S22 : sa liste de modèles traduit
+toute erreur du SDK en ``ModelListingError`` — elle la **re-lève**, nommée.)
 """
 
 from __future__ import annotations
@@ -37,8 +34,6 @@ _ALLOWLIST = frozenset(
     {
         "app/modules/discovery.py",
         "app/jobs.py",
-        # list_mistral_models : SDK enveloppant → catch-all assumé + tracé.
-        "adapters/llm/mistral.py",
     }
 )
 

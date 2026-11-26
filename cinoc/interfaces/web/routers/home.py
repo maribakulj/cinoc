@@ -39,8 +39,6 @@ from cinoc.app.engines import (
     EngineStatus,
     StatusProvider,
     curated_prompts,
-    installed_mistral_models,
-    installed_ollama_models,
 )
 from cinoc.app.history import series_insight
 from cinoc.app.run_planning import benchmark_engine_catalog, metric_profile_catalog
@@ -267,11 +265,8 @@ def build_home_router(
         # concurrent scoré côte à côte avec les pipelines à plat.
         context["segmenters"] = list(segmenters())
         context["recognizers"] = hybrid_recognizer_catalog(statuses())
-        # Modèles ollama installés → menu déroulant (au lieu d'une saisie à
-        # l'aveugle). Best-effort : serveur éteint → liste vide, saisie libre.
-        context["ollama_models"] = installed_ollama_models()
-        # Modèles Mistral disponibles pour la clé → menu déroulant dynamique.
-        context["mistral_models"] = installed_mistral_models()
+        # Les modèles ne sont pas rendus ici : le composeur les demande à
+        # ``/api/models/{fournisseur}`` (en direct, les quatre fournisseurs).
         # Le corpus est préparé dans la Bibliothèque ; ici on le sélectionne.
         context["corpora"] = _corpora_summaries(corpus_store)
         # Profils de normalisation lus **dynamiquement** depuis formats/text

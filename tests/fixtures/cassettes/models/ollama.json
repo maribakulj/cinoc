@@ -1,0 +1,12 @@
+{
+  "statut": "relevée sur un serveur Ollama 0.40.18 local (GET /api/tags, POST /api/show), noms de test ; capabilities présent dans /api/tags et /api/show sur cette version",
+  "responses": {
+    "tags": {
+      "models": [
+        {"name": "qwen-test:3b", "model": "qwen-test:3b", "modified_at": "2026-11-26T02:39:21.794133247Z", "size": 3200627168, "digest": "fb90415cde1ef08aa669ae74b082d49b158729b6db1ab183c941417d507e71a1", "details": {"format": "gguf", "family": "qwen25vl", "parameter_size": "3.8B", "quantization_level": "Q4_K_M"}, "capabilities": ["completion", "vision"]},
+        {"name": "texte-test:latest", "model": "texte-test:latest", "modified_at": "2026-11-20T00:00:00Z", "size": 1000, "digest": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", "details": {"format": "gguf"}}
+      ]
+    },
+    "show_texte": {"capabilities": ["completion"], "details": {"format": "gguf"}}
+  }
+}

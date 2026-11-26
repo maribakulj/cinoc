@@ -434,30 +434,6 @@ def segmenter_statuses(
     )
 
 
-def installed_ollama_models() -> tuple[str, ...]:
-    """Modèles **réellement installés** sur le serveur ollama local (commodité UI).
-
-    Best-effort : serveur injoignable / extra absent → ``()`` (l'UI retombe sur la
-    saisie libre). Sert à proposer un **menu déroulant** des modèles disponibles
-    au lieu d'une saisie à l'aveugle. Import local : ne charge ``httpx`` que si on
-    interroge réellement le serveur.
-    """
-    from cinoc.adapters.llm.ollama import list_installed_models
-
-    return list_installed_models()
-
-
-def installed_mistral_models() -> tuple[str, ...]:
-    """Modèles Mistral disponibles pour la clé courante (menu déroulant, UI).
-
-    Best-effort : clé/SDK absent → ``()`` (saisie libre). Rien de hardcodé : la
-    liste vient de l'API Mistral. Import local (ne charge le SDK qu'au besoin).
-    """
-    from cinoc.adapters.llm.mistral import list_mistral_models
-
-    return list_mistral_models()
-
-
 def normalization_profiles() -> tuple[str, ...]:
     """Noms des profils de normalisation, lus **dynamiquement** (jamais une
     liste statique — un profil ajouté en couche 2 apparaît ici sans câblage)."""

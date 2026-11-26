@@ -1,0 +1,13 @@
+{
+  "statut": "construite, au format documenté de GET /v1/models (SDK mistralai 3.9 : ModelList.data[] = BaseModelCard | FTModelCard — id, capabilities{completion_chat, vision, ocr…}, aliases, deprecation, deprecation_replacement_model) — à confirmer sur une réponse réelle",
+  "responses": {
+    "list": {
+      "object": "list",
+      "data": [
+        {"id": "mistral-test-small-latest", "object": "model", "created": 1750000000, "owned_by": "mistralai", "capabilities": {"completion_chat": true, "vision": true, "ocr": false}, "aliases": ["mistral-test-small-2506"], "deprecation": null, "type": "base"},
+        {"id": "mistral-test-ocr-latest", "object": "model", "created": 1750000000, "owned_by": "mistralai", "capabilities": {"completion_chat": false, "vision": false, "ocr": true}, "aliases": [], "type": "base"},
+        {"id": "mistral-test-ancien", "object": "model", "created": 1700000000, "owned_by": "mistralai", "capabilities": {"completion_chat": true}, "deprecation": "2026-12-31T00:00:00Z", "deprecation_replacement_model": "mistral-test-small-latest", "type": "base"}
+      ]
+    }
+  }
+}

@@ -43,7 +43,7 @@ _PRICING = {
             "output_eur_per_mtok": 0.60,
         }
     },
-    "default_models": {"openai": "gpt-4o-mini"},
+    "token_kinds": ["openai"],
 }
 
 
@@ -482,7 +482,7 @@ def test_mistral_latest_to_yymm_is_not_taken_for_a_snapshot() -> None:
                 "output_eur_per_mtok": 0.3,
             }
         },
-        "default_models": {"mistral": "mistral-small-latest"},
+        "token_kinds": ["mistral"],
     }
     step = PipelineStep(
         id="llm",

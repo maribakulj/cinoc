@@ -19,7 +19,6 @@ client vit dans ``mistralai.client`` depuis la 2.x.
 
 from __future__ import annotations
 
-import logging
 from typing import Any, ClassVar
 
 from cinoc.adapters._native import sdk_native, served_model
@@ -51,6 +50,14 @@ from cinoc.adapters.llm._base import (
     validate_role,
     wire_field,
 )
+from cinoc.adapters.llm._listing import (
+    LISTING_TIMEOUT,
+    ModelInfo,
+    ModelListingError,
+    declared_flag,
+    declared_text,
+    require_model,
+)
 from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.deadline import Deadline
 from cinoc.domain.errors import AdapterStepError, CinocError
@@ -59,14 +66,11 @@ from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
 
-logger = logging.getLogger(__name__)
-
 #: 2 : raison d'arrêt lue, réglages d'inférence transmis (``top_p``,
 #: ``random_seed``, ``max_tokens``) — une sortie peut changer.
 #: 2.1 : la réponse native est publiée en sidecar (``NATIVE_JSON``) ; le texte
 #: ne change pas.
 _VERSION = "2.1"
-_DEFAULT_MODEL = "mistral-small-latest"
 
 #: ``finish_reason`` (SDK mistralai 3.9 : ``stop``, ``length``,
 #: ``model_length``, ``error``, ``tool_calls``) → raison normalisée.
@@ -216,7 +220,7 @@ class MistralAdapter:
         self,
         *,
         label: str,
-        model: str = _DEFAULT_MODEL,
+        model: str,
         role: str = "text_only",
         prompt: str | None = None,
         temperature: float | None = DEFAULT_TEMPERATURE,
@@ -230,7 +234,7 @@ class MistralAdapter:
         self._settings = InferenceSettings.build(
             temperature=temperature, top_p=top_p, seed=seed, max_tokens=max_tokens
         )
-        self._model = model
+        self._model = require_model(model, "MistralAdapter")
         self._role: PipelineMode = validate_role(
             role, "MistralAdapter", self.SUPPORTED_MODES
         )
@@ -311,37 +315,67 @@ class MistralAdapter:
         )
 
 
-def list_mistral_models(*, timeout: float = 5.0) -> tuple[str, ...]:
-    """IDs des modèles disponibles pour la clé Mistral courante (``models.list``).
+def models_from_listing(body: object) -> tuple[ModelInfo, ...]:
+    """Corps de ``GET /v1/models`` (``data[]`` de cartes) → modèles. **Pur.**
 
-    **Best-effort, commodité d'UI** : ``MISTRAL_API_KEY`` absente, SDK absent ou
-    erreur réseau → ``()`` (l'interface retombe sur la saisie libre). Rien de
-    hardcodé : la liste vient **directement de l'API Mistral**.
+    Vision et OCR = ``capabilities.vision``/``ocr`` **déclarés** ; ``aliases``
+    gardés (un alias ``…-latest`` est un nom accepté) ; ``deprecation`` (date
+    annoncée par Mistral) → ``deprecated_at``. Rien d'autre n'est déduit.
+    """
+    data = body.get("data") if isinstance(body, dict) else None
+    found: dict[str, ModelInfo] = {}
+    for card in data if isinstance(data, list) else ():
+        name = declared_text(card.get("id")) if isinstance(card, dict) else None
+        if name is None:
+            continue
+        caps = card.get("capabilities")
+        caps = caps if isinstance(caps, dict) else {}
+        aliases = card.get("aliases")
+        found[name] = ModelInfo(
+            name=name,
+            vision=declared_flag(caps.get("vision")),
+            ocr=declared_flag(caps.get("ocr")),
+            deprecated_at=declared_text(card.get("deprecation")),
+            aliases=tuple(
+                sorted(
+                    {a for a in aliases if isinstance(a, str) and a and a != name}
+                )
+            )
+            if isinstance(aliases, list)
+            else (),
+        )
+    return tuple(found[name] for name in sorted(found))
+
+
+def list_models(*, timeout: float = LISTING_TIMEOUT) -> tuple[ModelInfo, ...]:
+    """Les modèles que la clé Mistral permet, **demandés en direct**
+    (``models.list``) — chat et OCR : un seul compte, une seule liste.
+
+    Le SDK mistralai **enveloppe** ses erreurs HTTP (``MistralError``) et laisse
+    passer celles du transport (``httpx2``) : on traduit toute erreur de
+    l'appel en ``ModelListingError`` — jamais avalée, toujours nommée.
     """
     import os
 
     api_key = os.environ.get("MISTRAL_API_KEY")
     if not api_key:
-        return ()
+        raise ModelListingError("clé MISTRAL_API_KEY absente")
     try:
-        from mistralai import Mistral  # type: ignore[import-not-found]
-    except ImportError:
-        return ()
+        from mistralai.client import Mistral  # type: ignore[import-not-found]
+    except ImportError as exc:
+        raise ModelListingError("SDK mistralai non installé (extra [mistral])") from exc
     try:
-        client = Mistral(api_key=api_key, timeout_ms=int(timeout * 1000))
-        response = client.models.list()
-    except Exception as exc:  # noqa: BLE001 — voir rationale ci-dessous
-        # Catch-all **assumé** : commodité d'UI qui ne doit jamais casser la
-        # page du composeur. Le SDK mistralai **enveloppe** ses erreurs HTTP
-        # (auth/429/5xx) dans ses propres types + propage des erreurs httpx pour
-        # le transport ; narrower au seul ``httpx.HTTPError`` (comme ollama, qui
-        # appelle httpx en direct) laisserait fuir une erreur SDK et casserait la
-        # page. On trace (§7) et on retombe sur la saisie libre.
-        logger.warning("[mistral] liste des modèles indisponible : %s", exc)
-        return ()
-    data = getattr(response, "data", None) or ()
-    ids = [m.id for m in data if isinstance(getattr(m, "id", None), str)]
-    return tuple(sorted(set(ids)))
+        client = Mistral(
+            api_key=api_key, retry_config=None, timeout_ms=int(timeout * 1000)
+        )
+        body = sdk_native(client.models.list(), "mistral")
+    except Exception as exc:  # SDK enveloppant + transport : voir la docstring
+        status = getattr(exc, "status_code", None)
+        raise ModelListingError(
+            f"api.mistral.ai : {type(exc).__name__}"
+            + (f" ({status})" if status else "")
+        ) from exc
+    return models_from_listing(body)
 
 
-__all__ = ["MistralAdapter", "list_mistral_models"]
+__all__ = ["MistralAdapter", "list_models", "models_from_listing"]

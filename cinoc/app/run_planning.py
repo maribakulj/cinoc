@@ -28,6 +28,7 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict, Field
 
 from cinoc.app.engines import EngineStatus, providers_for_mode
+from cinoc.app.models import ModelChoiceError, check_spec_models
 from cinoc.app.text_views import text_views
 from cinoc.domain.artifacts import ArtifactType
 from cinoc.domain.corpus import CorpusSpec
@@ -102,6 +103,9 @@ class Competitor(BaseModel):
     segmenter_token: str | None = Field(default=None, max_length=512)
     llm: str | None = Field(default=None, max_length=64)
     model: str | None = Field(default=None, max_length=128)
+    #: Modèle du moteur OCR **amont** d'une chaîne (``text_*``), où ``model``
+    #: désigne le LLM : aucun moteur n'a de modèle par défaut (D-268).
+    ocr_model: str | None = Field(default=None, max_length=128)
     lang: str = Field(default="fra", max_length=64)
     #: Prompt de post-correction/transcription (modes LLM/VLM). ``None`` → prompt
     #: par défaut du rôle (``default_prompt_for_role``). Exposé à l'UI (texte libre).
@@ -611,6 +615,8 @@ def _pipeline_for_competitor(
     }
     if comp.alto:
         kwargs[ocr_name]["alto"] = True
+    if comp.ocr_model:
+        kwargs[ocr_name]["model"] = comp.ocr_model
     if comp.ner:
         chain_steps.append(_ner_step(suffix, ArtifactType.CORRECTED_TEXT, "llm"))
         kwargs[f"ner:{suffix}"] = _ner_kwargs(suffix, comp)
@@ -697,6 +703,11 @@ def plan_benchmark_run(
             "archaic_list_hash": resolved.list_hash,
         },
     )
+    # Aucun modèle par défaut : refusé ici (422), en listant les disponibles.
+    try:
+        check_spec_models(spec, live=False)
+    except ModelChoiceError as exc:
+        raise RunPlanningError(str(exc)) from exc
     return lambda _ws: spec
 
 

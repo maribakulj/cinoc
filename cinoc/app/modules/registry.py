@@ -85,6 +85,18 @@ def _timeout_saisi(kwargs: Mapping[str, ParamValue]) -> dict[str, ParamValue]:
     return {"timeout": kwargs["timeout"]} if "timeout" in kwargs else {}
 
 
+def _required_model(kind: str, label: str, kwargs: Mapping[str, ParamValue]) -> str:
+    """Le modèle **nommé** par la spec — aucun défaut (D-268). Absent : refus
+    qui liste les modèles que le fournisseur offre, ou dit pourquoi la liste
+    n'a pas pu être lue."""
+    model = kwargs.get("model")
+    if isinstance(model, str) and model.strip():
+        return model
+    from cinoc.app.models import missing_model_message  # noqa: PLC0415
+
+    raise ModuleResolutionError(missing_model_message(f"{kind}:{label}", kwargs))
+
+
 def _build_precomputed(kwargs: Mapping[str, ParamValue]) -> Module:
     label = kwargs.get("source_label")
     if not isinstance(label, str):
@@ -122,7 +134,7 @@ def _build_mistral_ocr(kwargs: Mapping[str, ParamValue]) -> Module:
 
     return MistralOCRAdapter(
         label=label,
-        model=str(kwargs.get("model", "mistral-ocr-latest")),
+        model=_required_model("mistral_ocr", label, kwargs),
         **_timeout_saisi(kwargs),
     )
 
@@ -239,7 +251,7 @@ def _build_openai(kwargs: Mapping[str, ParamValue]) -> Module:
     prompt = kwargs.get("prompt")
     return OpenAIAdapter(
         label=label,
-        model=str(kwargs.get("model", "gpt-4o-mini")),
+        model=_required_model("openai", label, kwargs),
         role=str(kwargs.get("role", "text_only")),
         prompt=prompt if isinstance(prompt, str) else None,
         # Cible par instance (P5f 6) : l'adapter valide schéma, identifiants,
@@ -259,7 +271,7 @@ def _build_ollama(kwargs: Mapping[str, ParamValue]) -> Module:
     prompt = kwargs.get("prompt")
     return OllamaAdapter(
         label=label,
-        model=str(kwargs.get("model", "llama3")),
+        model=_required_model("ollama", label, kwargs),
         host=str(kwargs.get("host", "http://localhost:11434")),
         role=str(kwargs.get("role", "text_only")),
         prompt=prompt if isinstance(prompt, str) else None,
@@ -278,7 +290,7 @@ def _build_mistral(kwargs: Mapping[str, ParamValue]) -> Module:
     prompt = kwargs.get("prompt")
     return MistralAdapter(
         label=label,
-        model=str(kwargs.get("model", "mistral-small-latest")),
+        model=_required_model("mistral", label, kwargs),
         role=str(kwargs.get("role", "text_only")),
         prompt=prompt if isinstance(prompt, str) else None,
         **_inference(kwargs),
@@ -296,7 +308,7 @@ def _build_anthropic(kwargs: Mapping[str, ParamValue]) -> Module:
     prompt = kwargs.get("prompt")
     return AnthropicAdapter(
         label=label,
-        model=str(kwargs.get("model", "claude-haiku-4-5-20251001")),
+        model=_required_model("anthropic", label, kwargs),
         role=str(kwargs.get("role", "text_only")),
         prompt=prompt if isinstance(prompt, str) else None,
         **_inference(kwargs),

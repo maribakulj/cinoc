@@ -85,7 +85,9 @@ def test_alto_adds_output_type_and_kwarg_ocr_only(tmp_path: Path) -> None:
 
 
 def test_alto_in_chain_targets_ocr_step(tmp_path: Path) -> None:
-    comp = Competitor(engine="tesseract", mode="text_only", llm="openai", alto=True)
+    comp = Competitor(
+        model="m", engine="tesseract", mode="text_only", llm="openai", alto=True
+    )
     spec = plan_benchmark_run((comp,), _corpus(tmp_path), "r")(tmp_path)
     (pipe,) = spec.pipelines
     ocr, _llm = pipe.steps
@@ -110,7 +112,9 @@ def test_alto_rejected_for_non_tesseract(tmp_path: Path) -> None:
 
 
 def test_text_and_image_passes_image_to_llm(tmp_path: Path) -> None:
-    comp = Competitor(engine="tesseract", mode="text_and_image", llm="openai")
+    comp = Competitor(
+        model="m", engine="tesseract", mode="text_and_image", llm="openai"
+    )
     build = plan_benchmark_run((comp,), _corpus(tmp_path), "r")
     (pipe,) = build(tmp_path).pipelines
     _ocr, llm = pipe.steps
@@ -121,7 +125,7 @@ def test_text_and_image_passes_image_to_llm(tmp_path: Path) -> None:
 
 
 def test_zero_shot_pipeline_shape(tmp_path: Path) -> None:
-    comp = Competitor(engine="openai", mode="zero_shot")
+    comp = Competitor(model="m", engine="openai", mode="zero_shot")
     build = plan_benchmark_run((comp,), _corpus(tmp_path), "r")
     (pipe,) = build(tmp_path).pipelines
     (step,) = pipe.steps
@@ -265,7 +269,7 @@ def test_ner_step_appended_to_ocr_only(tmp_path: Path) -> None:
 
 
 def test_ner_step_in_chain_consumes_corrected_text(tmp_path: Path) -> None:
-    comp = Competitor(
+    comp = Competitor(model="m",
         engine="tesseract", mode="text_only", llm="openai", ner=True,
         ner_model="en_core_web_sm",
     )
@@ -307,7 +311,7 @@ def test_no_ner_view_without_entity_gt(tmp_path: Path) -> None:
 
 
 def test_curated_prompt_name_resolves_to_text(tmp_path: Path) -> None:
-    comp = Competitor(
+    comp = Competitor(model="m",
         engine="openai", mode="zero_shot", prompt_name="zero_shot_medieval_french"
     )
     spec = plan_benchmark_run((comp,), _corpus(tmp_path), "r")(tmp_path)
@@ -317,13 +321,13 @@ def test_curated_prompt_name_resolves_to_text(tmp_path: Path) -> None:
 
 
 def test_free_prompt_takes_precedence(tmp_path: Path) -> None:
-    comp = Competitor(engine="openai", mode="zero_shot", prompt="MON PROMPT")
+    comp = Competitor(model="m", engine="openai", mode="zero_shot", prompt="MON PROMPT")
     spec = plan_benchmark_run((comp,), _corpus(tmp_path), "r")(tmp_path)
     assert spec.adapter_kwargs["openai:c0"]["prompt"] == "MON PROMPT"
 
 
 def test_prompt_and_prompt_name_together_refused(tmp_path: Path) -> None:
-    comp = Competitor(
+    comp = Competitor(model="m",
         engine="openai", mode="zero_shot", prompt="x",
         prompt_name="zero_shot_medieval_french",
     )
@@ -332,7 +336,7 @@ def test_prompt_and_prompt_name_together_refused(tmp_path: Path) -> None:
 
 
 def test_unknown_prompt_name_refused(tmp_path: Path) -> None:
-    comp = Competitor(engine="openai", mode="zero_shot", prompt_name="bidon")
+    comp = Competitor(model="m", engine="openai", mode="zero_shot", prompt_name="bidon")
     with pytest.raises(RunPlanningError, match="inconnu"):
         plan_benchmark_run((comp,), _corpus(tmp_path), "r")
 
@@ -361,7 +365,7 @@ def test_benchmark_runs_n_competitors_in_one_run(
     )
     comps = (
         Competitor(engine="tesseract"),
-        Competitor(engine="tesseract", mode="text_only", llm="openai"),
+        Competitor(model="m", engine="tesseract", mode="text_only", llm="openai"),
     )
     build = plan_benchmark_run(comps, _corpus(tmp_path), "r")
     result = run(build(tmp_path), registry=_registry(), code_version="1.0")
@@ -547,7 +551,7 @@ def test_text_only_corpus_has_no_structure_view(tmp_path: Path) -> None:
 
 def test_hybrid_competitor_pipeline_shape(tmp_path: Path) -> None:
     # OCR par bloc : segment → recognize (fanout, crop) → text (RAW_TEXT scoré).
-    comp = Competitor(engine="mistral_ocr", segmenter="pp_doclayout")
+    comp = Competitor(model="m", engine="mistral_ocr", segmenter="pp_doclayout")
     spec = plan_benchmark_run((comp,), _corpus(tmp_path), "r")(tmp_path)
     (pipe,) = spec.pipelines
     assert pipe.name == "pp_doclayout→mistral_ocr"
@@ -559,12 +563,16 @@ def test_hybrid_competitor_pipeline_shape(tmp_path: Path) -> None:
     # L'étape texte produit du RAW_TEXT → scoré par la vue texte comme les autres.
     assert text.adapter_name == "layout_to_text:c0"
     assert text.output_types == (ArtifactType.RAW_TEXT,)
-    assert spec.adapter_kwargs["mistral_ocr:c0"] == {"label": "c0", "lang": "fra"}
+    assert spec.adapter_kwargs["mistral_ocr:c0"] == {
+        "label": "c0",
+        "lang": "fra",
+        "model": "m",
+    }
     assert spec.adapter_kwargs["layout_to_text:c0"] == {"label": "c0"}
 
 
 def test_hybrid_competitor_vlm_runs_zero_shot(tmp_path: Path) -> None:
-    comp = Competitor(
+    comp = Competitor(model="m",
         engine="openai", segmenter="pp_doclayout", prompt="Transcris ce bloc."
     )
     spec = plan_benchmark_run((comp,), _corpus(tmp_path), "r")(tmp_path)
@@ -572,12 +580,15 @@ def test_hybrid_competitor_vlm_runs_zero_shot(tmp_path: Path) -> None:
         "label": "c0",
         "role": "zero_shot",
         "prompt": "Transcris ce bloc.",
+        "model": "m",
     }
 
 
 def test_hybrid_competitor_alto_appends_assembler(tmp_path: Path) -> None:
     # ALTO en hybride n'est PAS réservé à tesseract : l'assembleur part du LAYOUT.
-    comp = Competitor(engine="mistral_ocr", segmenter="pp_doclayout", alto=True)
+    comp = Competitor(
+        model="m", engine="mistral_ocr", segmenter="pp_doclayout", alto=True
+    )
     spec = plan_benchmark_run((comp,), _corpus(tmp_path), "r")(tmp_path)
     (pipe,) = spec.pipelines
     assert [s.id for s in pipe.steps] == ["segment", "recognize", "text", "assemble"]

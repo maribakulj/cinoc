@@ -283,7 +283,7 @@ def _llm_spec(tmp_path: Path, llm_kwargs: dict[str, Any]) -> RunSpec:
         evaluation=EvaluationSpec(views=(view,)),
         adapter_kwargs={
             "precomputed:eng": {"source_label": "eng"},
-            "openai:gpt": {"label": "gpt", **llm_kwargs},
+            "openai:gpt": {"model": "m", "label": "gpt", **llm_kwargs},
         },
         run_id="t",
     )
@@ -298,9 +298,9 @@ def test_the_manifest_carries_the_effective_settings_defaults_included(
     result = run(_llm_spec(tmp_path, {}), registry=_registry(), code_version="1")
     assert result.manifest.adapter_kwargs["openai:gpt"] == {
         "label": "gpt",
-        # Le modèle demandé, le mode et le prompt **par défaut** compris (S9) :
-        # ils changent la sortie autant qu'une saisie.
-        "model": "gpt-4o-mini",
+        # Le modèle demandé (aucun défaut : la spec le nomme, S22), le mode et
+        # le prompt **par défaut** compris (S9) : ils changent la sortie.
+        "model": "m",
         "role": "text_only",
         "prompt": DEFAULT_CORRECTION_PROMPT,
         "temperature": 0.0,

@@ -49,13 +49,19 @@ def _add_list(subparsers: _SousCommandes) -> None:
     )
 
     modeles = sujets.add_parser(
-        "models", help="Modèles canoniques d'un fournisseur (suggestions)."
+        "models",
+        help="Modèles d'un fournisseur, demandés en direct (Ollama : installés).",
     )
     modeles.add_argument(
         "provider",
         nargs="?",
         default=None,
-        help="openai, anthropic, mistral, ollama. Omis : tous.",
+        help="openai, anthropic, mistral, mistral_ocr, ollama. Omis : tous.",
+    )
+    modeles.add_argument(
+        "--host",
+        default=None,
+        help="Serveur ollama à interroger (défaut : http://localhost:11434).",
     )
 
     profils = sujets.add_parser(
@@ -441,7 +447,8 @@ def build_parser() -> argparse.ArgumentParser:
     correct_cmd.add_argument(
         "--model",
         default="",
-        help="Modèle du producteur (ex. gemma4:e2b, mistral-medium-latest).",
+        help="Modèle du producteur (requis hors 'rules' ; "
+        "`cinoc list models <fournisseur>` les liste).",
     )
     correct_cmd.add_argument(
         "--host", default="http://localhost:11434", help="Serveur ollama."

@@ -98,8 +98,8 @@ def test_two_instances_reach_two_servers(
 ) -> None:
     seen: list[dict[str, Any]] = []
     _install(monkeypatch, seen)
-    _execute(OpenAIAdapter(label="distant"), tmp_path)
-    _execute(OpenAIAdapter(label="local", base_url=_LOCAL), tmp_path)
+    _execute(OpenAIAdapter(model="m", label="distant"), tmp_path)
+    _execute(OpenAIAdapter(model="m", label="local", base_url=_LOCAL), tmp_path)
     assert [kw["base_url"] for kw in seen] == ["https://api.openai.com/v1", _LOCAL]
 
 
@@ -111,7 +111,7 @@ def test_the_process_environment_no_longer_redirects_an_instance(
     seen: list[dict[str, Any]] = []
     _install(monkeypatch, seen)
     monkeypatch.setenv("OPENAI_BASE_URL", "http://ailleurs.lan:9000/v1")
-    adapter = OpenAIAdapter(label="distant")
+    adapter = OpenAIAdapter(model="m", label="distant")
     _execute(adapter, tmp_path)
     assert seen[0]["base_url"] == "https://api.openai.com/v1"
     assert adapter.effective_settings()["base_url"] == "https://api.openai.com/v1"
@@ -119,8 +119,8 @@ def test_the_process_environment_no_longer_redirects_an_instance(
 
 def test_the_endpoint_enters_the_settings_and_the_fingerprint() -> None:
     """Deux serveurs différents ne sont pas la même unité (reprise, provenance)."""
-    a = OpenAIAdapter(label="x", base_url="http://127.0.0.1:8000/v1")
-    b = OpenAIAdapter(label="x", base_url="http://127.0.0.1:8001/v1")
+    a = OpenAIAdapter(model="m", label="x", base_url="http://127.0.0.1:8000/v1")
+    b = OpenAIAdapter(model="m", label="x", base_url="http://127.0.0.1:8001/v1")
     assert a.effective_settings()["base_url"] == "http://127.0.0.1:8000/v1"
     from cinoc.domain.pipeline import PipelineStep
 
@@ -162,12 +162,12 @@ def test_the_endpoint_enters_the_settings_and_the_fingerprint() -> None:
 )
 def test_a_malformed_endpoint_is_refused_at_construction(url: str, motif: str) -> None:
     with pytest.raises(AdapterStepError, match=motif):
-        OpenAIAdapter(label="x", base_url=url)
+        OpenAIAdapter(model="m", label="x", base_url=url)
 
 
 def test_a_non_string_endpoint_is_refused() -> None:
     with pytest.raises(AdapterStepError, match="base_url"):
-        OpenAIAdapter(label="x", base_url=8000)
+        OpenAIAdapter(model="m", label="x", base_url=8000)
 
 
 # --------------------------------------------------------------------------- #
@@ -180,7 +180,7 @@ def test_the_openai_key_never_goes_to_a_self_hosted_server(
 ) -> None:
     seen: list[dict[str, Any]] = []
     _install(monkeypatch, seen)
-    _execute(OpenAIAdapter(label="local", base_url=_LOCAL), tmp_path)
+    _execute(OpenAIAdapter(model="m", label="local", base_url=_LOCAL), tmp_path)
     assert seen[0]["api_key"] != _OPENAI_KEY
     assert _OPENAI_KEY not in repr(seen)
 
@@ -190,7 +190,7 @@ def test_the_default_endpoint_keeps_openai_api_key(
 ) -> None:
     seen: list[dict[str, Any]] = []
     _install(monkeypatch, seen)
-    _execute(OpenAIAdapter(label="distant"), tmp_path)
+    _execute(OpenAIAdapter(model="m", label="distant"), tmp_path)
     assert seen[0]["api_key"] == _OPENAI_KEY
 
 
@@ -200,7 +200,9 @@ def test_api_key_env_names_the_variable_the_key_is_read_from(
     seen: list[dict[str, Any]] = []
     _install(monkeypatch, seen)
     monkeypatch.setenv("VLLM_API_KEY", "jeton-du-vllm")
-    adapter = OpenAIAdapter(label="local", base_url=_LOCAL, api_key_env="VLLM_API_KEY")
+    adapter = OpenAIAdapter(
+        model="m", label="local", base_url=_LOCAL, api_key_env="VLLM_API_KEY"
+    )
     _execute(adapter, tmp_path)
     assert seen[0]["api_key"] == "jeton-du-vllm"
     # Le nom n'est pas un réglage de sortie, et la valeur n'entre nulle part.
@@ -213,7 +215,9 @@ def test_a_named_key_that_is_absent_is_a_clear_error(
     seen: list[dict[str, Any]] = []
     _install(monkeypatch, seen)
     monkeypatch.delenv("VLLM_API_KEY", raising=False)
-    adapter = OpenAIAdapter(label="local", base_url=_LOCAL, api_key_env="VLLM_API_KEY")
+    adapter = OpenAIAdapter(
+        model="m", label="local", base_url=_LOCAL, api_key_env="VLLM_API_KEY"
+    )
     with pytest.raises(AdapterStepError, match="VLLM_API_KEY"):
         _execute(adapter, tmp_path)
     assert seen == []  # aucun client construit, rien n'est parti
@@ -225,7 +229,7 @@ def test_the_default_key_absent_is_still_a_clear_error(
     _install(monkeypatch, [])
     monkeypatch.delenv("OPENAI_API_KEY")
     with pytest.raises(AdapterStepError, match="OPENAI_API_KEY"):
-        _execute(OpenAIAdapter(label="distant"), tmp_path)
+        _execute(OpenAIAdapter(model="m", label="distant"), tmp_path)
 
 
 @pytest.mark.parametrize(
@@ -233,7 +237,7 @@ def test_the_default_key_absent_is_still_a_clear_error(
 )
 def test_api_key_env_must_be_a_variable_name(name: object) -> None:
     with pytest.raises(AdapterStepError, match="api_key_env"):
-        OpenAIAdapter(label="x", base_url=_LOCAL, api_key_env=name)
+        OpenAIAdapter(model="m", label="x", base_url=_LOCAL, api_key_env=name)
 
 
 # --------------------------------------------------------------------------- #
@@ -244,10 +248,10 @@ def test_api_key_env_must_be_a_variable_name(name: object) -> None:
 def test_self_hosted_requires_a_custom_endpoint() -> None:
     """Déclarer « auto-hébergé » l'endpoint d'OpenAI serait un coût faux (0)."""
     with pytest.raises(AdapterStepError, match="self_hosted"):
-        OpenAIAdapter(label="x", self_hosted=True)
+        OpenAIAdapter(model="m", label="x", self_hosted=True)
     with pytest.raises(AdapterStepError, match="self_hosted"):
-        OpenAIAdapter(label="x", base_url=_LOCAL, self_hosted="oui")
-    OpenAIAdapter(label="x", base_url=_LOCAL, self_hosted=True)
+        OpenAIAdapter(model="m", label="x", base_url=_LOCAL, self_hosted="oui")
+    OpenAIAdapter(model="m", label="x", base_url=_LOCAL, self_hosted=True)
 
 
 def test_the_registry_passes_the_instance_endpoint(
@@ -262,7 +266,7 @@ def test_the_registry_passes_the_instance_endpoint(
     register_default_modules(registry)
     module = registry.build(
         "openai:local",
-        {
+        {"model": "m",
             "label": "local",
             "base_url": _LOCAL,
             "api_key_env": "VLLM_API_KEY",
@@ -327,12 +331,12 @@ def test_the_adapter_takes_the_slot_of_its_server(
     done = threading.Event()
     try:
         # Le serveur occupé ne retient pas une instance qui en vise un autre.
-        libre = OpenAIAdapter(label="b", base_url="http://s21-libre.lan:8000/v1")
+        libre = OpenAIAdapter(model="m", label="b", base_url="http://s21-libre.lan:8000/v1")
         _execute(libre, tmp_path)
         done.set()
         with pytest.raises(AdapterStepError, match="créneau"):
             _execute(
-                OpenAIAdapter(
+                OpenAIAdapter(model="m",
                     label="a", base_url="http://s21-occupe.lan:8000/v1", timeout=0.05
                 ),
                 tmp_path,

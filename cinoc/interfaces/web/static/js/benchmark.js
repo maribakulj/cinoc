@@ -170,6 +170,7 @@
     var draftSegEndpointField = document.getElementById("draft-seg-endpoint-field");
     var draftSegTokenField = document.getElementById("draft-seg-token-field");
     var draftModel = document.getElementById("draft-model");
+    var draftOcrModel = document.getElementById("draft-ocr-model");
     var draftPrompt = document.getElementById("draft-prompt");
     var draftPromptCurated = document.getElementById("draft-prompt-curated");
     var draftNer = document.getElementById("draft-ner");
@@ -203,20 +204,32 @@
       if (corpusId && corpusSelect) corpusSelect.value = corpusId;
     }
 
-    // Le champ « Modèle » pointe vers la datalist du fournisseur sélectionné
-    // (ollama / mistral), qui n'existe que si le serveur a renvoyé des modèles.
-    // Sinon : saisie libre. Rien de hardcodé — les options viennent du serveur.
+    // Le champ « Modèle » pointe vers la liste des modèles du fournisseur
+    // choisi, demandés **en direct** à /api/models/{provider} (même origine ;
+    // mise en cache). Rien de codé : liste indisponible → saisie libre, et le
+    // pourquoi s'affiche. Vision et dépréciation : seulement si déclarées.
     var modelCache = {};
+    var MODEL_PROVIDERS = ["openai", "anthropic", "mistral", "ollama"];
 
-    function applyDatalist(listId, count) {
+    function applyDatalist(listId, count, why) {
       if (listId && count) draftModel.setAttribute("list", listId);
       else draftModel.removeAttribute("list");
       var hint = document.getElementById("model-hint");
       if (hint) {
         hint.textContent = count
-          ? count + " modèle(s) suggéré(s) — clique pour choisir"
-          : "";
+          ? count + " modèle(s) disponible(s) — clique pour choisir"
+          : why || "";
       }
+    }
+
+    function optionLabel(model) {
+      var bits = [];
+      if (model.vision === true) bits.push("vision");
+      if (model.lifecycle === "deprecated" || model.deprecated_at) {
+        bits.push("déprécié");
+      }
+      if (model.lifecycle === "retired") bits.push("retiré");
+      return bits.join(" · ");
     }
 
     function fillApiList(models) {
@@ -226,7 +239,8 @@
       for (var i = 0; i < models.length; i++) {
         var opt = document.createElement("option");
         opt.value = models[i].name;
-        if (models[i].vision) opt.label = "vision";
+        var label = optionLabel(models[i]);
+        if (label) opt.label = label;
         dl.appendChild(opt);
       }
       return models.length;
@@ -242,37 +256,35 @@
       return "";
     }
 
+    function showListing(listing) {
+      applyDatalist(
+        "api-model-list",
+        fillApiList(listing.models || []),
+        listing.unavailable ? "Liste indisponible : " + listing.unavailable : ""
+      );
+    }
+
     function updateModelList() {
       if (!draftModel) return;
       var provider = currentProvider();
-      // Modèles réellement installés (live) : datalists rendues côté serveur.
-      if (provider === "ollama" || provider === "mistral") {
-        var dl = document.getElementById(provider + "-models");
-        applyDatalist(provider + "-models", dl ? dl.children.length : 0);
+      if (MODEL_PROVIDERS.indexOf(provider) < 0) {
+        applyDatalist("", 0, "");
         return;
       }
-      // openai/anthropic : pas de source live → liste canonique + capacité vision
-      // via /api/models/{provider} (même origine ; mise en cache).
-      if (provider === "openai" || provider === "anthropic") {
-        if (modelCache[provider]) {
-          applyDatalist("api-model-list", fillApiList(modelCache[provider]));
-          return;
-        }
-        var asked = provider;
-        fetch("/api/models/" + encodeURIComponent(provider))
-          .then(function (r) {
-            return r.ok ? r.json() : { models: [] };
-          })
-          .then(function (data) {
-            modelCache[asked] = data.models || [];
-            if (currentProvider() === asked) {
-              applyDatalist("api-model-list", fillApiList(modelCache[asked]));
-            }
-          })
-          .catch(function () {});
+      if (modelCache[provider]) {
+        showListing(modelCache[provider]);
         return;
       }
-      applyDatalist("", 0);
+      var asked = provider;
+      fetch("/api/models/" + encodeURIComponent(provider))
+        .then(function (r) {
+          return r.ok ? r.json() : { models: [] };
+        })
+        .then(function (data) {
+          modelCache[asked] = data;
+          if (currentProvider() === asked) showListing(data);
+        })
+        .catch(function () {});
     }
 
     function setMode(mode) {
@@ -347,6 +359,10 @@
 
     function buildDraft() {
       var model = draftModel && draftModel.value ? draftModel.value.trim() : "";
+      // En chaîne, le modèle du moteur OCR amont (Mistral OCR, kraken…) :
+      // ``model`` y désigne le LLM aval. Aucun défaut n'est codé.
+      var ocrModel =
+        draftOcrModel && draftOcrModel.value ? draftOcrModel.value.trim() : "";
       var prompt = draftPrompt && draftPrompt.value ? draftPrompt.value.trim() : "";
       // Texte libre prioritaire : s'il est saisi, on ignore le prompt curé (le
       // serveur refuse d'ailleurs les deux à la fois).
@@ -378,6 +394,7 @@
           mode: "text_only",
           llm: draftLlm.value,
           model: model,
+          ocrModel: ocrModel,
           prompt: prompt,
           promptName: promptName,
           ner: ner,
@@ -391,6 +408,7 @@
           mode: "text_and_image",
           llm: draftVlm.value,
           model: model,
+          ocrModel: ocrModel,
           prompt: prompt,
           promptName: promptName,
           ner: ner,
@@ -452,6 +470,7 @@
         }
         if (queue[i].llm) entry.llm = queue[i].llm;
         if (queue[i].model) entry.model = queue[i].model;
+        if (queue[i].ocrModel) entry.ocr_model = queue[i].ocrModel;
         if (queue[i].prompt) entry.prompt = queue[i].prompt;
         else if (queue[i].promptName) entry.prompt_name = queue[i].promptName;
         if (queue[i].ner) {
@@ -504,6 +523,7 @@
           segmenterToken: c.segmenter_token || "",
           llm: c.llm || "",
           model: c.model || "",
+          ocrModel: c.ocr_model || "",
           prompt: c.prompt || "",
           promptName: c.prompt_name || "",
           ner: !!c.ner,

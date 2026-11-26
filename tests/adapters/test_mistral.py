@@ -68,16 +68,16 @@ def test_satisfies_module_protocol() -> None:
 
 def test_invalid_label_rejected() -> None:
     with pytest.raises(AdapterStepError):
-        MistralAdapter(label="bad label")
+        MistralAdapter(model="m", label="bad label")
 
 
 def test_invalid_role_rejected() -> None:
     with pytest.raises(AdapterStepError):
-        MistralAdapter(label="m", role="bogus")
+        MistralAdapter(model="m", label="m", role="bogus")
 
 
 def test_role_types() -> None:
-    zs = MistralAdapter(label="pix", role="zero_shot")
+    zs = MistralAdapter(model="m", label="pix", role="zero_shot")
     assert zs.input_types == frozenset({ArtifactType.IMAGE})
     assert zs.output_types == frozenset(
         {ArtifactType.RAW_TEXT, ArtifactType.NATIVE_JSON}
@@ -89,7 +89,7 @@ def test_execute_produces_corrected_text(
 ) -> None:
     (tmp_path / "ocr.txt").write_text("Hello wrld", encoding="utf-8")
     _mock_text(monkeypatch, "Hello world")
-    adapter = MistralAdapter(label="m")
+    adapter = MistralAdapter(model="m", label="m")
     out = adapter.execute(
         {ArtifactType.RAW_TEXT: _raw_text(tmp_path / "ocr.txt")},
         {},
@@ -107,7 +107,7 @@ def test_zero_shot_produces_raw_text(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _mock_vision(monkeypatch, "Transcrit")
-    adapter = MistralAdapter(label="pix", role="zero_shot")
+    adapter = MistralAdapter(model="m", label="pix", role="zero_shot")
     out = adapter.execute(
         {ArtifactType.IMAGE: _image(tmp_path / "doc1.png")},
         {},
@@ -120,7 +120,7 @@ def test_zero_shot_produces_raw_text(
 
 
 def test_requires_workspace() -> None:
-    adapter = MistralAdapter(label="m")
+    adapter = MistralAdapter(model="m", label="m")
     ctx = RunContext(document_id="doc1", code_version="t", pipeline_name="p")
     with pytest.raises(AdapterStepError):
         adapter.execute(
@@ -132,13 +132,13 @@ def test_requires_workspace() -> None:
 
 
 def test_missing_input_raises(tmp_path: Path) -> None:
-    adapter = MistralAdapter(label="m")
+    adapter = MistralAdapter(model="m", label="m")
     with pytest.raises(AdapterStepError):
         adapter.execute({}, {}, _ctx(tmp_path), RunControl())
 
 
 def test_cancellation_raises(tmp_path: Path) -> None:
-    adapter = MistralAdapter(label="m")
+    adapter = MistralAdapter(model="m", label="m")
     control = RunControl()
     control.trigger_cancel()
     with pytest.raises(RunCancelledError):

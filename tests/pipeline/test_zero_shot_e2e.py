@@ -49,7 +49,7 @@ def test_zero_shot_runs_and_reports_tokens(
     corpus = CorpusSpec(name="c", documents=(document,))
 
     build = plan_benchmark_run(
-        (Competitor(engine="openai", mode="zero_shot"),), corpus, "zs-run"
+        (Competitor(model="m", engine="openai", mode="zero_shot"),), corpus, "zs-run"
     )
     spec = build(tmp_path)
 

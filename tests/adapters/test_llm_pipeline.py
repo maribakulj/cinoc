@@ -53,7 +53,7 @@ def test_ocr_then_llm_produces_corrected_text(
     )
     modules = {
         "precomputed:eng": PrecomputedTextAdapter(source_label="eng"),
-        "openai:gpt": OpenAIAdapter(label="gpt"),
+        "openai:gpt": OpenAIAdapter(model="m", label="gpt"),
     }
 
     pool = PipelineExecutor("1.0").execute_document(
@@ -102,7 +102,7 @@ def test_ocr_then_vlm_correction_receives_image_and_text(
     )
     modules = {
         "precomputed:eng": PrecomputedTextAdapter(source_label="eng"),
-        "openai:gpt": OpenAIAdapter(label="gpt", role="text_and_image"),
+        "openai:gpt": OpenAIAdapter(model="m", label="gpt", role="text_and_image"),
     }
 
     pool = PipelineExecutor("1.0").execute_document(
@@ -136,7 +136,7 @@ def test_zero_shot_vlm_transcribes_image(
     spec = PipelineSpec(
         name="zero", initial_inputs=(ArtifactType.IMAGE,), steps=(vlm,)
     )
-    modules = {"openai:v": OpenAIAdapter(label="v", role="zero_shot")}
+    modules = {"openai:v": OpenAIAdapter(model="m", label="v", role="zero_shot")}
 
     pool = PipelineExecutor("1.0").execute_document(
         spec,
