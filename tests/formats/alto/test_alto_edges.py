@@ -63,15 +63,8 @@ def test_blocks_without_printspace_are_read() -> None:
     assert block.id == "b1"
 
 
-def _doc() -> AltoDocument:
-    return AltoDocument(pages=(AltoPage(id="p"),), source_version="v2")
-
-
-def test_write_version_v2_roundtrips() -> None:
-    doc = _doc()
-    assert parse_alto(write_alto(doc, version="v2")).source_version == "v2"
-
-
-def test_write_no_namespace_roundtrips() -> None:
-    doc = AltoDocument(pages=(AltoPage(id="p"),), source_version="none")
-    assert parse_alto(write_alto(doc, version="none")).source_version == "none"
+def test_writer_always_writes_alto_4() -> None:
+    """Un document lu en v2 ou sans namespace ressort en ALTO 4 (seule cible)."""
+    for version in ("v2", "none"):
+        doc = AltoDocument(pages=(AltoPage(id="p"),), source_version=version)
+        assert parse_alto(write_alto(doc)).source_version == "v4"

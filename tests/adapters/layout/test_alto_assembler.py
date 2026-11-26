@@ -14,12 +14,20 @@ import pytest
 from cinoc.adapters.layout.assembler import AltoAssembler
 from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.errors import AdapterStepError
-from cinoc.domain.layout import CanonicalLayout, LayoutPage, Line, Region
+from cinoc.domain.layout import (
+    BBox,
+    CanonicalLayout,
+    Geometry,
+    LayoutPage,
+    Line,
+    Region,
+)
 from cinoc.evaluation.context import DocContext
 from cinoc.evaluation.metrics.layout import region_cer
 from cinoc.evaluation.representations import load_representation
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext
+from tests.formats._xsd import alto_errors
 
 
 def _filled(*regions: tuple[str, str]) -> CanonicalLayout:
@@ -27,8 +35,7 @@ def _filled(*regions: tuple[str, str]) -> CanonicalLayout:
         pages=(
             LayoutPage(
                 regions=tuple(
-                    Region(id=rid, lines=(Line(text=text),))
-                    for rid, text in regions
+                    Region(id=rid, lines=(Line(text=text),)) for rid, text in regions
                 ),
                 reading_order=tuple(rid for rid, _ in regions),
             ),
@@ -94,3 +101,47 @@ def test_assembled_alto_reloads_as_layout_and_scores(tmp_path: Path) -> None:
 def test_assembler_rejects_missing_layout(tmp_path: Path) -> None:
     with pytest.raises(AdapterStepError, match="LAYOUT manquant"):
         AltoAssembler().execute({}, {}, _context(tmp_path), RunControl())
+
+
+def test_segmenter_layout_assembles_into_valid_alto_4(tmp_path: Path) -> None:
+    """La forme que livre le fan-out hybride : régions typées et géolocalisées,
+    lignes reconnues sans géométrie ni mots, une région rattrapée marquée.
+    Le XSD officiel ALTO 4.4 est l'oracle (A9)."""
+    box = Geometry(bbox=BBox(x=10, y=20, width=300, height=40))
+    layout = CanonicalLayout(
+        pages=(
+            LayoutPage(
+                width=1240,
+                height=1754,
+                regions=(
+                    Region(
+                        id="r1",
+                        region_type="title",
+                        geometry=box,
+                        lines=(Line(text="Chapitre premier"),),
+                    ),
+                    Region(id="r2", region_type="text+gapfill", geometry=box),
+                    Region(id="r3", geometry=box, lines=(Line(text="corps"),)),
+                ),
+                reading_order=("r1", "r2", "r3"),
+            ),
+        )
+    )
+    out = AltoAssembler().execute(
+        {ArtifactType.LAYOUT: _layout_artifact(tmp_path, layout)},
+        {},
+        _context(tmp_path),
+        RunControl(),
+    )
+    uri = out.artifacts[ArtifactType.ALTO_XML].uri
+    assert uri is not None
+    data = Path(uri).read_bytes()
+    assert alto_errors(data) == []
+    assert b"<MeasurementUnit>pixel</MeasurementUnit>" in data
+    reloaded = load_representation(uri, ArtifactType.LAYOUT)
+    assert isinstance(reloaded, CanonicalLayout)
+    assert [r.region_type for r in reloaded.pages[0].regions] == [
+        "title",
+        "text+gapfill",
+        "text",
+    ]

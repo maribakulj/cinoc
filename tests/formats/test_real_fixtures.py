@@ -109,9 +109,10 @@ def test_word_level_fallback_when_no_line_text() -> None:
 @pytest.mark.parametrize("name", ["tesseract.alto.xml", "gallica.alto.xml"])
 def test_alto_model_idempotent_on_real_input(name: str) -> None:
     doc = parse_alto(_read(name))
-    version = doc.source_version if doc.source_version in ("v2", "v3", "v4") else "v4"
     assert isinstance(doc, AltoDocument)
-    assert parse_alto(write_alto(doc, version=version)) == doc
+    # L'écrivain cible ALTO 4 : seule la version déclarée change.
+    expected = doc.model_copy(update={"source_version": "v4"})
+    assert parse_alto(write_alto(doc)) == expected
 
 
 @pytest.mark.parametrize("name", ["transkribus.page.xml", "escriptorium.page.xml"])

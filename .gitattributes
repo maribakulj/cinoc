@@ -1,0 +1,3 @@
+# Schémas officiels vendorisés comme oracle de test : octets d'origine (le XSD
+# ALTO 4.4 de loc.gov est en CRLF), empreintes vérifiées au chargement.
+tests/fixtures/xsd/*.xsd -text

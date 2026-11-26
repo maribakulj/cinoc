@@ -66,7 +66,10 @@ class AltoTextBlock(BaseModel):
     model_config = _FROZEN
     kind: Literal["text"] = "text"
     id: str | None = None
-    block_type: str | None = None  # attribut TYPE
+    #: Type de bloc. Lu sur ``TYPE`` (ALTO 2/3) ou sur l'``OtherTag`` que
+    #: désigne ``TAGREFS`` ; écrit **toujours** par ``TAGREFS`` + ``<Tags>``,
+    #: ALTO 4 interdisant ``TextBlock@TYPE``.
+    block_type: str | None = None
     bbox: AltoBBox | None = None
     polygon: tuple[Point, ...] | None = None
     lines: tuple[AltoLine, ...] = ()
@@ -119,6 +122,9 @@ class AltoPage(BaseModel):
     id: str | None = None
     width: int | None = None
     height: int | None = None
+    #: ``PHYSICAL_IMG_NR`` — rang de l'image dans le document (requis par
+    #: ALTO 4 ; l'écrivain retombe sur le rang de la page s'il manque).
+    physical_img_nr: float | None = None
     blocks: tuple[AltoBlock, ...] = ()
 
 

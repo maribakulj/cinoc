@@ -11,12 +11,16 @@ Géométrie en `domain` (et non en `formats`) : un point/une boîte neutres sont
 même alias structurel que ``formats._geometry.Point`` (``tuple[int, int]``) — une
 coïncidence de forme, **pas** un shim (aucune conversion).
 
-Convention de coordonnées : pixels entiers, origine haut-gauche, *y* vers le bas
-(image). Valeurs négatives tolérées (une région peut déborder la page). La
+Convention de coordonnées : entiers, origine haut-gauche, *y* vers le bas
+(image), en **pixels** sauf si ``CanonicalLayout.coordinate_unit`` dit autre
+chose — un ALTO en ``mm10`` n'est pas converti à la lecture, son unité
+l'accompagne. Valeurs négatives tolérées (une région peut déborder la page). La
 réconciliation d'unités/résolution est une affaire de couche 3.
 """
 
 from __future__ import annotations
+
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -24,6 +28,10 @@ _FROZEN = ConfigDict(frozen=True, extra="forbid")
 
 #: Point image : ``(x, y)`` en pixels entiers (origine haut-gauche).
 Point = tuple[int, int]
+
+#: Unités de coordonnées reconnues (celles qu'énumère ALTO :
+#: pixel, dixième de millimètre, 1/1200 de pouce).
+CoordinateUnit = Literal["pixel", "mm10", "inch1200"]
 
 
 class BBox(BaseModel):
@@ -137,6 +145,10 @@ class CanonicalLayout(BaseModel):
 
     model_config = _FROZEN
     pages: tuple[LayoutPage, ...] = ()
+    #: Unité de **toutes** les coordonnées du document. ``pixel`` pour ce que
+    #: produisent les segmenteurs et PAGE ; celle de la source pour un ALTO
+    #: lu, que l'assemblage réécrit au lieu de la perdre.
+    coordinate_unit: CoordinateUnit = "pixel"
 
 
 Region.model_rebuild()
@@ -146,6 +158,7 @@ CanonicalLayout.model_rebuild()
 __all__ = [
     "BBox",
     "CanonicalLayout",
+    "CoordinateUnit",
     "Geometry",
     "Line",
     "LayoutPage",

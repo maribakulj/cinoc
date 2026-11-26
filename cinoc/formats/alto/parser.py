@@ -4,11 +4,18 @@ Extrait toute la structure mesurable : régions de tout type (TextBlock,
 ComposedBlock récursif, Illustration, GraphicalElement), géométrie numérique
 (bbox + polygone + baseline), confidence de mot. Les éléments non modélisés
 (contenu de marge…) sont signalés par un ``warning``, jamais perdus en silence.
+
+Tolérant **par décision** (arbitrage A9) : la vérité terrain réelle n'est pas
+toujours conforme au XSD, et rien n'est validé à l'entrée. Le type d'un
+``TextBlock`` se lit sur ``TYPE`` (ALTO 2/3, ou fichiers non conformes) puis,
+à défaut, sur l'``OtherTag`` que désigne ``TAGREFS`` — la forme qu'ALTO 4
+permet, et celle qu'écrivent eScriptorium et ``write_alto``.
 """
 
 from __future__ import annotations
 
 import logging
+import math
 
 from lxml import etree
 
@@ -60,6 +67,17 @@ def _int_attr(el: etree._Element, name: str) -> int | None:
         return int(float(raw))
     except ValueError:
         return None
+
+
+def _float_attr(el: etree._Element, name: str) -> float | None:
+    raw = el.get(name)
+    if raw is None:
+        return None
+    try:
+        value = float(raw)
+    except ValueError:
+        return None
+    return value if math.isfinite(value) else None
 
 
 def _bbox(el: etree._Element) -> AltoBBox | None:
@@ -155,35 +173,58 @@ def _parse_line(el: etree._Element) -> AltoLine:
     )
 
 
-def _parse_text_block(el: etree._Element) -> AltoTextBlock:
+#: ``ID`` d'``OtherTag`` → son ``LABEL`` (``<Tags>`` du document).
+_TagLabels = dict[str, str]
+
+
+def _tag_labels(root: etree._Element) -> _TagLabels:
+    return {
+        tag_id: tag.get("LABEL", "")
+        for tag in root.iter()
+        if isinstance(tag.tag, str)
+        and _lname(tag) == "OtherTag"
+        and (tag_id := tag.get("ID")) is not None
+    }
+
+
+def _block_type(el: etree._Element, tags: _TagLabels) -> str | None:
+    if (declared := el.get("TYPE")) is not None:
+        return declared
+    for ref in (el.get("TAGREFS") or "").split():
+        if tags.get(ref):
+            return tags[ref]
+    return None
+
+
+def _parse_text_block(el: etree._Element, tags: _TagLabels) -> AltoTextBlock:
     lines = tuple(_parse_line(c) for c in el if _lname(c) == "TextLine")
     return AltoTextBlock(
         id=el.get("ID"),
-        block_type=el.get("TYPE"),
+        block_type=_block_type(el, tags),
         bbox=_bbox(el),
         polygon=_polygon(el),
         lines=lines,
     )
 
 
-def _parse_composed(el: etree._Element) -> AltoComposedBlock:
+def _parse_composed(el: etree._Element, tags: _TagLabels) -> AltoComposedBlock:
     return AltoComposedBlock(
         id=el.get("ID"),
         block_type=el.get("TYPE"),
         bbox=_bbox(el),
         polygon=_polygon(el),
-        blocks=_parse_blocks(el),
+        blocks=_parse_blocks(el, tags),
     )
 
 
-def _parse_blocks(parent: etree._Element) -> tuple[AltoBlock, ...]:
+def _parse_blocks(parent: etree._Element, tags: _TagLabels) -> tuple[AltoBlock, ...]:
     out: list[AltoBlock] = []
     for child in parent:
         name = _lname(child)
         if name == "TextBlock":
-            out.append(_parse_text_block(child))
+            out.append(_parse_text_block(child, tags))
         elif name == "ComposedBlock":
-            out.append(_parse_composed(child))
+            out.append(_parse_composed(child, tags))
         elif name == "Illustration":
             out.append(
                 AltoIllustration(
@@ -204,7 +245,7 @@ def _parse_blocks(parent: etree._Element) -> tuple[AltoBlock, ...]:
     return tuple(out)
 
 
-def _parse_page(el: etree._Element) -> AltoPage:
+def _parse_page(el: etree._Element, tags: _TagLabels) -> AltoPage:
     print_space: etree._Element | None = None
     for child in el:
         name = _lname(child)
@@ -217,7 +258,8 @@ def _parse_page(el: etree._Element) -> AltoPage:
         id=el.get("ID"),
         width=_int_attr(el, "WIDTH"),
         height=_int_attr(el, "HEIGHT"),
-        blocks=_parse_blocks(container),
+        physical_img_nr=_float_attr(el, "PHYSICAL_IMG_NR"),
+        blocks=_parse_blocks(container, tags),
     )
 
 
@@ -235,8 +277,9 @@ def parse_alto(data: bytes) -> AltoDocument:
             measurement_unit = (el.text or "").strip() or None
             break
 
+    tags = _tag_labels(root)
     pages = tuple(
-        _parse_page(el)
+        _parse_page(el, tags)
         for el in root.iter()
         if isinstance(el.tag, str) and _lname(el) == "Page"
     )

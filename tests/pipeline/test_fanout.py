@@ -24,7 +24,7 @@ from cinoc.domain.layout import (
     Line,
     Region,
 )
-from cinoc.pipeline.fanout import REGION_TYPE_PARAM, _fill_region
+from cinoc.pipeline.fanout import REGION_TYPE_PARAM, _fill_region, run_region_fanout
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext
 
@@ -93,6 +93,30 @@ def test_a_region_without_a_class_passes_an_empty_string(tmp_path: Any) -> None:
     """``None`` traverserait un paramètre typé ``ParamValue`` sans y avoir sa
     place ; la chaîne vide dit « pas de classe » sans mentir sur le type."""
     assert _appel(tmp_path, None) == [""]
+
+
+def test_the_filled_layout_keeps_its_coordinate_unit(tmp_path: Any) -> None:
+    """Un ALTO ``mm10`` relu reste en ``mm10`` une fois rempli : l'assemblage
+    réécrit cette unité, il ne doit pas la recevoir réinitialisée en pixels."""
+    layout = CanonicalLayout(
+        pages=(LayoutPage(width=100, height=100, regions=()),),
+        coordinate_unit="mm10",
+    )
+    image = Artifact(
+        id="i",
+        document_id="d",
+        type=ArtifactType.IMAGE,
+        uri=str(tmp_path / "p.png"),
+        content_hash="0" * 64,
+    )
+    rempli, _ = run_region_fanout(
+        layout=layout,
+        page_image=image,
+        recognizer=_Espion(),
+        context=_contexte(tmp_path),
+        control=RunControl(),
+    )
+    assert rempli.coordinate_unit == "mm10"
 
 
 def test_a_failing_region_does_not_abort_the_page(tmp_path: Any) -> None:

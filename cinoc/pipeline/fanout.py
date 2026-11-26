@@ -90,7 +90,8 @@ def run_region_fanout(
         )
         pages.append(filled_page)
         usage = usage.merged_with(page_usage)
-    return CanonicalLayout(pages=tuple(pages)), usage
+    # ``model_copy`` : le document garde ce qui n'est pas ses pages (l'unité).
+    return layout.model_copy(update={"pages": tuple(pages)}), usage
 
 
 def _fill_page(

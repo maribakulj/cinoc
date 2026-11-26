@@ -1,4 +1,4 @@
-"""Format ALTO XML (v2/v3/v4) : types, parser tolérant, writer déterministe."""
+"""Format ALTO XML : types, parser tolérant (v2/v3/v4), writer ALTO 4 déterministe."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from cinoc.formats.alto.types import (
     AltoString,
     AltoTextBlock,
 )
-from cinoc.formats.alto.writer import AltoWriteError, write_alto
+from cinoc.formats.alto.writer import write_alto
 
 __all__ = [
     "AltoBBox",
@@ -31,5 +31,4 @@ __all__ = [
     "parse_alto",
     "AltoParseError",
     "write_alto",
-    "AltoWriteError",
 ]
