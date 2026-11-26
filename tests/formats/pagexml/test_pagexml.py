@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from cinoc.formats.pagexml import (
-    DEFAULT_PAGE_NS,
+    PAGE_NS,
     PageDocument,
     PageGenericRegion,
     PagePage,
@@ -18,7 +18,7 @@ from cinoc.formats.pagexml import (
     write_pagexml,
 )
 
-_NS = f'xmlns="{DEFAULT_PAGE_NS}"'
+_NS = f'xmlns="{PAGE_NS}"'
 
 _PAGE = (
     f'<PcGts {_NS}><Page imageFilename="p.jpg" imageWidth="200" imageHeight="300">'
@@ -73,7 +73,7 @@ def _rich_doc() -> PageDocument:
         reading_order=reading_order,
         regions=(text_region, image),
     )
-    return PageDocument(pages=(page,), source_namespace=DEFAULT_PAGE_NS)
+    return PageDocument(pages=(page,), source_namespace=PAGE_NS)
 
 
 # --- parsing -----------------------------------------------------------------
@@ -81,7 +81,7 @@ def _rich_doc() -> PageDocument:
 
 def test_parse_namespace_and_page() -> None:
     doc = parse_pagexml(_PAGE)
-    assert doc.source_namespace == DEFAULT_PAGE_NS
+    assert doc.source_namespace == PAGE_NS
     page = doc.pages[0]
     assert page.image_filename == "p.jpg"
     assert page.image_width == 200 and page.image_height == 300
@@ -135,7 +135,8 @@ def test_roundtrip_empty_text_line() -> None:
     line = PageTextLine(id="l", text="")
     region = PageTextRegion(id="r", text_lines=(line,))
     doc = PageDocument(
-        pages=(PagePage(regions=(region,)),), source_namespace=DEFAULT_PAGE_NS
+        pages=(PagePage(image_width=10, image_height=10, regions=(region,)),),
+        source_namespace=PAGE_NS,
     )
     assert parse_pagexml(write_pagexml(doc)) == doc
 

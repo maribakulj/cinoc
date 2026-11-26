@@ -153,6 +153,11 @@ def _region_image(
 #: la classe : c'est cette information-là qui manquait pour le reproduire.
 REGION_TYPE_PARAM = "region_type"
 
+#: Joint l'identifiant de région et celui de ligne. Un point, pas ``:`` : ALTO
+#: et PAGE typent ces identifiants ``xsd:ID``, donc ``NCName``, où ``:`` est
+#: interdit — tout ALTO assemblé depuis un fan-out échouait au XSD (D-273).
+_LINE_ID_SEPARATOR = "."
+
 
 def _fill_region(
     region: Region,
@@ -226,7 +231,7 @@ def _lignes_reconnues(
     layout = outputs.get(ArtifactType.LAYOUT)
     if layout is not None and layout.uri is not None:
         return _greffer(layout, region)
-    return (Line(id=f"{region.id}:l1", text=_read_text(outputs)),)
+    return (Line(id=f"{region.id}{_LINE_ID_SEPARATOR}l1", text=_read_text(outputs)),)
 
 
 def _greffer(layout_artifact: Artifact, region: Region) -> tuple[Line, ...]:
@@ -272,7 +277,7 @@ def _decalee(ligne: Line, region_id: str, rang: int, dx: int, dy: int) -> Line:
         boite = geometrie.bbox
         decalee = boite.model_copy(update={"x": boite.x + dx, "y": boite.y + dy})
         geometrie = geometrie.model_copy(update={"bbox": decalee})
-    identifiant = f"{region_id}:{ligne.id or f'l{rang + 1}'}"
+    identifiant = f"{region_id}{_LINE_ID_SEPARATOR}{ligne.id or f'l{rang + 1}'}"
     return ligne.model_copy(update={"id": identifiant, "geometry": geometrie})
 
 

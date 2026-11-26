@@ -264,7 +264,7 @@ def test_grafted_line_ids_are_namespaced_by_their_region(tmp_path: Any) -> None:
     pour préserver.
     """
     remplie = _region_remplie(tmp_path, "a", "b")
-    assert [ligne.id for ligne in remplie.lines] == ["r1:line_0", "r1:line_1"]
+    assert [ligne.id for ligne in remplie.lines] == ["r1.line_0", "r1.line_1"]
 
 
 def test_an_empty_sub_layout_leaves_the_region_without_lines(tmp_path: Any) -> None:
@@ -307,7 +307,7 @@ def test_a_text_only_recognizer_still_yields_one_line(tmp_path: Any) -> None:
     remplie, _ = _fill_region(
         region, page, image, _Plat(), _contexte(tmp_path), RunControl(), {}, None
     )
-    assert [ligne.id for ligne in remplie.lines] == ["r1:l1"]
+    assert [ligne.id for ligne in remplie.lines] == ["r1.l1"]
     assert remplie.lines[0].text == "une seule"
 
 
@@ -408,3 +408,75 @@ def test_le_fanout_descend_dans_les_composes_imbriques(tmp_path: Any) -> None:
     # Et aucun niveau intermédiaire ne retient de texte au passage.
     assert not rempli.lines
     assert not rempli.regions[0].lines
+
+
+def test_fanout_line_ids_survive_both_exports(tmp_path: Any) -> None:
+    """Les identifiants que forge le fan-out sont des ``xsd:ID`` (``NCName``).
+
+    Ils joignaient région et ligne par ``:``, interdit dans un ``NCName`` : tout
+    ALTO assemblé depuis un fan-out échouait au XSD, et l'écrivain PAGE aurait
+    dû les renommer — perdant l'identité de ligne que la chaîne structurée
+    existe pour préserver (D-273). Les deux chemins : greffe d'un sous-layout,
+    et ligne unique d'un reconnaisseur à texte plat.
+    """
+    from cinoc.formats.alto.layout_map import layout_to_alto
+    from cinoc.formats.alto.writer import write_alto
+    from cinoc.formats.pagexml.layout_map import layout_to_page, page_to_layout
+    from cinoc.formats.pagexml.parser import parse_pagexml
+    from cinoc.formats.pagexml.writer import write_pagexml
+    from tests.formats._xsd import alto_errors, page_errors
+
+    greffee = _region_remplie(tmp_path, "a", "b")
+    plate = greffee.model_copy(
+        update={"id": "r2", "lines": (Line(id=_fanout_line_id(tmp_path), text="c"),)}
+    )
+    layout = CanonicalLayout(
+        pages=(
+            LayoutPage(
+                width=200, height=200, regions=(greffee, plate),
+                reading_order=("r1", "r2"),
+            ),
+        )
+    )
+    ids = [ligne.id for region in layout.pages[0].regions for ligne in region.lines]
+    assert alto_errors(write_alto(layout_to_alto(layout))) == []
+    page_xml = write_pagexml(layout_to_page(layout))
+    assert page_errors(page_xml) == []
+    relu = page_to_layout(parse_pagexml(page_xml))
+    assert [ligne.id for r in relu.pages[0].regions for ligne in r.lines] == ids
+
+
+def _fanout_line_id(tmp_path: Any) -> str | None:
+    """L'identifiant que donne le fan-out à la ligne d'un reconnaisseur plat."""
+    from cinoc.pipeline.types import StepOutput
+
+    chemin = tmp_path / "plat.txt"
+    chemin.write_text("c", encoding="utf-8")
+
+    class _Plat:
+        name, version = "plat", "1.0"
+        input_types = frozenset({ArtifactType.IMAGE})
+        output_types = frozenset({ArtifactType.RAW_TEXT})
+
+        def execute(self, inputs, params, context, control):  # type: ignore[no-untyped-def]
+            return StepOutput(
+                artifacts={
+                    ArtifactType.RAW_TEXT: Artifact(
+                        id="t", document_id="d", type=ArtifactType.RAW_TEXT,
+                        uri=str(chemin), content_hash="0" * 64,
+                    )
+                }
+            )
+
+    region = Region(
+        id="r2", geometry=Geometry(bbox=BBox(x=0, y=0, width=10, height=10))
+    )
+    image = Artifact(
+        id="i", document_id="d", type=ArtifactType.IMAGE,
+        uri=str(tmp_path / "p.png"), content_hash="0" * 64,
+    )
+    remplie, _ = _fill_region(
+        region, LayoutPage(width=100, height=100), image, _Plat(),
+        _contexte(tmp_path), RunControl(), {}, None,
+    )
+    return remplie.lines[0].id

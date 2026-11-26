@@ -68,11 +68,14 @@ def test_tesseract_alto_single_block_with_words() -> None:
     assert tuple(w.text for w in region.lines[0].words) == ("Liberté", "égalité")
 
 
-def test_transkribus_page_is_polygon_line_level() -> None:
+def test_transkribus_page_is_polygon_with_words() -> None:
     region = _regions(_layout("transkribus.page.xml"))[0]
     assert region.geometry is not None
     assert region.geometry.bbox is None and region.geometry.polygon  # PAGE = polygone
-    assert region.lines[0].words == ()  # PAGE = pas de niveau mot
+    # Les ``<Word>`` PAGE sont lus (D-273), polygone compris.
+    words = region.lines[0].words
+    assert tuple(w.text for w in words) == ("Nostre", "Seigneur")
+    assert all(w.geometry is not None and w.geometry.polygon for w in words)
 
 
 def test_escriptorium_page_separates_body_and_marginalia() -> None:

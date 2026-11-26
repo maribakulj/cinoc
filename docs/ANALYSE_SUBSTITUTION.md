@@ -41,8 +41,8 @@ corriger · **S** supprimer · **E** extraire.
 | Composant | Candidats | Preuve | Décision |
 |---|---|---|---|
 | `_xml.py` (parse durci) | defusedxml, lxml par défaut, parseurs d'ocrd et pagexml-tools | 10/10 vecteurs rejetés (XXE, entités paramètre, DTD externe, billion laughs, quadratique, DOCTYPE, imbrication 100 000, UTF-16), aucun accès disque sous `strace`. defusedxml : `.lxml` **déprécié**, accepte DTD externe et DOCTYPE par défaut, dernière version 2023. pagexml-tools accepte XXE en silence ; ocrd accepte DOCTYPE distant | **C** |
-| Parseurs ALTO / PAGE | `ocrd_models` (OCR-D core 3.13), pagexml-tools 0.9.1, xsdata | PAGE : résultats identiques à ocrd sur 5 fichiers, Cinoc 2,4× plus rapide ; pagexml-tools échoue sur un PAGE préfixé `pc:`. ALTO : **aucune bibliothèque Python maintenue** ; xsdata échoue sur v2/v3/BnF et perd l'entrelacement String/SP | **C+** (lire les `<Word>` PAGE : 161 et 258 mots perdus sur deux pages OCR-D) |
-| Writers ALTO / PAGE | ocrd_page, xsdata | **0/21 ALTO et 0/11 PAGE écrits par Cinoc valides au XSD officiel** (ALTO 4.4, PAGE 2019). ALTO : `PHYSICAL_IMG_NR`/`Page@ID` absents, `TextBlock@TYPE` interdit en v4. PAGE : `Metadata` et dimensions absents, types de région hors énumération, ImageRegion réécrite en TextRegion, sous-régions mal placées, `TextLine@id` manquant. Corrections locales ; l'oracle est `lxml.XMLSchema` + XSD vendorisés (aucune dépendance) | **C+** — contredit L9 de `MIGRATION_COUCHE_2.md` (« conforme par construction ») |
+| Parseurs ALTO / PAGE | `ocrd_models` (OCR-D core 3.13), pagexml-tools 0.9.1, xsdata | PAGE : résultats identiques à ocrd sur 5 fichiers, Cinoc 2,4× plus rapide ; pagexml-tools échoue sur un PAGE préfixé `pc:`. ALTO : **aucune bibliothèque Python maintenue** ; xsdata échoue sur v2/v3/BnF et perd l'entrelacement String/SP | **C+** (lire les `<Word>` PAGE : 161 et 258 mots perdus sur deux pages OCR-D — **corrigé** D-273, 161/161 et 258/258 lus, identiques après aller-retour) |
+| Writers ALTO / PAGE | ocrd_page, xsdata | **0/21 ALTO et 0/11 PAGE écrits par Cinoc valides au XSD officiel** (ALTO 4.4, PAGE 2019). ALTO : `PHYSICAL_IMG_NR`/`Page@ID` absents, `TextBlock@TYPE` interdit en v4. PAGE : `Metadata` et dimensions absents, types de région hors énumération, ImageRegion réécrite en TextRegion, sous-régions mal placées, `TextLine@id` manquant. Corrections locales ; l'oracle est `lxml.XMLSchema` + XSD vendorisés (aucune dépendance) | **C+** — contredit L9 de `MIGRATION_COUCHE_2.md` (« conforme par construction ») ; **corrigé** : ALTO D-272, PAGE D-273 |
 | `CanonicalLayout` | DoclingDocument (docling-core), PcGts d'OCR-D | Docling perd ids de ligne, 3 339 mots et leurs confiances, SUBS, polygones ; rabat les boîtes hors page. ocrd_page : generateDS mutable, non pydantic, sans JSON. Le modèle Cinoc est le plus fidèle des trois en aller-retour ALTO | **C** ; Docling au plus en exporteur |
 | `_geometry.py`, IoU | shapely 2.2 | IoU identique sur 20 000 paires ; Cinoc 10,7 ms, shapely 152 à 754 ms. Polygone ≠ bbox seulement en manuscrit (écart IoU ≤ 0,065) | **C** |
 | `ocrd_processor.py` | API `ocrd` (+327 Mo, 75 distributions) | Pas de DAG typé, pas de cache par contenu, pas d'annulation coopérative. L'adapter lance 3 processus par page (~4-7 s fixes) ; un METS par gabarit en fait 1 ; `ocrd process` enchaîne plusieurs processeurs | **I** amélioré (METS gabarit, chaîne de processeurs, arrêt à l'annulation) |
@@ -133,7 +133,7 @@ l'extra `hipe-oracle`), crowd-kit et LiteLLM hors CI.
 |---|---|---|---|
 | 1 | Segmenteur distant : validation SSRF puis seconde résolution DNS | sécurité | **corrigé** (D-263) |
 | 2 | Auth renvoyée sur redirection vers un autre port / https → http | sécurité | **corrigé** (D-263) |
-| 3 | ALTO et PAGE écrits invalides au XSD officiel | conformité | ALTO **corrigé** (D-272) ; PAGE → P5d item 7b (S3) |
+| 3 | ALTO et PAGE écrits invalides au XSD officiel | conformité | **corrigé** : ALTO (D-272), PAGE (D-273) |
 | 4 | IIIF v2 : URL du service prise pour l'image (corpus corrompu) | intégrité des données | → P5d item 7 |
 | 5 | IIIF v3 : vignette au lieu de l'image pleine résolution | biais de mesure | → P5d item 7 |
 | 6 | Vote multi-moteurs : pas un ROVER, dépend du nom des sources | justesse | → P5e item 11 |
@@ -144,8 +144,8 @@ l'extra `hipe-oracle`), crowd-kit et LiteLLM hors CI.
 | 11 | Romains absurdes acceptés ; mots détectés comme romains | justesse | → P5e item 8 |
 | 12 | Ordre de lecture `columns` entrelace les colonnes sous un titre large | justesse | → P5e item 11 |
 | 13 | Clé de reprise aveugle aux binaires système | reproductibilité | → P5f item 2b |
-| 14 | PAGE : `<Word>` ignorés à la lecture | perte de données | → P5d item 7 |
-| 15 | `alto_source` : lignes sans ID non vérifiées sous ComposedBlock | justesse | → P5d item 7 |
+| 14 | PAGE : `<Word>` ignorés à la lecture | perte de données | **corrigé** (D-273) |
+| 15 | `alto_source` : lignes sans ID non vérifiées sous ComposedBlock | justesse | **corrigé** (D-273) |
 | 16 | Tesseract exécuté 2-3× par page ; OpenMP non borné | coût | → P5g item 6 |
 | 17 | `ocrd_processor` : 3 processus par page, non tués à l'annulation | coût, annulation | → P5g item 6 |
 | 18 | Calibration : convention de bornes différente des références | documentation | → P5e item 9 |

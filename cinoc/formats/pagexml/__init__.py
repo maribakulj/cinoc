@@ -10,12 +10,13 @@ from cinoc.formats.pagexml.types import (
     PageRegion,
     PageTextLine,
     PageTextRegion,
+    PageWord,
     ReadingOrderGroup,
     ReadingOrderNode,
     ReadingOrderRef,
 )
 from cinoc.formats.pagexml.writer import (
-    DEFAULT_PAGE_NS,
+    PAGE_NS,
     PageWriteError,
     write_pagexml,
 )
@@ -26,6 +27,7 @@ __all__ = [
     "ReadingOrderNode",
     "PageTextLine",
     "PageTextRegion",
+    "PageWord",
     "PageGenericRegion",
     "PageRegion",
     "PagePage",
@@ -34,5 +36,5 @@ __all__ = [
     "PageParseError",
     "write_pagexml",
     "PageWriteError",
-    "DEFAULT_PAGE_NS",
+    "PAGE_NS",
 ]

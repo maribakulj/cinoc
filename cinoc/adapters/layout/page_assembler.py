@@ -22,7 +22,7 @@ from cinoc.domain.artifacts import Artifact, ArtifactType, compute_content_hash
 from cinoc.domain.errors import AdapterStepError
 from cinoc.domain.layout import CanonicalLayout
 from cinoc.formats.pagexml.layout_map import layout_to_page
-from cinoc.formats.pagexml.writer import write_pagexml
+from cinoc.formats.pagexml.writer import PageWriteError, write_pagexml
 from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
@@ -31,7 +31,9 @@ _VERSION = "1.0"
 
 
 class PageAssembler:
-    """Assemble un ``LAYOUT`` rempli en ``PAGE_XML`` (PAGE 2019, déterministe)."""
+    """Assemble un ``LAYOUT`` rempli en ``PAGE_XML`` (PAGE 2019, déterministe,
+    conforme au XSD de PRImA ; un layout hors pixels ou sans dimensions est
+    refusé plutôt qu'écrit faux)."""
 
     @property
     def name(self) -> str:
@@ -69,7 +71,15 @@ class PageAssembler:
             raise AdapterStepError(
                 f"{self.name} : LAYOUT illisible ({layout_path.name!r}) : {exc}"
             ) from exc
-        payload = write_pagexml(layout_to_page(layout))
+        try:
+            payload = write_pagexml(layout_to_page(layout))
+        except PageWriteError as exc:
+            # Un PAGE faux (unité, dimensions) serait pire qu'aucun : l'étape
+            # échoue, en disant pourquoi.
+            raise AdapterStepError(
+                f"{self.name} : PAGE non écrivable pour {context.document_id!r} : "
+                f"{exc}"
+            ) from exc
         out_dir = (
             Path(context.workspace_uri)
             if context.workspace_uri
