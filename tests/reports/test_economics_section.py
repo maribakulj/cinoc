@@ -136,3 +136,37 @@ def test_human_cost_is_labelled_a_simulation_in_both_languages() -> None:
     assert "pages/h effective (simulation)" in en
     assert "assumption: 5 s per character error" in en
     assert "<strong>simulation</strong>" in en
+
+
+def test_a_self_hosted_instance_says_so_in_both_languages() -> None:
+    """P5f 6 (D-293) : un serveur auto-hébergé n'a ni « tarif inconnu » ni un
+    tarif de fournisseur — la cellule et la note le disent, en FR et en EN."""
+    payload = _payload().model_copy(
+        update={
+            "pipelines": (
+                PipelineEconomics(
+                    pipeline="vlm_local",
+                    n_documents=2,
+                    duration_seconds=140.0,
+                    tokens_in=2_000,
+                    tokens_out=400,
+                    cost_eur=0.0031,
+                    basis="machine",
+                    self_hosted=("openai/qwen2.5vl:3b",),
+                ),
+            ),
+            "marginal": (),
+        }
+    )
+    result = RunResult(
+        manifest=_manifest(),
+        analyses=(Analysis(scope="corpus", view="text", payload=payload),),
+    )
+    fr = EconomicsSection().render(result, SectionContext())
+    en = EconomicsSection().render(result, SectionContext(lang="en"))
+    assert fr is not None and en is not None
+    assert "auto-hébergé : openai/qwen2.5vl:3b" in fr
+    assert "aucun tarif de fournisseur" in fr
+    assert "self-hosted: openai/qwen2.5vl:3b" in en
+    assert "no provider price" in en
+    assert "auto-hébergé" not in en and "self-hosted" not in fr

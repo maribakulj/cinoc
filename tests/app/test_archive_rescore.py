@@ -330,36 +330,40 @@ def test_offline_ignores_the_binaries_of_the_machine_that_rescores(
 # --------------------------------------------------------------------------- #
 
 
-def test_an_endpoint_read_from_the_environment_enters_the_key_and_the_manifest(
+def test_an_instance_endpoint_enters_the_key_and_the_manifest(
     archived: tuple[RunSpec, ResumeStore, RunResult, _Local],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """``OPENAI_BASE_URL`` (le contournement vLLM) réutilisait en silence les
-    sorties du modèle précédent : un autre endpoint est une autre unité."""
+    """Un autre serveur est une autre unité : viser un vLLM ne ressert pas les
+    sorties d'OpenAI. La cible venait de ``OPENAI_BASE_URL`` (D-279) ; elle est
+    la saisie ``base_url`` de l'instance depuis D-293."""
     spec, store, first, state = archived
     assert first.manifest.adapter_kwargs["openai:c0"]["base_url"] == (
         "https://api.openai.com/v1"
     )
-    monkeypatch.setenv(
-        "OPENAI_BASE_URL", "http://user:pw@vllm.local:8000/v1?token=abc"
+    vllm = spec.model_copy(
+        update={
+            "adapter_kwargs": {
+                **spec.adapter_kwargs,
+                "openai:c0": {
+                    **spec.adapter_kwargs["openai:c0"],
+                    "base_url": "http://vllm.local:8000/v1",
+                },
+            }
+        }
     )
     with pytest.raises(ArchiveIncompleteError, match=r"openai \(zero-shot\)"):
         run(
-            spec, registry=_registry(state), code_version="1.0", resume_store=store,
+            vllm, registry=_registry(state), code_version="1.0", resume_store=store,
             offline=True,
         )
     _serve(monkeypatch)
-    monkeypatch.setenv(
-        "OPENAI_BASE_URL", "http://user:pw@vllm.local:8000/v1?token=abc"
-    )
     second = run(
-        spec, registry=_registry(state), code_version="1.0", resume_store=store
+        vllm, registry=_registry(state), code_version="1.0", resume_store=store
     )
-    # Écrit sans identifiants ni jeton.
     assert second.manifest.adapter_kwargs["openai:c0"]["base_url"] == (
         "http://vllm.local:8000/v1"
     )
-    assert "pw" not in second.model_dump_json()
 
 
 # --------------------------------------------------------------------------- #

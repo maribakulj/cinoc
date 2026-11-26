@@ -222,6 +222,12 @@ def _inference(kwargs: Mapping[str, ParamValue], *extra: str) -> dict[str, Any]:
     return {k: kwargs[k] for k in (*_INFERENCE_KEYS, *extra) if k in kwargs}
 
 
+#: Réglages de cible d'une instance OpenAI-compatible (vLLM, SGLang, serveur
+#: local) : l'endpoint, le **nom** de la variable de la clé, le marqueur
+#: « auto-hébergé » lu par l'économie.
+_OPENAI_ENDPOINT_KEYS = ("base_url", "api_key_env", "self_hosted")
+
+
 def _build_openai(kwargs: Mapping[str, ParamValue]) -> Module:
     label = kwargs.get("label")
     if not isinstance(label, str):
@@ -236,7 +242,9 @@ def _build_openai(kwargs: Mapping[str, ParamValue]) -> Module:
         model=str(kwargs.get("model", "gpt-4o-mini")),
         role=str(kwargs.get("role", "text_only")),
         prompt=prompt if isinstance(prompt, str) else None,
-        **_inference(kwargs),
+        # Cible par instance (P5f 6) : l'adapter valide schéma, identifiants,
+        # nom de variable et marqueur — transmis tels quels.
+        **_inference(kwargs, *_OPENAI_ENDPOINT_KEYS),
     )
 
 

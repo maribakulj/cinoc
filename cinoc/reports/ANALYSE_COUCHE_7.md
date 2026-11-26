@@ -298,6 +298,8 @@ cinoc/reports/
 
 > **P5f 7 (D-292)** : Mesures clés — cellule s/page marquée ↺ quand le pipeline a une unité reprise ; la note sépare, par pipeline, durées mesurées par ce run et durées reprises (ou dit qu'aucune n'est mesurée) — remplace la note générique de S17. Économie — durée marquée ↺, note des unités reprises, pages facturées dans la base. CSV — `duration_seconds_first_run` pour une unité reprise. Méthodologie FR/EN. *Preuve : `tests/reports/test_key_measures_section.py`, `tests/app/test_resumed_units.py`.*
 
+> **P5f 6 (D-293)** : Économie — la cellule « base » d'un pipeline auto-hébergé ajoute « auto-hébergé : <modèle> » / « self-hosted: <model> », et une note sous le tableau dit qu'aucun tarif de fournisseur n'est appliqué (FR/EN). *Preuve : `tests/reports/test_economics_section.py`, `tests/app/test_self_hosted_run.py`.*
+
 > Tri-état : `[x]` fait **+ preuve** · `[ ]` à faire · `[~]` différé/réserve + raison.
 > Maj dans le **même commit** que le code. **Statut : ✅ T2** — cadre `Section` + assembleur autonome + sections **overview** & **cross_engine** + rapport de **comparaison** (deltas 2 runs) verts. **+ T7 `synthesis`** : section verdict factuel par vue (meilleur pipeline CER · Δ au suivant · significativité `cross_engine`), gatée `requires=("cer",)`, déterministe — **toutes les vues S4 au design désormais livrées**. Différé : importeurs cœur · longitudinal (T7), interactivité client-side.
 
