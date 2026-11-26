@@ -9,9 +9,19 @@ n'importe pas ``RunResult`` (couche 3) — c'est la couche ``app`` qui aplatit u
 ``RunResult`` en enregistrements (``app/history.py``). Persistance pure, réutilisable
 et testable avec de la donnée simple.
 
+**Une série = (corpus, profil de normalisation, pipeline, vue)** (D-288) : avant,
+une série n'était indexée que par (pipeline, vue), si bien qu'une « tendance »
+mêlait des runs sur des corpus ou sous des profils différents — un CER qui
+« baisse » parce qu'on est passé de ``nfc`` à ``flat_text`` n'est pas un progrès.
+Le profil ``None`` (comparaison brute) est une série à part entière (``NULL``,
+comparé par ``IS``). Une base écrite avant cette clé n'a pas la colonne : elle
+est **refusée** (``HistorySchemaError``) plutôt que relue en séries mêlées — elle
+ne dit pas sous quel profil ses valeurs ont été calculées.
+
 Concurrence : **une connexion par opération** (``sqlite3.connect`` est bon marché),
 donc aucun partage de connexion entre threads. Ré-enregistrer un même run est
-**idempotent** (clé primaire ``(run_id, pipeline, view, metric)``).
+**idempotent** (clé primaire ``(run_id, pipeline, view, metric)`` : un run a un
+seul corpus et un seul profil par vue).
 """
 
 from __future__ import annotations
@@ -22,11 +32,14 @@ from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
 
+from cinoc.domain.errors import CinocError
+
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS run_metrics (
     run_id       TEXT NOT NULL,
     completed_at TEXT NOT NULL,
     corpus_name  TEXT NOT NULL,
+    normalization_profile TEXT,
     code_version TEXT NOT NULL,
     pipeline     TEXT NOT NULL,
     view         TEXT NOT NULL,
@@ -34,13 +47,31 @@ CREATE TABLE IF NOT EXISTS run_metrics (
     value        REAL NOT NULL,
     PRIMARY KEY (run_id, pipeline, view, metric)
 );
-CREATE INDEX IF NOT EXISTS idx_run_metrics_lookup
-    ON run_metrics (view, metric, pipeline, completed_at);
+CREATE INDEX IF NOT EXISTS idx_run_metrics_series
+    ON run_metrics (corpus_name, normalization_profile, pipeline, view, metric,
+                    completed_at);
 """
 
 _COLUMNS = (
-    "run_id, completed_at, corpus_name, code_version, pipeline, view, metric, value"
+    "run_id, completed_at, corpus_name, normalization_profile, code_version, "
+    "pipeline, view, metric, value"
 )
+_SERIES_ORDER = "corpus_name, normalization_profile, pipeline, view"
+
+
+class HistorySchemaError(CinocError):
+    """Base d'historique d'un format antérieur (séries sans profil)."""
+
+
+@dataclass(frozen=True)
+class SeriesKey:
+    """Ce qui fait **une** série : deux runs ne se comparent que sous la même."""
+
+    corpus_name: str
+    #: ``None`` = comparaison brute (``normalization_profile: null``).
+    normalization_profile: str | None
+    pipeline: str
+    view: str
 
 
 @dataclass(frozen=True)
@@ -50,17 +81,26 @@ class HistoryRecord:
     run_id: str
     completed_at: str  # ISO 8601 (UTC) — triable lexicographiquement
     corpus_name: str
+    normalization_profile: str | None
     code_version: str
     pipeline: str
     view: str
     metric: str
     value: float
 
+    @property
+    def series(self) -> SeriesKey:
+        return SeriesKey(
+            self.corpus_name, self.normalization_profile, self.pipeline, self.view
+        )
+
 
 @dataclass(frozen=True)
 class Regression:
-    """Dégradation d'un pipeline entre ses deux runs les plus récents."""
+    """Dégradation d'une série entre ses deux runs les plus récents."""
 
+    corpus_name: str
+    normalization_profile: str | None
     pipeline: str
     view: str
     metric: str
@@ -85,6 +125,17 @@ class HistoryStore:
         """Ouvre une connexion, créant dossier + schéma au besoin (idempotent)."""
         self._path.parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(self._path)
+        columns = {
+            row[1] for row in conn.execute("PRAGMA table_info(run_metrics)")
+        }
+        if columns and "normalization_profile" not in columns:
+            conn.close()
+            raise HistorySchemaError(
+                f"historique {self._path} au format antérieur : ses séries ne "
+                "disent ni corpus ni profil de normalisation, et ses valeurs ne "
+                "peuvent pas être rangées sans les mêler. Déplacez ce fichier "
+                "pour en commencer un nouveau (les RunResult, eux, se relisent)."
+            )
         conn.executescript(_SCHEMA)
         return conn
 
@@ -95,6 +146,7 @@ class HistoryStore:
                 r.run_id,
                 r.completed_at,
                 r.corpus_name,
+                r.normalization_profile,
                 r.code_version,
                 r.pipeline,
                 r.view,
@@ -108,31 +160,63 @@ class HistoryStore:
         with closing(self._connect()) as conn:
             conn.executemany(
                 f"INSERT OR REPLACE INTO run_metrics ({_COLUMNS}) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 rows,
             )
             conn.commit()
         return len(rows)
 
-    def history(
-        self, pipeline: str, view: str, metric: str
-    ) -> tuple[HistoryRecord, ...]:
-        """Suite chronologique (croissante) d'une métrique pour un pipeline/vue."""
+    def history(self, series: SeriesKey, metric: str) -> tuple[HistoryRecord, ...]:
+        """Suite chronologique (croissante) d'une métrique sur **une** série."""
         with closing(self._connect()) as conn:
             cur = conn.execute(
                 f"SELECT {_COLUMNS} FROM run_metrics "
-                "WHERE pipeline = ? AND view = ? AND metric = ? "
+                "WHERE corpus_name = ? AND normalization_profile IS ? "
+                "AND pipeline = ? AND view = ? AND metric = ? "
                 "ORDER BY completed_at, run_id",  # run_id = bris d'égalité déterministe
-                (pipeline, view, metric),
+                (
+                    series.corpus_name,
+                    series.normalization_profile,
+                    series.pipeline,
+                    series.view,
+                    metric,
+                ),
             )
             return tuple(HistoryRecord(*row) for row in cur.fetchall())
+
+    def series(
+        self, view: str, metric: str, *, pipeline: str | None = None
+    ) -> tuple[tuple[SeriesKey, tuple[HistoryRecord, ...]], ...]:
+        """Toutes les séries d'une (vue, métrique), chacune chronologique.
+
+        ``pipeline`` restreint à ce pipeline. Ordre déterministe : clé de série,
+        puis ``completed_at``, puis ``run_id``.
+        """
+        query = f"SELECT {_COLUMNS} FROM run_metrics WHERE view = ? AND metric = ?"
+        params: tuple[str, ...] = (view, metric)
+        if pipeline is not None:
+            query += " AND pipeline = ?"
+            params += (pipeline,)
+        with closing(self._connect()) as conn:
+            rows = conn.execute(query, params).fetchall()
+        grouped: dict[SeriesKey, list[HistoryRecord]] = {}
+        for row in rows:
+            record = HistoryRecord(*row)
+            grouped.setdefault(record.series, []).append(record)
+        return tuple(
+            (
+                key,
+                tuple(sorted(grouped[key], key=lambda r: (r.completed_at, r.run_id))),
+            )
+            for key in sorted(grouped, key=_sort_key)
+        )
 
     def all_records(self, *, limit: int = 1000) -> tuple[HistoryRecord, ...]:
         """Lignes les plus récentes d'abord, **bornées** (pour la vue Historique)."""
         with closing(self._connect()) as conn:
             cur = conn.execute(
                 f"SELECT {_COLUMNS} FROM run_metrics "
-                "ORDER BY completed_at DESC, run_id, pipeline, view, metric "
+                f"ORDER BY completed_at DESC, run_id, {_SERIES_ORDER}, metric "
                 "LIMIT ?",
                 (limit,),
             )
@@ -146,46 +230,45 @@ class HistoryStore:
         threshold: float = 0.0,
         higher_is_better: bool = False,
     ) -> tuple[Regression, ...]:
-        """Pipelines dont la métrique s'est dégradée entre les 2 derniers runs.
+        """Séries dont la métrique s'est dégradée entre leurs 2 derniers runs.
 
         ``higher_is_better=False`` (défaut, CER/WER) : régression = la valeur a
         **augmenté** de plus de ``threshold``. ``True`` inverse le sens.
         """
-        with closing(self._connect()) as conn:
-            cur = conn.execute(
-                "SELECT pipeline, completed_at, value, run_id FROM run_metrics "
-                "WHERE view = ? AND metric = ? "
-                "ORDER BY pipeline, completed_at, run_id",  # bris d'égalité stable
-                (view, metric),
-            )
-            rows = cur.fetchall()
-
-        by_pipeline: dict[str, list[tuple[str, float, str]]] = {}
-        for pipeline, completed_at, value, run_id in rows:
-            by_pipeline.setdefault(pipeline, []).append((completed_at, value, run_id))
-
         out: list[Regression] = []
-        for pipeline, series in by_pipeline.items():
-            if len(series) < 2:
+        for key, records in self.series(view, metric):
+            if len(records) < 2:
                 continue
-            _, prev_value, prev_run = series[-2]
-            _, last_value, last_run = series[-1]
-            delta = last_value - prev_value
+            previous, latest = records[-2], records[-1]
+            delta = latest.value - previous.value
             worse = -delta if higher_is_better else delta
             if worse > threshold:
                 out.append(
                     Regression(
-                        pipeline=pipeline,
+                        corpus_name=key.corpus_name,
+                        normalization_profile=key.normalization_profile,
+                        pipeline=key.pipeline,
                         view=view,
                         metric=metric,
-                        previous_run_id=prev_run,
-                        latest_run_id=last_run,
-                        previous=prev_value,
-                        latest=last_value,
+                        previous_run_id=previous.run_id,
+                        latest_run_id=latest.run_id,
+                        previous=previous.value,
+                        latest=latest.value,
                         delta=delta,
                     )
                 )
         return tuple(out)
 
 
-__all__ = ["HistoryRecord", "HistoryStore", "Regression"]
+def _sort_key(key: SeriesKey) -> tuple[str, str, str, str]:
+    """Ordre total de séries (le profil brut ``None`` avant les profils nommés)."""
+    return (key.corpus_name, key.normalization_profile or "", key.pipeline, key.view)
+
+
+__all__ = [
+    "HistoryRecord",
+    "HistorySchemaError",
+    "HistoryStore",
+    "Regression",
+    "SeriesKey",
+]

@@ -65,7 +65,7 @@ def line_cers(
     correspondance est notée face à une hypothèse vide (CER 1.0). Notée par
     :func:`lines.line_cer` (D-285). Les lignes de référence vides sont
     ignorées (CER indéfini) ; les lignes excédentaires de l'hypothèse
-    relèvent du scalaire ``hallucination``.
+    relèvent du scalaire ``unanchored_trigrams``.
     """
     ref_lines = reference.splitlines()
     mapped = aligned_to_reference(ref_lines, hypothesis.splitlines())

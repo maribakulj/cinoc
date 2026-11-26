@@ -43,8 +43,15 @@ def test_completed_run_is_recorded(tmp_path: Path) -> None:
         if s.value is not None
     )
     pipeline, score = sample
-    series = history.history(pipeline.pipeline, pipeline.view, score.metric)
+    (series,) = [
+        records
+        for key, records in history.series(pipeline.view, score.metric)
+        if key.pipeline == pipeline.pipeline
+    ]
     assert len(series) == 1
+    # La démo nomme son corpus ; sa vue texte reçoit le profil par défaut.
+    assert series[0].corpus_name == result.manifest.corpus_name
+    assert series[0].normalization_profile == "flat_text"
     assert series[0].run_id == "rec-1"
     assert series[0].value == score.value
 

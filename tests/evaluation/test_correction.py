@@ -264,3 +264,19 @@ def test_through_evaluate_run(tmp_path: Path) -> None:
     ]
     assert len(payloads) == 1
     assert payloads[0].pipelines[0].change_ratio == pytest.approx(2.0)
+
+
+def test_heavy_insertion_count_is_named_after_its_calculation() -> None:
+    """Le compte des documents dont la part d'insertions dépasse 0,10 s'appelait
+    ``n_hallucination_heavy`` : il ne mesure qu'une part d'insertions (D-288).
+    L'ancien champ n'est pas aliasé — un payload qui le porte est refusé."""
+    from pydantic import ValidationError
+
+    from cinoc.evaluation.analysis import PipelineCorrection
+
+    assert "n_heavy_insertion" in PipelineCorrection.model_fields
+    assert "n_hallucination_heavy" not in PipelineCorrection.model_fields
+    with pytest.raises(ValidationError):
+        PipelineCorrection.model_validate(
+            {"pipeline": "p", "n_documents": 1, "n_hallucination_heavy": 0}
+        )

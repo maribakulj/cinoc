@@ -126,3 +126,33 @@ def test_sans_geometrie_aucun_appariement_invente() -> None:
         ),)
     )
     assert correspondance(VT, nue) == {}
+
+
+def test_les_regions_fantomes_comptent_leur_texte() -> None:
+    """Une région de la sortie sans vis-à-vis dans la référence (« fantôme »)
+    portait du texte que ``region_cer`` ignorait : un moteur qui invente un
+    bloc entier gardait son CER par région (D-288). Ce texte compte en
+    insertions, comme une région de référence manquée compte en
+    suppressions — l'identifiant partagé ou la géométrie l'ont dit."""
+    fantome = Region(
+        id="r_9",
+        geometry=Geometry(bbox=BBox(x=700, y=50, width=90, height=40)),
+        lines=(Line(id="r_9:l1", text="texte inventé"),),
+    )
+    page = VT.pages[0]
+    hyp = CanonicalLayout(
+        pages=(page.model_copy(update={"regions": (*page.regions, fantome)}),)
+    )
+    observation = region_cer.fn(_ctx(VT, hyp))
+    assert observation is not None
+    # 13 caractères inventés sur 14 de référence (alpha + beta + gamma).
+    assert observation.value == 13 / 14
+    assert observation.weight == 14
+    # Par géométrie aussi (identifiants étrangers) : même verdict.
+    autre = _page(("b0", "b1", "b2"), ("alpha", "beta", "gamma"), ("b0", "b1", "b2"))
+    p = autre.pages[0]
+    hyp2 = CanonicalLayout(
+        pages=(p.model_copy(update={"regions": (*p.regions, fantome)}),)
+    )
+    observation = region_cer.fn(_ctx(VT, hyp2))
+    assert observation is not None and observation.value == 13 / 14

@@ -20,6 +20,13 @@ d'hypothèse) ni sa recherche de coefficients — variante plus lourde et **non
 déterministe**, différée. La méthode retenue est entièrement **déterministe et
 auditable** (invariant §12), ce qui prime sur la fidélité bit-à-bit à une
 implémentation de référence.
+
+⚠️ **Métrique limitée** (déclarée en D-288, glossaire et radar) : appariant des
+lignes **entières**, elle vaut **0** dès que la sortie fusionne les lignes de
+la référence — le cas typique d'un VLM qui rend un paragraphe —, quelle que
+soit la qualité du texte. Et sous un profil qui aplatit les blancs (le défaut
+``flat_text``), la vue lui donne une seule ligne de chaque côté : elle vaut
+alors 1 − CER, sans sa tolérance à l'ordre.
 """
 
 from __future__ import annotations
@@ -64,7 +71,8 @@ def _flexible_errors(gt_lines: list[str], ocr_lines: list[str]) -> int:
     input_types=(ArtifactType.RAW_TEXT, ArtifactType.RAW_TEXT),
     description=(
         "Flexible Character Accuracy : exactitude caractère par appariement "
-        "optimal de lignes (indépendante de l'ordre de lecture)."
+        "optimal de lignes entières (ordre libre) ; 0 si la sortie fusionne "
+        "les lignes."
     ),
     higher_is_better=True,
     tags=frozenset({"text", "accuracy", "reading_order"}),

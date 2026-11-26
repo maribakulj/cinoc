@@ -195,3 +195,49 @@ class TestEntitiesCollector:
         analysis = collector.build("text")
         assert analysis is not None
         assert [r.pipeline for r in analysis.payload.pipelines] == ["alpha", "beta"]
+
+
+class TestExactName:
+    """Variante « nom exact » (D-288) : ``ner_f1`` apparie par recouvrement
+    d'empans et ne lit pas la forme écrite — « Montfort » lu « Montfert » au
+    même endroit compte juste. ``ner_f1_exact`` exige la forme de la GT."""
+
+    def _pair(self, written: str) -> tuple[EntitySet, EntitySet]:
+        gt = _es("Jehan de Montfort vint", ("PER", 0, 17))
+        hyp = _es(f"Jehan de {written} vint", ("PER", 0, 9 + len(written)))
+        return gt, hyp
+
+    def test_misread_name_counts_for_span_f1_not_for_exact(self) -> None:
+        from cinoc.evaluation.context import DocContext
+        from cinoc.evaluation.metrics.ner import ner_f1, ner_f1_exact
+
+        gt, hyp = self._pair("Montfert")
+        ctx = DocContext(document_id="d", reference=gt, hypothesis=hyp)
+        span, exact = ner_f1.fn(ctx), ner_f1_exact.fn(ctx)
+        assert span is not None and span.value == 1.0
+        assert exact is not None and exact.value == 0.0
+        assert exact.weight == 1
+        counts = compute_ner(gt, hyp)
+        assert (counts.tp, counts.tp_exact) == (1, 0)
+
+    def test_exact_name_counts_for_both(self) -> None:
+        from cinoc.evaluation.context import DocContext
+        from cinoc.evaluation.metrics.ner import ner_f1, ner_f1_exact
+
+        # Le nom est exact mais décalé par un insert OCR amont : R14 le
+        # reprojette, et sa forme est lue à ses offsets dans **la sortie**.
+        gt = _es("Jehan de Montfort vint", ("PER", 0, 17))
+        hyp = _es("XX Jehan de Montfort vint", ("PER", 3, 20))
+        ctx = DocContext(document_id="d", reference=gt, hypothesis=hyp)
+        assert ner_f1.fn(ctx).value == 1.0  # type: ignore[union-attr]
+        assert ner_f1_exact.fn(ctx).value == 1.0  # type: ignore[union-attr]
+
+    def test_misread_name_is_both_missed_and_spurious(self) -> None:
+        # Deux entités, une seule exacte : TP 1, FP 1, FN 1 → F1 = 0,5.
+        from cinoc.evaluation.context import DocContext
+        from cinoc.evaluation.metrics.ner import ner_f1_exact
+
+        gt = _es("Jehan de Montfort et Marie", ("PER", 0, 17), ("PER", 21, 26))
+        hyp = _es("Jehan de Montfert et Marie", ("PER", 0, 17), ("PER", 21, 26))
+        ctx = DocContext(document_id="d", reference=gt, hypothesis=hyp)
+        assert ner_f1_exact.fn(ctx).value == pytest.approx(0.5)  # type: ignore[union-attr]

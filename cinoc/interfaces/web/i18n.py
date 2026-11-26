@@ -192,7 +192,9 @@ _STRINGS: dict[str, dict[str, str]] = {
         "history_eyebrow": "Vitrine · longitudinal",
         "history_title": "Historique",
         "history_desc": "Évolution des métriques par moteur au fil des runs ; "
-        "régressions signalées entre les deux derniers runs.",
+        "régressions signalées entre les deux derniers runs. Une série = un "
+        "corpus, un profil de normalisation, un moteur et une vue : deux runs "
+        "ne se comparent que sous les mêmes.",
         "history_stat_runs": "mesures",
         "history_trends_title": "Tendances",
         "history_trends_desc": "Évolution du CER par moteur au fil des runs "
@@ -218,6 +220,13 @@ _STRINGS: dict[str, dict[str, str]] = {
         "history_col_metric": "Métrique",
         "history_col_value": "Valeur",
         "history_col_change": "Évolution",
+        "history_col_corpus": "Corpus",
+        "history_col_profile": "Profil",
+        "history_raw_profile": "brut",
+        "history_legacy": "Base d'historique au format antérieur : ses séries "
+        "ne disent ni corpus ni profil de normalisation, elles ne sont pas "
+        "affichées. Déplacez le fichier history.db pour en commencer une "
+        "nouvelle.",
         "library_eyebrow": "VIEW · LIBRARY",
         "library_title": "Bibliothèque de corpus",
         "library_desc": "Corpus locaux et catalogues distants — toute la matière "
@@ -446,7 +455,9 @@ _STRINGS: dict[str, dict[str, str]] = {
         "history_eyebrow": "Showcase · longitudinal",
         "history_title": "History",
         "history_desc": "Per-engine metric evolution across runs; regressions "
-        "flagged between the two most recent runs.",
+        "flagged between the two most recent runs. A series = one corpus, one "
+        "normalisation profile, one engine and one view: two runs are only "
+        "compared under the same ones.",
         "history_stat_runs": "records",
         "history_trends_title": "Trends",
         "history_trends_desc": "CER evolution per engine across runs "
@@ -471,6 +482,12 @@ _STRINGS: dict[str, dict[str, str]] = {
         "history_col_metric": "Metric",
         "history_col_value": "Value",
         "history_col_change": "Change",
+        "history_col_corpus": "Corpus",
+        "history_col_profile": "Profile",
+        "history_raw_profile": "raw",
+        "history_legacy": "History database in an earlier format: its series "
+        "name neither corpus nor normalisation profile, so they are not "
+        "shown. Move the history.db file aside to start a new one.",
         "library_eyebrow": "VIEW · LIBRARY",
         "library_title": "Corpus library",
         "library_desc": "Local corpora and remote catalogues — all your material "

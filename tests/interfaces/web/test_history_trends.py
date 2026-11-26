@@ -28,11 +28,19 @@ def _history_body(tmp_path: Path, store: HistoryStore, lang: str = "fr") -> str:
     return TestClient(app).get(f"/history?lang={lang}").text
 
 
-def _rec(run_id: str, ts: str, value: float) -> HistoryRecord:
+def _rec(
+    run_id: str,
+    ts: str,
+    value: float,
+    *,
+    corpus: str = "c",
+    profile: str | None = "flat_text",
+) -> HistoryRecord:
     return HistoryRecord(
         run_id=run_id,
         completed_at=ts,
-        corpus_name="c",
+        corpus_name=corpus,
+        normalization_profile=profile,
         code_version="1.0",
         pipeline="tesseract",
         view="text",
@@ -137,3 +145,46 @@ def test_history_says_two_runs_cannot_be_tested(tmp_path: Path) -> None:
     body = _history_body(tmp_path, store)
     assert "aucun test à 2 runs" in body
     assert "significative" not in body.split("trend-grid", 1)[1].split("</section>")[0]
+
+
+def test_a_trend_never_spans_two_corpora_or_two_profiles(tmp_path: Path) -> None:
+    """D-288 : six runs sur deux corpus et deux profils faisaient une seule
+    carte (une « pente » nette qui ne mesurait que le changement de corpus).
+    Chaque (corpus, profil, pipeline, vue) a sa carte, qui le dit, FR et EN."""
+    store = HistoryStore(tmp_path / "h.db")
+    store.add(
+        [
+            _rec("a1", "2026-01-01T00:00:00", 0.30),
+            _rec("a2", "2026-01-02T00:00:00", 0.31),
+            _rec("b1", "2026-01-03T00:00:00", 0.10, corpus="autre"),
+            _rec("b2", "2026-01-04T00:00:00", 0.11, corpus="autre"),
+            _rec("n1", "2026-01-05T00:00:00", 0.05, profile=None),
+            _rec("n2", "2026-01-06T00:00:00", 0.06, profile=None),
+        ]
+    )
+    body = _history_body(tmp_path, store)
+    assert body.count('class="panel trend-card"') == 3
+    assert "Corpus autre" in body and "Profil brut" in body
+    assert "Profil flat_text" in body
+    # Chaque série monte de 0,01 à son dernier run : trois régressions de
+    # +0,01, aucune de 0,30 → 0,10 tirée d'un corpus à l'autre.
+    assert body.count("<td>autre</td>") == 3  # sa régression + 2 lignes du journal
+    assert "+0.0100" in body and "0.3100 → 0.1000" not in body
+    english = _history_body(tmp_path, store, lang="en")
+    assert "Profile raw" in english
+
+
+def test_legacy_database_is_refused_and_said(tmp_path: Path) -> None:
+    import sqlite3
+
+    db = tmp_path / "h.db"
+    with sqlite3.connect(db) as conn:
+        conn.execute(
+            "CREATE TABLE run_metrics (run_id TEXT, completed_at TEXT, "
+            "corpus_name TEXT, code_version TEXT, pipeline TEXT, view TEXT, "
+            "metric TEXT, value REAL)"
+        )
+    body = _history_body(tmp_path, HistoryStore(db))
+    assert "format antérieur" in body
+    english = _history_body(tmp_path, HistoryStore(db), lang="en")
+    assert "earlier format" in english

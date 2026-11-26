@@ -21,7 +21,7 @@ _AXIS_METRICS = (
     "fca",
     "bow_f1",
     "searchability",
-    "hallucination",
+    "unanchored_trigrams",
 )
 
 
@@ -68,12 +68,12 @@ def test_radar_tooltips_absolute_scale_and_accessible() -> None:
 
 
 def test_radar_signals_dropped_non_comparable_dimensions() -> None:
-    # ≥3 axes communs (radar rendu) ; ``hallucination`` présent pour un seul
+    # ≥3 axes communs (radar rendu) ; ``unanchored_trigrams`` présent pour un seul
     # moteur → non comparable → masqué MAIS signalé (jamais comblé par un zéro).
-    shared = {m: 0.8 for m in _AXIS_METRICS if m != "hallucination"}
+    shared = {m: 0.8 for m in _AXIS_METRICS if m != "unanchored_trigrams"}
     result = _result(
         (
-            _pipe("tesseract", dict(shared, hallucination=0.1)),
+            _pipe("tesseract", dict(shared, unanchored_trigrams=0.1)),
             _pipe("pero", shared),
         )
     )

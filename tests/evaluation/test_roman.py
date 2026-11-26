@@ -223,3 +223,49 @@ def test_through_evaluate_run_and_r1_single_count(tmp_path: Path) -> None:
     (row,) = roman[0].pipelines
     assert row.n_total == 1
     assert row.converted_to_arabic == 1
+
+
+def _forms(text: str) -> list[tuple[str, int]]:
+    return [(form, value) for _i, form, value in detect_roman_numerals(text)]
+
+
+def test_hyphen_attached_word_fragments_are_not_numerals() -> None:
+    """Les cinq « numéraux » détectés dans la GT de ``37-GT-BNL`` étaient des
+    mots : « ci-devant » (×3), « dix- huit », « di- sait » (césure de fin de
+    ligne, aplatie par la vue). Un fragment soudé par un tiret à un mot n'est
+    pas un nombre ; deux numéraux joints (« XIV-XV ») le restent."""
+    assert _forms("Pierre Bourgmeyer, ci-devant loueur de voitures") == []
+    assert _forms("Jeanne Schmit, ci-de- vant demeurant à Wiltz") == []
+    assert _forms("en date du dix- huit septembre 1873") == []
+    assert _forms("il n'avait pas étrenné, di- sait-il") == []
+    assert _forms("celui-ci") == []
+    assert _forms("siècles XIV-XV") == [("XIV", 14), ("XV", 15)]
+    assert _forms("pages xii-23") == [("xii", 12)]
+
+
+def test_lexical_forms_need_the_dotted_frame() -> None:
+    """Une forme qui est aussi un mot courant (« dix », « li », « MM. »,
+    « cm ») n'est un numéral que dans le cadre de points de l'écriture
+    médiévale (``.mi.``, ``.dix.``) ; ailleurs, c'est le mot."""
+    assert _forms("A dix heures et demie précises") == []
+    assert _forms("Journée du Dix Août") == []
+    assert _forms("bachelier, MM. Marius Filippi et Pierre") == []
+    assert _forms("une planche de 12 cm de large") == []
+    assert _forms("li rois vint") == []
+    assert _forms("l'an .mi. et .dix. jours") == [("mi", 1001), ("dix", 509)]
+
+
+def test_lexical_forms_are_all_valid_numerals() -> None:
+    """Une entrée qui ne serait pas un numéral valide n'écarterait rien."""
+    from cinoc.evaluation.roman import _LEXICAL_FORMS
+
+    assert all(roman_to_int(form) is not None for form in _LEXICAL_FORMS)
+
+
+def test_unambiguous_numerals_are_kept_in_any_context() -> None:
+    assert _forms("le roi Edouard VII arriva") == [("VII", 7)]
+    assert _forms("SCÈNE II. — UNE MUSICIENNE") == [("II", 2)]
+    assert _forms("le .xiiij. jour de mai mcclxxxij") == [
+        ("xiiij", 14),
+        ("mcclxxxij", 1282),
+    ]

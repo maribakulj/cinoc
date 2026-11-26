@@ -31,11 +31,28 @@ logger = logging.getLogger(__name__)
 
 
 def records_from_run(run_result: RunResult) -> tuple[HistoryRecord, ...]:
-    """Aplatit un ``RunResult`` en lignes d'historique (métriques applicables)."""
+    """Aplatit un ``RunResult`` en lignes d'historique (métriques applicables).
+
+    Chaque ligne porte le **profil de normalisation** de sa vue, lu dans
+    ``manifest.view_specs`` (D-288) : c'est, avec le corpus, ce qui distingue
+    deux séries. Une vue que le manifeste ne déclare pas n'a pas de profil
+    connu : ses agrégats ne sont **pas** enregistrés (avertissement), plutôt
+    que rangés sous un profil deviné.
+    """
     manifest = run_result.manifest
     completed_at = manifest.completed_at.isoformat()
+    profiles = {view.name: view.normalization_profile for view in manifest.view_specs}
     records: list[HistoryRecord] = []
     for pipeline in run_result.pipelines:
+        if pipeline.view not in profiles:
+            logger.warning(
+                "[history] vue %r absente du manifeste (run %s) : profil inconnu, "
+                "agrégats de %s non enregistrés.",
+                pipeline.view,
+                manifest.run_id,
+                pipeline.pipeline,
+            )
+            continue
         for score in pipeline.aggregate:
             if score.value is None:
                 continue
@@ -44,6 +61,7 @@ def records_from_run(run_result: RunResult) -> tuple[HistoryRecord, ...]:
                     run_id=manifest.run_id,
                     completed_at=completed_at,
                     corpus_name=manifest.corpus_name,
+                    normalization_profile=profiles[pipeline.view],
                     code_version=manifest.code_version,
                     pipeline=pipeline.pipeline,
                     view=pipeline.view,
@@ -61,7 +79,7 @@ def record_run(store: HistoryStore, run_result: RunResult) -> int:
 
 @dataclass(frozen=True)
 class SeriesInsight:
-    """Tendance + rupture d'une série (pipeline, vue, métrique) d'historique.
+    """Tendance + rupture d'une série (corpus, profil, pipeline, vue) d'historique.
 
     ``rupture_run_id`` = le **premier run du nouveau régime**, renseigné
     seulement quand la rupture est significative (p ≤ α) — sinon il n'y a

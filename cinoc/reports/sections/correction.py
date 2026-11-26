@@ -100,7 +100,7 @@ def _pipeline_block(
                 f"· length)",
             ),
             _num(row.char_ins_ratio, lang),
-            str(row.n_hallucination_heavy),
+            str(row.n_heavy_insertion),
             _num(row.length_ratio, lang),
         ),
         _row(

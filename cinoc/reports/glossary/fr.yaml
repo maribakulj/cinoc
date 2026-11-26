@@ -188,55 +188,101 @@ air:
     borne supérieure (un archaïsme légitime hors GT peut le faire monter).
 
 ner_f1:
-  title: "F1 sur entités nommées"
+  title: "F1 sur entités nommées (empan)"
   definition: >-
     Moyenne harmonique précision/rappel des entités (personnes, lieux, dates)
-    retrouvées dans la sortie, spans alignés en coordonnées vérité terrain.
+    retrouvées dans la sortie : une entité de la sortie compte si son empan,
+    reprojeté en coordonnées vérité terrain, recouvre celui d'une entité de
+    même étiquette avec un IoU ≥ 0,5. La forme écrite n'est pas comparée.
   measures: >-
     L'**utilité aval** pour l'indexation prosopographique : un CER flatteur
     peut masquer la perte des noms propres, décisifs pour la recherche.
   limits: >-
     Mesure **conjointe** OCR + extracteur NER (le modèle d'entités faillit
-    aussi) ; appariement par recouvrement de spans (IoU ≥ 0,5), pas par sens.
+    aussi). Le seuil IoU ≥ 0,5 est une convention de Cinoc, plus tolérante
+    qu'un appariement d'empans exacts et plus stricte qu'un simple
+    recouvrement : « Montfort » lu « Montfert » au même endroit compte juste
+    — c'est ce que mesure ner_f1_exact.
 
-hallucination:
+ner_f1_exact:
+  title: "F1 sur entités nommées (nom exact)"
+  definition: >-
+    Comme ner_f1, mais une entité appariée ne compte juste que si sa forme
+    écrite dans la sortie est identique, caractère pour caractère, à celle de
+    la vérité terrain ; sinon elle compte manquée et ajoutée.
+  measures: >-
+    Combien de noms un index construit sur la sortie retrouverait tels
+    qu'écrits — « Montfert » pour « Montfort » est un nom perdu.
+  limits: >-
+    Aucune tolérance : une casse ou un accent différent suffit à manquer le
+    nom. Mêmes appariement et limites que ner_f1 (mesure conjointe OCR + NER).
+
+unanchored_trigrams:
   title: "Texte non ancré (trigrammes)"
   definition: >-
     Part des trigrammes de caractères de l'hypothèse **absents** de la
     référence (1 − ancrage n-gramme). Plus haut = plus de texte produit
-    sans appui dans le GT.
+    sans appui dans la vérité terrain.
   measures: >-
     La quantité de texte produit sans correspondance dans le document
-    source — un signal mesuré, pas une preuve d'« hallucination »
-    intentionnelle.
+    source — un signal mesuré, pas une détection d'« hallucination ».
   limits: >-
-    Mesure de surface : une insertion légitime (texte réellement présent
-    mais hors GT) la fait monter ; n'établit aucune intention du modèle.
+    Ne voit que des trigrammes nouveaux : une page dupliquée (la sortie
+    recopie deux fois la page) vaut 0,021 pour un CER de 1,01, et un texte
+    réordonné presque 0. Une insertion légitime (texte présent sur la page
+    mais hors vérité terrain) la fait monter ; n'établit aucune intention du
+    modèle.
 
 searchability:
-  title: "Rappel plein-texte (Lev ≤ 2)"
+  title: "Rappel plein-texte (tolérance selon la longueur)"
   definition: >-
-    Part des mots de la référence retrouvés dans l'hypothèse à distance de
-    Levenshtein ≤ 2 (recherche plein-texte tolérante, appariement
-    multi-ensemble).
+    Part des mots de la référence retrouvés dans l'hypothèse par une
+    recherche tolérante : distance de Levenshtein au plus 0 pour un mot de 1
+    ou 2 caractères, 1 de 3 à 5, 2 au-delà (échelle AUTO de
+    Lucene/Elasticsearch) ; appariement multi-ensemble.
   measures: >-
     Combien de mots du GT resteraient retrouvables par une recherche
     tolérante malgré les erreurs de transcription.
   limits: >-
     Heuristique d'usage : ne remplace pas une évaluation de rappel sur des
-    requêtes réelles.
+    requêtes réelles. Une transposition coûte 2 éditions (Lucene la compte 1).
 
 region_cer:
   title: "CER par région"
   definition: >-
-    CER agrégé au niveau d'une région de mise en page (bloc, colonne),
-    quand la segmentation fournit un découpage.
+    CER agrégé au niveau des régions de mise en page (bloc, colonne), quand
+    la segmentation fournit un découpage : Σ erreurs / Σ caractères de
+    référence, régions appariées par identifiant, sinon par géométrie. Une
+    région de référence sans vis-à-vis compte tout son texte en suppressions ;
+    une région **fantôme** (de la sortie, sans vis-à-vis) compte tout le sien
+    en insertions.
   measures: >-
     La qualité de transcription localisée, pour repérer les zones d'une
     page où le moteur décroche.
   limits: >-
     Dépend de la qualité de la segmentation amont ; non applicable sans
-    couche structurelle.
+    couche structurelle. Dépasse 1 quand la sortie invente plus de texte
+    que la référence n'en porte.
+
+fca:
+  title: "FCA — exactitude flexible (limitée : lignes fusionnées → 0)"
+  definition: >-
+    Exactitude caractère (1 − erreurs / caractères de référence, bornée
+    [0, 1]) après appariement optimal des **lignes**, dans n'importe quel
+    ordre : un texte transcrit dans un autre ordre de lecture n'est pas
+    pénalisé.
+  measures: >-
+    La qualité de transcription indépendamment de l'ordre des lignes
+    (colonnes interverties, blocs réordonnés).
+  limits: >-
+    Variante simplifiée de Clausner et al. (2019) : une ligne n'est appariée
+    qu'entière, jamais coupée. Sous un profil qui garde les lignes, dès que
+    la sortie les fusionne — le cas typique d'un VLM qui rend un paragraphe —
+    chaque ligne de référence reste sans vis-à-vis et la FCA vaut **0**,
+    quelle que soit la qualité du texte (CER brut 0,105 sur un exemple où
+    elle vaut 0). Sous le profil par défaut (flat_text), la vue a déjà réuni
+    les lignes : il n'en reste qu'une, et la FCA vaut 1 − CER, sans sa
+    tolérance à l'ordre.
 
 region_detection:
   title: "Détection de régions"

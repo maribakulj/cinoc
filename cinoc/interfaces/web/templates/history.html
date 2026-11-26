@@ -15,6 +15,12 @@
   </div>
 </section>
 
+{% if legacy %}
+<section class="sec">
+  <div class="sec-body"><p class="empty">{{ t.history_legacy }}</p></div>
+</section>
+{% endif %}
+
 {% if trends %}
 <section class="sec">
   <div class="sec-head">
@@ -30,6 +36,10 @@
         <div class="trend-head">
           <span class="t-pipe">{{ tr.pipeline }}</span>
           <span class="badge">{{ tr.view }}</span>
+        </div>
+        <div class="trend-meta">
+          <span class="mono">{{ t.history_col_corpus }} {{ tr.corpus }}</span>
+          <span class="mono">{{ t.history_col_profile }} {{ tr.profile or t.history_raw_profile }}</span>
         </div>
         <div class="trend-spark">{{ tr.svg|safe }}</div>
         <div class="trend-meta">
@@ -76,6 +86,8 @@
       <table class="data">
         <thead>
           <tr>
+            <th>{{ t.history_col_corpus }}</th>
+            <th>{{ t.history_col_profile }}</th>
             <th>{{ t.history_col_pipeline }}</th>
             <th>{{ t.history_col_view }}</th>
             <th>{{ t.history_col_metric }}</th>
@@ -85,6 +97,8 @@
         <tbody>
           {% for r in regressions %}
           <tr>
+            <td>{{ r.corpus_name }}</td>
+            <td>{{ r.normalization_profile or t.history_raw_profile }}</td>
             <td>{{ r.pipeline }}</td>
             <td>{{ r.view }}</td>
             <td>{{ r.metric }}</td>
@@ -118,6 +132,8 @@
         <thead>
           <tr>
             <th>{{ t.history_col_run }}</th>
+            <th>{{ t.history_col_corpus }}</th>
+            <th>{{ t.history_col_profile }}</th>
             <th>{{ t.history_col_pipeline }}</th>
             <th>{{ t.history_col_view }}</th>
             <th>{{ t.history_col_metric }}</th>
@@ -128,6 +144,8 @@
           {% for r in records %}
           <tr>
             <td class="mono">{{ r.run_id }}</td>
+            <td>{{ r.corpus_name }}</td>
+            <td>{{ r.normalization_profile or t.history_raw_profile }}</td>
             <td>{{ r.pipeline }}</td>
             <td>{{ r.view }}</td>
             <td>{{ r.metric }}</td>

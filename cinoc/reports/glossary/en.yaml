@@ -186,53 +186,95 @@ air:
     bound (a legitimate archaism outside the GT can raise it).
 
 ner_f1:
-  title: "Named-entity F1"
+  title: "Named-entity F1 (span)"
   definition: >-
     Harmonic mean of precision/recall over entities (people, places, dates)
-    recovered in the output, with spans aligned to ground-truth coordinates.
+    recovered in the output: an output entity counts if its span, projected
+    into ground-truth coordinates, overlaps that of an entity with the same
+    label at IoU ≥ 0.5. The written form is not compared.
   measures: >-
     Downstream usefulness for prosopographic indexing: a flattering CER can
     hide the loss of proper nouns, which are decisive for search.
   limits: >-
-    Joint OCR + NER measure (the entity model also fails); matching is by span
-    overlap (IoU ≥ 0.5), not by meaning.
+    Joint OCR + NER measure (the entity model also fails). The IoU ≥ 0.5
+    threshold is Cinoc's own convention, more tolerant than exact-span
+    matching and stricter than mere overlap: "Montfort" read "Montfert" in
+    the same place counts as correct — that is what ner_f1_exact measures.
 
-hallucination:
+ner_f1_exact:
+  title: "Named-entity F1 (exact name)"
+  definition: >-
+    Like ner_f1, but a matched entity only counts as correct if its written
+    form in the output is identical, character for character, to the ground
+    truth's; otherwise it counts as both missed and spurious.
+  measures: >-
+    How many names an index built on the output would find as written —
+    "Montfert" for "Montfort" is a lost name.
+  limits: >-
+    No tolerance: a different case or accent is enough to miss the name.
+    Same matching and limits as ner_f1 (joint OCR + NER measure).
+
+unanchored_trigrams:
   title: "Unanchored text (trigrams)"
   definition: >-
     Share of the hypothesis's character trigrams **absent** from the
     reference (1 − n-gram anchoring). Higher = more text produced with no
-    support in the GT.
+    support in the ground truth.
   measures: >-
     How much text is produced with no match in the source document — a
-    measured signal, not proof of intentional "hallucination".
+    measured signal, not a "hallucination" detector.
   limits: >-
-    A surface measure: a legitimate insertion (text truly present but
-    outside the GT) raises it; it establishes no model intent.
+    It only sees new trigrams: a duplicated page (the output copies the page
+    twice) scores 0.021 for a CER of 1.01, and reordered text almost 0. A
+    legitimate insertion (text present on the page but outside the ground
+    truth) raises it; it establishes no model intent.
 
 searchability:
-  title: "Full-text recall (Lev ≤ 2)"
+  title: "Full-text recall (length-dependent tolerance)"
   definition: >-
-    Share of reference words found in the hypothesis within a Levenshtein
-    distance ≤ 2 (tolerant full-text search, multiset matching).
+    Share of reference words found in the hypothesis by a tolerant search:
+    Levenshtein distance at most 0 for a 1- or 2-character word, 1 for 3 to
+    5, 2 beyond (Lucene/Elasticsearch AUTO scale); multiset matching.
   measures: >-
     How many GT words would remain retrievable by a tolerant search despite
     transcription errors.
   limits: >-
     A usage heuristic: it does not replace a recall evaluation on real
-    queries.
+    queries. A transposition costs 2 edits (Lucene counts it as 1).
 
 region_cer:
   title: "Per-region CER"
   definition: >-
-    CER aggregated at the level of a layout region (block, column), when
-    segmentation provides a partition.
+    CER aggregated over layout regions (block, column), when segmentation
+    provides a partition: Σ errors / Σ reference characters, regions matched
+    by identifier, otherwise by geometry. A reference region with no
+    counterpart counts all its text as deletions; a **phantom** region (in
+    the output, with no counterpart) counts all of its own as insertions.
   measures: >-
     Localized transcription quality, to spot the areas of a page where the
     engine breaks down.
   limits: >-
     Depends on upstream segmentation quality; not applicable without a
-    structural layer.
+    structural layer. Exceeds 1 when the output invents more text than the
+    reference holds.
+
+fca:
+  title: "FCA — flexible accuracy (limited: merged lines → 0)"
+  definition: >-
+    Character accuracy (1 − errors / reference characters, bounded to
+    [0, 1]) after optimal matching of **lines**, in any order: text
+    transcribed in another reading order is not penalised.
+  measures: >-
+    Transcription quality regardless of line order (swapped columns,
+    reordered blocks).
+  limits: >-
+    A simplified variant of Clausner et al. (2019): a line is only matched
+    whole, never split. Under a profile that keeps lines, as soon as the
+    output merges them — the typical case of a VLM returning a paragraph —
+    every reference line stays unmatched and FCA is **0**, whatever the
+    quality of the text (raw CER 0.105 on an example where it is 0). Under
+    the default profile (flat_text), the view has already joined the lines:
+    only one is left, and FCA equals 1 − CER, without its order tolerance.
 
 region_detection:
   title: "Region detection"

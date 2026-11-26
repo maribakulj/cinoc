@@ -126,7 +126,7 @@ _METRIC_GROUPS: tuple[tuple[str, tuple[str, str], frozenset[str]], ...] = (
     ("philo", ("Philologique", "Philological"),
      frozenset({"diacritic_err", "mufi_err"})),
     ("trust", ("Fiabilité documentaire", "Document reliability"),
-     frozenset({"searchability", "hallucination", "air", "hcpr"})),
+     frozenset({"searchability", "unanchored_trigrams", "air", "hcpr"})),
     ("struct", ("Structuré", "Structured"),
      frozenset({"numseq_strict", "numseq_value", "region_cer", "region_detection"})),
 )
@@ -201,7 +201,7 @@ _METRIC_SHORT: dict[str, str] = {
     "bow_recall": "R",
     "bow_f1": "F1",
     "searchability": "rappel·ft",
-    "hallucination": "non-ancré",
+    "unanchored_trigrams": "non-ancré",
     "diacritic_err": "diacr.",
     "mufi_err": "MUFI",
     "region_cer": "CER rég.",

@@ -14,7 +14,9 @@ Les 4 premiers préservent la valeur. C'est l'**unique** comptage des romains
 (R1 : retiré de `structured_data`, qui n'en garde qu'un helper de **valeur**
 régnale, ré-exporté ici) ; les scores strict/valeur s'en dérivent sans double
 comptage. Détection greedy `\\b[IVXLCDMivxlcdmj]+\\b` + validation par la grammaire des
-chiffres (canonique ou additif médiéval, D-287) ;
+chiffres (canonique ou additif médiéval, D-287) + lecture en contexte (un
+fragment soudé à un mot par un tiret, ou une forme qui est aussi un mot courant
+hors du cadre de points médiéval, n'est pas un nombre — D-288) ;
 ``min_length=2`` par défaut (R2 : filtre les ``I``/``M`` isolés ambigus).
 Adaptatif : GT sans numéral → pas de payload.
 """
@@ -116,17 +118,72 @@ def roman_to_int(text: str | None) -> int | None:
     return _parse_normalized(_normalize_roman(text))
 
 
+#: Formes valides qui sont aussi des **mots** courants des langues du corpus
+#: (français, allemand, latin, anglais) ou des abréviations d'unités et de
+#: civilités : « ci », « dix », « li » (article de l'ancien français), « liv. »
+#: (livre), « MM. » (messieurs), « cm »… Comparées sans casse ; chacune est un
+#: numéral valide (sinon elle n'aurait rien à écarter). Donnée fermée, pas une
+#: heuristique : une forme absente de la liste reste détectée partout (« vi »,
+#: le six médiéval, en est absent exprès), une forme présente ne l'est que dans
+#: le cadre de points de l'écriture médiévale (``.dix.``) — cf.
+#: :func:`_in_context`.
+_LEXICAL_FORMS: frozenset[str] = frozenset(
+    {
+        "ci", "di", "dix", "li", "liv", "mi", "mix",
+        "cl", "cm", "dl", "ml", "mm",
+    }
+)
+
+#: Tirets qui soudent deux fragments d'un même mot (trait d'union, tiret
+#: insécable, tiret de césure ``⸗`` et ``¬``, tiret conditionnel).
+_HYPHENS = "-\u2010\u2011\u2e17\u00ac\u00ad"
+_ATTACHED_AFTER = re.compile(rf"[{_HYPHENS}]\s*([^\W\d_]+)")
+_ATTACHED_BEFORE = re.compile(rf"([^\W\d_]+)[{_HYPHENS}]$")
+
+
+def _is_numeral_token(token: str) -> bool:
+    return roman_to_int(token) is not None
+
+
+def _in_context(text: str, start: int, end: int) -> bool:
+    """Le numéral candidat ``text[start:end]`` en est-il un **dans sa phrase** ?
+
+    Deux contextes le démentent (D-288 ; les cinq « numéraux » détectés dans la
+    GT de ``37-GT-BNL`` étaient des mots, défaut 11 de l'audit D-264) :
+
+    - **soudé par un tiret à un mot** — « ci-devant », « celui-ci », et la
+      césure de fin de ligne que la vue aplatit (« dix- huit », « di- sait ») ;
+      deux numéraux joints (« XIV-XV ») restent des numéraux ;
+    - **forme lexicale** (:data:`_LEXICAL_FORMS`) hors du cadre de points
+      médiéval : « à dix heures », « MM. Marius » sont des mots, ``.dix.`` un
+      nombre.
+    """
+    after = _ATTACHED_AFTER.match(text, end)
+    if after is not None and not _is_numeral_token(after.group(1)):
+        return False
+    before = _ATTACHED_BEFORE.search(text, 0, start)
+    if before is not None and not _is_numeral_token(before.group(1)):
+        return False
+    if text[start:end].casefold() in _LEXICAL_FORMS:
+        return text[start - 1 : start] == "." and text[end : end + 1] == "."
+    return True
+
+
 def detect_roman_numerals(
     text: str, *, min_length: int = 2
 ) -> list[tuple[int, str, int]]:
-    """Numéraux valides de ``text`` : ``[(index, forme, valeur), ...]``."""
+    """Numéraux de ``text`` : ``[(index, forme, valeur), ...]``.
+
+    Une forme est retenue si elle est **valide** (grammaire des chiffres,
+    D-287) **et** lue comme un nombre dans son contexte (:func:`_in_context`).
+    """
     found: list[tuple[int, str, int]] = []
     for match in _ROMAN_RE.finditer(text):
         form = match.group(0)
         if len(form) < min_length:
             continue
         value = roman_to_int(form)
-        if value is not None:
+        if value is not None and _in_context(text, match.start(), match.end()):
             found.append((match.start(), form, value))
     return found
 

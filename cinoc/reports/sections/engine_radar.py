@@ -19,15 +19,17 @@ from cinoc.reports.svg import radar_chart
 
 #: Axes du radar : (clé métrique, inverser ?, libellé fr, libellé en). Toutes les
 #: valeurs sont ramenées à « plus haut = meilleur » dans [0,1] (les métriques
-#: d'erreur sont inversées : 1 − valeur). L'axe ``hallucination`` inversé EST
-#: l'ancrage des trigrammes (1 − part non ancrée) → libellé honnête « Ancrage ».
+#: d'erreur sont inversées : 1 − valeur). L'axe ``unanchored_trigrams`` inversé
+#: EST l'ancrage des trigrammes (1 − part non ancrée) → libellé « Ancrage ».
+#: ``fca`` porte son nom, pas « Fidélité » : elle vaut 0 dès que les lignes
+#: sont fusionnées (D-288) — un axe « fidélité » à zéro mentirait.
 _AXES: tuple[tuple[str, bool, str, str], ...] = (
     ("char_accuracy", False, "Caract.", "Char."),
     ("word_accuracy", False, "Mot", "Word"),
-    ("fca", False, "Fidél.", "Fidel."),
+    ("fca", False, "FCA", "FCA"),
     ("bow_f1", False, "F1", "F1"),
     ("searchability", False, "Rappel", "Recall"),
-    ("hallucination", True, "Ancrage", "Anchoring"),
+    ("unanchored_trigrams", True, "Ancrage", "Anchoring"),
 )
 
 
