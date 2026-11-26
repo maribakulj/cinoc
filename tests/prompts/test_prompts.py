@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 import pytest
 
 from cinoc.prompts import PromptError, available_prompts, load_prompt
@@ -37,3 +39,14 @@ def test_no_stale_picarones_references() -> None:
     for name in available_prompts():
         lowered = load_prompt(name).lower()
         assert "picarones" not in lowered
+
+
+def test_no_placeholder_is_left_for_the_model_to_read() -> None:
+    """Seul ``{ocr_text}`` est substitué (``build_prompt``) : tout autre
+    ``{…}`` part tel quel au modèle. Trois prompts zero-shot finissaient sur
+    « Image (base64) : {image_b64} » — l'image est jointe à part, le modèle
+    lisait l'accolade."""
+    for name in available_prompts():
+        placeholders = set(re.findall(r"{[A-Za-z_0-9]+}", load_prompt(name)))
+        expected = {"{ocr_text}"} if name.startswith("correction_") else set()
+        assert placeholders == expected, name

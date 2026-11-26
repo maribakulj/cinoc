@@ -15,6 +15,3 @@ MANDATORY RULES:
    unless they form part of the current text
 7. Preserve letterforms: thorn (þ), eth (ð), yogh (ȝ), long-s (ſ), and
    manuscript abbreviation characters as written
-
-Image (base64):
-{image_b64}

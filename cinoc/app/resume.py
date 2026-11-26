@@ -29,6 +29,14 @@ note encore sur un run rechargé. L'``usage`` mesuré au run d'origine est
 restauré avec les artefacts (les ressources réellement consommées pour produire
 le résultat — un coût de re-lecture de cache serait un mensonge économique).
 
+L'**image** d'une page n'est stockée qu'une fois, quel que soit le nombre de
+pipelines qui la lisent : rangée par son contenu sous ``images/<sha256><suffixe>``
+et nommée par chaque unité relativement à son dossier (``../images/…``) — la
+règle de toujours, donc aucun format nouveau. Une archive d'avant, qui la
+recopiait sous chaque unité, se relit telle quelle (D20 du pilote D-281 :
+45 Mo pour 10 pages × 4 pipelines). Un nom relatif qui sortirait de l'archive
+n'est jamais suivi : l'unité est alors incomplète.
+
 Les sidecars voyagent comme le reste : la réponse native d'un moteur distant
 (``NATIVE_JSON``) est copiée sous ``<étape>.native_json.json`` et rechargée avec
 son étape ; un fichier disparu rend l'unité incomplète, donc ré-exécutée.
@@ -46,6 +54,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import shutil
 from collections.abc import Mapping, Sequence
 from hashlib import sha256
@@ -79,6 +88,8 @@ _OUTCOMES = frozenset(get_args(UnitOutcome))
 _REASONS = frozenset(get_args(FailureReason))
 #: Binaires des unités de l'archive, ``{adapter_name: {binaire: version}}``.
 _BINARIES = "binaries.json"
+#: Sous-dossier des images, rangées par contenu (une par page, tous pipelines).
+IMAGES_DIR = "images"
 #: Haché d'un fichier d'entrée déclaré qui n'existe pas (ou n'est pas un fichier).
 ABSENT = "absent"
 #: Haché d'un fichier d'entrée qui existe mais ne se lit pas.
@@ -163,13 +174,30 @@ def unit_key(
     return sha256(payload).hexdigest()
 
 
-def _rebased(artifact: Artifact, unit_dir: Path) -> Artifact:
+def repetition_dir(base: Path, index: int, times: int) -> Path:
+    """Archive de la répétition ``index`` (0-based) sur ``times`` (``--repeat``).
+
+    Un run unique archive dans ``base`` ; répété, chaque run a son dossier neuf
+    ``base/repetition-<k>`` : aucune répétition ne relit une autre (sinon on
+    mesurerait le cache, pas le dispositif), et chacune se re-note hors ligne.
+    """
+    return base if times <= 1 else base / f"repetition-{index + 1}"
+
+
+def _rebased(artifact: Artifact, unit_dir: Path, base: Path) -> Artifact | None:
     """Un fichier archivé est nommé relativement au dossier de son unité : on le
-    rattache au dossier où l'archive se trouve **maintenant**."""
+    rattache au dossier où l'archive se trouve **maintenant**.
+
+    ``None`` si le nom sort de l'archive (``base``) : une archive se télécharge,
+    et un ``../..`` ne doit pas y désigner un fichier de la machine qui la relit.
+    """
     uri = artifact.uri
     if uri is None or "://" in uri or Path(uri).is_absolute():
         return artifact
-    return artifact.model_copy(update={"uri": str(unit_dir / uri)})
+    resolved = Path(os.path.normpath(unit_dir / uri))
+    if not resolved.is_relative_to(Path(os.path.normpath(base))):
+        return None
+    return artifact.model_copy(update={"uri": str(resolved)})
 
 
 class ResumeStore:
@@ -213,10 +241,10 @@ class ResumeStore:
             return None
         unit_dir = self._base / key
         try:
-            by_step = {
+            rebased = {
                 entry["step"]: {
                     ArtifactType(type_name): _rebased(
-                        Artifact.model_validate(artifact), unit_dir
+                        Artifact.model_validate(artifact), unit_dir, self._base
                     )
                     for type_name, artifact in entry["artifacts"].items()
                 }
@@ -236,6 +264,19 @@ class ResumeStore:
                 return None
         except (AttributeError, TypeError, ValueError, KeyError, ValidationError):
             return None
+        by_step: dict[str, dict[ArtifactType, Artifact]] = {}
+        for step_id, found in rebased.items():
+            kept: dict[ArtifactType, Artifact] = {}
+            for artifact_type, artifact in found.items():
+                if artifact is None:
+                    logger.warning(
+                        "[resume] unité %s : un fichier nommé hors de l'archive "
+                        "n'est pas suivi ; unité ré-exécutée.",
+                        key,
+                    )
+                    return None
+                kept[artifact_type] = artifact
+            by_step[step_id] = kept
         if outcome == "failed":
             if not (failures and isinstance(reason, str) and message is not None):
                 return None
@@ -276,10 +317,12 @@ class ResumeStore:
                 for artifact_type, artifact in outputs.items():
                     entry = artifact
                     if artifact.uri is not None and Path(artifact.uri).is_file():
-                        suffix = Path(artifact.uri).suffix
-                        name = f"{step_id}.{artifact_type.value}{suffix}"
-                        destination = unit_dir / name
-                        shutil.copyfile(artifact.uri, destination)
+                        if artifact_type is ArtifactType.IMAGE:
+                            name = self._store_image(Path(artifact.uri))
+                        else:
+                            suffix = Path(artifact.uri).suffix
+                            name = f"{step_id}.{artifact_type.value}{suffix}"
+                            shutil.copyfile(artifact.uri, unit_dir / name)
                         # Relatif au dossier de l'unité : l'archive se déplace,
                         # se télécharge, se re-note ailleurs (P5h).
                         entry = artifact.model_copy(update={"uri": name})
@@ -314,6 +357,25 @@ class ResumeStore:
             )
         except OSError as exc:
             logger.warning("[resume] persistance dégradée (unité %s) : %s", key, exc)
+
+    def _store_image(self, source: Path) -> str:
+        """Range une image par son contenu, une fois ; renvoie son nom relatif
+        au dossier d'une unité (``../images/<sha256><suffixe>``).
+
+        Le même contenu a le même nom : la deuxième unité qui lit la page ne
+        recopie rien. Écrite sous un nom temporaire puis renommée — une copie
+        interrompue ne laisse pas un fichier tronqué sous un nom qui ferait foi.
+        """
+        payload = source.read_bytes()
+        name = f"{compute_content_hash(payload)}{source.suffix.lower()}"
+        images = self._base / IMAGES_DIR
+        destination = images / name
+        if not destination.is_file():
+            images.mkdir(exist_ok=True)
+            partial = images / f".{name}.partiel"
+            partial.write_bytes(payload)
+            partial.replace(destination)
+        return f"../{IMAGES_DIR}/{name}"
 
     def recorded_binaries(self) -> dict[str, dict[str, str]]:
         """Binaires sous lesquels l'archive a été produite, par module (``{}`` si
@@ -350,8 +412,10 @@ class ResumeStore:
 __all__ = [
     "ABSENT",
     "CACHE_FORMAT",
+    "IMAGES_DIR",
     "UNREADABLE",
     "ResumeStore",
     "declared_inputs",
+    "repetition_dir",
     "unit_key",
 ]

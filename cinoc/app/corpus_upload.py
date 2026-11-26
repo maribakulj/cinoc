@@ -45,6 +45,10 @@ from cinoc.formats.layout_xml import layout_xml_kind, parse_layout_xml
 #: Quotas (généreux mais bornés) — un Space gratuit n'est pas un entrepôt.
 MAX_ZIP_BYTES = 25 * 1024 * 1024
 MAX_TOTAL_UNCOMPRESSED = 200 * 1024 * 1024
+#: Une archive **locale** (``cinoc corpus import zip``) n'est pas un dépôt sur
+#: un serveur partagé : seul le plafond décompressé (anti-bombe) la borne. Le
+#: quota du dépôt web refusait `37-GT-BNL` (29 Mo zippé) à la CLI.
+LOCAL_MAX_ZIP_BYTES = MAX_TOTAL_UNCOMPRESSED
 MAX_FILE_BYTES = 25 * 1024 * 1024
 MAX_ENTRIES = 1000
 
@@ -68,9 +72,15 @@ class CorpusUploadError(CinocError):
     """Archive rejetée (non sûre, hors quota, vide, ou mal formée)."""
 
 
-def extract_corpus_zip(data: bytes, dest: Path, *, name: str) -> CorpusSpec:
-    """Valide et extrait ``data`` (ZIP) sous ``dest`` → ``CorpusSpec``."""
-    if len(data) > MAX_ZIP_BYTES:
+def extract_corpus_zip(
+    data: bytes, dest: Path, *, name: str, max_zip_bytes: int | None = None
+) -> CorpusSpec:
+    """Valide et extrait ``data`` (ZIP) sous ``dest`` → ``CorpusSpec``.
+
+    ``max_zip_bytes`` : plafond de l'archive compressée ; absent, celui du dépôt
+    web (:data:`MAX_ZIP_BYTES`) ; la CLI passe :data:`LOCAL_MAX_ZIP_BYTES`.
+    """
+    if len(data) > (MAX_ZIP_BYTES if max_zip_bytes is None else max_zip_bytes):
         raise CorpusUploadError("archive trop volumineuse.")
     try:
         archive = zipfile.ZipFile(io.BytesIO(data))
@@ -305,6 +315,7 @@ class CorpusStore:
 
 __all__ = [
     "GT_SOURCE_KEY",
+    "LOCAL_MAX_ZIP_BYTES",
     "MAX_ZIP_BYTES",
     "CorpusStore",
     "CorpusUploadError",

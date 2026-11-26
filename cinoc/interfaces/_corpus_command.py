@@ -44,7 +44,7 @@ from cinoc.app.corpus_import import (
     materialize_corpus,
     resolve_curated_author,
 )
-from cinoc.app.corpus_upload import extract_corpus_zip
+from cinoc.app.corpus_upload import LOCAL_MAX_ZIP_BYTES, extract_corpus_zip
 from cinoc.app.dataset_standardize import StandardizeConfig, standardize_corpus
 from cinoc.app.loader import dump_corpus_spec
 from cinoc.domain.corpus import CorpusSpec
@@ -96,7 +96,10 @@ def _builder(args: argparse.Namespace) -> Callable[[Path], CorpusSpec]:
         case "zip":
             archive = Path(args.archive).read_bytes()
             return lambda dest: extract_corpus_zip(
-                archive, dest, name=args.name or Path(args.archive).stem
+                archive,
+                dest,
+                name=args.name or Path(args.archive).stem,
+                max_zip_bytes=LOCAL_MAX_ZIP_BYTES,
             )
         case _:  # pragma: no cover — argparse borne déjà les choix
             raise CinocError(f"source de corpus inconnue : {args.source!r}.")

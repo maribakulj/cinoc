@@ -166,6 +166,30 @@ def test_a_zip_corpus_needs_no_network(tmp_path: Path) -> None:
     assert (tmp_path / "c" / "corpus.yaml").exists()
 
 
+def test_a_local_zip_is_not_held_to_the_public_upload_quota(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Le plafond d'un dépôt web (25 Mo, un Space n'est pas un entrepôt) ne
+    vaut pas pour une archive locale : `37-GT-BNL` (29 Mo zippé) ne
+    s'importait pas par la CLI. Le plafond décompressé, lui, tient."""
+    import cinoc.app.corpus_upload as upload
+
+    archive = tmp_path / "corpus.zip"
+    with zipfile.ZipFile(archive, "w") as zf:
+        zf.writestr("page_1.png", b"\x89PNG\r\n\x1a\n stub")
+        zf.writestr("page_1.txt", "bonjour")
+    monkeypatch.setattr(upload, "MAX_ZIP_BYTES", 64)
+    with pytest.raises(upload.CorpusUploadError, match="trop volumineuse"):
+        upload.extract_corpus_zip(archive.read_bytes(), tmp_path / "w", name="w")
+
+    code = main(
+        ["corpus", "import", "zip", str(archive), "--dest", str(tmp_path / "c")]
+    )
+
+    assert code == 0
+    assert (tmp_path / "c" / "corpus.yaml").exists()
+
+
 def test_a_populated_destination_is_refused(
     tmp_path: Path, gallica: dict[str, object], capsys: pytest.CaptureFixture[str]
 ) -> None:

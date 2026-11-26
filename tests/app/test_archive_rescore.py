@@ -424,7 +424,7 @@ def test_the_provenance_hash_covers_model_and_prompt_and_is_the_key_s_basis(
             if entry["step"] == "vlm"
             for artifact in entry["artifacts"].values()
         }
-        keys[variant] = {p.name for p in store.base_dir.iterdir() if p.is_dir()}
+        keys[variant] = {p.parent.name for p in store.base_dir.glob("*/index.json")}
     assert all(len(h) == 1 for h in hashes.values())  # une empreinte par étape
     assert len(set.union(*hashes.values())) == 3
     assert len(set.union(*keys.values())) == 3 * len(_DOCS)

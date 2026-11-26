@@ -3,7 +3,7 @@
 Les deux premières sont des archives de campagnes menées sur `saknussemm`
 avant que cette plateforme reprenne le rôle de banc ; elles arrivent avec le
 corpus qu'elles mesuraient, le 2026-08-16. La troisième est le pilote de
-Cinoc lui-même (S10).
+Cinoc lui-même (S10), la quatrième la campagne de référence (S30).
 
 Elles sont ici pour **ce qu'elles ont trouvé**, pas pour leurs chiffres.
 
@@ -55,9 +55,19 @@ Le pilote de S10 (D-281) : 10 pages de `37-GT-BNL`, Tesseract et un VLM local,
 aucun appel facturé. Pas une publication : ses 24 constats ont été rattachés
 aux sessions de la feuille de route.
 
+## `2026-11-26-reference/`
+
+La campagne de référence de P5h, **préparée** en S30 (D-304) : les specs E0-E5
+sur `37-GT-BNL` et Dresden, les conventions de la GT BNL en vues, la partie sans
+clé (Tesseract, VLM local) exécutée, archivée, re-notée hors ligne et recoupée
+par dinglehopper, et l'estimation du coût Mistral (2,14 € central, plafond
+3,74 €). L'exécution Mistral (S31) et la publication (S32) attendent le
+mainteneur.
+
 ## Ce qu'elles impliquent ici
 
 Une campagne rejouée sur ce banc devra fournir ce qu'aucune des deux archives
 n'avait : des **runs répétés** avec leur dispersion — `cinoc run --repeat N`
-(`app/variance`) écrit une fourchette par métrique ; c'est le protocole de la
-campagne publiée (P5h).
+(`app/variance`) écrit une fourchette par métrique, et, avec `--resume-dir`,
+archive chaque répétition à part (`<archive>/repetition-<k>`) ; c'est le
+protocole de la campagne publiée (P5h).

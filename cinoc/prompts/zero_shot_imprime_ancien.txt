@@ -13,6 +13,3 @@ RÈGLES IMPÉRATIVES :
 4. Conserve la capitalisation d'origine — ne la normalise pas
 5. Signale les passages illisibles par [illisible] plutôt que d'inventer
 6. Transcris les chiffres romains tels quels (iij, xiij, MCCCLx…)
-
-Image (base64) :
-{image_b64}
