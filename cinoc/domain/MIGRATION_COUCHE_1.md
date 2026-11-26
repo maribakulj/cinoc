@@ -191,6 +191,8 @@ backlog inexistant. **Aucune logique ne change.**
 
 > **P5f 5 + 7 (D-292)** : `usage.py` — `ResourceUsage.billed_pages` (pages facturées à la page, tentatives facturables comprises ; `None` = non compté, sommé par `merged_with`) ; `FailureReason` : `cancelled` couvre aussi le **délai propre d'une étape** (« arrêtée (délai) », D3 du pilote — aucun motif créé). `errors.py` — `AdapterStepError(…, billed=ResourceUsage | None)` : ce qu'une étape a fait facturer avant d'échouer (jetons d'une réponse refusée, page soumise) ; docstring de `DeadlineExceeded` : un délai d'étape dépassé en est un. *Preuve : `tests/adapters/test_resilience.py`, `tests/app/test_resumed_units.py`, `tests/evaluation/test_economics.py`.*
 
+> **S22 fin (D-294, P5f 8)** : `usage.py` — `ResourceUsage.tokens_cache_read`, `.tokens_cache_write`, `.tokens_reasoning` : **parties** de `tokens_in` (désormais toute l'entrée, cache compris) et de `tokens_out` (toute la sortie, raisonnement compris) ; `None` = non rendu (jamais 0 supposé), sommés `None`-tolérants par `merged_with`. Champs additifs : une archive ou un JSON antérieur les lit `None`. Preuve : `tests/adapters/test_cache_reasoning_tokens.py::test_usage_sums_the_parts_and_keeps_none`, `tests/app/test_cache_tokens_archive.py`.
+
 > Tri-état : `[x]` fait **+ preuve** · `[ ]` à faire · `[~]` différé/réserve + raison.
 > Mise à jour dans le **même commit** que le code (règle d'or anti-dérive).
 > **Statut couche 1 : ✅ vert** (vérifié 2026-05-31).

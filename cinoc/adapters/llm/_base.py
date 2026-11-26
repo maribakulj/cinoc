@@ -84,6 +84,11 @@ class LLMCompletion(NamedTuple):
 
     ``model`` est le modèle **servi**, lu dans ce même corps (``served_model``) ;
     ``None`` quand la réponse ne le dit pas.
+
+    ``tokens_in`` est toute l'entrée (cache compris) et ``tokens_out`` toute la
+    sortie (raisonnement compris) ; ``tokens_cache_read``, ``tokens_cache_write``
+    et ``tokens_reasoning`` en sont des **parties**, ``None`` quand la réponse
+    ne les rend pas (``ResourceUsage``).
     """
 
     text: str
@@ -92,6 +97,21 @@ class LLMCompletion(NamedTuple):
     stop_reason: StopReason = "unknown"
     native: object | None = None
     model: str | None = None
+    tokens_cache_read: int | None = None
+    tokens_cache_write: int | None = None
+    tokens_reasoning: int | None = None
+
+    def usage(self) -> ResourceUsage | None:
+        """Les jetons de la réponse ; ``None`` si elle n'en rend aucun total."""
+        if self.tokens_in is None and self.tokens_out is None:
+            return None
+        return ResourceUsage(
+            tokens_in=self.tokens_in,
+            tokens_out=self.tokens_out,
+            tokens_cache_read=self.tokens_cache_read,
+            tokens_cache_write=self.tokens_cache_write,
+            tokens_reasoning=self.tokens_reasoning,
+        )
 
 
 def wire_field(data: object, key: str) -> Any:
@@ -440,13 +460,7 @@ def run_llm_step(
     else:  # text_only
         ocr_text = load_ocr_text(inputs, name)
         completion = text_invoke(build_prompt(prompt, ocr_text))
-    usage = (
-        ResourceUsage(
-            tokens_in=completion.tokens_in, tokens_out=completion.tokens_out
-        )
-        if completion.tokens_in is not None or completion.tokens_out is not None
-        else None
-    )
+    usage = completion.usage()
     if completion.stop_reason in ("refusal", "error"):
         cause = (
             "refusée par le fournisseur"

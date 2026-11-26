@@ -91,14 +91,29 @@ def _completion_from_chat(response: object) -> LLMCompletion:
     ``NATIVE_JSON`` : relire le sidecar rend la même complétion. Usage→jetons
     (``prompt_tokens``/``completion_tokens``) et ``finish_reason`` se testent sur
     cassette. Jetons → économie (coût cloud réel).
+
+    ``usage.prompt_tokens_details.cached_tokens`` (SDK mistralai 3.9,
+    ``UsageInfo``) est lu comme une partie de ``prompt_tokens`` — la forme
+    d'OpenAI, que Mistral reprend ; à confirmer sur une réponse réelle. Le
+    chat ne rend aucun compte de raisonnement (seule l'API Responses en a un).
     """
     usage = wire_field(response, "usage")
+    cached = usage_tokens(
+        wire_field(wire_field(usage, "prompt_tokens_details"), "cached_tokens")
+    )
     tokens_in = usage_tokens(wire_field(usage, "prompt_tokens"))
     tokens_out = usage_tokens(wire_field(usage, "completion_tokens"))
     choices = wire_field(response, "choices")
     model = served_model(response)
     if not isinstance(choices, list) or not choices:
-        return LLMCompletion("", tokens_in, tokens_out, native=response, model=model)
+        return LLMCompletion(
+            "",
+            tokens_in,
+            tokens_out,
+            native=response,
+            model=model,
+            tokens_cache_read=cached,
+        )
     choice = choices[0]
     return LLMCompletion(
         normalize_llm_content(wire_field(wire_field(choice, "message"), "content")),
@@ -107,6 +122,7 @@ def _completion_from_chat(response: object) -> LLMCompletion:
         stop_reason_from(wire_field(choice, "finish_reason"), _STOP_REASONS),
         native=response,
         model=model,
+        tokens_cache_read=cached,
     )
 
 

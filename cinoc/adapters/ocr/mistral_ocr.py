@@ -31,7 +31,7 @@ from __future__ import annotations
 
 from base64 import b64encode
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 from cinoc.adapters._native import sdk_native, served_model
 from cinoc.adapters._resilience import (
@@ -63,7 +63,7 @@ from cinoc.pipeline.types import RunContext, StepOutput
 _VERSION = "1.3"
 #: Granularité des confiances demandées : celle de la projection
 #: (``Region.confidence`` = ``block_type_confidence_score``).
-_CONFIDENCE_GRANULARITY = "block"
+_CONFIDENCE_GRANULARITY: Final = "block"
 _MEDIA = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
           ".webp": "image/webp", ".tif": "image/tiff", ".tiff": "image/tiff"}
 

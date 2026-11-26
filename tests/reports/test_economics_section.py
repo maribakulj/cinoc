@@ -170,3 +170,59 @@ def test_a_self_hosted_instance_says_so_in_both_languages() -> None:
     assert "self-hosted: openai/qwen2.5vl:3b" in en
     assert "no provider price" in en
     assert "auto-hébergé" not in en and "self-hosted" not in fr
+
+
+def _cache_result(**fields: object) -> RunResult:
+    base: dict[str, object] = {
+        "pipeline": "vlm",
+        "n_documents": 2,
+        "duration_seconds": 10.0,
+        "tokens_in": 2_048,
+        "tokens_out": 75,
+        "cost_eur": 0.0004,
+        "basis": "machine+jetons",
+    }
+    row = PipelineEconomics.model_validate({**base, **fields})
+    payload = _payload().model_copy(update={"pipelines": (row,), "marginal": ()})
+    return RunResult(
+        manifest=_manifest(),
+        analyses=(Analysis(scope="corpus", view="text", payload=payload),),
+    )
+
+
+def test_cache_and_reasoning_tokens_show_inside_their_totals() -> None:
+    """P5f 8 (S22, D-294) : les jetons de cache et de raisonnement sont des
+    **parties** des colonnes de jetons existantes — affichées dans leur cellule,
+    en FR et en EN, sans colonne ni section nouvelle."""
+    result = _cache_result(
+        tokens_cache_read=1_536, tokens_cache_write=0, tokens_reasoning=64
+    )
+    fr = EconomicsSection().render(result, SectionContext())
+    en = EconomicsSection().render(result, SectionContext(lang="en"))
+    assert fr is not None and en is not None
+    assert "dont 1536 lus en cache, 0 écrits en cache" in fr
+    assert "dont 64 de raisonnement" in fr
+    assert "incl. 1536 read from cache, 0 written to cache" in en
+    assert "incl. 64 reasoning" in en
+    assert "en cache" not in en and "from cache" not in fr
+
+
+def test_counts_a_provider_did_not_give_are_not_shown() -> None:
+    fr = EconomicsSection().render(_cache_result(), SectionContext())
+    assert fr is not None
+    assert "en cache" not in fr and "raisonnement" not in fr
+
+
+def test_unpriced_cache_tokens_are_said_in_both_languages() -> None:
+    result = _cache_result(
+        cost_eur=None,
+        basis="jetons de cache non tarifés : mistral/mistral-small-latest",
+        tokens_cache_read=1_024,
+        unpriced_cache=("mistral/mistral-small-latest",),
+    )
+    fr = EconomicsSection().render(result, SectionContext())
+    en = EconomicsSection().render(result, SectionContext(lang="en"))
+    assert fr is not None and en is not None
+    assert "jetons de cache non tarifés : mistral/mistral-small-latest" in fr
+    assert "cache tokens not priced: mistral/mistral-small-latest" in en
+    assert "non tarifés" not in en

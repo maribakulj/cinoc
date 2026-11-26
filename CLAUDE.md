@@ -28,13 +28,13 @@ avant d'écrire la moindre ligne.**
   tranche, est dans le roll-up — **pas ici**.
 - **Le plan qu'exécutent les sessions est [`PLAN_FIN_MIGRATION.md`](PLAN_FIN_MIGRATION.md)**
   (P0→P5i), pas les axes `T#`/`S#` : ceux-ci décrivent comment on est arrivé là.
-  **Étapes 1→4 + P0→P4 + P5a + P5d + P5e livrées.**
-- **Prochaine étape = P5f** — *une inférence tracée*, troisième phase de la
+  **Étapes 1→4 + P0→P4 + P5a + P5d + P5e + P5f livrées.**
+- **Prochaine étape = P5g** — *par soustraction*, quatrième phase de la
   route **P5d → P5i** vers une 1.0 publiable (`PLAN_FIN_MIGRATION.md` §« Étape
-  4quinquies », D-260 → D-266) ; P5d (*installable et sûr*) et P5e (*une mesure
-  qui dit vrai*) sont livrées. La
+  4quinquies », D-260 → D-266) ; P5d (*installable et sûr*), P5e (*une mesure
+  qui dit vrai*) et P5f (*une inférence tracée*) sont livrées. La
   **feuille de route session par session** (S1 → S35) de cette section dit
-  laquelle ouvrir ; S1-S21 sont livrées, la suivante est la fin de S22 (S22b), et les arbitrages A1, A2, A3, A6, A9
+  laquelle ouvrir ; S1-S22 sont livrées, la suivante est S23, et les arbitrages A1, A2, A3, A6, A9
   sont rendus (D-271). Née d'un audit sur le produit et non sur la CI : un
   `pip install cinoc` sans extra ne démarrait pas, et plusieurs chiffres
   affichés ne mesuraient pas ce qu'annonçait leur nom. Cette route **remplace**
