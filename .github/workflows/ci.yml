@@ -138,18 +138,31 @@ jobs:
           taille=$(stat -c %s "$RUNNER_TEMP"/dist/*.tar.gz)
           test "$taille" -lt 5000000 || { echo "::error::sdist de $taille octets (plafond : 5 Mo)"; exit 1; }
           python -c "import sys, zipfile; md = [n for n in zipfile.ZipFile(sys.argv[1]).namelist() if n.endswith('.md')]; sys.exit(f'.md dans la roue : {md}' if md else 0)" "$RUNNER_TEMP"/dist/*.whl
-      - name: Installer sans extra et lancer hors du dépôt
+      # Les parcours d'une personne extérieure (P5i 2, D-305), exécutés par
+      # `tests/installed/` contre l'exécutable `cinoc` de la roue installée,
+      # hors du dépôt — aucun import de l'arbre de sources. Tesseract : le
+      # premier vrai OCR (le paquet apt n'apporte que `eng`, que le parcours lit).
+      - name: Installer Tesseract
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq tesseract-ocr
+      - name: Installer sans extra et lancer les parcours de base
+        env:
+          CINOC_INSTALLED_VENV: ${{ runner.temp }}/bare
         run: |
           python -m venv "$RUNNER_TEMP/bare"
           "$RUNNER_TEMP/bare/bin/pip" install "$RUNNER_TEMP"/dist/*.whl
-          cp -r examples "$RUNNER_TEMP/examples"
-          cd "$RUNNER_TEMP"
-          bare/bin/cinoc --help
-          bare/bin/cinoc --version
-          bare/bin/cinoc list engines
-          bare/bin/cinoc demo --output demo.html
-          bare/bin/cinoc run examples/config.yaml -o run.html
-          test -s demo.html && test -s run.html
+          python -m pip install pytest
+          python -m pytest -q -p no:cacheprovider tests/installed -rs
+      # Même venv, avec les extras des deux autres parcours : la vitrine qui
+      # sert un rapport de la CLI avec ses images et lance un run depuis la
+      # page, et la correction d'un ALTO existant. Un extra absent y échoue.
+      - name: Ajouter les extras des parcours web et correction
+        env:
+          CINOC_INSTALLED_VENV: ${{ runner.temp }}/bare
+          CINOC_INSTALLED_EXTRAS: "1"
+        run: |
+          roue=$(ls "$RUNNER_TEMP"/dist/*.whl)
+          "$RUNNER_TEMP/bare/bin/pip" install "$roue[serve,images,saknussemm]"
+          python -m pytest -q -p no:cacheprovider tests/installed -rs
 
   # Construit l'image de la vitrine (ce que le sandbox ne pouvait pas vérifier)
   # et la sonde RÉELLEMENT : conteneur lancé → /health via curl.

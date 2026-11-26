@@ -285,7 +285,11 @@ def create_app(
     )
     app.include_router(
         build_reports_router(
-            runtime_dir, alto_store=alto_store, image_root=uploads_root
+            runtime_dir,
+            alto_store=alto_store,
+            image_root=uploads_root,
+            # Un rapport déposé relit ses images contre son dossier (D-305).
+            deposit_dir=catalog_dir,
         )
     )
     app.include_router(

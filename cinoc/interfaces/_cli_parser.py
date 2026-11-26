@@ -370,7 +370,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--json",
         dest="json_output",
         default=None,
-        help="Écrit aussi le RunResult en JSON (pour comparer plus tard).",
+        help="Écrit aussi le RunResult en JSON (comparer, servir) ; ses images "
+        "se relisent contre le dossier de la spec : écrivez-le à côté d'elle.",
     )
     run_cmd.add_argument(
         "--hipe-jsonl",
@@ -570,7 +571,7 @@ def build_parser() -> argparse.ArgumentParser:
     serve_cmd.add_argument(
         "--reports-dir",
         default=None,
-        help="Dossier des rapports RunResult JSON à servir.",
+        help="Dossier des RunResult JSON à servir ; leurs images s'y relisent.",
     )
     return parser
 

@@ -101,7 +101,39 @@ def resolve_image_ref(ref: str, root: Path | None) -> str | None:
         return None
 
 
+def confine_image_refs(result: RunResult, root: Path) -> RunResult:
+    """``result`` dont chaque image **locale** se relit sous ``root``, ou n'a pas
+    de référence.
+
+    Pour un ``RunResult`` **servi** : le serveur lit les images qu'un JSON
+    déposé lui nomme, et un JSON se dépose depuis ailleurs. Un absolu (JSON
+    antérieur à D-282) ne passe donc que s'il tombe sous ``root`` — au lieu de
+    faire ouvrir au serveur un fichier de son choix —, et un relatif qui en
+    sort perd sa référence comme dans :func:`resolve_image_ref`. Une URL reste
+    telle quelle. Le rendu local (CLI), lui, relit le JSON de la machine même :
+    il garde la règle de :func:`resolve_image_ref`.
+    """
+    documents = tuple(
+        document
+        if document.image_ref is None
+        or document.image_ref.startswith(_REMOTE)
+        or _confined(document.image_ref, root)
+        else document.model_copy(update={"image_ref": None})
+        for document in result.documents
+    )
+    return result.model_copy(update={"documents": documents})
+
+
+def _confined(ref: str, root: Path) -> bool:
+    try:
+        validated_path(ref, root)
+    except PathSecurityError:
+        return False
+    return True
+
+
 __all__ = [
+    "confine_image_refs",
     "portable_dir",
     "portable_image_ref",
     "portable_result",
