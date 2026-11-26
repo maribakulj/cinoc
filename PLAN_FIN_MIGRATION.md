@@ -648,7 +648,7 @@ après la 1.0 si le temps manque (voir « Ligne de coupe »).
 | Session | Contenu | Sortie vérifiable | |
 |---|---|---|---|
 | S19 | P5f 4 — Mistral OCR : markdown retiré du texte noté ; réponse OCR 4.1 projetée en `LAYOUT` depuis le sidecar ; `Region.confidence` ; aucune géométrie inventée | — | ★ (markdown) / ◇ (LAYOUT) |
-| S20 | P5f 5 + 7 — confidences Azure et Google ; délais finis ; une seule couche de retry ; retry des OCR cloud ; tentatives comptées dans le coût ; **pilote (D-281)** : (D10) une unité reprise de l'archive garde la durée de sa première exécution, sans que l'économie le dise (114,6 s mesurées sous contention → « 244,6 pages/h » contre 1 410 pour l'autre Tesseract) ; (D3) un délai dépassé par contention est classé motif `moteur` | — | ★ |
+| S20 | P5f 5 + 7 — **reste de S10b (D-282)** : `cinoc correct` sort encore en code 0 sans bilan quand des unités échouent — même bilan et même code 3 que `cinoc run` ; confidences Azure et Google ; délais finis ; une seule couche de retry ; retry des OCR cloud ; tentatives comptées dans le coût ; **pilote (D-281)** : (D10) une unité reprise de l'archive garde la durée de sa première exécution, sans que l'économie le dise (114,6 s mesurées sous contention → « 244,6 pages/h » contre 1 410 pour l'autre Tesseract) ; (D3) un délai dépassé par contention est classé motif `moteur` | — | ★ |
 | S21 | P5f 6 — endpoint OpenAI-compatible par instance (vLLM, SGLang), liste blanche d'hôtes, sémaphore par hôte, coût « auto-hébergé » | un run compare OpenAI distant et un serveur local | ◇ (★ si GPU BnF en A6) |
 | S22 | P5f 8 — modèles listés en direct chez les quatre fournisseurs (une fonction, web et CLI) ; plus aucun modèle par défaut codé ; vision et dépréciation lues dans l'API ; SDK épinglés par majeure ; jetons de cache et de raisonnement lus ; **pilote (D-281)** : (D17) `cinoc list models ollama` ignore les modèles installés ; (D18) le modèle Ollama est tracé par son **tag** — le digest (`/api/tags`, `/api/show`) au manifeste et dans la clé d'unité ; (D13) `--check` refuse un modèle absent du fournisseur | aucun nom de modèle codé hors tarifs ; spec sans modèle refusée avec la liste disponible | ★ |
 
@@ -673,7 +673,7 @@ après la 1.0 si le temps manque (voir « Ligne de coupe »).
 
 | Session | Contenu | Sortie vérifiable | |
 |---|---|---|---|
-| S33 | P5i 1 + 2 — README court avec un vrai résultat de S30-S32 ; trois parcours testés sur le paquet installé | une personne extérieure lance un premier rapport en moins de deux minutes | ★ |
+| S33 | P5i 1 + 2 — **reste de S10b (D-282)** : un `RunResult` produit par la CLI puis servi par `cinoc serve --reports-dir` relit ses `image_ref` relatifs contre le dossier des corpus déposés et retombe sur l'aperçu synthétique (les chemins absolus d'avant D5 marchaient sur la même machine) — fixer la racine de relecture d'un rapport baké, parcours testé sur le paquet installé ; README court avec un vrai résultat de S30-S32 ; trois parcours testés sur le paquet installé | une personne extérieure lance un premier rapport en moins de deux minutes | ★ |
 | S34 | P5i 3 — testeurs extérieurs sur `rc1` (A7) ; leurs blocages traités comme des défauts | — | ★ |
 | S35 | P5i 4 + 5 + 6 — métadonnées du dépôt, `CITATION.cff`, `CHANGELOG [1.0.0]` ; **tag `v1.0.0` posé par le mainteneur** ; Space redéployé ; plans historiques retirés de l'arbre | — | ★ |
 
