@@ -41,7 +41,10 @@ from cinoc.evaluation.analysis import (
 )
 from cinoc.evaluation.errors import EvaluationError
 
-#: Seuil d'IoU pour qu'un appariement compte (convention CoNLL/HIPE).
+#: Seuil d'IoU pour qu'un appariement compte. Convention **de Cinoc** — ni
+#: celle de CoNLL (empans exacts), ni celles de HIPE (strict : empans exacts ;
+#: fuzzy : tout recouvrement) : la mention « CoNLL/HIPE » qu'elle portait était
+#: inexacte (D-288).
 DEFAULT_IOU_THRESHOLD = 0.5
 
 #: Échantillons d'entités embarqués dans le payload (bornent la sortie).
@@ -213,6 +216,14 @@ class NerCounts:
     cat_fn: Counter[str]
     missed: list[Entity]
     hallucinated: list[Entity]
+    #: Appariés dont la **forme écrite** dans la sortie est celle de la GT,
+    #: caractère pour caractère (``ner_f1_exact``) ; ``≤ tp``.
+    tp_exact: int = 0
+
+
+def _surface(entity_set: EntitySet, entity: Entity) -> str:
+    """Forme écrite d'une entité, lue à ses offsets dans **son** texte."""
+    return entity_set.text[entity.start : entity.end]
 
 
 def compute_ner(
@@ -230,6 +241,14 @@ def compute_ner(
     cat_tp: Counter[str] = Counter(refs[i].label for i, _ in matches)
     cat_fn: Counter[str] = Counter(refs[i].label for i in unmatched_refs)
     cat_fp: Counter[str] = Counter(hyps[j].label for j in unmatched_hyps)
+    # La forme se lit aux offsets **d'origine** de la sortie (avant R14) : le
+    # span reprojeté est en coordonnées GT, pas dans le texte du moteur.
+    tp_exact = sum(
+        1
+        for i, j in matches
+        if _surface(hypothesis, hypothesis.entities[j])
+        == _surface(reference, refs[i])
+    )
     return NerCounts(
         tp=len(matches),
         fp=len(unmatched_hyps),
@@ -239,6 +258,7 @@ def compute_ner(
         cat_fn=cat_fn,
         missed=[refs[i] for i in sorted(unmatched_refs)],
         hallucinated=[hyps[j] for j in sorted(unmatched_hyps)],
+        tp_exact=tp_exact,
     )
 
 

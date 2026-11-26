@@ -176,3 +176,34 @@ def test_view_profile_is_named_and_defined_text_views_only() -> None:
     assert "<code>flat_text</code>: NFC, invisible characters removed" in en
     # La convention par défaut et la comparaison brute sont dites.
     assert "<code>normalization_profile: null</code>" in fr
+
+
+def test_conventions_follow_the_failure_policy_in_both_languages() -> None:
+    """Reste de S12 (D-284) : « un document non produit par un moteur est omis
+    de ses agrégats » était écrit quelle que soit la politique — faux sous
+    ``failure_policy: max_error``, où l'unité en échec est notée à l'erreur
+    maximale. La phrase suit désormais la politique du run."""
+    for policy, fr_rule, en_rule in (
+        (
+            "exclude",
+            "est <b>exclu</b> de ses agrégats",
+            "is <b>left out</b> of its aggregates",
+        ),
+        (
+            "max_error",
+            "est noté à l’<b>erreur maximale</b>",
+            "is scored at the <b>maximum error</b>",
+        ),
+    ):
+        manifest = _manifest(failure_policy=policy)
+        french = MethodologySection().render(_result(manifest), SectionContext())
+        english = MethodologySection().render(
+            _result(manifest), SectionContext(lang="en")
+        )
+        assert french is not None and english is not None
+        assert "omis de ses agrégats" not in french
+        assert "omitted from its aggregates" not in english
+        assert fr_rule in french, policy
+        assert en_rule in english, policy
+        assert f"<code>failure_policy: {policy}</code>" in french
+        assert f"<code>failure_policy: {policy}</code>" in english

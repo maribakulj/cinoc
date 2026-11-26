@@ -59,3 +59,27 @@ def test_higher_is_better_and_type_guard() -> None:
     assert fca.spec.higher_is_better is True
     with pytest.raises(EvaluationError):
         fca.fn(_ctx(123, "x"))
+
+
+def test_limit_merged_lines_score_zero_whatever_the_text() -> None:
+    """La limite déclarée (D-288) : une sortie qui fusionne les lignes — un
+    VLM qui rend un paragraphe — laisse chaque ligne de référence sans
+    vis-à-vis, et la FCA vaut 0 pour un texte presque exact."""
+    from cinoc.evaluation.metrics.text import cer
+
+    gt = "abc def\nghi jkl\nmno"
+    merged = "abc def ghi jkl mno"
+    assert fca.fn(_ctx(gt, merged)).value == 0.0
+    cer_obs = cer.fn(_ctx(gt, merged))
+    assert cer_obs is not None and cer_obs.value == pytest.approx(2 / 19)
+
+
+def test_limit_flat_profile_leaves_one_line_and_no_order_tolerance() -> None:
+    """Sous le profil par défaut (``flat_text``), la vue a déjà réuni les
+    lignes : la FCA vaut 1 − CER, sans sa tolérance à l'ordre."""
+    from cinoc.formats.text.normalization import get_builtin_profile
+
+    flat = get_builtin_profile("flat_text").normalize
+    gt, swapped = flat("ab\ncd"), flat("cd\nab")
+    assert fca.fn(_ctx("ab\ncd", "cd\nab")).value == 1.0
+    assert fca.fn(_ctx(gt, swapped)).value == pytest.approx(0.2)

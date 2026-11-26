@@ -22,13 +22,13 @@ def test_default_metrics_registration_is_idempotent() -> None:
         "del_rate",
         "diacritic_err",
         "fca",
-        "hallucination",
         "ins_rate",
         "line_identity_cer",
         "line_identity_coverage",
         "mer",
         "mufi_err",
         "ner_f1",
+        "ner_f1_exact",
         "numseq_strict",
         "numseq_value",
         "reading_order_coverage",
@@ -36,6 +36,7 @@ def test_default_metrics_registration_is_idempotent() -> None:
         "region_cer",
         "region_detection",
         "searchability",
+        "unanchored_trigrams",
         "wer",
         "word_accuracy",
     )
@@ -62,7 +63,7 @@ def test_get_and_select_by_input_types() -> None:
         "del_rate",
         "diacritic_err",
         "fca",
-        "hallucination",
+        "unanchored_trigrams",
         "ins_rate",
         "wer",
         "word_accuracy",
@@ -86,7 +87,7 @@ def test_get_and_select_by_input_types() -> None:
     entity_metrics = registry.for_input_types(
         ArtifactType.ENTITIES, ArtifactType.ENTITIES
     )
-    assert {metric.name for metric in entity_metrics} == {"ner_f1"}
+    assert {metric.name for metric in entity_metrics} == {"ner_f1", "ner_f1_exact"}
 
 
 def test_fresh_registry_is_empty() -> None:

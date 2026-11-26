@@ -31,7 +31,9 @@ def _doc(doc_id: str, pipeline: str, cer: float, *, unanch: float | None = None,
          stratum: str | None = None) -> RunDocumentResult:
     scores = [MetricScore(metric="cer", value=cer, support=1)]
     if unanch is not None:
-        scores.append(MetricScore(metric="hallucination", value=unanch, support=1))
+        scores.append(
+            MetricScore(metric="unanchored_trigrams", value=unanch, support=1)
+        )
     return RunDocumentResult(
         document_id=doc_id, pipeline=pipeline, view="text",
         scores=tuple(scores), stratum=stratum,

@@ -33,7 +33,7 @@ avant d'écrire la moindre ligne.**
   route **P5d → P5i** vers une 1.0 publiable (`PLAN_FIN_MIGRATION.md` §« Étape
   4quinquies », D-260 → D-266) ; P5d (*installable et sûr*) est livrée. La
   **feuille de route session par session** (S1 → S35) de cette section dit
-  laquelle ouvrir ; S1-S15 sont livrées, la suivante est S16, et les arbitrages A1, A2, A3, A6, A9
+  laquelle ouvrir ; S1-S16 sont livrées, la suivante est S17, et les arbitrages A1, A2, A3, A6, A9
   sont rendus (D-271). Née d'un audit sur le produit et non sur la CI : un
   `pip install cinoc` sans extra ne démarrait pas, et plusieurs chiffres
   affichés ne mesuraient pas ce qu'annonçait leur nom. Cette route **remplace**

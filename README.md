@@ -66,11 +66,11 @@ Far beyond CER/WER — every family ships with its own report section and tests 
 - **Character / word** — CER, diplomatic CER, WER, MER, median/min/max, Gini concentration.
 - **Philology** — diacritics, MUFI (Medieval Unicode) overlap, abbreviations, early‑modern forms, modern‑archive conventions, Roman numerals, archaism rates (AIR/HCPR).
 - **HIPE conformity** — cMER under the HIPE‑OCRepair norm, micro/macro, JSONL export.
-- **Correction balance** *(the "did the LLM help?" family)* — improvement/regression/no‑change triplet, pcis, change ratio (CCR), **over‑normalisation** (correct words the corrector degraded), heavy‑insertion / **hallucination** flags, consecutive‑edit runs, worst regressions. When the corrector reports its own **decisions**, the report also shows what it *refused* to change, and why — a refusal is a result, not a silence.
+- **Correction balance** *(the "did the LLM help?" family)* — improvement/regression/no‑change triplet, pcis, change ratio (CCR), **over‑normalisation** (correct words the corrector degraded), **heavy‑insertion** flags, consecutive‑edit runs, worst regressions. When the corrector reports its own **decisions**, the report also shows what it *refused* to change, and why — a refusal is a result, not a silence.
 - **Line identity** — when a pipeline preserves line identifiers (structured post‑correction), before/after are matched **by id** instead of being guessed by alignment: per‑line CER and coverage stop depending on a heuristic.
 - **Structured data** — survival of dates, foliation, amounts, regnal years (strict form *and* equivalent value).
 - **Textual fidelity** — rare‑token recall, lexical modernisation flow.
-- **Named entities (NER)** — precision/recall/F1 per category, missed & hallucinated entities, IoU span matching in GT coordinates.
+- **Named entities (NER)** — precision/recall/F1 per category, missed & hallucinated entities, IoU span matching in GT coordinates, plus an **exact‑name** F1 (a misread name is a lost name).
 - **Inter‑engine** — Jensen‑Shannon divergence, oracle gap, complementarity; **Wilcoxon / Friedman / Nemenyi** significance and bootstrap CIs.
 - **Per‑line distribution** — percentiles, Gini, catastrophic‑line rate, positional heat‑map.
 - **Calibration** — ECE / MCE on engine confidences.

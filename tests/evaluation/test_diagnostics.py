@@ -17,7 +17,8 @@ from cinoc.evaluation.diagnostics import (
     char_confusions,
     line_cers,
 )
-from cinoc.evaluation.metrics.diagnostics import hallucination, searchability
+from cinoc.evaluation.metrics.diagnostics import searchability, unanchored_trigrams
+from cinoc.evaluation.metrics.text import cer
 from cinoc.evaluation.result import MetricScore
 
 
@@ -25,19 +26,35 @@ def _ctx(reference: str, hypothesis: str) -> DocContext:
     return DocContext(document_id="d1", reference=reference, hypothesis=hypothesis)
 
 
-# --- searchability : recall de mots à distance <= 2 ------------------------
+# --- searchability : rappel de mots, tolérance selon la longueur ----------
 
 
-def test_searchability_tolerates_two_edits() -> None:
-    # « chat » vs « chot » : distance 1 → retrouvé ; « noir » vs « noir » : 0.
-    obs = searchability.fn(_ctx("le chat noir", "le chot noir"))
+def test_searchability_tolerance_grows_with_word_length() -> None:
+    # Échelle AUTO de Lucene/Elasticsearch : 0 édition jusqu'à 2 caractères,
+    # 1 de 3 à 5, 2 au-delà. « chat »/« chot » (4 car., 1 éd.) retrouvé ;
+    # « le »/« la » (2 car., 1 éd.) non ; « seigneur »/« seignuer » (8 car.,
+    # 2 éd.) retrouvé ; « chat »/« chut » oui, « chat »/« cbut » (2 éd.) non.
+    assert searchability.fn(_ctx("le chat noir", "le chot noir")).value == 1.0  # type: ignore[union-attr]
+    obs = searchability.fn(_ctx("le chat", "la chat"))
+    assert obs is not None and obs.value == pytest.approx(0.5)
+    obs = searchability.fn(_ctx("seigneur", "seignuer"))
+    assert obs is not None and obs.value == 1.0
+    obs = searchability.fn(_ctx("chat", "cbut"))
+    assert obs is not None and obs.value == 0.0
+
+
+def test_searchability_noise_of_short_words_finds_nothing() -> None:
+    """Constat de l'audit (D-264) : à seuil absolu ``≤ 2``, tout mot de deux
+    lettres « retrouvait » n'importe quel mot de deux lettres — un bruit
+    « xx yy zz… » faisait 0,6 de rappel sur « le roi et la reine… »."""
+    gt = "le roi et la reine de la cour du roi"
+    obs = searchability.fn(_ctx(gt, "xx yy zz aa bb cc dd ee ff gg"))
     assert obs is not None
-    assert obs.value == pytest.approx(1.0)
-    assert obs.weight == 3
+    assert obs.value == 0.0
+    assert obs.weight == 10
 
 
 def test_searchability_counts_missing_words() -> None:
-    # « xxxxxxx » est à distance > 2 de tous les mots produits → 2/3 retrouvés.
     obs = searchability.fn(_ctx("le chat noir", "le xxxxxxx noir"))
     assert obs is not None
     assert obs.value == pytest.approx(2 / 3)
@@ -54,27 +71,42 @@ def test_searchability_empty_reference_is_not_applicable() -> None:
     assert searchability.fn(_ctx("", "texte")) is None
 
 
-# --- hallucination : trigrammes non ancrés ----------------------------------
+# --- unanchored_trigrams : trigrammes non ancrés ----------------------------
 
 
-def test_hallucination_zero_when_verbatim() -> None:
-    obs = hallucination.fn(_ctx("bonjour", "bonjour"))
+def test_unanchored_trigrams_zero_when_verbatim() -> None:
+    obs = unanchored_trigrams.fn(_ctx("bonjour", "bonjour"))
     assert obs is not None
     assert obs.value == 0.0
     assert obs.weight == 5  # « bonjour » : 7 chars → 5 trigrammes
 
 
-def test_hallucination_hand_computed_on_invented_suffix() -> None:
+def test_unanchored_trigrams_hand_computed_on_invented_suffix() -> None:
     # Réf « abcdef » ancre {abc,bcd,cde,def}. Hyp « abcxyz » produit
     # {abc,bcx,cxy,xyz} → 3 non ancrés sur 4 = 0.75.
-    obs = hallucination.fn(_ctx("abcdef", "abcxyz"))
+    obs = unanchored_trigrams.fn(_ctx("abcdef", "abcxyz"))
     assert obs is not None
     assert obs.value == pytest.approx(0.75)
     assert obs.weight == 4
 
 
-def test_hallucination_short_hypothesis_not_applicable() -> None:
-    assert hallucination.fn(_ctx("abcdef", "ab")) is None
+def test_unanchored_trigrams_short_hypothesis_not_applicable() -> None:
+    assert unanchored_trigrams.fn(_ctx("abcdef", "ab")) is None
+
+
+def test_unanchored_trigrams_is_blind_to_a_duplicated_page() -> None:
+    """La limite qui a fait retirer le nom ``hallucination`` (D-288) : une page
+    recopiée deux fois n'invente aucun trigramme. Le CER le voit (> 1), la
+    part non ancrée ne voit que les 3 trigrammes de la jointure sur 141."""
+    gt = "Le seigneur Jehan de Montfort donna la terre au prieuré de Saint Martin"
+    doubled = gt + " " + gt
+    obs = unanchored_trigrams.fn(_ctx(gt, doubled))
+    assert obs is not None
+    assert obs.weight == len(doubled) - 2
+    assert obs.value == pytest.approx(3 / 141)
+    assert round(obs.value, 3) == 0.021
+    cer_obs = cer.fn(_ctx(gt, doubled))
+    assert cer_obs is not None and cer_obs.value > 1.0
 
 
 # --- confusions de caractères ------------------------------------------------

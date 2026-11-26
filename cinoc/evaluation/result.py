@@ -140,6 +140,12 @@ class RunResult(BaseModel):
     #: que relu comme attribué. Le profil d'une vue qui n'en nomme aucun devient
     #: ``flat_text`` ; le nom est toujours écrit, et un ``null`` d'un JSON
     #: antérieur garde son sens (comparaison brute) : rien n'est relu faux.
+    #: Toujours 5 (D-288) : la métrique ``hallucination`` s'appelle
+    #: ``unanchored_trigrams`` — même calcul. Un score d'avant garde sa clé :
+    #: le nom d'une métrique est une chaîne libre, il se relit tel quel, sous
+    #: son nom d'alors, sans conversion (et sans glossaire). Le bilan de
+    #: correction compte ``n_heavy_insertion`` (ex-``n_hallucination_heavy``) :
+    #: un payload d'avant est refusé (champ inconnu) plutôt qu'aliasé.
     schema_version: int = 5
     manifest: RunManifest
     pipelines: tuple[PipelineResult, ...] = Field(default_factory=tuple)

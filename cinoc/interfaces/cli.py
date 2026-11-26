@@ -14,6 +14,7 @@ from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import TYPE_CHECKING
 
 from cinoc.app import (
     dump_run_result,
@@ -60,6 +61,9 @@ from cinoc.interfaces._list_command import (
 from cinoc.reports import default_report_renderer, render_comparison
 from cinoc.reports.csv_export import run_result_csv
 from cinoc.reports.sections.overview import REASON_LABELS
+
+if TYPE_CHECKING:
+    from cinoc.adapters.storage.history_store import SeriesKey
 
 #: Code de sortie d'un ``run`` dont le rapport est écrit mais dont au moins une
 #: unité (pipeline × document) a échoué. Distinct de ``1`` (rien n'a pu se
@@ -123,32 +127,45 @@ def demo_to_html() -> str:
 def _run_history(
     db: str, view: str, metric: str, pipeline: str | None, threshold: float
 ) -> int:
-    """Lit le ``HistoryStore`` : série d'un pipeline, ou régressions de la vue."""
+    """Lit le ``HistoryStore`` : séries d'un pipeline, ou régressions de la vue.
+
+    Une série = (corpus, profil, pipeline, vue) : chaque série est imprimée
+    sous son en-tête, jamais mêlée à une autre (D-288).
+    """
     from cinoc.adapters.storage.history_store import HistoryStore
 
     store = HistoryStore(Path(db))
     if pipeline is not None:
-        records = store.history(pipeline, view, metric)
-        if not records:
+        series = store.series(view, metric, pipeline=pipeline)
+        if not series:
             print(f"Aucune mesure pour {pipeline!r} ({view}:{metric}).")
             return 0
-        for record in records:
-            print(
-                f"{record.completed_at}  {record.run_id}  "
-                f"{record.metric}={record.value:.6f}  ({record.corpus_name}, "
-                f"code {record.code_version})"
-            )
+        for key, records in series:
+            print(f"[{_series_label(key)}]")
+            for record in records:
+                print(
+                    f"  {record.completed_at}  {record.run_id}  "
+                    f"{record.metric}={record.value:.6f}  "
+                    f"(code {record.code_version})"
+                )
         return 0
     regressions = store.regressions(view, metric, threshold=threshold)
     if not regressions:
         print(f"Aucune régression ({view}:{metric}, seuil {threshold:g}).")
         return 0
+    # ASCII : une console Windows redirigée est en cp1252, sans « → » ni « Δ ».
     for reg in regressions:
         print(
-            f"{reg.pipeline}: {reg.previous:.6f} → {reg.latest:.6f} "
-            f"(Δ {reg.delta:+.6f}, run {reg.latest_run_id})"
+            f"{reg.pipeline}: {reg.previous:.6f} -> {reg.latest:.6f} "
+            f"(delta {reg.delta:+.6f}, run {reg.latest_run_id}) "
+            f"[corpus {reg.corpus_name}, profil {reg.normalization_profile or 'brut'}]"
         )
     return 0
+
+
+def _series_label(key: SeriesKey) -> str:
+    profile = key.normalization_profile or "brut"
+    return f"corpus {key.corpus_name} | profil {profile} | {key.pipeline} | {key.view}"
 
 
 def _run_demo(output: str) -> int:

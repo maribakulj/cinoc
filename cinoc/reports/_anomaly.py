@@ -76,7 +76,7 @@ def compute_anomalies(
     ``anomalies_par_doc[doc_id]`` = ensemble des types déclenchés (≥ 1 moteur).
     ``cutoffs`` = seuil retenu par type quantitatif (pour l'affichage du critère)."""
     cer = _by_doc(result, view, "cer")
-    unanchored = _by_doc(result, view, "hallucination")
+    unanchored = _by_doc(result, view, "unanchored_trigrams")
     cer_cut = _percentile([v for vs in cer.values() for v in vs], _QUANTILE)
     unanch_cut = _percentile([v for vs in unanchored.values() for v in vs], _QUANTILE)
     spreads = {

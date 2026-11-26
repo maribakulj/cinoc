@@ -295,7 +295,7 @@ def test_ner_view_added_when_corpus_has_entity_gt(tmp_path: Path) -> None:
     names = {v.name for v in spec.evaluation.views}
     assert "entités nommées (NER)" in names
     ner_view = next(v for v in spec.evaluation.views if v.name.startswith("entités"))
-    assert ner_view.metric_names == ("ner_f1",)
+    assert ner_view.metric_names == ("ner_f1", "ner_f1_exact")
     assert ner_view.candidate_types == frozenset({ArtifactType.ENTITIES})
 
 
@@ -441,7 +441,7 @@ def test_metric_profile_default_is_standard_and_byte_identical(tmp_path: Path) -
     assert _plan_metrics(tmp_path, None) == (
         "cer", "cmer", "char_accuracy", "word_accuracy", "fca", "wer", "mer",
         "bow_precision", "bow_recall", "bow_f1",
-        "searchability", "hallucination", "air",
+        "searchability", "unanchored_trigrams", "air",
     )
     assert _plan_metrics(tmp_path, "standard") == _plan_metrics(tmp_path, None)
 

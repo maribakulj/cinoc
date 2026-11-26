@@ -1,5 +1,8 @@
 """Section économie : coûts estimés, débit effectif, Pareto (couche 7).
 
+Le débit « effectif » est une **simulation** (temps de relecture supposé par
+erreur caractère, ``time_per_error_seconds``), étiquetée comme telle (D-288).
+
 Rend les payloads ``economics`` de ``RunResult.analyses`` en **lecture seule**
 (tout est calculé en couche 3 — anti data-layer). Chaque nombre est une
 fonction auditable des mesures E1 + de la table de tarifs **datée** : si la
@@ -125,15 +128,17 @@ def _block(
         '<p class="muted">Coûts <strong>indicatifs</strong> : temps machine '
         f"(durée mesurée × {rate} "
         f"{escape(payload.currency)}/h) + jetons cloud au tarif de la table "
-        f"(valable jusqu'au {escape(payload.pricing_valid_until)}) ; débit "
-        "effectif corrigé du temps de relecture "
-        f"({tpe} s/erreur).</p>\n",
+        f"(valable jusqu'au {escape(payload.pricing_valid_until)}). Le débit "
+        "effectif est une <strong>simulation</strong>, pas une mesure : il "
+        "retire un temps de relecture supposé (hypothèse : "
+        f"{tpe} s par erreur caractère).</p>\n",
         '<p class="muted">Costs are <strong>indicative</strong>: machine time '
         f"(measured duration × {rate} "
         f"{escape(payload.currency)}/h) + cloud tokens at the table's rate "
-        f"(valid until {escape(payload.pricing_valid_until)}); effective "
-        "throughput corrected for proofreading time "
-        f"({tpe} s/error).</p>\n",
+        f"(valid until {escape(payload.pricing_valid_until)}). Effective "
+        "throughput is a <strong>simulation</strong>, not a measurement: it "
+        "subtracts an assumed proofreading time (assumption: "
+        f"{tpe} s per character error).</p>\n",
     )
     th_pipeline = localized(lang, "Pipeline", "Pipeline")
     th_duration = localized(lang, "durée (s)", "duration (s)")
@@ -147,7 +152,7 @@ def _block(
     th_basis = localized(lang, "base", "basis")
     th_pages_per_hour = localized(lang, "pages/h", "pages/h")
     th_pages_per_hour_eff = localized(
-        lang, "pages/h effectif", "pages/h effective"
+        lang, "pages/h effectif (simulation)", "pages/h effective (simulation)"
     )
     return (
         f"<h3>{head}</h3>\n"

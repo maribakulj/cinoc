@@ -26,7 +26,12 @@ from cinoc.adapters.corpus.huggingface import (
     HuggingFaceDataset,
     discover_curated,
 )
-from cinoc.adapters.storage.history_store import HistoryRecord, HistoryStore
+from cinoc.adapters.storage.history_store import (
+    HistoryRecord,
+    HistorySchemaError,
+    HistoryStore,
+    SeriesKey,
+)
 from cinoc.app import resolve_code_version
 from cinoc.app.alto_store import AltoStore
 from cinoc.app.corpus_upload import CorpusStore
@@ -111,29 +116,32 @@ def _corpora_summaries(corpus_store: CorpusStore | None) -> list[dict[str, objec
 def _cer_trends(
     history_store: HistoryStore, records: tuple[HistoryRecord, ...]
 ) -> list[dict[str, object]]:
-    """Sparklines CER : une série chronologique par ``(pipeline, vue)``.
+    """Sparklines CER : une série chronologique par (corpus, profil, pipeline, vue).
 
     Données réelles du store (``history``) — aucune ré-agrégation ici : la
     tendance (pente et son test, ``linregress``) et la rupture (Pettitt)
-    viennent d'``app.history`` (couche 6).
+    viennent d'``app.history`` (couche 6). La clé de série est celle du store
+    (D-288) : deux corpus ou deux profils ne partagent jamais une courbe.
     Ordre stable (première apparition dans ``records``, plus récent d'abord).
     """
-    seen: set[tuple[str, str]] = set()
+    seen: set[SeriesKey] = set()
     trends: list[dict[str, object]] = []
     for record in records:
         if record.metric != "cer":
             continue
-        key = (record.pipeline, record.view)
+        key = record.series
         if key in seen:
             continue
         seen.add(key)
-        series = history_store.history(record.pipeline, record.view, "cer")
+        series = history_store.history(key, "cer")
         values = [s.value for s in series]
         insight = series_insight(series)
         trends.append(
             {
                 "pipeline": record.pipeline,
                 "view": record.view,
+                "corpus": record.corpus_name,
+                "profile": record.normalization_profile,
                 "latest": values[-1] if values else None,
                 "n": len(values),
                 "svg": sparkline_svg(values),
@@ -318,6 +326,7 @@ def build_home_router(
     @router.get("/history", response_class=HTMLResponse)
     def history(request: Request, lang: str = "fr") -> HTMLResponse:
         lang = normalize_lang(lang)
+        legacy = False
         try:
             records = history_store.all_records()
             # Régressions pour chaque (vue, métrique) enregistrée : lecture du
@@ -334,7 +343,12 @@ def build_home_router(
             # la page se dégrade au lieu de renvoyer une 500.
             logger.warning("[history] historique indisponible : %s", exc)
             records, regressions, trends = (), [], []
+        except HistorySchemaError as exc:
+            # Base d'avant la clé (corpus, profil) : refusée, et la page le dit.
+            logger.warning("[history] %s", exc)
+            records, regressions, trends, legacy = (), [], [], True
         context = _base_context(lang, "history", {"history": str(len(records))})
+        context["legacy"] = legacy
         context["records"] = records
         context["regressions"] = regressions
         context["trends"] = trends

@@ -333,7 +333,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     history_cmd = subparsers.add_parser(
         "history",
-        help="Historique longitudinal : série d'un pipeline ou régressions.",
+        help="Historique longitudinal : séries (corpus, profil, pipeline, vue) "
+        "d'un pipeline, ou régressions.",
     )
     history_cmd.add_argument("db", help="Base SQLite de l'historique.")
     history_cmd.add_argument("--view", default="texte")

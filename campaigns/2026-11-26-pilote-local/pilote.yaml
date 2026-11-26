@@ -135,7 +135,7 @@ evaluation:
     - wer
     - cer_diplo
     - mer
-    - hallucination
+    - unanchored_trigrams
   - name: sans_cesure
     candidate_types:
     - raw_text

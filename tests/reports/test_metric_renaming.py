@@ -1,44 +1,83 @@
-"""Renommage T4 : les métriques aux noms « chargés » (`hallucination`,
-`searchability`) reçoivent un **libellé d'affichage descriptif** qui porte son
-**critère**, sans prêter d'intention au modèle. Les **clés** de métrique (donc le
-JSON/`RunResult`) restent inchangées — seul l'affichage change (comme `mer`)."""
+"""Des noms qui ne promettent pas plus qu'ils ne mesurent (T4a D-194, puis P5e 8
+D-288).
+
+T4a avait renommé l'**affichage** des métriques aux noms « chargés » en gardant
+leurs clés. P5e 8 renomme la **clé** de ``hallucination`` — le calcul est la
+part des trigrammes de l'hypothèse absents de la GT, rien de plus : il ne voit
+pas une page recopiée deux fois — et dit les limites de ``fca``,
+``searchability``, ``ner_f1`` et ``region_cer`` là où le lecteur les lit."""
 
 from __future__ import annotations
 
+from cinoc.evaluation.registry import MetricRegistry, register_default_metrics
 from cinoc.reports.glossary import load_glossary
 from cinoc.reports.sections._tables import _METRIC_SHORT, metric_short_label
 from cinoc.reports.sections.engine_radar import _AXES
 
 
-def test_glossary_titles_are_descriptive_and_carry_the_criterion() -> None:
-    cases = (("fr", "Lev", "trigramme"), ("en", "Lev", "trigram"))
-    for lang, recall_kw, anchor_kw in cases:
+def _registry() -> MetricRegistry:
+    registry = MetricRegistry()
+    register_default_metrics(registry)
+    return registry
+
+
+def test_the_key_says_what_is_computed() -> None:
+    registry = _registry()
+    assert registry.document_metric("unanchored_trigrams") is not None
+    # Zéro shim : l'ancienne clé n'est ni enregistrée ni aliasée.
+    assert registry.document_metric("hallucination") is None
+    for lang in ("fr", "en"):
         gloss = load_glossary(lang)
-        # clés inchangées (donnée stable) ...
-        assert "hallucination" in gloss and "searchability" in gloss
-        h, s = gloss["hallucination"], gloss["searchability"]
-        # ... mais titres descriptifs, plus « Indice d'… » (vocable chargé).
-        assert "Indice" not in h["title"] and "index" not in h["title"].lower()
+        assert "hallucination" not in gloss
+        assert "unanchored_trigrams" in gloss
+
+
+def test_glossary_titles_are_descriptive_and_carry_the_criterion() -> None:
+    cases = (("fr", "trigramme", "page dupliquée"), ("en", "trigram", "duplicated"))
+    for lang, anchor_kw, blind_kw in cases:
+        gloss = load_glossary(lang)
+        h, s = gloss["unanchored_trigrams"], gloss["searchability"]
         assert "ancr" in h["title"].lower() or "anchor" in h["title"].lower()
         assert "rappel" in s["title"].lower() or "recall" in s["title"].lower()
-        # le critère exact figure dans la définition (montré, pas seulement nommé).
         assert anchor_kw in h["definition"].lower()
-        assert recall_kw in s["definition"]
+        # La limite mesurée est dite : une page recopiée deux fois vaut 0,021.
+        assert blind_kw in h["limits"].lower()
+        # Le seuil n'est plus un « ≤ 2 » absolu.
+        assert "≤ 2" not in s["title"] and "AUTO" in s["definition"]
 
 
-def test_short_labels_renamed_keys_preserved() -> None:
-    # clés (données) conservées, libellés courts neutres.
-    assert _METRIC_SHORT["hallucination"] == "non-ancré"
+def test_fca_is_declared_limited() -> None:
+    for lang, kw in (("fr", "fusionn"), ("en", "merge")):
+        entry = load_glossary(lang)["fca"]
+        assert kw in entry["limits"].lower()
+        assert kw in entry["title"].lower() or "limit" in entry["title"].lower()
+
+
+def test_ner_carries_no_borrowed_convention() -> None:
+    for lang in ("fr", "en"):
+        gloss = load_glossary(lang)
+        for key in ("ner_f1", "ner_f1_exact"):
+            text = " ".join(str(v) for v in gloss[key].values())
+            assert "CoNLL" not in text and "HIPE" not in text
+
+
+def test_region_cer_says_phantom_regions_count() -> None:
+    for lang, kw in (("fr", "fantôme"), ("en", "phantom")):
+        assert kw in load_glossary(lang)["region_cer"]["definition"].lower()
+
+
+def test_short_labels() -> None:
+    assert _METRIC_SHORT["unanchored_trigrams"] == "non-ancré"
     assert _METRIC_SHORT["searchability"] == "rappel·ft"
-    assert metric_short_label("hallucination") == "non-ancré"
-    assert "halluc." not in _METRIC_SHORT.values()
+    assert metric_short_label("unanchored_trigrams") == "non-ancré"
+    assert "hallucination" not in _METRIC_SHORT
 
 
-def test_radar_axis_for_inverted_hallucination_is_anchoring() -> None:
-    # L'axe radar inverse hallucination (1 − part non ancrée) : son nom honnête
-    # est « Ancrage »/« Anchoring », pas « ¬Halluc ».
+def test_radar_axes_are_named_after_their_calculation() -> None:
+    # L'axe inverse la part non ancrée : c'est l'ancrage. ``fca`` n'est pas une
+    # « fidélité » : l'axe porte son nom.
     axes = {key: (fr, en) for key, _inv, fr, en in _AXES}
-    assert axes["hallucination"] == ("Ancrage", "Anchoring")
+    assert axes["unanchored_trigrams"] == ("Ancrage", "Anchoring")
     assert axes["searchability"] == ("Rappel", "Recall")
-    assert all("Halluc" not in fr and "Halluc" not in en for _fr, (fr, en) in
-               (("k", v) for k, v in axes.items()))
+    assert axes["fca"] == ("FCA", "FCA")
+    assert "hallucination" not in axes

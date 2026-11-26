@@ -18,6 +18,7 @@ def _rec(run_id: str, when: str, value: float) -> HistoryRecord:
         run_id=run_id,
         completed_at=when,
         corpus_name="corpusA",
+        normalization_profile="flat_text",
         code_version="0.1.0",
         pipeline="tesseract",
         view="text",

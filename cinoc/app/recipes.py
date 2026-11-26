@@ -357,7 +357,7 @@ def default_evaluation(
             EvaluationView(
                 name="entites",
                 candidate_types=frozenset({ENTITIES}),
-                metric_names=("ner_f1",),
+                metric_names=("ner_f1", "ner_f1_exact"),
             )
         )
     return EvaluationSpec(views=tuple(vues))

@@ -238,7 +238,7 @@ Toutes dans `CorrectionPayload`, calculées sur **une** extraction avant/après
   `change_ratio = CCR / cmer_raw` (drapeau `overedited` > 2.0) ;
   `length_ratio = len(system)/len(GT)`.
 - **R-1.3 char_ins_ratio** `= I/(H+S+D+I)` caractère (dérivé des comptes cmer,
-  pas un 3ᵉ alignement) + drapeau `hallucination_heavy` (> 0.10). N'altère pas
+  pas un 3ᵉ alignement) + compte `n_heavy_insertion` (> 0.10 ; ex-`hallucination_heavy`, renommé D-288). N'altère pas
   `ins_rate`/`del_rate` existants (niveau **mot**, dénominateur réf — cousins,
   pas doublons ; documenté au glossaire).
 - **R-2.2 pcis avec garde-fous** : pcis officiel + `pcis_median` + comptage
@@ -273,10 +273,14 @@ Toutes dans `CorrectionPayload`, calculées sur **une** extraction avant/après
 ## 10. Hygiène de clés pré-1.0 (couplée au plan A)
 
 Les clés et sémantiques gèlent à la 1.0. Trois décisions **avant** le gel :
-1. `hallucination` : procédure §8 (exécutée à 4g.2).
+1. `hallucination` : procédure §8 (exécutée à 4g.2). **Tranché (D-288)** : la
+   clé devient `unanchored_trigrams` — le calcul ne détecte pas une
+   hallucination (une page dupliquée vaut 0,021) ; même calcul, nom honnête.
 2. `searchability` : durcissement **échelle Elastic AUTO** (0 édition < 3
    caractères · 1 pour 3-5 · 2 pour ≥ 6) — les valeurs baisseront vs runs passés,
-   raison de plus pour le faire pré-1.0.
+   raison de plus pour le faire pré-1.0. **Fait (D-288)** : sur `bnl_mini`,
+   0,89-0,95 → 0,80-0,89 selon le moteur ; un bruit de mots de deux lettres
+   0,43 → 0,03.
 3. `flesch_delta` : **abandonné** (amendement de la table 4a — construct hors
    domaine sur ponctuation OCR abîmée ; couvert par lexical_modernization /
    4g.2 / hcpr-air ; réversible sans perte, formules publiées). Journal D-0xx au

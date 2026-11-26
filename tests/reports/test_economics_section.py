@@ -121,3 +121,18 @@ def test_renders_english_labels() -> None:
 def test_without_economics_payload_renders_nothing() -> None:
     result = RunResult(manifest=_manifest())
     assert EconomicsSection().render(result, SectionContext()) is None
+
+
+def test_human_cost_is_labelled_a_simulation_in_both_languages() -> None:
+    """Le débit « effectif » retire un temps de relecture **supposé** (5 s par
+    erreur caractère) : ce n'est pas une mesure, et il le dit (D-288) — à
+    l'en-tête de sa colonne comme dans la prose, en français et en anglais."""
+    fr = EconomicsSection().render(_result(), SectionContext())
+    en = EconomicsSection().render(_result(), SectionContext(lang="en"))
+    assert fr is not None and en is not None
+    assert "pages/h effectif (simulation)" in fr
+    assert "hypothèse : 5 s par erreur caractère" in fr
+    assert "<strong>simulation</strong>" in fr
+    assert "pages/h effective (simulation)" in en
+    assert "assumption: 5 s per character error" in en
+    assert "<strong>simulation</strong>" in en

@@ -144,7 +144,7 @@ METRIC_PROFILES: dict[str, tuple[str, ...]] = {
     "standard": (
         "cer", "cmer", "char_accuracy", "word_accuracy", "fca", "wer", "mer",
         "bow_precision", "bow_recall", "bow_f1",
-        "searchability", "hallucination", "air",
+        "searchability", "unanchored_trigrams", "air",
     ),
     "essentiel": ("cer", "wer", "mer"),
     "philologie": ("cer", "cer_diplo", "mer", "diacritic_err", "mufi_err", "air"),
@@ -206,14 +206,15 @@ def _layout_view() -> EvaluationView:
 
 def _ner_view() -> EvaluationView:
     """Vue **entités nommées (NER)** : note les sorties ``ENTITIES`` (étape NER)
-    par ``ner_f1`` contre la GT ``ENTITIES``, sans projection (jonction
+    par ``ner_f1`` (empan) et ``ner_f1_exact`` (nom exact, D-288) contre la GT
+    ``ENTITIES``, sans projection (jonction
     ``(ENTITIES, ENTITIES)``). Normalisation/`char_exclude` N/A (comparaison
     d'entités, pas de texte). N'est ajoutée que si le corpus porte une GT
     ``ENTITIES`` (sinon la section NER resterait orpheline)."""
     return EvaluationView(
         name="entités nommées (NER)",
         candidate_types=frozenset({ArtifactType.ENTITIES}),
-        metric_names=("ner_f1",),
+        metric_names=("ner_f1", "ner_f1_exact"),
     )
 
 

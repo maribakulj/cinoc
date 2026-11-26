@@ -51,8 +51,8 @@ logger = logging.getLogger(__name__)
 _CATASTROPHIC_THRESHOLD = 0.10
 #: ``change_ratio`` au-delà duquel le correcteur a sur-édité (R-1.9).
 _OVEREDIT_THRESHOLD = 2.0
-#: Part d'insertions au-delà de laquelle un document est « hallucination
-#: lourde » (R-1.3).
+#: Part d'insertions au-delà de laquelle un document compte en « insertions
+#: lourdes » (R-1.3, ``n_heavy_insertion``).
 _HEAVY_INSERTION_THRESHOLD = 0.10
 #: Longueur de séquence d'éditions au-delà de laquelle on parle de passage
 #: réécrit (R-2.6).
@@ -291,7 +291,7 @@ class _CorrectionAccumulator:
             length_ratio=_safe_ratio(self.corrected_len, self.reference_len),
             n_overedited=self.n_overedited,
             char_ins_ratio=_safe_ratio(self.sys_insertions, self.sys_total),
-            n_hallucination_heavy=self.n_heavy,
+            n_heavy_insertion=self.n_heavy,
             errors_before=self.errors_before,
             errors_after=self.errors_after,
             corrected=self.n_corrected,

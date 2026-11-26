@@ -58,8 +58,8 @@ corriger · **S** supprimer · **E** extraire.
 | `char_confusions` | `Levenshtein.editops` | Compte de substitutions = le S du CER (8 430 contre 7 024), 7× plus rapide | **R** (~−25 LOC) — **fait** (D-286) : 8 424 = S du CER sur `bnl_mini` |
 | `diagnostics.line_cers` | `lines.aligned_line_cers` (déjà au dépôt) | Lignes appariées par index : CER différent sur 1 131 des 2 340 lignes | **R** (~−17 LOC) — **fait** (D-286) : `_alignment.aligned_to_reference`, partagé avec la distribution par ligne |
 | Normalisation (15 profils) | dinglehopper (table SBB), cor-asv-ann, ftfy | 5 des 19 clés Cinoc couvertes ailleurs ; u/v, i/j, ꝑ, ꝓ, ꝗ, œ, æ, ß nulle part. cor-asv-ann **ne s'installe pas** (tensorflow 1.15) et mute sa propre table en mémoire. Le shim `nfc`/`diplomatic` de `from_dict` et `from_yaml` n'ont aucun consommateur | **C**, **S** du shim (~−20 LOC) |
-| NER (`ner_f1`) | nervaluate 1.2, HIPE-scorer, seqeval | Cinoc entre strict et fuzzy ; seule implémentation qui résiste à la dérive d'offsets OCR (reprojection R14) | **C** ; nervaluate seulement si un consommateur demande strict/partial |
-| `roman.py` | paquet `roman` 5.2 | Concordent sur les 3 999 formes canoniques ; `roman` refuse les formes médiévales (iiij). **Bug** : `IIV`, `IXI`, `VIV`, `XIIX` acceptés ; les 5 « numéraux » détectés au corpus sont des mots (`ci`, `dix`) | **C+** ; `roman` en oracle de test — validation **faite** (D-287, S15) : grammaire des chiffres (canonique + additif médiéval), `IIV`/`IXI`/`VIV`/`XIIX` refusés ; la détection de mots (`ci`, `dix`) reste à P5e 8, l'oracle `roman` à P5e 10 |
+| NER (`ner_f1`) | nervaluate 1.2, HIPE-scorer, seqeval | Cinoc entre strict et fuzzy ; seule implémentation qui résiste à la dérive d'offsets OCR (reprojection R14) | **C** ; nervaluate seulement si un consommateur demande strict/partial — variante « nom exact » `ner_f1_exact` ajoutée (D-288) : la forme écrite comptée, que l'appariement par empan ignore |
+| `roman.py` | paquet `roman` 5.2 | Concordent sur les 3 999 formes canoniques ; `roman` refuse les formes médiévales (iiij). **Bug** : `IIV`, `IXI`, `VIV`, `XIIX` acceptés ; les 5 « numéraux » détectés au corpus sont des mots (`ci`, `dix`) | **C+** ; `roman` en oracle de test — validation **faite** (D-287, S15) : grammaire des chiffres (canonique + additif médiéval), `IIV`/`IXI`/`VIV`/`XIIX` refusés ; détection en contexte **faite** (D-288, S16) : un fragment soudé à un mot par un tiret (« ci-devant », « dix- huit ») ou une forme lexicale hors du cadre de points médiéval n'est plus un numéral — 6 détections → 0 sur la GT des 37 pages BNL ; l'oracle `roman` à P5e 10 |
 | FCA, bow, diacritiques, philologie, structured_data | — | Rien d'équivalent en Python ; FCA absente de dinglehopper | **C** |
 | `lines.percentile`, `kendall_distance` | `numpy.percentile`, `scipy.stats.kendalltau` | Identiques (0 écart) | **R** facultatif (~−22 LOC) |
 
@@ -141,7 +141,7 @@ l'extra `hipe-oracle`), crowd-kit et LiteLLM hors CI.
 | 8 | Pires lignes appariées par index | justesse | **corrigé** (D-286) : appariées par F15 |
 | 9 | Nemenyi : colonne α = 0,05 servie pour tout α ≠ 0,01 | justesse | → P5e item 4 |
 | 10 | Tendance OLS affichée sans test de significativité | justesse | **corrigé** (D-287) : `linregress`, p-value et « significative / non significative » à l'écran |
-| 11 | Romains absurdes acceptés ; mots détectés comme romains | justesse | romains absurdes **corrigés** (D-287) ; mots détectés → P5e item 8 |
+| 11 | Romains absurdes acceptés ; mots détectés comme romains | justesse | romains absurdes **corrigés** (D-287) ; mots détectés **corrigés** (D-288) : détection en contexte |
 | 12 | Ordre de lecture `columns` entrelace les colonnes sous un titre large | justesse | **corrigé** (D-287) : ordre de Breuel |
 | 13 | Clé de reprise aveugle aux binaires système | reproductibilité | → P5f item 2b |
 | 14 | PAGE : `<Word>` ignorés à la lecture | perte de données | **corrigé** (D-273) |

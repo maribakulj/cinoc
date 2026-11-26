@@ -154,7 +154,8 @@ class PipelineEconomics(BaseModel):
     #: Erreurs estimées sur la vue : Σ (cer_doc × poids_doc) — auditable.
     estimated_errors: float | None = Field(default=None, ge=0)
     pages_per_hour: float | None = Field(default=None, ge=0)
-    #: Débit corrigé du temps de correction des erreurs résiduelles.
+    #: Débit **simulé** : retire un temps de relecture supposé par erreur
+    #: résiduelle (``time_per_error_seconds``) — une hypothèse, pas une mesure.
     pages_per_hour_effective: float | None = Field(default=None, ge=0)
 
 
@@ -533,7 +534,9 @@ class PipelineCorrection(BaseModel):
     n_overedited: int = Field(default=0, ge=0)
     #: Volume de texte inséré vs GT (R-1.3) : I/(H+S+D+I) sur (GT, corrigé).
     char_ins_ratio: float | None = None
-    n_hallucination_heavy: int = Field(default=0, ge=0)
+    #: Documents dont cette part dépasse le seuil (« insertions lourdes ») —
+    #: une part d'insertions, pas une détection d'hallucination (D-288).
+    n_heavy_insertion: int = Field(default=0, ge=0)
     #: Absorption d'erreurs (multiset de mots GT) : flux corrigé vs introduit.
     errors_before: int = Field(default=0, ge=0)
     errors_after: int = Field(default=0, ge=0)

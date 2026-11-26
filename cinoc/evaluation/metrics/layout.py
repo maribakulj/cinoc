@@ -1,7 +1,9 @@
 """Métriques de structure par bloc (couche 3) — ``region_cer`` + ``region_detection``.
 
-- ``region_cer`` : texte **région par région** (apparié par ``id``), micro-agrégé
-  page (Σ erreurs / Σ caractères).
+- ``region_cer`` : texte **région par région** (apparié par ``id``, sinon par
+  géométrie), micro-agrégé page (Σ erreurs / Σ caractères de référence) ; une
+  région de référence sans vis-à-vis compte en suppressions, une région
+  fantôme de l'hypothèse en insertions (D-288).
 - ``region_detection`` : qualité de la **segmentation géométrique** — F1 des
   régions appariées par **IoU de boîte** (≥ 0.5), en coordonnées **relatives à la
   page** (donc robuste aux unités : mm10 ALTO vs pixels). Pas de ``shapely`` :
@@ -75,7 +77,10 @@ def _layout_pair(ctx: DocContext) -> tuple[CanonicalLayout, CanonicalLayout]:
 @document_metric(
     name="region_cer",
     input_types=(ArtifactType.LAYOUT, ArtifactType.LAYOUT),
-    description="CER par région agrégé à la page (micro) sur le CanonicalLayout.",
+    description=(
+        "CER par région agrégé à la page (micro) sur le CanonicalLayout ; le "
+        "texte des régions fantômes de l'hypothèse compte en insertions."
+    ),
     higher_is_better=False,
     tags=frozenset({"structure", "edit_distance", "layout"}),
 )
@@ -98,6 +103,13 @@ def region_cer(ctx: DocContext) -> Observation | None:
         hyp_text = hyp_texts.get(paires.get(region_id, ""), _MISSING)
         total_edits += _edit_distance(ref_text, hyp_text)
         total_chars += len(ref_text)
+    # Symétrique : une région **fantôme** (de l'hypothèse, sans vis-à-vis)
+    # compte tout son texte en insertions. Ignorée avant D-288 — un moteur
+    # qui inventait un bloc entier gardait son CER par région.
+    apparies = set(paires.values())
+    total_edits += sum(
+        len(text) for region_id, text in hyp_texts.items() if region_id not in apparies
+    )
     if total_chars == 0:
         return None
     return Observation(value=total_edits / total_chars, weight=total_chars)

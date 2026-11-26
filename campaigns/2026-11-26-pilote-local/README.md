@@ -19,7 +19,7 @@ citer comme résultat.
 | (a) | `tesseract_fra_deu` (`lang: fra+deu+ltz`) et `tesseract_fraktur_fra` (`lang: Fraktur+fra`), `psm 6` |
 | (b) | `qwen25vl_3b_zero_shot` : `ollama`, `qwen2.5vl:3b`, `role: zero_shot`, prompt par défaut, `max_tokens: 2048` |
 | (c) | `tesseract_fraktur_fra_qwen_corr` : (a) Fraktur → `ollama` `qwen2.5vl:3b` en `text_only`, prompt curé `correction_press_19c_european` **recopié** dans `prompt:` (un `prompt_name` en YAML est ignoré, cf. D15) |
-| vues | `texte` (`nfc` : cer, wer, cer_diplo, mer, hallucination) · `sans_cesure` (`dehyphenated` : cer, wer) ; en re-notation seulement : `plat` (`flat_text`) et `sans_apostrophes` (`no_apostrophes`) |
+| vues | `texte` (`nfc` : cer, wer, cer_diplo, mer, hallucination — clé renommée `unanchored_trigrams` en D-288, même calcul ; `pilote.yaml` porte le nouveau nom, `run_result.json` l'ancien, relu tel quel) · `sans_cesure` (`dehyphenated` : cer, wer) ; en re-notation seulement : `plat` (`flat_text`) et `sans_apostrophes` (`no_apostrophes`) |
 | défaut d'août | évité par construction : aucun pipeline n'entre par `alto_source`, donc aucune césure de la GT n'est mêlée au texte d'un moteur ; `--ocr-sidecar` ne s'applique qu'à `cinoc correct` |
 
 Fichiers : `pilote.yaml` (la spec exécutée — ses chemins sont relatifs au

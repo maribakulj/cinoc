@@ -155,6 +155,32 @@ class MethodologySection:
             if env
             else ""
         )
+        # La phrase sur les unités en échec suit la politique **du run**
+        # (D-288) : « omis de ses agrégats » était faux sous ``max_error``.
+        policy = result.manifest.failure_policy
+        code = f"<code>failure_policy: {policy}</code>"
+        if policy == "max_error":
+            failed_fr = (
+                "Un document qu’un moteur n’a pas produit (unité en échec) est "
+                "noté à l’<b>erreur maximale</b> — 1 pour un taux d’erreur, 0 "
+                f"pour un score —, pondéré par sa référence ({code})."
+            )
+            failed_en = (
+                "A document an engine did not produce (failed unit) is scored "
+                "at the <b>maximum error</b> — 1 for an error rate, 0 for a "
+                f"score —, weighted by its reference ({code})."
+            )
+        else:
+            failed_fr = (
+                "Un document qu’un moteur n’a pas produit (unité en échec) est "
+                "<b>exclu</b> de ses agrégats, sans score factice ; l’agrégat "
+                f"porte alors « n notés / n attendus » ({code})."
+            )
+            failed_en = (
+                "A document an engine did not produce (failed unit) is "
+                "<b>left out</b> of its aggregates, with no fake score; the "
+                f"aggregate then shows “n scored / n expected” ({code})."
+            )
         conventions = localized(
             lang,
             "<b>Conventions.</b> Les métriques d’erreur (CER, WER, MER) sont des "
@@ -168,9 +194,8 @@ class MethodologySection:
             "taille. Leur IC 95 % (mode détaillé) est un bootstrap de ce même "
             "ratio, documents rééchantillonnés. Une moyenne des taux par document "
             "(macro) est nommée comme telle (« moyen », µ). Une valeur absente "
-            "est rendue « — », jamais interprétée comme zéro. Un document non "
-            "produit par un moteur est omis de ses agrégats (pas de score "
-            "factice). Une "
+            "est rendue « — », jamais interprétée comme zéro. "
+            f"{failed_fr} Une "
             "vue qui ne nomme pas de profil reçoit <code>flat_text</code> ; la "
             "comparaison brute se demande explicitement "
             "(<code>normalization_profile: null</code>).",
@@ -184,8 +209,8 @@ class MethodologySection:
             "proportion to its size. Their 95% CI (detailed mode) is a bootstrap "
             "of that same ratio, resampling documents. A mean of per-document "
             "rates (macro) is named as such (“mean”, µ). A missing value "
-            "renders as “—”, never as zero. A document not produced by an engine is "
-            "omitted from its aggregates (no fake score). A view naming no profile "
+            "renders as “—”, never as zero. "
+            f"{failed_en} A view naming no profile "
             "gets <code>flat_text</code>; raw comparison is requested explicitly "
             "(<code>normalization_profile: null</code>).",
         )
