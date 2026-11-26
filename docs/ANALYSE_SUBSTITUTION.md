@@ -54,9 +54,9 @@ corriger · **S** supprimer · **E** extraire.
 | Composant | Candidats | Preuve | Décision |
 |---|---|---|---|
 | CER/WER/MER/cMER (`metrics/text.py`) | jiwer 4.0, dinglehopper 0.11 | Déjà adossés à rapidfuzz. Identiques à jiwer (audit précédent) et à dinglehopper **160/160** en appel par chaînes. dinglehopper : ~270× plus lent, 370 Mo / 83 distributions (ocrd obligatoire), WER d'une autre définition | **C** ; dinglehopper en **oracle CI** (variante légère `--no-deps`, 107 Mo) |
-| 5 alignements `difflib` | `rapidfuzz.distance.Levenshtein.opcodes` | difflib est sous-optimal (425-616 éditions en excès sur le corpus) et **triple les lacunes** de la taxonomie face au WER affiché à côté (555 contre 168) ; signale comme hallucinations deux sorties simplement brouillées. Un helper de ~20 lignes : 55/55 tests passent (`merge=True`), 1,5-4× plus rapide | **R** (un helper ; `word_misses` fusionné avec `modernization_counts`) |
-| `char_confusions` | `Levenshtein.editops` | Compte de substitutions = le S du CER (8 430 contre 7 024), 7× plus rapide | **R** (~−25 LOC) |
-| `diagnostics.line_cers` | `lines.aligned_line_cers` (déjà au dépôt) | Lignes appariées par index : CER différent sur 1 131 des 2 340 lignes | **R** (~−17 LOC) |
+| 5 alignements `difflib` | `rapidfuzz.distance.Levenshtein.opcodes` | difflib est sous-optimal (425-616 éditions en excès sur le corpus) et **triple les lacunes** de la taxonomie face au WER affiché à côté (555 contre 168) ; signale comme hallucinations deux sorties simplement brouillées. Un helper de ~20 lignes : 55/55 tests passent (`merge=True`), 1,5-4× plus rapide | **R** (un helper ; `word_misses` fusionné avec `modernization_counts`) — **fait** (D-286, S14) : `evaluation._alignment`, `textual_fidelity.token_fates` ; sur `bnl_mini`, lacunes 555 → 168 = D du WER hors fusions/scissions |
+| `char_confusions` | `Levenshtein.editops` | Compte de substitutions = le S du CER (8 430 contre 7 024), 7× plus rapide | **R** (~−25 LOC) — **fait** (D-286) : 8 424 = S du CER sur `bnl_mini` |
+| `diagnostics.line_cers` | `lines.aligned_line_cers` (déjà au dépôt) | Lignes appariées par index : CER différent sur 1 131 des 2 340 lignes | **R** (~−17 LOC) — **fait** (D-286) : `_alignment.aligned_to_reference`, partagé avec la distribution par ligne |
 | Normalisation (15 profils) | dinglehopper (table SBB), cor-asv-ann, ftfy | 5 des 19 clés Cinoc couvertes ailleurs ; u/v, i/j, ꝑ, ꝓ, ꝗ, œ, æ, ß nulle part. cor-asv-ann **ne s'installe pas** (tensorflow 1.15) et mute sa propre table en mémoire. Le shim `nfc`/`diplomatic` de `from_dict` et `from_yaml` n'ont aucun consommateur | **C**, **S** du shim (~−20 LOC) |
 | NER (`ner_f1`) | nervaluate 1.2, HIPE-scorer, seqeval | Cinoc entre strict et fuzzy ; seule implémentation qui résiste à la dérive d'offsets OCR (reprojection R14) | **C** ; nervaluate seulement si un consommateur demande strict/partial |
 | `roman.py` | paquet `roman` 5.2 | Concordent sur les 3 999 formes canoniques ; `roman` refuse les formes médiévales (iiij). **Bug** : `IIV`, `IXI`, `VIV`, `XIIX` acceptés ; les 5 « numéraux » détectés au corpus sont des mots (`ci`, `dix`) | **C+** ; `roman` en oracle de test |
@@ -137,8 +137,8 @@ l'extra `hipe-oracle`), crowd-kit et LiteLLM hors CI.
 | 4 | IIIF v2 : URL du service prise pour l'image (corpus corrompu) | intégrité des données | **corrigé** (D-274) : service d'abord, `info.json` jamais retenu, téléchargement refusé s'il n'est pas une image |
 | 5 | IIIF v3 : vignette au lieu de l'image pleine résolution | biais de mesure | **corrigé** (D-274) — la v2 du même manifeste Wellcome avait le même défaut |
 | 6 | Vote multi-moteurs : pas un ROVER, dépend du nom des sources | justesse | → P5e item 11 |
-| 7 | Taxonomie et hallucinations sur `difflib` sous-optimal | justesse | → P5e item 11 |
-| 8 | Pires lignes appariées par index | justesse | → P5e item 11 |
+| 7 | Taxonomie et hallucinations sur `difflib` sous-optimal | justesse | **corrigé** (D-286) : alignement optimal partagé ; lacunes = D du WER hors fusions/scissions |
+| 8 | Pires lignes appariées par index | justesse | **corrigé** (D-286) : appariées par F15 |
 | 9 | Nemenyi : colonne α = 0,05 servie pour tout α ≠ 0,01 | justesse | → P5e item 4 |
 | 10 | Tendance OLS affichée sans test de significativité | justesse | → P5e item 11 |
 | 11 | Romains absurdes acceptés ; mots détectés comme romains | justesse | → P5e item 8 |

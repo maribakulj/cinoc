@@ -35,7 +35,7 @@ from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.documents import DocumentRef
 from cinoc.domain.evaluation import EvaluationView
-from cinoc.evaluation._alignment import char_counts, char_mer
+from cinoc.evaluation._alignment import aligned_to_reference, char_counts, char_mer
 from cinoc.evaluation.analysis import (
     Analysis,
     CorrectionPayload,
@@ -92,19 +92,6 @@ def _missing(reference_words: list[str], words: list[str]) -> Counter[str]:
         if lacking > 0:
             out[word] = lacking
     return out
-
-
-def _aligned_words(
-    reference_words: list[str], words: list[str]
-) -> list[str | None]:
-    """Mot aligné sur chaque mot GT (``None`` = supprimé) — blocs ``equal`` /
-    ``replace`` mappés positionnellement (mécanique des pires lignes F15)."""
-    aligned: list[str | None] = [None] * len(reference_words)
-    for op in Levenshtein.opcodes(reference_words, words):
-        if op.tag in ("equal", "replace"):
-            for offset in range(op.src_end - op.src_start):
-                aligned[op.src_start + offset] = words[op.dest_start + offset]
-    return aligned
 
 
 def _text_of(
@@ -257,8 +244,8 @@ class _CorrectionAccumulator:
                 self.n_introduced += after - before
                 self.introduced_tokens.add(word)
 
-        aligned_raw = _aligned_words(reference_words, raw_words)
-        aligned_corrected = _aligned_words(reference_words, corrected_words)
+        aligned_raw = aligned_to_reference(reference_words, raw_words)
+        aligned_corrected = aligned_to_reference(reference_words, corrected_words)
         for index, word in enumerate(reference_words):
             if aligned_raw[index] != word:
                 continue

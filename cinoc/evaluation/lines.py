@@ -34,6 +34,7 @@ from collections.abc import Sequence
 from rapidfuzz.distance import Levenshtein
 
 from cinoc.domain.evaluation import EvaluationView
+from cinoc.evaluation._alignment import aligned_to_reference
 from cinoc.evaluation.analysis import (
     Analysis,
     CatastrophicRate,
@@ -87,21 +88,14 @@ def line_cer(reference: str, hypothesis: str) -> float:
 def aligned_line_cers(reference: str, hypothesis: str) -> list[float]:
     """CER par ligne GT, lignes appariées par alignement Levenshtein (F15).
 
-    L'alignement opère sur les **listes de lignes** : seuls les opcodes
-    ``equal``/``replace`` apparient (positionnellement à l'intérieur du
-    segment) ; une ligne GT supprimée reste sans correspondance (CER 1.0 via
-    l'hypothèse vide) ; les lignes hypothèse insérées n'entrent pas dans la
-    distribution.
+    L'alignement opère sur les **listes de lignes**
+    (``_alignment.aligned_to_reference``, partagé avec les pires lignes des
+    diagnostics) : seuls les blocs ``equal``/``replace`` apparient ; une ligne
+    GT supprimée reste sans correspondance (CER 1.0 via l'hypothèse vide) ;
+    les lignes hypothèse insérées n'entrent pas dans la distribution.
     """
     ref_lines = reference.splitlines()
-    hyp_lines = hypothesis.splitlines()
-    if not ref_lines:
-        return []
-    mapped: list[str | None] = [None] * len(ref_lines)
-    for op in Levenshtein.opcodes(ref_lines, hyp_lines):
-        if op.tag in ("equal", "replace"):
-            for offset in range(op.src_end - op.src_start):
-                mapped[op.src_start + offset] = hyp_lines[op.dest_start + offset]
+    mapped = aligned_to_reference(ref_lines, hypothesis.splitlines())
     return [
         line_cer(ref_line, mapped[i] or "")
         for i, ref_line in enumerate(ref_lines)

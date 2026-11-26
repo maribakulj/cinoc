@@ -13,19 +13,21 @@ from cinoc.evaluation.analysis import CharConfusion, DiagnosticsPayload, WorstLi
 from cinoc.evaluation.result import RunResult
 from cinoc.reports._numbers import localize_decimal
 from cinoc.reports.engine_badges import engine_cell, engine_order
-from cinoc.reports.html import escape, view_prefix
+from cinoc.reports.html import escape, localized, view_prefix
 from cinoc.reports.section import Html, SectionContext
 from cinoc.reports.text_diff import char_diff
 
-#: Libellés bilingues du **flux de confusion** (#8). Le reste de la section,
-#: antérieur à la consigne FR/EN des graphiques, reste FR (i18n rapport = jalon).
+#: Libellés bilingues du **flux de confusion** (#8) ; les pires lignes le sont
+#: aussi (D-286). Le tableau des documents difficiles, antérieur à la consigne
+#: FR/EN des graphiques, reste FR (i18n rapport = jalon).
 _CONFUSION_TEXT: dict[str, dict[str, str]] = {
     "fr": {
         "title": "Confusions de caractères récurrentes (attendu → produit)",
         "intro": (
             "Le glyphe attendu (vérité-terrain) → le glyphe produit par le "
             "moteur ; la barre indique la fréquence. La <strong>direction</strong> "
-            "compte : « ſ → f » (long s lu f) n'est pas « f → ſ »."
+            "compte : « ſ → f » (long s lu f) n'est pas « f → ſ ». Ce sont les "
+            "substitutions que compte le CER, ni plus ni moins."
         ),
     },
     "en": {
@@ -33,7 +35,8 @@ _CONFUSION_TEXT: dict[str, dict[str, str]] = {
         "intro": (
             "The expected glyph (ground truth) → the glyph the engine produced; "
             "the bar shows frequency. <strong>Direction</strong> matters: "
-            "“ſ → f” (long s read as f) is not “f → ſ”."
+            "“ſ → f” (long s read as f) is not “f → ſ”. These are exactly the "
+            "substitutions the CER counts."
         ),
     },
 }
@@ -97,14 +100,33 @@ def _worst_lines_table(payload: DiagnosticsPayload, lang: str) -> str:
     if not payload.worst_lines:
         return ""
     rows = "".join(_worst_lines_row(line, lang) for line in payload.worst_lines)
-    return (
+    head = localized(
+        lang,
         "<h4>Pires lignes du corpus — diff GT ↔ hypothèse</h4>\n"
-        '<p class="muted">Surlignage : '
+        '<p class="muted">Lignes appariées par alignement des lignes, comme la '
+        "distribution par ligne : une ligne ajoutée ne décale pas les suivantes, "
+        "une ligne perdue est notée face à une sortie vide. Surlignage : "
         '<del class="d-del">supprimé</del> (présent en GT) · '
-        '<ins class="d-ins">inséré</ins> (produit par le moteur).</p>\n'
-        '<table class="data">\n<thead><tr><th>Pipeline</th><th>Document</th>'
+        '<ins class="d-ins">inséré</ins> (produit par le moteur).</p>\n',
+        "<h4>Worst lines of the corpus — GT ↔ hypothesis diff</h4>\n"
+        '<p class="muted">Lines paired by aligning the lines, as in the per-line '
+        "distribution: an added line does not shift the following ones, a lost "
+        "line is scored against an empty output. Highlighting: "
+        '<del class="d-del">deleted</del> (present in the GT) · '
+        '<ins class="d-ins">inserted</ins> (produced by the engine).</p>\n',
+    )
+    columns = localized(
+        lang,
         '<th class="num-cell">ligne</th><th class="num-cell">CER</th>'
-        "<th>référence (GT)</th><th>hypothèse</th></tr></thead>\n"
+        "<th>référence (GT)</th><th>hypothèse</th>",
+        '<th class="num-cell">line</th><th class="num-cell">CER</th>'
+        "<th>reference (GT)</th><th>hypothesis</th>",
+    )
+    return (
+        head
+        + '<table class="data">\n<thead><tr><th>Pipeline</th><th>Document</th>'
+        + columns
+        + "</tr></thead>\n"
         f"<tbody>{rows}</tbody>\n</table>\n"
     )
 

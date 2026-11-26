@@ -10,15 +10,18 @@ l'isole par l'**alignement** des mots (GT ↔ sortie) :
   alignés sur un **vide** du GT → **hallucination**.
 
 On ne signale donc que les **runs d'insertion d'au moins ``_MIN_INSERT`` mots**
-(un passage, pas un mot parasite isolé). Aucune dépendance, déterministe, lecture
-pure. Plafonds de sûreté sur le poids du payload.
+(un passage, pas un mot parasite isolé). Alignement optimal partagé
+(``evaluation._alignment``, D-286) : ``difflib``, qu'il remplace, ancrait un mot
+commun mal placé et prenait une sortie simplement brouillée pour un passage
+inséré, ou fondait un passage ajouté dans un remplacement 1 → n. Déterministe,
+lecture pure. Plafonds de sûreté sur le poids du payload.
 """
 
 from __future__ import annotations
 
 import re
-from difflib import SequenceMatcher
 
+from cinoc.evaluation._alignment import alignment
 from cinoc.evaluation.analysis import (
     Analysis,
     DocumentHallucination,
@@ -68,18 +71,26 @@ def _compute(
     n'est jamais comptée."""
     gt_tokens = _tokenize(reference)
     hyp_tokens = _tokenize(hypothesis)
-    matcher = SequenceMatcher(a=gt_tokens, b=hyp_tokens, autojunk=False)
     inserted = 0
     blocks: list[HallucinatedBlock] = []
-    for op, _a0, _a1, b0, b1 in matcher.get_opcodes():
-        if op != "insert":
-            continue  # 'replace' = mot mal lu, 'delete' = omis, 'equal' = correct
-        run = b1 - b0
-        inserted += run
-        if run >= _MIN_INSERT and len(blocks) < _MAX_BLOCKS:
-            text = " ".join(hyp_tokens[b0:b1])[:_MAX_BLOCK_CHARS]
+    # Runs de mots de la sortie sans vis-à-vis GT ; une substitution (mot mal
+    # lu), une suppression ou un mot juste les interrompent.
+    runs: list[list[int]] = []
+    previous_inserted = False
+    for i, j in alignment(gt_tokens, hyp_tokens):
+        if i is None and j is not None:
+            if not previous_inserted:
+                runs.append([])
+            runs[-1].append(j)
+            previous_inserted = True
+        else:
+            previous_inserted = False
+    for run in runs:
+        inserted += len(run)
+        if len(run) >= _MIN_INSERT and len(blocks) < _MAX_BLOCKS:
+            text = " ".join(hyp_tokens[run[0] : run[-1] + 1])[:_MAX_BLOCK_CHARS]
             blocks.append(
-                HallucinatedBlock(start_token=b0, end_token=b1 - 1, text=text)
+                HallucinatedBlock(start_token=run[0], end_token=run[-1], text=text)
             )
     if not blocks:
         return None

@@ -15,16 +15,18 @@ Particularité d'architecture (≠ scalaires `air`/`mufi_err`) : la rareté est
 accumule (pipeline × document) au fil du scoring (pattern ``TaxonomyCollector``,
 zéro relecture), puis ``build`` calcule les fréquences sur les GT collectées et
 en dérive le rappel — tout **après** la passe, sans mécanique nouvelle dans le
-runner. Pur stdlib (``re`` + ``difflib`` + ``Counter``).
+runner. L'alignement mot-à-mot est l'alignement optimal partagé
+(``evaluation._alignment``, D-286) ; :func:`token_fates` le lit une fois pour
+la modernisation et pour la carte des mots (``word_errors``).
 """
 
 from __future__ import annotations
 
-import difflib
 import re
 from collections import Counter
 from dataclasses import dataclass, field
 
+from cinoc.evaluation._alignment import alignment
 from cinoc.evaluation.analysis import (
     Analysis,
     ModernizedToken,
@@ -38,7 +40,8 @@ from cinoc.evaluation.analysis import (
 #: espaces = séparateurs. Une seule tokenisation pour les deux mesures.
 _TOKEN_RE = re.compile(r"\w+(?:['’\-]\w+)*", re.UNICODE)
 
-#: Mot supprimé par le moteur (variante de modernisation).
+#: Mot supprimé par le moteur (variante de modernisation, forme produite de la
+#: carte des mots).
 _DELETED = "∅"
 
 #: Rareté par défaut : ≤ 2 occurrences corpus-wide (hapax + dis legomena).
@@ -100,39 +103,43 @@ class _ModSlot:
     variants: Counter[str] = field(default_factory=Counter)
 
 
-def modernization_counts(reference: str, hypothesis: str) -> dict[str, _ModSlot]:
-    """Réécriture par token GT via alignement mot-à-mot ``difflib``.
+def token_fates(reference: str, hypothesis: str) -> list[tuple[str, str | None]]:
+    """Sort de chaque token GT, dans l'ordre : ``(token, forme produite)``.
 
-    ``equal`` → token compté (non modernisé) ; ``replace`` apparié 1-à-1 →
-    modernisé (variante = forme hyp) ; GT en trop d'un ``replace`` ou ``delete``
-    → modernisé en ``∅`` (supprimé). ``autojunk=False`` : pas d'heuristique de
-    saut sur les tokens fréquents (déterminisme).
+    ``None`` = restitué tel quel ; une forme hyp = réécrit (substitution) ;
+    ``∅`` = supprimé. Les tokens hyp insérés n'y figurent pas (mesure centrée
+    GT). Alignement :func:`_alignment.alignment`.
+    Le nombre de ``∅`` est le D, celui des formes produites le S, de
+    l'alignement optimal sur ces tokens.
     """
     ref_tokens = tokenize(reference)
     hyp_tokens = tokenize(hypothesis)
-    slots: dict[str, _ModSlot] = {}
+    fates: list[tuple[str, str | None]] = []
+    for i, j in alignment(ref_tokens, hyp_tokens):
+        if i is None:
+            continue  # token hyp inséré
+        if j is None:
+            fates.append((ref_tokens[i], _DELETED))
+        elif ref_tokens[i] == hyp_tokens[j]:
+            fates.append((ref_tokens[i], None))
+        else:
+            fates.append((ref_tokens[i], hyp_tokens[j]))
+    return fates
 
-    def bump(token: str, variant: str | None) -> None:
+
+def modernization_counts(reference: str, hypothesis: str) -> dict[str, _ModSlot]:
+    """Réécriture par token GT (:func:`token_fates`).
+
+    Restitué → token compté (non modernisé) ; réécrit → modernisé (variante =
+    forme hyp) ; supprimé → modernisé en ``∅``.
+    """
+    slots: dict[str, _ModSlot] = {}
+    for token, variant in token_fates(reference, hypothesis):
         slot = slots.setdefault(token, _ModSlot())
         slot.n_total += 1
         if variant is not None:
             slot.n_modernized += 1
             slot.variants[variant] += 1
-
-    matcher = difflib.SequenceMatcher(None, ref_tokens, hyp_tokens, autojunk=False)
-    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
-        if tag == "equal":
-            for k in range(i1, i2):
-                bump(ref_tokens[k], None)
-        elif tag == "replace":
-            paired = min(i2 - i1, j2 - j1)
-            for k in range(paired):
-                bump(ref_tokens[i1 + k], hyp_tokens[j1 + k])
-            for k in range(i1 + paired, i2):
-                bump(ref_tokens[k], _DELETED)
-        elif tag == "delete":
-            for k in range(i1, i2):
-                bump(ref_tokens[k], _DELETED)
     return slots
 
 
@@ -252,5 +259,6 @@ __all__ = [
     "modernization_counts",
     "rare_recall_counts",
     "rare_tokens",
+    "token_fates",
     "tokenize",
 ]

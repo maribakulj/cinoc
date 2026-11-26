@@ -106,3 +106,16 @@ def test_without_payload_renders_nothing() -> None:
         DiagnosticsSection().render(RunResult(manifest=manifest), SectionContext())
         is None
     )
+
+
+def test_worst_lines_say_how_lines_are_paired_in_both_languages() -> None:
+    # D-286 : appariées par l'alignement de lignes (F15), plus par index.
+    english = DiagnosticsSection().render(_result(), SectionContext(lang="en"))
+    assert english is not None
+    assert "Worst lines of the corpus" in english
+    assert "an added line does not shift the following ones" in english
+    assert "<th>hypothesis</th>" in english and "Pires lignes" not in english
+    french = DiagnosticsSection().render(_result(), SectionContext(lang="fr"))
+    assert french is not None
+    assert "une ligne ajoutée ne décale pas les suivantes" in french
+    assert "substitutions que compte le CER" in french
