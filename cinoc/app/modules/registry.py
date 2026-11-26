@@ -6,22 +6,47 @@ C'est le **seul** point d'extension du produit : le socle est enregistré
 **en dur** (``register_default_modules``) ; la **découverte de plugins tiers**
 (entry-points ``cinoc.modules``, cf. ``app.modules.discovery``) — même résolution
 ``name → Module``, source différente.
+
+**Les réglages sont vérifiés ici, contre la déclaration de la brique**
+(``PARAMS``, ``pipeline.params``) : un réglage inconnu, mal typé, hors bornes
+ou un requis absent est refusé **en le nommant**, avant toute construction. Tout
+chemin qui construit un module passe par :meth:`ModuleRegistry.build` — le run,
+``cinoc run --check``, le dépôt de spec web : le contrôle vaut partout. Une
+brique du socle se lit sans être construite (``declared_by``) ; un module tiers
+est contrôlé sur la déclaration de sa classe, une fois construit, et n'est pas
+contrôlé du tout s'il n'en déclare pas.
+
+Les réglages étant vérifiés d'avance, la plupart des builders du socle se
+réduisent à ``Classe(**réglages)`` (:func:`_direct`) : les noms de réglages
+**sont** les paramètres du constructeur, et un défaut n'existe qu'à un endroit
+de plus que le constructeur — la déclaration, qu'un test confronte à lui.
 """
 
 from __future__ import annotations
 
+import importlib
 from collections.abc import Callable, Mapping
 from typing import Any
 
-from cinoc.domain.errors import CinocError
+from cinoc.app.modules.params import (
+    ModuleResolutionError,
+    ModuleSettingsError,
+    check_settings,
+    closest_hint,
+)
+from cinoc.domain.run_spec import RunSpec
+from cinoc.pipeline.params import Param, declared_params
 from cinoc.pipeline.protocols import Module, ParamValue
 
 #: Construit une instance de module depuis ses kwargs de construction.
 ModuleBuilder = Callable[[Mapping[str, ParamValue]], Module]
 
 
-class ModuleResolutionError(CinocError):
-    """``kind`` inconnu, kwargs invalides, ou nom construit incohérent."""
+def _load_class(path: str) -> Any:
+    """``"paquet.module:Classe"`` → la classe (import paresseux : un SDK lourd
+    n'est jamais chargé pour lire une déclaration)."""
+    module, _, attr = path.partition(":")
+    return getattr(importlib.import_module(module), attr)
 
 
 class ModuleRegistry:
@@ -29,13 +54,32 @@ class ModuleRegistry:
 
     def __init__(self) -> None:
         self._builders: dict[str, ModuleBuilder] = {}
+        self._declared_by: dict[str, str] = {}
 
-    def register_builder(self, kind: str, builder: ModuleBuilder) -> None:
-        """Enregistre (ou remplace) le builder d'un ``kind``. Idempotent."""
+    def register_builder(
+        self, kind: str, builder: ModuleBuilder, *, declared_by: str | None = None
+    ) -> None:
+        """Enregistre (ou remplace) le builder d'un ``kind``. Idempotent.
+
+        ``declared_by`` (``"paquet.module:Classe"``) nomme la classe qui porte la
+        déclaration ``PARAMS`` : elle se lit alors **sans construire** — pour
+        refuser un réglage avant même d'appeler le builder, et pour décrire la
+        brique (``cinoc list engines <brique>``).
+        """
         self._builders[kind] = builder
+        if declared_by is None:
+            self._declared_by.pop(kind, None)
+        else:
+            self._declared_by[kind] = declared_by
 
     def kinds(self) -> tuple[str, ...]:
         return tuple(sorted(self._builders))
+
+    def declared_params(self, kind: str) -> tuple[Param, ...] | None:
+        """La déclaration d'un ``kind``, lue sans construire ; ``None`` si elle
+        ne se lit qu'à la construction (module tiers) ou n'existe pas."""
+        path = self._declared_by.get(kind)
+        return None if path is None else declared_params(_load_class(path))
 
     def build(self, adapter_name: str, kwargs: Mapping[str, ParamValue]) -> Module:
         """Construit le module ``adapter_name`` (``kind`` = avant le ``:``)."""
@@ -45,414 +89,85 @@ class ModuleRegistry:
             raise ModuleResolutionError(
                 f"aucun builder pour le kind {kind!r} (module {adapter_name!r})."
             )
+        params = self.declared_params(kind)
+        if params is not None:
+            _require_model(adapter_name, params, kwargs)
+            check_settings(adapter_name, params, kwargs)
         module = builder(kwargs)
         if module.name != adapter_name:
             raise ModuleResolutionError(
                 f"module construit {module.name!r} ≠ nom déclaré "
                 f"{adapter_name!r} (kwargs incohérents ?)."
             )
+        if params is None:
+            # Module tiers : sa déclaration (s'il en a une) se lit sur sa classe.
+            tiers = declared_params(module)
+            if tiers is not None:
+                check_settings(adapter_name, tiers, kwargs)
         return module
 
 
-def _dpi_optionnel(kwargs: Mapping[str, ParamValue]) -> int | None:
-    """``dpi`` des kwargs, ou ``None`` — auquel cas tesseract décide seul.
+def _require_model(
+    adapter_name: str, params: tuple[Param, ...], kwargs: Mapping[str, ParamValue]
+) -> None:
+    """Un modèle **nommé** — aucun défaut (D-268). Absent chez un fournisseur
+    qui sait lister les siens : le refus les liste, ou dit pourquoi la liste
+    n'a pas pu être lue — plus utile que « réglage requis »."""
+    from cinoc.app.models import missing_model_message, model_providers  # noqa: PLC0415
 
-    Le défaut reste l'absence : imposer une valeur à tout le monde changerait
-    silencieusement des runs existants. Mais l'option devait exister, car sans
-    elle une numérisation aux métadonnées fausses rend une page blanche.
-    """
-    valeur = kwargs.get("dpi")
-    return int(valeur) if isinstance(valeur, (int, float)) else None
-
-
-def _timeout_optionnel(
-    kwargs: Mapping[str, ParamValue], defaut: float
-) -> float:
-    """``timeout`` des kwargs, ou le défaut de la brique.
-
-    Le défaut reste celui de l'adaptateur : le relever pour tout le monde
-    masquerait des blocages réels. Mais l'option devait exister — une page de
-    37 Mpx dépasse les 120 s et se perdait **sans recours**, aucun réglage de
-    spec ne permettant de la rattraper.
-    """
-    valeur = kwargs.get("timeout")
-    return float(valeur) if isinstance(valeur, (int, float)) else defaut
-
-
-def _timeout_saisi(kwargs: Mapping[str, ParamValue]) -> dict[str, ParamValue]:
-    """``timeout`` saisi, transmis tel quel à un moteur distant (qui le
-    valide) ; absent → le défaut fini de l'adaptateur (P5f 7)."""
-    return {"timeout": kwargs["timeout"]} if "timeout" in kwargs else {}
-
-
-def _required_model(kind: str, label: str, kwargs: Mapping[str, ParamValue]) -> str:
-    """Le modèle **nommé** par la spec — aucun défaut (D-268). Absent : refus
-    qui liste les modèles que le fournisseur offre, ou dit pourquoi la liste
-    n'a pas pu être lue."""
     model = kwargs.get("model")
     if isinstance(model, str) and model.strip():
-        return model
-    from cinoc.app.models import missing_model_message  # noqa: PLC0415
-
-    raise ModuleResolutionError(missing_model_message(f"{kind}:{label}", kwargs))
-
-
-def _build_precomputed(kwargs: Mapping[str, ParamValue]) -> Module:
-    label = kwargs.get("source_label")
-    if not isinstance(label, str):
-        raise ModuleResolutionError(
-            "precomputed : 'source_label' (str) requis dans adapter_kwargs."
-        )
-    from cinoc.adapters.ocr.precomputed import PrecomputedTextAdapter
-
-    return PrecomputedTextAdapter(source_label=label)
-
-
-def _build_kraken(kwargs: Mapping[str, ParamValue]) -> Module:
-    label = kwargs.get("label")
-    model = kwargs.get("model")
-    if not isinstance(label, str):
-        raise ModuleResolutionError(
-            "kraken : 'label' (str) requis dans adapter_kwargs."
-        )
-    if not isinstance(model, str) or not model:
-        raise ModuleResolutionError(
-            "kraken : 'model' (chemin .mlmodel) requis dans adapter_kwargs."
-        )
-    from cinoc.adapters.ocr.kraken import KrakenAdapter
-
-    return KrakenAdapter(label=label, model=model)
-
-
-def _build_mistral_ocr(kwargs: Mapping[str, ParamValue]) -> Module:
-    label = kwargs.get("label")
-    if not isinstance(label, str):
-        raise ModuleResolutionError(
-            "mistral_ocr : 'label' (str) requis dans adapter_kwargs."
-        )
-    from cinoc.adapters.ocr.mistral_ocr import MistralOCRAdapter
-
-    return MistralOCRAdapter(
-        label=label,
-        model=_required_model("mistral_ocr", label, kwargs),
-        **_timeout_saisi(kwargs),
-    )
-
-
-def _build_pero(kwargs: Mapping[str, ParamValue]) -> Module:
-    label = kwargs.get("label")
-    model = kwargs.get("model")
-    if not isinstance(label, str):
-        raise ModuleResolutionError("pero : 'label' (str) requis dans adapter_kwargs.")
-    if not isinstance(model, str) or not model:
-        raise ModuleResolutionError(
-            "pero : 'model' (chemin de config PERO) requis dans adapter_kwargs."
-        )
-    from cinoc.adapters.ocr.pero import PeroAdapter
-
-    return PeroAdapter(label=label, model=model)
-
-
-def _build_calamari(kwargs: Mapping[str, ParamValue]) -> Module:
-    label = kwargs.get("label")
-    model = kwargs.get("model")
-    if not isinstance(label, str):
-        raise ModuleResolutionError(
-            "calamari : 'label' (str) requis dans adapter_kwargs."
-        )
-    if not isinstance(model, str) or not model:
-        raise ModuleResolutionError(
-            "calamari : 'model' (checkpoint) requis dans adapter_kwargs."
-        )
-    from cinoc.adapters.ocr.calamari import CalamariAdapter
-
-    return CalamariAdapter(label=label, model=model)
-
-
-def _build_google_vision(kwargs: Mapping[str, ParamValue]) -> Module:
-    label = kwargs.get("label")
-    if not isinstance(label, str):
-        raise ModuleResolutionError(
-            "google_vision : 'label' (str) requis dans adapter_kwargs."
-        )
-    from cinoc.adapters.ocr.google_vision import GoogleVisionAdapter
-
-    # `lang` (passé par le planificateur à tout moteur OCR) est ignoré : Vision
-    # détecte la langue en `DOCUMENT_TEXT_DETECTION` (pas de hint fragile à mapper).
-    return GoogleVisionAdapter(label=label, **_timeout_saisi(kwargs))
-
-
-def _build_azure_di(kwargs: Mapping[str, ParamValue]) -> Module:
-    label = kwargs.get("label")
-    if not isinstance(label, str):
-        raise ModuleResolutionError(
-            "azure_di : 'label' (str) requis dans adapter_kwargs."
-        )
-    from cinoc.adapters.ocr.azure_di import AzureDocIntelAdapter
-
-    # `lang` (passé par le planificateur à tout moteur OCR) ignoré : le modèle
-    # `prebuilt-read` détecte la langue (pas de paramètre de langue à mapper).
-    return AzureDocIntelAdapter(label=label, **_timeout_saisi(kwargs))
-
-
-def _build_tesseract(kwargs: Mapping[str, ParamValue]) -> Module:
-    label = kwargs.get("label")
-    if not isinstance(label, str):
-        raise ModuleResolutionError(
-            "tesseract : 'label' (str) requis dans adapter_kwargs."
-        )
-    from cinoc.adapters.ocr.tesseract import (  # noqa: PLC0415
-        DEFAULT_TIMEOUT as TESSERACT_DEFAULT_TIMEOUT,
-    )
-    from cinoc.adapters.ocr.tesseract import TesseractAdapter
-
-    return TesseractAdapter(
-        label=label,
-        lang=str(kwargs.get("lang", "fra")),
-        psm=int(kwargs.get("psm", 6)),
-        oem=int(kwargs.get("oem", 3)),
-        alto=bool(kwargs.get("alto", False)),
-        # Table « classe de région → psm » (NDNP bascule 6 ↔ 3 selon la classe).
-        # Vide = un seul réglage, le comportement historique.
-        psm_by_class=str(kwargs.get("psm_by_class", "")),
-        # Résolution imposée. Absente, tesseract croit les métadonnées du fichier,
-        # qui mentent souvent sur les numérisations patrimoniales.
-        dpi=_dpi_optionnel(kwargs),
-        timeout=_timeout_optionnel(kwargs, TESSERACT_DEFAULT_TIMEOUT),
-    )
-
-
-#: Réglages d'inférence communs aux quatre fournisseurs LLM/VLM, transmis tels
-#: quels : c'est l'adapter qui les valide (type, bornes) et les écrit au
-#: manifeste, défauts compris. Un réglage absent garde le défaut de l'adapter.
-#: ``timeout`` (délai de l'étape, retries compris) n'est pas écrit au
-#: manifeste par l'adapter : il ne change aucune sortie produite.
-_INFERENCE_KEYS = ("temperature", "top_p", "seed", "max_tokens", "timeout")
-
-
-def _inference(kwargs: Mapping[str, ParamValue], *extra: str) -> dict[str, Any]:
-    return {k: kwargs[k] for k in (*_INFERENCE_KEYS, *extra) if k in kwargs}
-
-
-#: Réglages de cible d'une instance OpenAI-compatible (vLLM, SGLang, serveur
-#: local) : l'endpoint, le **nom** de la variable de la clé, le marqueur
-#: « auto-hébergé » lu par l'économie.
-_OPENAI_ENDPOINT_KEYS = ("base_url", "api_key_env", "self_hosted")
-
-
-def _build_openai(kwargs: Mapping[str, ParamValue]) -> Module:
-    label = kwargs.get("label")
-    if not isinstance(label, str):
-        raise ModuleResolutionError(
-            "openai : 'label' (str) requis dans adapter_kwargs."
-        )
-    from cinoc.adapters.llm.openai import OpenAIAdapter
-
-    prompt = kwargs.get("prompt")
-    return OpenAIAdapter(
-        label=label,
-        model=_required_model("openai", label, kwargs),
-        role=str(kwargs.get("role", "text_only")),
-        prompt=prompt if isinstance(prompt, str) else None,
-        # Cible par instance (P5f 6) : l'adapter valide schéma, identifiants,
-        # nom de variable et marqueur — transmis tels quels.
-        **_inference(kwargs, *_OPENAI_ENDPOINT_KEYS),
-    )
-
-
-def _build_ollama(kwargs: Mapping[str, ParamValue]) -> Module:
-    label = kwargs.get("label")
-    if not isinstance(label, str):
-        raise ModuleResolutionError(
-            "ollama : 'label' (str) requis dans adapter_kwargs."
-        )
-    from cinoc.adapters.llm.ollama import OllamaAdapter
-
-    prompt = kwargs.get("prompt")
-    return OllamaAdapter(
-        label=label,
-        model=_required_model("ollama", label, kwargs),
-        host=str(kwargs.get("host", "http://localhost:11434")),
-        role=str(kwargs.get("role", "text_only")),
-        prompt=prompt if isinstance(prompt, str) else None,
-        **_inference(kwargs, "num_ctx"),
-    )
-
-
-def _build_mistral(kwargs: Mapping[str, ParamValue]) -> Module:
-    label = kwargs.get("label")
-    if not isinstance(label, str):
-        raise ModuleResolutionError(
-            "mistral : 'label' (str) requis dans adapter_kwargs."
-        )
-    from cinoc.adapters.llm.mistral import MistralAdapter
-
-    prompt = kwargs.get("prompt")
-    return MistralAdapter(
-        label=label,
-        model=_required_model("mistral", label, kwargs),
-        role=str(kwargs.get("role", "text_only")),
-        prompt=prompt if isinstance(prompt, str) else None,
-        **_inference(kwargs),
-    )
-
-
-def _build_anthropic(kwargs: Mapping[str, ParamValue]) -> Module:
-    label = kwargs.get("label")
-    if not isinstance(label, str):
-        raise ModuleResolutionError(
-            "anthropic : 'label' (str) requis dans adapter_kwargs."
-        )
-    from cinoc.adapters.llm.anthropic import AnthropicAdapter
-
-    prompt = kwargs.get("prompt")
-    return AnthropicAdapter(
-        label=label,
-        model=_required_model("anthropic", label, kwargs),
-        role=str(kwargs.get("role", "text_only")),
-        prompt=prompt if isinstance(prompt, str) else None,
-        **_inference(kwargs),
-    )
-
-
-def _build_precomputed_layout(kwargs: Mapping[str, ParamValue]) -> Module:
-    from cinoc.adapters.layout.precomputed import PrecomputedLayoutSource
-
-    return PrecomputedLayoutSource()
-
-
-def _build_page_assembler(kwargs: Mapping[str, ParamValue]) -> Module:
-    """``page_assembler`` — sortie PAGE XML, ré-importable en relecture.
-
-    Sans paramètre, comme ``alto_assembler`` : un assembleur n'a rien à régler,
-    il traduit.
-    """
-    from cinoc.adapters.layout.page_assembler import PageAssembler  # noqa: PLC0415
-
-    del kwargs
-    return PageAssembler()
-
-
-def _build_gap_fill(kwargs: Mapping[str, ParamValue]) -> Module:
-    """``gap_fill:<label>`` — croise deux lectures d'une page (fusion).
-
-    Brique de **fusion** : l'exécuteur l'appelle par ``execute_merge`` sur les
-    étapes que ``merge_from`` nomme, et la **première** source nommée fait
-    autorité. Ce que le détecteur a raté ne doit pas disparaître du texte.
-    """
-    from cinoc.adapters.layout.gap_fill import (  # noqa: PLC0415
-        DEFAULT_OVERLAP,
-        LayoutGapFiller,
-    )
-
-    label = kwargs.get("label")
-    if not isinstance(label, str):
-        raise ModuleResolutionError(
-            "gap_fill : 'label' (str) requis dans adapter_kwargs."
-        )
-    recouvrement = kwargs.get("overlap")
-    return LayoutGapFiller(  # type: ignore[return-value]
-        label=label,
-        overlap=(
-            float(recouvrement)
-            if isinstance(recouvrement, (int, float))
-            else DEFAULT_OVERLAP
-        ),
-    )
-
-
-def _build_vote(kwargs: Mapping[str, ParamValue]) -> Module:
-    """``vote:<label>`` — fusionne N transcriptions par vote majoritaire.
-
-    Brique de **fusion** : l'exécuteur l'appelle par ``execute_merge``, sur les
-    étapes que ``merge_from`` nomme. Elle ne peut pas être utilisée comme une
-    étape ordinaire, et c'est voulu — fusionner exige plusieurs avis.
-    """
-    from cinoc.adapters.merge import TextVoteMerger  # noqa: PLC0415
-
-    label = kwargs.get("label")
-    if not isinstance(label, str):
-        raise ModuleResolutionError("vote : 'label' (str) requis dans adapter_kwargs.")
-    return TextVoteMerger(  # type: ignore[return-value]
-        label=label, kind=str(kwargs.get("kind", "raw_text"))
-    )
-
-
-def _build_reading_order(kwargs: Mapping[str, ParamValue]) -> Module:
-    """``reading_order:<label>`` — ordonne les blocs d'une mise en page.
-
-    ``strategy`` choisit entre la ligne de base (``topdown``) et le regroupement
-    en colonnes : ce sont deux hypothèses sur la page, et c'est précisément ce
-    qu'un banc sert à départager.
-    """
-    from cinoc.adapters.layout.reading_order import ReadingOrderModule  # noqa: PLC0415
-
-    label = kwargs.get("label")
-    if not isinstance(label, str):
-        raise ModuleResolutionError(
-            "reading_order : 'label' (str) requis dans adapter_kwargs."
-        )
-    return ReadingOrderModule(
-        label=label, strategy=str(kwargs.get("strategy", "columns"))
-    )
-
-
-def _build_preprocess(kwargs: Mapping[str, ParamValue]) -> Module:
-    """``preprocess:<label>`` — prépare l'image avant lecture (``IMAGE → IMAGE``).
-
-    ``operations`` est une chaîne séparée par des virgules : les paramètres
-    d'adapter sont plats par contrat, et l'ordre déclaré est respecté tel quel —
-    redresser puis binariser n'est pas la même chose que l'inverse.
-    """
-    from cinoc.adapters.preprocess import ImagePreprocessor  # noqa: PLC0415
-
-    label = kwargs.get("label")
-    if not isinstance(label, str):
-        raise ModuleResolutionError(
-            "preprocess : 'label' (str) requis dans adapter_kwargs."
-        )
-    operations = kwargs.get("operations", "deskew,binarize")
-    amplitude = kwargs.get("skew_amplitude_deg", 5.0)
-    return ImagePreprocessor(
-        label=label,
-        operations=str(operations),
-        skew_amplitude_deg=float(amplitude),  # type: ignore[arg-type]
-    )
+        return
+    if adapter_name.split(":", 1)[0] in model_providers() and any(
+        p.name == "model" and p.required for p in params
+    ):
+        raise ModuleResolutionError(missing_model_message(adapter_name, kwargs))
+
+
+def _direct(path: str) -> ModuleBuilder:
+    """Builder d'une brique dont les réglages **sont** les paramètres du
+    constructeur : vérifiés d'avance contre sa déclaration, passés tels quels."""
+
+    def build(kwargs: Mapping[str, ParamValue]) -> Module:
+        return _load_class(path)(**dict(kwargs))  # type: ignore[no-any-return]
+
+    return build
+
+
+def _llm(path: str) -> ModuleBuilder:
+    """Builder d'un adapter LLM/VLM : ``prompt_name`` (un prompt curé) est résolu
+    en ``prompt`` — la règle du composeur web, ``resolve_prompt`` — puis tout le
+    reste passe tel quel. C'est donc le **texte** du prompt qui atteint
+    l'adapter, son manifeste et l'empreinte de l'étape."""
+
+    def build(kwargs: Mapping[str, ParamValue]) -> Module:
+        from cinoc.prompts import PromptError, resolve_prompt  # noqa: PLC0415
+
+        reglages: dict[str, Any] = dict(kwargs)
+        name = reglages.pop("prompt_name", None)
+        if name is not None:
+            prompt = reglages.get("prompt")
+            try:
+                reglages["prompt"] = resolve_prompt(
+                    prompt if isinstance(prompt, str) else None, str(name)
+                )
+            except PromptError as exc:
+                raise ModuleResolutionError(
+                    f"{path.rsplit(':', 1)[1]} : {exc} (cinoc list prompts)"
+                ) from exc
+        return _load_class(path)(**reglages)  # type: ignore[no-any-return]
+
+    return build
 
 
 def _build_saknussemm(kwargs: Mapping[str, ParamValue]) -> Module:
+    """Le libellé suit la règle des LLM : il nomme une brique qui en appelle un."""
     from cinoc.adapters.layout.saknussemm_correct import SaknussemmCorrector
     from cinoc.adapters.llm._base import validate_llm_label
 
-    scale = kwargs.get("xml_scale", 1.0)
-    return SaknussemmCorrector(
-        label=validate_llm_label(str(kwargs["label"]), "SaknussemmCorrector"),
-        producer=str(kwargs.get("producer", "rules")),
-        model=str(kwargs.get("model", "")),
-        host=str(kwargs.get("host", "http://localhost:11434")),
-        # ``xml_scale`` : géométrie ALTO → pixels du scan, pour le producteur
-        # vision (``mm10`` à 300 DPI ⇒ 1,1811). 1,0 = résolution native.
-        xml_scale=float(scale) if isinstance(scale, (int, float)) else 1.0,
-        # Routage QE : sans `qe`, chaque ligne part au producteur comme avant.
-        qe=str(kwargs.get("qe", "")),
-        qe_skip=_seuil(kwargs.get("qe_skip")),
-        qe_escalate=_seuil(kwargs.get("qe_escalate")),
-    )
-
-
-def _seuil(valeur: ParamValue | None) -> float | None:
-    """Seuil de routage : un nombre, ou ``None`` (« pas de borne de ce côté »).
-
-    Distinguer les deux importe : ``0.0`` veut dire « ne saute que les lignes
-    notées zéro », ``None`` veut dire « ne saute rien ».
-    """
-    return float(valeur) if isinstance(valeur, (int, float)) else None
-
-
-def _build_alto_source(kwargs: Mapping[str, ParamValue]) -> Module:
-    from cinoc.adapters.layout.alto_source import AltoLayoutSource
-
-    return AltoLayoutSource(ocr_sidecar=str(kwargs.get("ocr_sidecar", "")))
+    reglages: dict[str, Any] = dict(kwargs)
+    reglages["label"] = validate_llm_label(str(kwargs["label"]), "SaknussemmCorrector")
+    return SaknussemmCorrector(**reglages)
 
 
 def _build_pp_doclayout(kwargs: Mapping[str, ParamValue]) -> Module:
@@ -468,227 +183,99 @@ def _build_pp_doclayout(kwargs: Mapping[str, ParamValue]) -> Module:
     return PPDocLayoutSegmenter(model=model)
 
 
-def _build_cli_layout(kwargs: Mapping[str, ParamValue]) -> Module:
-    """``cli_layout:<label>`` — un outil externe qui écrit du PAGE/ALTO.
+_A = "cinoc.adapters."
 
-    L'interface n'est pas l'outil, c'est le **format** : eynollah, kraken,
-    OCR-D, dhSegment parlent tous PAGE-XML, et deviennent donc des lignes de
-    spec plutôt que des adaptateurs. **Réservée à la CLI** (`CLI_ONLY_KINDS`) :
-    elle exécute une commande décrite par la spec.
+#: Le socle : ``kind → (classe déclarante, builder)``. Builder absent = direct.
+#:
+#: Quelques notes que les builders portaient et qui restent vraies :
+#: ``google_vision`` et ``azure_di`` détectent la langue (aucun ``lang``) ;
+#: ``tesseract`` sans ``dpi`` croit les métadonnées du fichier, qui mentent
+#: souvent sur les numérisations patrimoniales ; ``cli_layout`` et ``ocrd``
+#: exécutent ce que la spec nomme — **réservés à la CLI** (``CLI_ONLY_KINDS``) ;
+#: ``vote`` et ``gap_fill`` sont des briques de **fusion**, appelées par
+#: ``execute_merge`` sur les étapes que ``merge_from`` nomme ; ``alto_source``
+#: fait entrer un ALTO existant sans l'aplatir ; ``saknussemm`` corrige **dans**
+#: la mise en page (l'identité de ligne survit au correcteur).
+_SOCLE: tuple[tuple[str, str, ModuleBuilder | None], ...] = (
+    ("precomputed", "ocr.precomputed:PrecomputedTextAdapter", None),
+    ("tesseract", "ocr.tesseract:TesseractAdapter", None),
+    ("kraken", "ocr.kraken:KrakenAdapter", None),
+    ("pero", "ocr.pero:PeroAdapter", None),
+    ("calamari", "ocr.calamari:CalamariAdapter", None),
+    ("mistral_ocr", "ocr.mistral_ocr:MistralOCRAdapter", None),
+    ("google_vision", "ocr.google_vision:GoogleVisionAdapter", None),
+    ("azure_di", "ocr.azure_di:AzureDocIntelAdapter", None),
+    ("openai", "llm.openai:OpenAIAdapter", _llm(_A + "llm.openai:OpenAIAdapter")),
+    ("ollama", "llm.ollama:OllamaAdapter", _llm(_A + "llm.ollama:OllamaAdapter")),
+    ("mistral", "llm.mistral:MistralAdapter", _llm(_A + "llm.mistral:MistralAdapter")),
+    (
+        "anthropic",
+        "llm.anthropic:AnthropicAdapter",
+        _llm(_A + "llm.anthropic:AnthropicAdapter"),
+    ),
+    # Segmenteurs réels (étape IMAGE → LAYOUT).
+    ("pp_doclayout", "layout.pp_doclayout:PPDocLayoutSegmenter", _build_pp_doclayout),
+    ("doclayout_yolo", "layout.doclayout_yolo:DocLayoutYoloSegmenter", None),
+    ("tesseract_layout", "layout.tesseract_layout:TesseractLayoutSegmenter", None),
+    ("cli_layout", "layout.cli_source:CliLayoutSource", None),
+    ("ocrd", "layout.ocrd_processor:OcrdProcessor", None),
+    ("remote_segmenter", "layout.remote:RemoteSegmenter", None),
+    ("ner", "ner.spacy_extractor:SpacyNerExtractor", None),
+    ("text_confidences", "quality.text_confidences:LanguageConfidenceScorer", None),
+    ("alto_source", "layout.alto_source:AltoLayoutSource", None),
+    ("saknussemm", "layout.saknussemm_correct:SaknussemmCorrector", _build_saknussemm),
+    ("precomputed_layout", "layout.precomputed:PrecomputedLayoutSource", None),
+    ("precomputed_region", "layout.precomputed:PrecomputedRegionRecognizer", None),
+    ("alto_assembler", "layout.assembler:AltoAssembler", None),
+    ("layout_to_text", "layout.to_text:LayoutToTextExtractor", None),
+    ("preprocess", "preprocess:ImagePreprocessor", None),
+    ("reading_order", "layout.reading_order:ReadingOrderModule", None),
+    ("vote", "merge:TextVoteMerger", None),
+    ("gap_fill", "layout.gap_fill:LayoutGapFiller", None),
+    ("page_assembler", "layout.page_assembler:PageAssembler", None),
+)
+
+
+def check_spec_settings(spec: RunSpec, registry: ModuleRegistry) -> None:
+    """Chaque brique d'une spec **se construit** avec ses réglages — rien ne
+    s'exécute : un réglage inconnu ou mal typé est refusé avant le premier
+    appel, à ``cinoc run --check`` comme au dépôt d'une spec web (D14 du pilote).
+
+    Refuse aussi des réglages posés pour une brique qu'**aucune étape**
+    n'emploie (``ollama:qwen`` pour une étape ``ollama:qwen_vlm``) : ils
+    seraient ignorés de la même façon, en silence.
     """
-    from cinoc.adapters.layout.cli_source import CliLayoutSource  # noqa: PLC0415
-
-    label = kwargs.get("label")
-    if not isinstance(label, str):
-        raise ModuleResolutionError(
-            "cli_layout : 'label' (str) requis dans adapter_kwargs."
+    used = sorted({s.adapter_name for p in spec.pipelines for s in p.steps})
+    for name in sorted(set(spec.adapter_kwargs) - set(used)):
+        raise ModuleSettingsError(
+            f"adapter_kwargs : réglages pour {name!r}, qu'aucune étape n'emploie"
+            f"{closest_hint(name, used) or '.'} Ils ne seraient lus par personne."
         )
-    delai = kwargs.get("timeout")
-    return CliLayoutSource(
-        label=label,
-        command=str(kwargs.get("command", "")),
-        timeout=float(delai) if isinstance(delai, (int, float)) else 600.0,
-    )
+    for name in used:
+        registry.build(name, spec.adapter_kwargs.get(name, {}))
 
 
-def _build_ocrd(kwargs: Mapping[str, ParamValue]) -> Module:
-    """``ocrd:<label>`` — un processeur OCR-D, piloté par son workspace METS.
-
-    Distincte de ``cli_layout`` parce que le **contrat** diffère : OCR-D ne voit
-    pas une image mais un workspace. Une brique, une centaine de processeurs.
-    **Réservée à la CLI** (`CLI_ONLY_KINDS`) : la spec nomme un exécutable.
-    """
-    from cinoc.adapters.layout.ocrd_processor import OcrdProcessor  # noqa: PLC0415
-
-    label = kwargs.get("label")
-    if not isinstance(label, str):
-        raise ModuleResolutionError("ocrd : 'label' (str) requis dans adapter_kwargs.")
-    reglages = kwargs.get("parameters")
-    dossier = kwargs.get("bin_dir")
-    delai = kwargs.get("timeout")
-    return OcrdProcessor(
-        label=label,
-        processor=str(kwargs.get("processor", "")),
-        parameters=dict(reglages) if isinstance(reglages, dict) else None,
-        bin_dir=str(dossier) if isinstance(dossier, str) else None,
-        timeout=float(delai) if isinstance(delai, (int, float)) else 900.0,
-    )
-
-
-def _build_tesseract_layout(kwargs: Mapping[str, ParamValue]) -> Module:
-    """``tesseract_layout`` — la mise en page que Tesseract trouve lui-même.
-
-    Le segmenteur de la chaîne NDNP **de référence** : pas de modèle en plus,
-    pas de poids à tirer. Sert aussi de second avis au rattrapage `gap_fill`.
-    """
-    from cinoc.adapters.layout.tesseract_layout import (  # noqa: PLC0415
-        DEFAULT_PSM,
-        TesseractLayoutSegmenter,
-    )
-    from cinoc.adapters.layout.tesseract_layout import (
-        DEFAULT_TIMEOUT as LAYOUT_DEFAULT_TIMEOUT,
-    )
-
-    psm = kwargs.get("psm")
-    oem = kwargs.get("oem")
-    return TesseractLayoutSegmenter(
-        lang=str(kwargs.get("lang", "fra")),
-        psm=int(psm) if isinstance(psm, (int, float)) else DEFAULT_PSM,
-        oem=int(oem) if isinstance(oem, (int, float)) else 3,
-        dpi=_dpi_optionnel(kwargs),
-        timeout=_timeout_optionnel(kwargs, LAYOUT_DEFAULT_TIMEOUT),
-    )
-
-
-def _build_doclayout_yolo(kwargs: Mapping[str, ParamValue]) -> Module:
-    """``doclayout_yolo`` — segmenteur réel installable par pip.
-
-    Le seul du socle qui ne demande ni PaddleX ni une adresse distante : c'est
-    lui qui rend la famille hybride exécutable sur une machine nue.
-    """
-    from cinoc.adapters.layout.doclayout_yolo import (  # noqa: PLC0415
-        DEFAULT_IMGSZ,
-        DEFAULT_MIN_SCORE,
-        DocLayoutYoloSegmenter,
-    )
-
-    score = kwargs.get("min_score")
-    taille = kwargs.get("imgsz")
-    return DocLayoutYoloSegmenter(
-        weights=str(kwargs.get("weights", "")),
-        imgsz=int(taille) if isinstance(taille, (int, float)) else DEFAULT_IMGSZ,
-        min_score=(
-            float(score) if isinstance(score, (int, float)) else DEFAULT_MIN_SCORE
-        ),
-        device=str(kwargs.get("device", "cpu")),
-    )
-
-
-def _build_remote_segmenter(kwargs: Mapping[str, ParamValue]) -> Module:
-    endpoint = kwargs.get("endpoint")
-    if not isinstance(endpoint, str) or not endpoint:
-        raise ModuleResolutionError(
-            "remote_segmenter : 'endpoint' (str) requis dans adapter_kwargs."
-        )
-    from cinoc.adapters.layout.remote import RemoteSegmenter
-
-    token = kwargs.get("token")
-    min_score = kwargs.get("min_score")
-    return RemoteSegmenter(
-        endpoint=endpoint,
-        token=token if isinstance(token, str) else None,
-        min_score=float(min_score) if isinstance(min_score, (int, float)) else 0.5,
-    )
-
-
-def _build_precomputed_region(kwargs: Mapping[str, ParamValue]) -> Module:
-    label = kwargs.get("source_label")
-    if not isinstance(label, str):
-        raise ModuleResolutionError(
-            "precomputed_region : 'source_label' (str) requis dans adapter_kwargs."
-        )
-    from cinoc.adapters.layout.precomputed import PrecomputedRegionRecognizer
-
-    return PrecomputedRegionRecognizer(source_label=label)
-
-
-def _build_alto_assembler(kwargs: Mapping[str, ParamValue]) -> Module:
-    from cinoc.adapters.layout.assembler import AltoAssembler
-
-    return AltoAssembler()
-
-
-def _build_layout_to_text(kwargs: Mapping[str, ParamValue]) -> Module:
-    label = kwargs.get("label")
-    if not isinstance(label, str):
-        raise ModuleResolutionError(
-            "layout_to_text : 'label' (str) requis dans adapter_kwargs."
-        )
-    from cinoc.adapters.layout.to_text import LayoutToTextExtractor
-
-    return LayoutToTextExtractor(label=label)
-
-
-def _build_text_confidences(kwargs: Mapping[str, ParamValue]) -> Module:
-    """``text_confidences:<label>`` — une confiance par mot, sans moteur d'OCR.
-
-    Allume la section calibration (ECE/MCE, courbe de fiabilité) pour les
-    pipelines dont le moteur n'émet aucune confiance — l'OCR Mistral, un VLM en
-    transcription directe, un texte corrigé.
-    """
-    from cinoc.adapters.quality.text_confidences import (  # noqa: PLC0415
-        LanguageConfidenceScorer,
-    )
-
-    label = kwargs.get("label")
-    if not isinstance(label, str):
-        raise ModuleResolutionError(
-            "text_confidences : 'label' (str) requis dans adapter_kwargs."
-        )
-    return LanguageConfidenceScorer(
-        label=label, model=str(kwargs.get("model", ""))
-    )
-
-
-def _build_ner(kwargs: Mapping[str, ParamValue]) -> Module:
-    label = kwargs.get("label")
-    if not isinstance(label, str):
-        raise ModuleResolutionError("ner : 'label' (str) requis dans adapter_kwargs.")
-    from cinoc.adapters.ner.spacy_extractor import SpacyNerExtractor
-
-    return SpacyNerExtractor(
-        label=label, model=str(kwargs.get("model", "fr_core_news_sm"))
-    )
+def socle_params(kind: str) -> tuple[Param, ...] | None:
+    """La déclaration d'une brique du **socle**, sans registre à construire."""
+    for socle_kind, path, _ in _SOCLE:
+        if socle_kind == kind:
+            return declared_params(_load_class(_A + path))
+    return None
 
 
 def register_default_modules(registry: ModuleRegistry) -> None:
     """Enregistre le socle (starter pack). Aucun effet de bord à l'import."""
-    registry.register_builder("precomputed", _build_precomputed)
-    registry.register_builder("tesseract", _build_tesseract)
-    registry.register_builder("kraken", _build_kraken)
-    registry.register_builder("pero", _build_pero)
-    registry.register_builder("calamari", _build_calamari)
-    registry.register_builder("mistral_ocr", _build_mistral_ocr)
-    registry.register_builder("google_vision", _build_google_vision)
-    registry.register_builder("azure_di", _build_azure_di)
-    registry.register_builder("openai", _build_openai)
-    registry.register_builder("ollama", _build_ollama)
-    registry.register_builder("mistral", _build_mistral)
-    registry.register_builder("anthropic", _build_anthropic)
-    # Segmenteurs réels (étape IMAGE → LAYOUT), composables dès aujourd'hui.
-    registry.register_builder("pp_doclayout", _build_pp_doclayout)
-    registry.register_builder("doclayout_yolo", _build_doclayout_yolo)
-    registry.register_builder("tesseract_layout", _build_tesseract_layout)
-    registry.register_builder("cli_layout", _build_cli_layout)
-    registry.register_builder("ocrd", _build_ocrd)
-    registry.register_builder("remote_segmenter", _build_remote_segmenter)
-    registry.register_builder("ner", _build_ner)
-    registry.register_builder("text_confidences", _build_text_confidences)
-    # --- Enveloppe T5 : pipeline hybride seg → reconnaissance par région → ALTO ---
-    # Ces 3 briques (``Module`` Protocol) sont composées par
-    # ``run_planning.plan_hybrid_run`` (finition T5 livrée) : segmentation →
-    # reconnaissance par région (fanout, couche 4) → assemblage ALTO. Consommateur
-    # vérifié de bout en bout par ``tests/pipeline/test_t5_envelope.py``.
-    # Fait entrer un ALTO **existant** dans le banc sans l'aplatir : jusqu'ici
-    # un corpus livré avec sa mise en page ne pouvait y entrer qu'en texte.
-    registry.register_builder("alto_source", _build_alto_source)
-    # Post-correction **dans** la mise en page : l'identite de ligne survit au
-    # correcteur, donc l'appariement avant/apres est connu et non devine.
-    registry.register_builder("saknussemm", _build_saknussemm)
-    registry.register_builder("precomputed_layout", _build_precomputed_layout)
-    registry.register_builder("precomputed_region", _build_precomputed_region)
-    registry.register_builder("alto_assembler", _build_alto_assembler)
-    registry.register_builder("layout_to_text", _build_layout_to_text)
-    registry.register_builder("preprocess", _build_preprocess)
-    registry.register_builder("reading_order", _build_reading_order)
-    registry.register_builder("vote", _build_vote)
-    registry.register_builder("gap_fill", _build_gap_fill)
-    registry.register_builder("page_assembler", _build_page_assembler)
+    for kind, path, builder in _SOCLE:
+        registry.register_builder(
+            kind, builder or _direct(_A + path), declared_by=_A + path
+        )
 
 
 __all__ = [
     "ModuleBuilder",
+    "check_spec_settings",
     "ModuleRegistry",
     "ModuleResolutionError",
     "register_default_modules",
+    "socle_params",
 ]

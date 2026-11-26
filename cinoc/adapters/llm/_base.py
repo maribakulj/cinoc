@@ -23,12 +23,15 @@ from pathlib import Path
 from typing import Any, Literal, NamedTuple, cast
 
 from cinoc.adapters._native import native_artifact
+from cinoc.adapters._params import label_param, model_param, timeout_param
+from cinoc.adapters._resilience import DEFAULT_LLM_TIMEOUT
 from cinoc.adapters._workspace import workspace_artifact_path
 from cinoc.domain.artifacts import Artifact, ArtifactType, compute_content_hash
 from cinoc.domain.errors import AdapterStepError
 from cinoc.domain.pipeline import PipelineMode
 from cinoc.domain.usage import ResourceUsage
 from cinoc.formats.text import read_plaintext
+from cinoc.pipeline.params import Param
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
 
@@ -205,6 +208,47 @@ class InferenceSettings:
             "seed": self.seed,
             "max_tokens": self.max_tokens,
         }
+
+
+def llm_params(
+    modes: frozenset[PipelineMode],
+    *,
+    sampling: bool = True,
+    extra: tuple[Param, ...] = (),
+) -> tuple[Param, ...]:
+    """Les réglages qu'un adapter LLM/VLM déclare (``PARAMS``) — **les mêmes**
+    pour les quatre fournisseurs, défauts compris, plus ``extra`` (sa cible).
+
+    ``sampling=False`` : le fournisseur n'accepte ni ``temperature``, ni
+    ``top_p``, ni ``seed`` (Anthropic) — ils ne sont pas déclarés, donc refusés
+    par nom plutôt qu'acceptés puis ignorés. ``prompt_name`` (un prompt curé,
+    ``cinoc list prompts``) est résolu par le registre en ``prompt`` : c'est le
+    **texte** du prompt qui entre dans l'empreinte, pas le nom qui l'a désigné.
+    """
+    echantillonnage = (
+        Param(
+            "temperature", "float", "Température", "Temperature",
+            default=DEFAULT_TEMPERATURE, minimum=0.0, maximum=2.0,
+        ),
+        Param("top_p", "float", "top_p (défaut : le fournisseur)",
+              "top_p (default: the provider's)", minimum=0.0, maximum=1.0),
+        Param("seed", "int", "Graine", "Seed", default=DEFAULT_SEED, minimum=0),
+    )
+    return (
+        label_param(),
+        model_param("Modèle (nommé : aucun défaut)", "Model (named: no default)"),
+        Param("role", "str", "Mode", "Mode", default="text_only",
+              choices=tuple(sorted(modes))),
+        Param("prompt", "str", "Prompt libre (défaut : celui du mode)",
+              "Free prompt (default: the mode's own)"),
+        Param("prompt_name", "str", "Prompt curé (cinoc list prompts)",
+              "Curated prompt (cinoc list prompts)", affects_output=False),
+        *(echantillonnage if sampling else ()),
+        Param("max_tokens", "int", "Plafond de jetons de sortie",
+              "Output token cap", default=DEFAULT_MAX_TOKENS, minimum=1),
+        timeout_param(DEFAULT_LLM_TIMEOUT),
+        *extra,
+    )
 
 
 #: Ce qu'un module LLM/VLM déclare au manifeste et à l'empreinte de l'étape.
@@ -518,6 +562,7 @@ __all__ = [
     "default_prompt_for_role",
     "llm_effective_settings",
     "llm_input_types",
+    "llm_params",
     "llm_output_type",
     "llm_output_types",
     "load_image_b64",

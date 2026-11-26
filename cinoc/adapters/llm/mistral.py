@@ -42,6 +42,7 @@ from cinoc.adapters.llm._base import (
     llm_effective_settings,
     llm_input_types,
     llm_output_types,
+    llm_params,
     normalize_llm_content,
     run_llm_step,
     stop_reason_from,
@@ -62,6 +63,7 @@ from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.deadline import Deadline
 from cinoc.domain.errors import AdapterStepError, CinocError
 from cinoc.domain.pipeline import PipelineMode
+from cinoc.pipeline.params import Param
 from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
@@ -230,6 +232,8 @@ class MistralAdapter:
     SUPPORTED_MODES: ClassVar[frozenset[PipelineMode]] = frozenset(
         {"text_only", "text_and_image", "zero_shot", "refine"}
     )
+    #: Réglages acceptés : ceux des quatre fournisseurs.
+    PARAMS: ClassVar[tuple[Param, ...]] = llm_params(SUPPORTED_MODES)
 
 
     def __init__(

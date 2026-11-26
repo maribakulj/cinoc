@@ -34,14 +34,16 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from cinoc.adapters._native import native_artifact, served_model
+from cinoc.adapters._params import label_param
 from cinoc.adapters._workspace import workspace_artifact_path
 from cinoc.adapters.layout.to_text import _page_text
 from cinoc.domain.artifacts import Artifact, ArtifactType, compute_content_hash
 from cinoc.domain.errors import AdapterStepError
 from cinoc.domain.layout import CanonicalLayout, Line, Region
+from cinoc.pipeline.params import Param
 from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
@@ -53,33 +55,28 @@ _VERSION = "1.1"
 VISION_PRODUCER = "mistral_vision"
 
 #: **La** table des producteurs qui interrogent un modèle : nom → le client que
-#: ``saknussemm`` recevra. Tout le reste en dérive (noms acceptés, exigence de
-#: ``model``), pour qu'ajouter un fournisseur soit une ligne et non trois.
-#:
-#: Elle n'est **pas** dérivable de ``app.engines.providers_for_mode`` et c'est
-#: délibéré : ``saknussemm`` ne consomme pas un adapter de pipeline mais un
-#: ``StructuredCompletionClient``, que chaque fournisseur doit implémenter à la
-#: main. Un fournisseur présent dans cinoc mais absent ici n'est pas un oubli —
-#: c'est un client qui n'existe pas encore, et le proposer ferait échouer le run
-#: au premier appel. ``mistral_vision`` n'a d'ailleurs aucun pendant là-bas :
-#: c'est une *capacité* (regarder le scan), pas un fournisseur de plus.
+#: ``saknussemm`` recevra ; noms acceptés et exigence de ``model`` en dérivent.
+#: Non dérivable de ``app.engines.providers_for_mode``, délibérément :
+#: ``saknussemm`` consomme un ``StructuredCompletionClient``, écrit à la main par
+#: fournisseur — un absent d'ici est un client qui n'existe pas encore.
+#: ``mistral_vision`` est une *capacité* (regarder le scan), pas un fournisseur.
 MODEL_PRODUCERS: dict[str, str] = {
     "ollama": "serveur local, sans clé",
     "mistral": "API Mistral, correction sur le texte",
     VISION_PRODUCER: "API Mistral, découpe chaque ligne dans le scan",
 }
 
-#: Producteurs câblés. ``rules`` est déterministe et hors ligne : il n'interroge
-#: aucun modèle, donc il ne figure pas dans la table ci-dessus.
+#: Producteurs câblés. ``rules`` (déterministe, hors ligne) n'interroge aucun modèle.
 PRODUCERS = ("rules", *sorted(MODEL_PRODUCERS))
 
-#: Scoreurs de qualité branchables. Le routage est **opt-in** : sans scoreur,
-#: chaque ligne part au producteur, exactement comme avant.
+#: Scoreurs de qualité branchables. Routage **opt-in** : sans scoreur, chaque
+#: ligne part au producteur.
 #:
 #: ``heuristic`` est celui que ``saknussemm`` livre ; son propre docstring dit
 #: qu'il voudrait D'AlemBERT plutôt qu'une règle de pouce, et la calibration de
 #: ce dépôt lui donne raison — AUC ligne 0,500 (le hasard) contre 0,766.
 QE_SCORERS = ("heuristic", "dalembert")
+_DEFAULT_HOST = "http://localhost:11434"
 
 
 def _require_saknussemm() -> Any:
@@ -96,13 +93,25 @@ def _require_saknussemm() -> Any:
 class SaknussemmCorrector:
     """Corrige un ``CanonicalLayout`` ligne à ligne, identités préservées."""
 
+    #: Réglages acceptés (``pipeline.params``) : tout autre est refusé, nommé.
+    PARAMS: ClassVar[tuple[Param, ...]] = (
+        label_param(),
+        Param("producer", "str", "Producteur", "Producer", "rules", choices=PRODUCERS),
+        Param("model", "str", "Modèle (producteur à modèle)", "Model", ""),
+        Param("host", "str", "Serveur Ollama", "Ollama server", _DEFAULT_HOST),
+        Param("xml_scale", "float", "ALTO → px", "ALTO → px", 1.0, minimum=0.0),
+        Param("qe", "str", "Scoreur QE", "QE scorer", "", choices=("", *QE_SCORERS)),
+        Param("qe_skip", "float", "Seuil QE : garder", "QE threshold: keep"),
+        Param("qe_escalate", "float", "Seuil QE : escalader", "QE threshold: escalate"),
+    )
+
     def __init__(
         self,
         *,
         label: str,
         producer: str = "rules",
         model: str = "",
-        host: str = "http://localhost:11434",
+        host: str = _DEFAULT_HOST,
         xml_scale: float = 1.0,
         qe: str = "",
         qe_skip: float | None = None,
@@ -127,8 +136,7 @@ class SaknussemmCorrector:
                 f"(attendu : {', '.join(QE_SCORERS)})."
             )
         if not qe and (qe_skip is not None or qe_escalate is not None):
-            # Des seuils sans scoreur ne routent rien, et l'utilisateur croirait
-            # avoir activé une économie qui n'existe pas.
+            # Des seuils sans scoreur ne routent rien : une économie illusoire.
             raise AdapterStepError(
                 "SaknussemmCorrector : des seuils de routage sans `qe` ne "
                 "s'appliquent à rien — nomme un scoreur."

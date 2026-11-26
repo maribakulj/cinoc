@@ -46,6 +46,7 @@ from cinoc.app.engines import (
 from cinoc.app.jobs import JobRunner
 from cinoc.app.models import ModelChoiceError, check_spec_models
 from cinoc.app.modules import ModuleRegistry, register_default_modules
+from cinoc.app.modules.registry import check_spec_settings
 from cinoc.app.recipes import (
     RecipeError,
     plan_recipe_run,
@@ -403,6 +404,13 @@ def build_runs_router(
         try:
             check_spec_models(spec, live=False)
         except ModelChoiceError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        # Chaque brique se construit avec ses réglages (sans rien exécuter) : un
+        # réglage qu'elle ne déclare pas est refusé ici, nommé (422) — la règle
+        # de ``cinoc run --check``, en couche ``app`` (D14 du pilote).
+        try:
+            check_spec_settings(spec, registre)
+        except CinocError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         # La disponibilité se juge **par instance** : une instance ``openai``
         # auto-hébergée (``base_url``) n'a pas besoin d'``OPENAI_API_KEY``. Une

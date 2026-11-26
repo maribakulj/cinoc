@@ -32,11 +32,14 @@ from __future__ import annotations
 import logging
 from collections.abc import Mapping
 from pathlib import Path
+from typing import ClassVar
 
+from cinoc.adapters._params import label_param
 from cinoc.adapters._workspace import workspace_artifact_path
 from cinoc.domain.artifacts import Artifact, ArtifactType, compute_content_hash
 from cinoc.domain.errors import AdapterStepError
 from cinoc.domain.layout import BBox, CanonicalLayout, LayoutPage, Region
+from cinoc.pipeline.params import Param
 from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
@@ -128,6 +131,13 @@ def combler(
 
 class LayoutGapFiller:
     """Fusionne deux ``LAYOUT`` : le fin fait autorité, l'autre comble les trous."""
+
+    #: Réglages acceptés (``pipeline.params``) : tout autre est refusé, nommé.
+    PARAMS: ClassVar[tuple[Param, ...]] = (
+        label_param(),
+        Param("overlap", "float", "Recouvrement minimal", "Minimum overlap",
+              default=DEFAULT_OVERLAP, minimum=0.0, maximum=1.0),
+    )
 
     def __init__(self, *, label: str, overlap: float = DEFAULT_OVERLAP) -> None:
         if not 0.0 < overlap <= 1.0:

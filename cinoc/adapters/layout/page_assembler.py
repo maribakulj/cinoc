@@ -17,12 +17,14 @@ existait depuis le début, et rien ne le produisait.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import ClassVar
 
 from cinoc.domain.artifacts import Artifact, ArtifactType, compute_content_hash
 from cinoc.domain.errors import AdapterStepError
 from cinoc.domain.layout import CanonicalLayout
 from cinoc.formats.pagexml.layout_map import layout_to_page
 from cinoc.formats.pagexml.writer import PageWriteError, write_pagexml
+from cinoc.pipeline.params import Param
 from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
@@ -34,6 +36,9 @@ class PageAssembler:
     """Assemble un ``LAYOUT`` rempli en ``PAGE_XML`` (PAGE 2019, déterministe,
     conforme au XSD de PRImA ; un layout hors pixels ou sans dimensions est
     refusé plutôt qu'écrit faux)."""
+
+    #: Réglages acceptés (``pipeline.params``) : tout autre est refusé, nommé.
+    PARAMS: ClassVar[tuple[Param, ...]] = ()
 
     @property
     def name(self) -> str:

@@ -21,6 +21,8 @@ seuil de score fixe, la sortie est stable ; l'ordre de lecture est **trié**
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 from cinoc.adapters.layout._base import (
     DetectedRegion,
     DetectorFn,
@@ -30,6 +32,7 @@ from cinoc.adapters.layout._base import (
 )
 from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.errors import AdapterStepError
+from cinoc.pipeline.params import Param
 from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
@@ -85,6 +88,13 @@ def _detect_with_paddle(  # pragma: no cover -- SDK + poids requis (test 'live')
 
 class PPDocLayoutSegmenter:
     """Segmenteur PP-DocLayout : ``IMAGE → LAYOUT`` (régions sans lignes)."""
+
+    #: Réglages acceptés (``pipeline.params``) : tout autre est refusé, nommé.
+    PARAMS: ClassVar[tuple[Param, ...]] = (
+        Param("model", "str",
+              "Variante (défaut : CINOC_PPDOCLAYOUT_MODEL, sinon PP-DocLayout-L)",
+              "Variant (default: CINOC_PPDOCLAYOUT_MODEL, else PP-DocLayout-L)"),
+    )
 
     def __init__(
         self,

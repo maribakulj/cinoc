@@ -28,6 +28,7 @@ from __future__ import annotations
 
 from typing import ClassVar
 
+from cinoc.adapters._params import timeout_param
 from cinoc.adapters.layout._base import layout_step_output
 from cinoc.adapters.ocr.tesseract import invoke_tesseract_alto
 from cinoc.domain.artifacts import Artifact, ArtifactType
@@ -35,6 +36,7 @@ from cinoc.domain.errors import AdapterStepError, FormatError
 from cinoc.domain.layout import CanonicalLayout
 from cinoc.formats.alto.layout_map import alto_to_layout
 from cinoc.formats.alto.parser import parse_alto
+from cinoc.pipeline.params import Param
 from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
@@ -54,6 +56,19 @@ _TIMEOUT_MAX = 3600.0
 
 class TesseractLayoutSegmenter:
     """``IMAGE → LAYOUT`` par l'analyse de page native de Tesseract."""
+
+    #: Réglages acceptés (``pipeline.params``) : tout autre est refusé, nommé.
+    PARAMS: ClassVar[tuple[Param, ...]] = (
+        Param("lang", "str", "Langue(s) (fra+lat)", "Language(s) (fra+lat)",
+              default="fra"),
+        Param("psm", "int", "Découpe de page (psm)", "Page segmentation (psm)",
+              default=DEFAULT_PSM, minimum=0, maximum=13),
+        Param("oem", "int", "Moteur (oem)", "Engine mode (oem)",
+              default=3, minimum=0, maximum=3),
+        Param("dpi", "int", "Résolution imposée (défaut : celle du fichier)",
+              "Forced resolution (default: the file's)", minimum=70, maximum=2400),
+        timeout_param(DEFAULT_TIMEOUT),
+    )
 
     #: **Vide, et ce n'est pas un oubli.** Tesseract découpe la page en blocs
     #: mais ne leur donne aucune classe sémantique : il ne dit pas « ceci est un

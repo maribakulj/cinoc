@@ -44,12 +44,26 @@ _SAC: dict[str, Any] = {
 }
 
 
-def _briques_construisibles() -> dict[str, tuple[frozenset[str], frozenset[str]]]:
-    """``kind → (entrées, sorties)`` pour tout ce que le registre sait bâtir."""
+def _briques_construisibles(
+    mode: str | None = None,
+) -> dict[str, tuple[frozenset[str], frozenset[str]]]:
+    """``kind → (entrées, sorties)`` pour tout ce que le registre sait bâtir.
+
+    Le sac est réduit, brique par brique, aux réglages qu'elle **déclare** : un
+    réglage non déclaré est refusé (D14), et c'est précisément ce que ce sac
+    trop généreux aurait sinon fait passer. ``mode`` : le mode LLM/VLM posé
+    (``role``), sur les briques qui en ont un — il change leur signature.
+    """
     registre = ModuleRegistry()
     register_default_modules(registre)
     out: dict[str, tuple[frozenset[str], frozenset[str]]] = {}
     for kind in sorted(registre.kinds()):
+        declares = {p.name for p in registre.declared_params(kind) or ()}
+        sac = {
+            k: v
+            for k, v in {**_SAC, **({"role": mode} if mode else {})}.items()
+            if k in declares
+        }
         # Trois formes de nom, parce que la convention ``<kind>:<label>`` a des
         # variantes : ``precomputed`` se nomme d'après ``source_label`` et non
         # ``label``, et le registre vérifie que le module construit porte bien
@@ -57,7 +71,7 @@ def _briques_construisibles() -> dict[str, tuple[frozenset[str], frozenset[str]]
         # spec (``alto_source:brut`` pour un module sans label).
         for nom in (kind, f"{kind}:x", f"{kind}:s"):
             try:
-                module = registre.build(nom, _SAC)
+                module = registre.build(nom, sac)
             except Exception:  # noqa: BLE001 — on teste la constructibilité
                 continue
             out[kind] = (
@@ -121,10 +135,10 @@ def test_a_role_brick_honours_the_role_signature() -> None:
     Confondre les deux niveaux ferait rejeter des reconnaisseurs parfaitement
     valides.
     """
-    briques = _briques_construisibles()
     par_region = {"raw_text", "layout"}
     fautives: dict[str, list[str]] = {}
     for nom, role in roles().items():
+        briques = _briques_construisibles(role.mode)
         attendu = par_region if role.fanout else {t.value for t in role.sorties}
         for brique in role.briques:
             signature = briques.get(brique)

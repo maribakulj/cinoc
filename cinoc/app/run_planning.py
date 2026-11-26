@@ -48,7 +48,7 @@ from cinoc.domain.projection import ProjectionSpec
 from cinoc.domain.run_spec import RunSpec
 from cinoc.evaluation.archaic import resolve_archaic_list
 from cinoc.formats.text import NORMALIZATION_PROFILES
-from cinoc.prompts import PromptError, load_prompt
+from cinoc.prompts import PromptError, resolve_prompt
 
 #: Moteurs OCR câblés pour un run réel (amont d'une chaîne ou OCR seul).
 _OCR_ENGINES = frozenset(
@@ -302,22 +302,27 @@ def _resolve_metric_profile(name: str | None) -> tuple[str, ...]:
 def _resolve_prompt(comp: Competitor) -> str | None:
     """Texte du prompt : libre (prioritaire) > curé (par nom) > défaut du rôle.
 
-    ``prompt`` (texte libre saisi) et ``prompt_name`` (prompt curé) sont
-    **mutuellement exclusifs** : les fournir tous deux est une erreur de plan
-    (jamais un choix silencieux). Un nom curé inconnu → ``RunPlanningError`` (422).
+    Mutuellement exclusifs, nom inconnu → ``RunPlanningError`` (422) : la règle
+    d'une spec YAML (``resolve_prompt``), pas une seconde.
     """
-    if comp.prompt and comp.prompt_name:
-        raise RunPlanningError(
-            "prompt : choisir un prompt libre OU un prompt curé, pas les deux."
-        )
-    if comp.prompt:
-        return comp.prompt
-    if comp.prompt_name:
-        try:
-            return load_prompt(comp.prompt_name)
-        except PromptError as exc:
-            raise RunPlanningError(str(exc)) from exc
-    return None
+    try:
+        return resolve_prompt(comp.prompt, comp.prompt_name)
+    except PromptError as exc:
+        raise RunPlanningError(str(exc)) from exc
+
+
+def _ocr_kwargs(
+    kind: str, suffix: str, comp: Competitor, model: str | None
+) -> dict[str, str | int | float | bool]:
+    """Réglages d'un OCR : ceux du formulaire **que la brique déclare** (D14) —
+    Google et Azure n'ont pas de ``lang``, Tesseract pas de ``model``."""
+    from cinoc.app.modules.registry import socle_params  # noqa: PLC0415
+
+    saisis = {"label": suffix, "lang": comp.lang, "alto": comp.alto or None}
+    declares = {p.name for p in socle_params(kind) or ()}
+    return {
+        k: v for k, v in {**saisis, "model": model}.items() if v and k in declares
+    }
 
 
 def _llm_kwargs(
@@ -374,10 +379,10 @@ def _hybrid_reco_kwargs(
         prompt = _resolve_prompt(comp)
         if prompt:
             kwargs["prompt"] = prompt
+        if comp.model:
+            kwargs["model"] = comp.model
     else:
-        kwargs = {"label": suffix, "lang": comp.lang}
-    if comp.model:
-        kwargs["model"] = comp.model
+        kwargs = _ocr_kwargs(comp.engine, suffix, comp, comp.model)
     return name, kwargs
 
 
@@ -516,17 +521,12 @@ def _pipeline_for_competitor(
             output_types=ocr_outputs,
         )
         steps: list[PipelineStep] = [step]
-        ocr_kwargs: dict[str, dict[str, str | int | float | bool]] = {
-            name: {"label": suffix, "lang": comp.lang}
-        }
-        if comp.alto:
-            ocr_kwargs[name]["alto"] = True
         # En OCR seul, ``model`` est le **modèle du moteur** (chemin .mlmodel
-        # kraken, config PERO, checkpoint Calamari, nom Mistral OCR) — requis par
-        # ces moteurs. Tesseract/Google/Azure ignorent ce kwarg. (En chaîne,
+        # kraken, config PERO, checkpoint Calamari, nom Mistral OCR). (En chaîne,
         # ``model`` désigne le LLM aval, cf. ``_llm_kwargs``.)
-        if comp.model:
-            ocr_kwargs[name]["model"] = comp.model
+        ocr_kwargs: dict[str, dict[str, str | int | float | bool]] = {
+            name: _ocr_kwargs(comp.engine, suffix, comp, comp.model)
+        }
         if comp.ner:
             steps.append(_ner_step(suffix, ArtifactType.RAW_TEXT, "ocr"))
             ocr_kwargs[f"ner:{suffix}"] = _ner_kwargs(suffix, comp)
@@ -610,13 +610,9 @@ def _pipeline_for_competitor(
     )
     chain_steps: list[PipelineStep] = [ocr_step, llm_step]
     kwargs: dict[str, dict[str, str | int | float | bool]] = {
-        ocr_name: {"label": suffix, "lang": comp.lang},
+        ocr_name: _ocr_kwargs(comp.engine, suffix, comp, comp.ocr_model),
         llm_name: _llm_kwargs(suffix, comp, comp.mode),
     }
-    if comp.alto:
-        kwargs[ocr_name]["alto"] = True
-    if comp.ocr_model:
-        kwargs[ocr_name]["model"] = comp.ocr_model
     if comp.ner:
         chain_steps.append(_ner_step(suffix, ArtifactType.CORRECTED_TEXT, "llm"))
         kwargs[f"ner:{suffix}"] = _ner_kwargs(suffix, comp)

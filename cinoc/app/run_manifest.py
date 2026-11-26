@@ -22,11 +22,13 @@ import unicodedata
 from collections.abc import Mapping
 from datetime import datetime
 
+from cinoc.app.modules.params import operational_names, secret_names
 from cinoc.app.versioning import dependencies_lock
 from cinoc.domain.artifacts import StepArtifacts
 from cinoc.domain.run import RunManifest
 from cinoc.domain.run_spec import RunSpec
 from cinoc.pipeline.fingerprint import ModuleIdentity
+from cinoc.pipeline.params import declared_params
 from cinoc.pipeline.protocols import Module
 
 #: Réglages qui portent une **valeur secrète** (jeton d'un endpoint privé…). Le
@@ -35,27 +37,37 @@ from cinoc.pipeline.protocols import Module
 #: partage le rapport. Il garde donc le **fait** qu'un secret a été fourni,
 #: jamais sa valeur. Un seul point de passage : tout ce qui sort d'un run sort
 #: du manifeste.
+#:
+#: Une brique **déclare** ses secrets (``Param.secret``, ``pipeline.params``) ;
+#: cette liste de noms reste le filet d'une brique qui ne déclare rien (un
+#: module tiers écrit avant la déclaration) : un ``token`` y est masqué même
+#: sans qu'on le sache secret.
 SECRET_KWARGS = frozenset({"token", "api_key", "key", "secret", "password"})
 SECRET_PLACEHOLDER = "<secret>"
 
 
-def sans_secrets(kwargs: Mapping[str, object]) -> dict[str, object]:
-    """Les kwargs saisis, valeurs secrètes remplacées par ``<secret>``."""
-    return {
-        k: SECRET_PLACEHOLDER if k in SECRET_KWARGS else v for k, v in kwargs.items()
-    }
+def sans_secrets(
+    kwargs: Mapping[str, object], declared: frozenset[str] = frozenset()
+) -> dict[str, object]:
+    """Les kwargs saisis, valeurs secrètes (par nom, ou ``declared``)
+    remplacées par ``<secret>``."""
+    secrets = SECRET_KWARGS | declared
+    return {k: SECRET_PLACEHOLDER if k in secrets else v for k, v in kwargs.items()}
 
 
 def secret_values(
     adapter_kwargs: Mapping[str, Mapping[str, object]],
+    modules: Mapping[str, Module] | None = None,
 ) -> tuple[str, ...]:
-    """Valeurs secrètes du run — à caviarder dans tout message d'échec."""
-    values = {
-        str(v)
-        for kwargs in adapter_kwargs.values()
-        for k, v in kwargs.items()
-        if k in SECRET_KWARGS and str(v)
-    }
+    """Valeurs secrètes du run — à caviarder dans tout message d'échec : celles
+    des noms de ``SECRET_KWARGS`` et celles que chaque module déclare secrètes."""
+    values: set[str] = set()
+    for name, kwargs in adapter_kwargs.items():
+        module = (modules or {}).get(name)
+        secrets = SECRET_KWARGS | secret_names(
+            declared_params(module) if module is not None else None
+        )
+        values.update(str(v) for k, v in kwargs.items() if k in secrets and str(v))
     # Le plus long d'abord : un secret qui en contient un autre reste masqué.
     return tuple(sorted(values, key=lambda v: (-len(v), v)))
 
@@ -81,7 +93,9 @@ def module_identities(
 
     ``settings`` = la saisie (sans secret) complétée de ``effective_settings()``
     — ce que le module applique vraiment : défauts, prompt, modèle demandé,
-    endpoint lu dans l'environnement. ``binaries`` = ``system_binaries()``,
+    endpoint lu dans l'environnement. Les réglages saisis que la brique déclare
+    d'**exploitation** (``affects_output=False``) vont à ``operational`` : au
+    manifeste, hors de l'empreinte. ``binaries`` = ``system_binaries()``,
     sondés ici, **avant** la première page : ce sont eux qui entrent dans la clé.
     ``recorded_binaries`` (relecture hors ligne) les remplace par ceux de
     l'archive : rien ne s'exécute, la machine qui relit n'a rien à sonder.
@@ -94,13 +108,17 @@ def module_identities(
             if recorded_binaries is None
             else recorded_binaries.get(name, {})
         )
+        params = declared_params(module)
+        saisis = sans_secrets(spec.adapter_kwargs.get(name, {}), secret_names(params))
+        exploitation = operational_names(params)
         identities[name] = ModuleIdentity(
             version=module.version,
             settings={
-                **sans_secrets(spec.adapter_kwargs.get(name, {})),
+                **{k: v for k, v in saisis.items() if k not in exploitation},
                 **_hook(module, "effective_settings"),
             },
             binaries={str(k): str(v) for k, v in binaries.items()},
+            operational={k: v for k, v in saisis.items() if k in exploitation},
         )
     return identities
 
@@ -140,7 +158,8 @@ def build_manifest(
 
     ``adapter_kwargs`` = les réglages **effectifs** de l'identité (pas la seule
     saisie : la température d'un run ne doit pas dépendre du défaut de la
-    version qui l'a produit) ; ``system_binaries_lock`` = les binaires de
+    version qui l'a produit), réglages d'exploitation compris (``self_hosted``,
+    que l'économie lit) ; ``system_binaries_lock`` = les binaires de
     l'identité (ceux de la clé, pas un second sondage en fin de run).
     """
     names = sorted(identities)
@@ -152,7 +171,10 @@ def build_manifest(
         corpus_name=spec.corpus.name,
         n_documents=len(spec.corpus.documents),
         pipeline_specs=spec.pipelines,
-        adapter_kwargs={name: dict(identities[name].settings) for name in names},
+        adapter_kwargs={
+            name: {**identities[name].operational, **identities[name].settings}
+            for name in names
+        },
         module_versions={name: identities[name].version for name in names},
         system_binaries_lock=binaries,
         dependencies_lock=dependencies_lock(),

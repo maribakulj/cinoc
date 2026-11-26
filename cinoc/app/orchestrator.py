@@ -239,7 +239,7 @@ def run(
         # Une ``DocumentExecution`` par unité, **échecs compris** : l'issue est
         # conservée, jamais remplacée par un dict vide qui se lirait « absent ».
         results: dict[tuple[str, str], DocumentExecution] = {}
-        secrets = secret_values(spec.adapter_kwargs)
+        secrets = secret_values(spec.adapter_kwargs, modules)
         digests: dict[Path, str] = {}  # fichiers d'entrée, hachés une fois
         pending: list[tuple[PipelineSpec, DocumentRef, str | None]] = []
         # Unités relues de l'archive : leur durée est celle de leur première

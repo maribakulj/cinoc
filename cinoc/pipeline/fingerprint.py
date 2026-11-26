@@ -6,7 +6,10 @@ Ce qui détermine la sortie d'une étape, et rien d'autre :
 - l'**identité du module** qui l'exécute (:class:`ModuleIdentity`) : sa version
   déclarée, ses **réglages effectifs** — saisis, défauts compris, et toute
   configuration lue dans l'environnement qui change la cible (un endpoint) — et
-  les **binaires système** qu'il enveloppe (tesseract) ;
+  les **binaires système** qu'il enveloppe (tesseract) ; **pas** ses réglages
+  d'exploitation (un délai, le nom de la variable d'une clé, « auto-hébergé »),
+  que la brique déclare ``affects_output=False`` (``pipeline.params``) : ils
+  vont au manifeste, et les changer ne fait réexécuter aucune inférence ;
 - :data:`EXECUTION_VERSION`, pour ce que l'exécuteur ajoute hors des modules
   (fan-out, découpe des régions).
 
@@ -49,11 +52,14 @@ class ModuleIdentity:
     ``settings`` : réglages **effectifs**, sans valeur secrète (une clé tournée ne
     change aucune sortie, et l'empreinte voyage dans le nom d'un dossier
     d'archive). ``binaries`` : versions des binaires externes enveloppés.
+    ``operational`` : réglages d'exploitation saisis — écrits au manifeste avec
+    ``settings``, **jamais** hachés.
     """
 
     version: str
     settings: Mapping[str, object] = field(default_factory=dict)
     binaries: Mapping[str, str] = field(default_factory=dict)
+    operational: Mapping[str, object] = field(default_factory=dict)
 
 
 def canonical_json(payload: object) -> bytes:

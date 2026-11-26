@@ -31,9 +31,10 @@ from __future__ import annotations
 
 from base64 import b64encode
 from pathlib import Path
-from typing import Any, Final
+from typing import Any, ClassVar, Final
 
 from cinoc.adapters._native import sdk_native, served_model
+from cinoc.adapters._params import label_param, model_param, timeout_param
 from cinoc.adapters._resilience import (
     DEFAULT_OCR_TIMEOUT,
     BillingMeter,
@@ -50,6 +51,7 @@ from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.deadline import Deadline
 from cinoc.domain.errors import AdapterStepError, CinocError
 from cinoc.formats.text import markdown_to_text
+from cinoc.pipeline.params import Param
 from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
@@ -144,6 +146,15 @@ class MistralOCRAdapter:
     """OCR cloud Mistral : ``IMAGE`` → ``RAW_TEXT`` + ``NATIVE_JSON`` (+ ``LAYOUT``
     quand la réponse porte des blocs — publié en plus, non déclaré : une réponse
     sans blocs n'en a pas)."""
+
+    #: Réglages acceptés (``pipeline.params``) : tout autre est refusé, nommé.
+    PARAMS: ClassVar[tuple[Param, ...]] = (
+        label_param(),
+        model_param(
+            "Modèle OCR (nommé : aucun défaut)", "OCR model (named: no default)"
+        ),
+        timeout_param(DEFAULT_OCR_TIMEOUT),
+    )
 
     def __init__(
         self,

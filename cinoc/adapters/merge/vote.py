@@ -16,12 +16,15 @@ et c'est pourquoi la fusion se **mesure** plutôt qu'elle ne se suppose.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from typing import ClassVar
 
+from cinoc.adapters._params import label_param
 from cinoc.adapters._workspace import workspace_artifact_path
 from cinoc.adapters.merge._vote import vote_tokens
 from cinoc.domain.artifacts import Artifact, ArtifactType, compute_content_hash
 from cinoc.domain.errors import AdapterStepError
 from cinoc.formats.text.plain import read_plaintext
+from cinoc.pipeline.params import Param
 from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
@@ -39,6 +42,13 @@ class TextVoteMerger:
     de sortie sont **le même** — fusionner ne change pas la nature de ce qu'on
     tient, seulement le nombre d'avis qui l'ont produit.
     """
+
+    #: Réglages acceptés (``pipeline.params``) : tout autre est refusé, nommé.
+    PARAMS: ClassVar[tuple[Param, ...]] = (
+        label_param(),
+        Param("kind", "str", "Type fusionné", "Merged type", default="raw_text",
+              choices=("raw_text", "corrected_text")),
+    )
 
     def __init__(self, *, label: str, kind: str = "raw_text") -> None:
         try:

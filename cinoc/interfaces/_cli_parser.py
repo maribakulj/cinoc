@@ -43,9 +43,15 @@ def _add_list(subparsers: _SousCommandes) -> None:
     )
     sujets = list_cmd.add_subparsers(dest="topic", required=True)
 
-    sujets.add_parser(
+    moteurs = sujets.add_parser(
         "engines",
         help="Moteurs, segmenteurs et étape NER, avec la cause d'indisponibilité.",
+    )
+    moteurs.add_argument(
+        "brick",
+        nargs="?",
+        default=None,
+        help="Une brique (tesseract, openai…) : les réglages qu'elle accepte.",
     )
 
     modeles = sujets.add_parser(

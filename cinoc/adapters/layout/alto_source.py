@@ -22,6 +22,7 @@ from __future__ import annotations
 import json
 from collections.abc import Iterator
 from pathlib import Path
+from typing import ClassVar
 
 from cinoc.adapters._workspace import workspace_artifact_path
 from cinoc.domain.artifacts import Artifact, ArtifactType, compute_content_hash
@@ -30,6 +31,7 @@ from cinoc.domain.errors import AdapterStepError, CinocError
 from cinoc.domain.layout import CanonicalLayout, Line, Region
 from cinoc.formats.alto.layout_map import alto_to_layout
 from cinoc.formats.alto.parser import parse_alto
+from cinoc.pipeline.params import Param
 from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
@@ -56,6 +58,12 @@ class AltoLayoutSource:
     d'OCR à part entière — le moteur n'a rien reconnu — et remplace donc le
     texte. Confondre les deux crédite le moteur d'une ligne qu'il n'a pas lue.
     """
+
+    #: Réglages acceptés (``pipeline.params``) : tout autre est refusé, nommé.
+    PARAMS: ClassVar[tuple[Param, ...]] = (
+        Param("ocr_sidecar", "str", "Sidecar d'OCR du corpus (suffixe)",
+              "Corpus OCR sidecar (suffix)", default=""),
+    )
 
     def __init__(self, *, ocr_sidecar: str = "") -> None:
         self._sidecar = ocr_sidecar

@@ -59,6 +59,7 @@ from cinoc.adapters.llm._base import (
     llm_effective_settings,
     llm_input_types,
     llm_output_types,
+    llm_params,
     normalize_llm_content,
     run_llm_step,
     stop_reason_from,
@@ -76,6 +77,7 @@ from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.deadline import Deadline
 from cinoc.domain.errors import AdapterStepError, DeadlineExceeded
 from cinoc.domain.pipeline import PipelineMode
+from cinoc.pipeline.params import Param
 from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
@@ -312,6 +314,17 @@ class OllamaAdapter:
     #: dérive — c'est arrivé (D-233).
     SUPPORTED_MODES: ClassVar[frozenset[PipelineMode]] = frozenset(
         {"text_only", "text_and_image", "zero_shot", "refine"}
+    )
+    #: Réglages acceptés : ceux des quatre fournisseurs, plus le serveur et la
+    #: fenêtre de contexte (son défaut à lui tronque l'entrée en silence).
+    PARAMS: ClassVar[tuple[Param, ...]] = llm_params(
+        SUPPORTED_MODES,
+        extra=(
+            Param("host", "str", "Serveur Ollama", "Ollama server",
+                  default=_DEFAULT_HOST),
+            Param("num_ctx", "int", "Fenêtre de contexte (jetons)",
+                  "Context window (tokens)", default=DEFAULT_NUM_CTX, minimum=1),
+        ),
     )
 
 

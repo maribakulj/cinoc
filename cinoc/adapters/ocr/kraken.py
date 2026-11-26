@@ -15,11 +15,14 @@ from __future__ import annotations
 
 import json
 import logging
+from typing import ClassVar
 
+from cinoc.adapters._params import label_param, model_param
 from cinoc.adapters._workspace import workspace_artifact_path
 from cinoc.domain.artifacts import Artifact, ArtifactType, compute_content_hash
 from cinoc.domain.confidence import ConfidenceToken
 from cinoc.domain.errors import AdapterStepError
+from cinoc.pipeline.params import Param
 from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
@@ -86,6 +89,12 @@ def _invoke_kraken(  # pragma: no cover -- SDK + modèle requis (cf. 'live')
 
 class KrakenAdapter:
     """HTR kraken : ``IMAGE`` → ``RAW_TEXT`` + ``CONFIDENCES``."""
+
+    #: Réglages acceptés (``pipeline.params``) : tout autre est refusé, nommé.
+    PARAMS: ClassVar[tuple[Param, ...]] = (
+        label_param(),
+        model_param("Modèle (chemin .mlmodel)", "Model (.mlmodel path)"),
+    )
 
     def __init__(self, *, label: str, model: str) -> None:
         if not label or not all(c.isalnum() or c in "_-" for c in label):

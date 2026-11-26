@@ -1,0 +1,19 @@
+# OCR puis correction par un VLM qui voit aussi l'image : le texte de l'OCR
+# guide, l'image arbitre. À comparer à `ocr_puis_llm`, où le modèle ne voit que
+# le texte — l'écart mesure ce que l'image apporte à la correction.
+name: ocr_puis_vlm
+title:
+  fr: OCR puis correction par un modèle qui voit l'image
+  en: OCR then correction by a model that sees the image
+description:
+  fr: >-
+    Un OCR lit la page ; un modèle de vision corrige son texte en regardant
+    l'image. L'image l'aide-t-elle à réparer, ou à réécrire ?
+  en: >-
+    An OCR reads the page; a vision model corrects its text while looking at
+    the image. Does the image help it repair, or rewrite?
+steps:
+  - id: ocr
+    role: ocr
+  - id: correction
+    role: text_and_image

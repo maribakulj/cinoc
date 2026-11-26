@@ -31,8 +31,14 @@ from cinoc.app.engines import (
     third_party_statuses,
 )
 from cinoc.app.models import ModelInfo, available_models, model_providers
+from cinoc.app.modules import (
+    ModuleRegistry,
+    discover_plugins,
+    register_default_modules,
+)
 from cinoc.app.normalization_preview import preview_normalization
 from cinoc.domain.errors import CinocError
+from cinoc.pipeline.params import Param
 
 
 def _print_statuses(titre: str, statuses: tuple[EngineStatus, ...]) -> None:
@@ -43,8 +49,63 @@ def _print_statuses(titre: str, statuses: tuple[EngineStatus, ...]) -> None:
         print(f"{ligne}\n      {status.detail}" if status.detail else ligne)
 
 
+def _param_line(param: Param) -> str:
+    """Une ligne par réglage : nom, type, défaut et bornes, libellé, marques."""
+    if param.required:
+        regle = "requis"
+    elif param.default is None:
+        regle = "défaut : non fixé"
+    else:
+        regle = f"défaut : {param.default!r}"
+    if param.minimum is not None or param.maximum is not None:
+        bas = "" if param.minimum is None else f"{param.minimum:g}"
+        haut = "" if param.maximum is None else f"{param.maximum:g}"
+        regle += f", [{bas} ; {haut}]"
+    if param.choices:
+        regle += f", parmi {', '.join(repr(c) for c in param.choices)}"
+    marques = [
+        *(["secret : jamais écrit"] if param.secret else []),
+        *(["hors empreinte"] if not param.affects_output else []),
+    ]
+    suite = f" ({'; '.join(marques)})" if marques else ""
+    return f"  {param.name:<20} {param.type:<5} {param.label_fr}{suite}\n      {regle}"
+
+
+def _print_brick(kind: str) -> int:
+    """Les réglages qu'une brique **déclare** (``PARAMS``) — ceux qu'une spec
+    peut poser en ``adapter_kwargs`` ; tout autre est refusé, nommé."""
+    registre = ModuleRegistry()
+    register_default_modules(registre)
+    discover_plugins(registre, enabled=True)  # CLI local : code de confiance
+    if kind not in registre.kinds():
+        raise CinocError(
+            f"brique inconnue : {kind!r} (connues : {', '.join(registre.kinds())})."
+        )
+    params = registre.declared_params(kind)
+    print(f"{kind} — réglages (adapter_kwargs.\"{kind}:<libellé>\".<réglage>)")
+    if params is None:
+        print(
+            "  brique tierce : sa déclaration (PARAMS), si elle en a une, se lit à "
+            "la construction — les réglages sont vérifiés au run et à --check."
+        )
+        return 0
+    if not params:
+        print("  aucun réglage : tout réglage posé est refusé.")
+    for param in params:
+        print(_param_line(param))
+    print(
+        "\nUn réglage hors de cette liste est refusé, nommé (cinoc run --check). "
+        "« hors empreinte » : écrit au manifeste, mais le changer ne fait "
+        "réexécuter aucune unité archivée."
+    )
+    return 0
+
+
 def run_list_engines(args: argparse.Namespace) -> int:
-    """Moteurs, segmenteurs et étape NER, avec la **cause** d'indisponibilité."""
+    """Moteurs, segmenteurs et étape NER, avec la **cause** d'indisponibilité ;
+    avec une brique, les réglages qu'elle déclare."""
+    if getattr(args, "brick", None):
+        return _print_brick(args.brick)
     _print_statuses("Moteurs (OCR / HTR / LLM / VLM)", engine_statuses())
     _print_statuses("Segmenteurs de mise en page", segmenter_statuses())
     _print_statuses(
@@ -177,8 +238,9 @@ def run_list_prompts(args: argparse.Namespace) -> int:
     for prompt in curated_prompts():
         print(f"  {prompt}")
     print(
-        "\nÀ poser en `prompt_name` d'un concurrent. Un prompt libre reste "
-        "possible et prime sur le prompt curé."
+        "\nÀ poser en `prompt_name` d'une brique LLM/VLM (adapter_kwargs d'une "
+        "spec) ou d'un concurrent du composeur. Un prompt libre (`prompt`) reste "
+        "possible : l'un ou l'autre, pas les deux."
     )
     return 0
 
