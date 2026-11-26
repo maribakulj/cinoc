@@ -78,6 +78,37 @@ jobs:
           CINOC_REQUIRE_ORACLES: "1"
         run: python -m pytest -q -m oracle
 
+  # Les SDK fournisseurs INSTALLÉS (reste de S22, D-294 ; S29a) : ailleurs,
+  # `openai`, `anthropic` et `mistralai` sont absents — les adaptateurs sont
+  # exercés sur de faux SDK, mypy ne voit pas leurs types, et les tests « vrais
+  # SDK » (`importorskip`) sautent. Trois erreurs de typage et un import cassé
+  # (listage Mistral sous 3.x) sont passés ainsi. Une seule version de Python,
+  # comme `oracle` : on juge le contrat d'une majeure de SDK, pas l'interpréteur.
+  sdks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install
+        # `saknussemm` : sans lui, les tests de la correction structurée de
+        # `tests/adapters` sautent ici aussi. `cryptography` : le serveur HTTPS
+        # muet qui prouve qu'un arrêt coupe une lecture TLS (toute API cloud
+        # est en HTTPS) — absent des autres jobs, ce test n'y tourne pas.
+        run: pip install -e ".[dev,openai,anthropic,mistral,saknussemm]" cryptography
+      - name: Type (vrais SDK)
+        run: python -m mypy -p cinoc
+      - name: Test (adaptateurs sous vrais SDK)
+        env:
+          # Installation réussie -> SDK importables, sinon échec nommé (et non
+          # des tests « vrais SDK » sautés en silence, job vert sur rien).
+          CINOC_REQUIRE_SDKS: "1"
+        run: >-
+          python -m pytest -q -n auto tests/adapters
+          tests/app/test_models_real_sdk.py
+          tests/guardrails/test_optional_deps_really_installed.py
+
   # Le paquet DISTRIBUÉ, pas l'environnement de dev : la roue construite,
   # installée sans aucun extra dans un venv vierge, lancée hors du dépôt. Le
   # job `test` installe toujours `[dev]`, qui tire des dépendances que la base

@@ -39,12 +39,12 @@ from cinoc.adapters._resilience import (
     DEFAULT_OCR_TIMEOUT,
     BillingMeter,
     call_resilient,
-    register_close,
     request_timeout,
     step_deadline,
     validate_timeout,
 )
 from cinoc.adapters.llm._listing import require_model
+from cinoc.adapters.llm.mistral import mistral_sdk
 from cinoc.adapters.ocr._base import run_remote_image_to_text
 from cinoc.adapters.ocr._mistral_layout import layout_from_response
 from cinoc.domain.artifacts import Artifact, ArtifactType
@@ -102,20 +102,12 @@ def _invoke_mistral_ocr(
     api_key = os.environ.get("MISTRAL_API_KEY")
     if not api_key:
         raise AdapterStepError("mistral_ocr : MISTRAL_API_KEY manquante.")
-    try:
-        from mistralai.client import Mistral  # type: ignore[import-not-found]
-    except ImportError as exc:
-        raise AdapterStepError(
-            "mistral_ocr : SDK non installé (pip install 'cinoc[mistral]')."
-        ) from exc
     path = Path(image_path)
     media = _MEDIA.get(path.suffix.lower(), "image/png")
     image_b64 = b64encode(path.read_bytes()).decode("ascii")
+    ctrl = control if control is not None else RunControl()
+    client, http = mistral_sdk("mistral_ocr", api_key, ctrl)
     try:
-        # ``retry_config=None`` : une seule politique de retry, celle de Cinoc.
-        client = Mistral(api_key=api_key, retry_config=None)
-        if control is not None:
-            register_close(control, client)
 
         def process() -> Any:
             timeout = request_timeout(deadline)
@@ -131,7 +123,7 @@ def _invoke_mistral_ocr(
             )
 
         response = call_resilient(
-            "mistral", process, deadline=deadline, control=control, meter=meter
+            "mistral", process, deadline=deadline, control=ctrl, meter=meter
         )
     except CinocError:
         raise  # délai, annulation : déjà typés
@@ -139,6 +131,8 @@ def _invoke_mistral_ocr(
         raise AdapterStepError(
             f"mistral_ocr a échoué ({model}) : {type(exc).__name__}: {exc}"
         ) from exc
+    finally:
+        http.close()
     return sdk_native(response, "mistral_ocr")
 
 

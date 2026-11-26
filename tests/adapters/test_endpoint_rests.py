@@ -27,7 +27,7 @@ from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.errors import AdapterStepError, DeadlineExceeded
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext
-from tests.adapters._native_fakes import SdkResponse, wire
+from tests.adapters._native_fakes import SdkResponse, fake_sdk_module, wire
 
 
 def _ctx(tmp_path: Path) -> RunContext:
@@ -68,9 +68,11 @@ def test_anthropic_base_url_is_not_read_from_the_environment(
 
             self.messages = types.SimpleNamespace(create=create)
 
-    module = types.ModuleType("anthropic")
-    module.Anthropic = _Client  # type: ignore[attr-defined]
-    module.AnthropicError = type("AnthropicError", (Exception,), {})  # type: ignore[attr-defined]
+    module = fake_sdk_module(
+        "anthropic",
+        Anthropic=_Client,
+        AnthropicError=type("AnthropicError", (Exception,), {}),
+    )
     monkeypatch.setitem(sys.modules, "anthropic", module)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
     monkeypatch.setenv("ANTHROPIC_BASE_URL", "http://ailleurs.lan:9000")

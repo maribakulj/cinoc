@@ -25,7 +25,7 @@ from cinoc.adapters._native import sdk_native, served_model
 from cinoc.adapters._resilience import (
     DEFAULT_LLM_TIMEOUT,
     call_resilient,
-    register_close,
+    cut_on_cancel_hooks,
     request_timeout,
     step_deadline,
     validate_timeout,
@@ -146,6 +146,28 @@ def _request_kwargs(
     return kwargs
 
 
+def mistral_sdk(owner: str, api_key: str, control: RunControl) -> tuple[Any, Any]:
+    """``(client mistralai, son client HTTP)`` pour **un** appel — chat et OCR.
+
+    Le client HTTP est celui que le SDK construirait (``httpx2.Client`` avec
+    ``follow_redirects=True``, sa dépendance déclarée), plus la trace qui coupe
+    l'appel en vol à l'arrêt (``cut_on_cancel_hooks``). Fourni, il n'est plus
+    fermé par le SDK : l'appelant le ferme (``close``). ``retry_config=None`` :
+    une seule politique de retry, celle de Cinoc.
+    """
+    try:
+        import httpx2  # type: ignore[import-not-found]
+        from mistralai.client import Mistral  # type: ignore[import-not-found]
+    except ImportError as exc:
+        raise AdapterStepError(
+            f"{owner} : SDK non installé (pip install 'cinoc[mistral]')."
+        ) from exc
+    http = httpx2.Client(
+        follow_redirects=True, event_hooks=cut_on_cancel_hooks(control)
+    )
+    return Mistral(api_key=api_key, retry_config=None, client=http), http
+
+
 def _mistral_client(
     model: str,
     content: object,
@@ -159,19 +181,11 @@ def _mistral_client(
     api_key = os.environ.get("MISTRAL_API_KEY")
     if not api_key:
         raise AdapterStepError("mistral : MISTRAL_API_KEY manquante.")
-    try:
-        from mistralai.client import Mistral  # type: ignore[import-not-found]
-    except ImportError as exc:
-        raise AdapterStepError(
-            "mistral : SDK non installé (pip install 'cinoc[mistral]')."
-        ) from exc
+    ctrl = control if control is not None else RunControl()
+    client, http = mistral_sdk("mistral", api_key, ctrl)
     try:
         # Le SDK mistralai type strictement ses kwargs/messages ; on lui passe
         # des dicts valides à l'exécution (cf. tests live). ``ignore`` ciblé.
-        # ``retry_config=None`` : une seule politique de retry, celle de Cinoc.
-        client = Mistral(api_key=api_key, retry_config=None)
-        if control is not None:
-            register_close(control, client)
 
         def _complete() -> Any:
             timeout = request_timeout(deadline)
@@ -183,7 +197,7 @@ def _mistral_client(
         # Cap de concurrence (≤ N appels Mistral simultanés) + retry borné sur
         # 429/5xx/transport (Retry-After respecté), dans le délai de l'étape.
         response = call_resilient(
-            "mistral", _complete, deadline=deadline, control=control
+            "mistral", _complete, deadline=deadline, control=ctrl
         )
     except CinocError:
         raise  # délai, annulation : déjà typés
@@ -191,6 +205,8 @@ def _mistral_client(
         raise AdapterStepError(
             f"mistral a échoué ({model}) : {type(exc).__name__}: {exc}"
         ) from exc
+    finally:
+        http.close()
     return _completion_from_chat(sdk_native(response, "mistral"))
 
 
@@ -398,4 +414,4 @@ def list_models(*, timeout: float = LISTING_TIMEOUT) -> tuple[ModelInfo, ...]:
     return models_from_listing(body)
 
 
-__all__ = ["MistralAdapter", "list_models", "models_from_listing"]
+__all__ = ["MistralAdapter", "list_models", "mistral_sdk", "models_from_listing"]

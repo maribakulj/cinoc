@@ -32,7 +32,6 @@ reviendrait à réintroduire en aval ce que les gardes ont écarté.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -42,7 +41,7 @@ from cinoc.adapters._workspace import workspace_artifact_path
 from cinoc.adapters.layout.to_text import _page_text
 from cinoc.domain.artifacts import Artifact, ArtifactType, compute_content_hash
 from cinoc.domain.errors import AdapterStepError
-from cinoc.domain.layout import CanonicalLayout, Line, Region
+from cinoc.domain.layout import CanonicalLayout
 from cinoc.pipeline.params import Param
 from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
@@ -235,11 +234,11 @@ class SaknussemmCorrector:
             escalate_at_or_above=self._qe_escalate,
         )
 
-    def _build_producer(self) -> tuple[Any, Any]:
+    def _build_producer(self, control: RunControl) -> tuple[Any, Any]:
         """``(producteur, client)`` — le client garde les réponses reçues
         (``responses``) ; ``None`` pour ``rules``, qui n'appelle rien. Un client
         neuf par exécution : deux unités concurrentes ne mêlent pas leurs
-        réponses."""
+        réponses. ``control`` : un arrêt coupe l'appel Ollama en vol."""
         if self._producer == "rules":
             from saknussemm.producers.rules import (  # type: ignore[import-not-found]  # noqa: PLC0415
                 RulesProducer,
@@ -270,7 +269,7 @@ class SaknussemmCorrector:
             OllamaStructuredClient,
         )
 
-        ollama = OllamaStructuredClient(host=self._host)
+        ollama = OllamaStructuredClient(host=self._host, control=control)
         return LLMEditProducer(ollama, api_key="", model=self._model), ollama
 
     def _build_vision_producer(self) -> tuple[Any, Any]:
@@ -375,6 +374,8 @@ class SaknussemmCorrector:
         )
 
         from cinoc.adapters.layout._saknussemm_bridge import (  # noqa: PLC0415
+            apply_decisions,
+            decisions_json,
             layout_to_manifest,
             manifest_page_ids,
         )
@@ -399,7 +400,7 @@ class SaknussemmCorrector:
 
             guard_config = GuardConfig.vision()
         scoreur, politique = self._build_qe()
-        producteur, client = self._build_producer()
+        producteur, client = self._build_producer(control)
         pipeline = CorrectionPipeline(
             producer=producteur,
             observer=_Observer(),
@@ -415,16 +416,30 @@ class SaknussemmCorrector:
         # ``source_files`` vide : on ne réécrit aucun XML. L'artefact de sortie
         # est la mise en page, et ``alto_assembler`` sait en faire un ALTO — le
         # moteur n'a donc rien à rendre lui-même.
-        result = pipeline.run_sync(
-            document_manifest=manifest, source_files={}, page_images=page_images
+        from saknussemm.errors import (  # type: ignore[import-not-found]  # noqa: PLC0415
+            CorrectionAborted,
         )
+
+        try:
+            # ``should_abort`` : sondé entre deux pages et deux lots.
+            result = pipeline.run_sync(
+                document_manifest=manifest,
+                source_files={},
+                page_images=page_images,
+                should_abort=control.is_cancelled,
+            )
+        except CorrectionAborted as exc:
+            control.raise_if_cancelled()  # l'arrêt du run : RunCancelledError
+            raise AdapterStepError(f"{self.name} : abandonnée — {exc}") from exc
 
         decided = {
             (outcome.page_id, outcome.line_id): outcome.decision.final_text
             for outcome in result.report.lines
         }
-        corrected = _apply(layout, decided, manifest_page_ids(manifest))
-        output = self._emit(corrected, _decisions(result, context.document_id), context)
+        corrected = apply_decisions(layout, decided, manifest_page_ids(manifest))
+        output = self._emit(
+            corrected, decisions_json(result, context.document_id), context
+        )
         if client is None:
             return output
         # Chaque corps reçu dit quel modèle l'a servi (Mistral, Ollama : ``model``).
@@ -435,6 +450,9 @@ class SaknussemmCorrector:
                 ArtifactType.NATIVE_JSON: self._native(client.responses, context),
             },
             served_models=tuple(sorted(servis)),
+            # Jetons de toutes les réponses, lus comme les adaptateurs du
+            # fournisseur (cache compris quand rendu) : l'économie les voit.
+            usage=client.usage(),
         )
 
     def _native(self, responses: list[Any], context: RunContext) -> Artifact:
@@ -492,89 +510,6 @@ class SaknussemmCorrector:
                 context.workspace_uri, context.document_id, self._label, suffix
             )
         return Path(f"{context.document_id.replace('/', '_')}.{self._label}.{suffix}")
-
-
-def _decisions(result: object, document_id: str) -> bytes:
-    """Sérialise ce que la bibliothèque a décidé, ligne par ligne.
-
-    Le **statut** distingue trois situations qu'un texte corrigé confond :
-    la ligne a changé, une garde a refusé un changement proposé, ou rien n'a
-    été proposé. Sans cette distinction, un correcteur prudent et un correcteur
-    inerte rendent le même artefact.
-    """
-    lignes = []
-    for outcome in result.report.lines:  # type: ignore[attr-defined]
-        decision = outcome.decision
-        propose = outcome.proposal.output_text if outcome.proposal else None
-        raison = decision.reason
-        lignes.append(
-            {
-                "document_id": document_id,
-                "page_id": outcome.page_id,
-                "line_id": outcome.line_id,
-                "status": decision.status,
-                "source_text": outcome.source_text,
-                "final_text": decision.final_text,
-                "proposed_text": propose,
-                "hyphen_role": outcome.hyphen_role,
-                "reason_code": raison.code if raison else None,
-                "reason_detail": raison.detail if raison else None,
-                "review_reasons": [
-                    {"code": reason.code, "detail": reason.detail}
-                    for reason in decision.review_reasons
-                ],
-            }
-        )
-    return json.dumps(
-        {"document_id": document_id, "lines": lignes}, ensure_ascii=False
-    ).encode("utf-8")
-
-
-def _apply(
-    layout: CanonicalLayout,
-    decided: dict[tuple[str, str], str],
-    page_ids: list[str],
-) -> CanonicalLayout:
-    """Repose les textes décidés sur la mise en page, identités à l'appui.
-
-    Les mots sont **abandonnés sur une ligne modifiée** : leur géométrie décrit
-    des caractères qui ne sont plus là. Les garder ferait dire à l'artefact une
-    position que rien ne soutient — le contraire de ce que la structure sert à
-    porter. La confiance OCR décrivait aussi l'ancien texte : elle devient
-    inconnue sur une ligne modifiée, sans inventer de score pour la correction.
-    """
-
-    def region(reg: Region, page_id: str) -> Region:
-        lines = []
-        for line in reg.lines:
-            texte = decided.get((page_id, line.id or ""))
-            if texte is None or texte == line.text:
-                lines.append(line)
-                continue
-            lines.append(
-                Line(
-                    id=line.id,
-                    text=texte,
-                    geometry=line.geometry,
-                    baseline=line.baseline,
-                    words=(),
-                    confidence=None,
-                )
-            )
-        return reg.model_copy(
-            update={
-                "lines": tuple(lines),
-                "regions": tuple(region(r, page_id) for r in reg.regions),
-            }
-        )
-
-    pages = tuple(
-        page.model_copy(
-            update={"regions": tuple(region(r, page_ids[i]) for r in page.regions)}
-        )
-        for i, page in enumerate(layout.pages)
-    )
-    return layout.model_copy(update={"pages": pages})
 
 
 def _flatten(layout: CanonicalLayout) -> str:

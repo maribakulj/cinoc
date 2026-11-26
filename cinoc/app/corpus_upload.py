@@ -37,9 +37,11 @@ from cinoc.domain.artifacts import ArtifactType
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.documents import DocumentRef, GroundTruthRef
 from cinoc.domain.errors import CinocError, CorpusSpecError, FormatError
+from cinoc.domain.layout import CanonicalLayout
 from cinoc.evaluation.projectors import layout_to_text
 from cinoc.formats.alto import parse_alto
 from cinoc.formats.alto.layout_map import alto_to_layout
+from cinoc.formats.images import IMAGE_SUFFIXES, looks_like_image
 from cinoc.formats.pagexml import parse_pagexml
 from cinoc.formats.pagexml.layout_map import page_to_layout
 
@@ -49,12 +51,10 @@ MAX_TOTAL_UNCOMPRESSED = 200 * 1024 * 1024
 MAX_FILE_BYTES = 25 * 1024 * 1024
 MAX_ENTRIES = 1000
 
-_IMAGE_EXT = frozenset({".png", ".jpg", ".jpeg", ".tif", ".tiff"})
 _GT_EXT = frozenset({".txt"})
 #: Vérité-terrain au format mise-en-page : ALTO 4.x ou PAGE XML. Convertie en
 #: texte d'ordre de lecture à l'ingestion (cf. ``_xml_to_text``).
 _GT_XML_EXT = frozenset({".xml"})
-_IMAGE_MAGIC = (b"\x89PNG\r\n\x1a\n", b"\xff\xd8\xff", b"II*\x00", b"MM\x00*")
 #: Clé de métadonnée disant **d'où vient** la vérité terrain d'un document :
 #: ``"text"`` (un ``.txt`` fourni), ``"layout"`` (dérivée de l'ALTO/PAGE du même
 #: document). La distinction n'est pas cosmétique : une GT dérivée de l'ALTO est
@@ -96,7 +96,7 @@ def extract_corpus_zip(data: bytes, dest: Path, *, name: str) -> CorpusSpec:
     for info in entries:
         base = _safe_basename(info.filename)
         ext = Path(base).suffix.lower()
-        if ext not in _IMAGE_EXT and ext not in _GT_EXT and ext not in _GT_XML_EXT:
+        if ext not in IMAGE_SUFFIXES and ext not in _GT_EXT and ext not in _GT_XML_EXT:
             raise CorpusUploadError(f"extension non autorisée : {base!r}.")
         if base in written:
             raise CorpusUploadError(f"doublon de nom : {base!r}.")
@@ -104,7 +104,7 @@ def extract_corpus_zip(data: bytes, dest: Path, *, name: str) -> CorpusSpec:
         total += len(payload)
         if total > MAX_TOTAL_UNCOMPRESSED:
             raise CorpusUploadError("archive trop volumineuse décompressée (bombe ?).")
-        if ext in _IMAGE_EXT and not payload.startswith(_IMAGE_MAGIC):
+        if ext in IMAGE_SUFFIXES and not looks_like_image(payload):
             raise CorpusUploadError(f"image non reconnue : {base!r}.")
         target = validated_path(base, dest)  # défense en profondeur
         target.write_bytes(payload)
@@ -158,7 +158,7 @@ def _pair_documents(written: dict[str, Path]) -> tuple[DocumentRef, ...]:
     """Apparie chaque image à sa vérité-terrain par radical (``_ground_truth_for``)."""
     documents: list[DocumentRef] = []
     for base, path in sorted(written.items()):
-        if Path(base).suffix.lower() not in _IMAGE_EXT:
+        if Path(base).suffix.lower() not in IMAGE_SUFFIXES:
             continue
         stem = Path(base).stem
         refs, source = _ground_truth_for(stem, written)
@@ -176,7 +176,9 @@ def _pair_documents(written: dict[str, Path]) -> tuple[DocumentRef, ...]:
 def _ground_truth_for(
     stem: str, written: dict[str, Path]
 ) -> tuple[tuple[GroundTruthRef, ...], str]:
-    """Vérité-terrain ``RAW_TEXT`` d'un radical, **et sa provenance**.
+    """Vérités-terrain d'un radical, **et la provenance de son texte**.
+
+    Texte (``RAW_TEXT``) :
 
     1. ``.txt`` manuel (``<rad>.gt.txt`` puis ``<rad>.txt``) — chemin direct.
     2. À défaut, ALTO/PAGE (``<rad>.gt.xml`` puis ``<rad>.xml``) : texte d'ordre
@@ -185,37 +187,59 @@ def _ground_truth_for(
        ``RAW_TEXT``, un seul chemin d'évaluation, déterministe.
     3. Sinon ``()`` : le run reste exécutable, simplement non scoré.
 
-    La **provenance** est retournée avec la référence (``"text"`` / ``"layout"``
-    / ``""``) : elle seule distingue une transcription fournie d'un texte
-    **extrait de l'ALTO du document**, et cette différence décide si un run de
-    post-correction mesure quelque chose ou se compare à lui-même.
+    Mise en page (``LAYOUT``, S29a) : ``<rad>.gt.xml`` **seul** — une mise en
+    page n'est une vérité que nommée comme telle. ``<rad>.xml`` est la source
+    que lit ``alto_source`` (l'ALTO à corriger, le plus souvent celui d'un
+    OCR) : en faire la vérité de la vue ``structure`` noterait ``alto_corrige``
+    contre son propre ALTO, et tout autre pipeline contre l'accord avec un OCR.
+    ``alto_source`` ne lit jamais ``<rad>.gt.xml`` : l'auto-comparaison est
+    impossible par construction.
+
+    La **provenance** est retournée avec les références (``"text"`` /
+    ``"layout"`` / ``""``) : elle seule distingue une transcription fournie d'un
+    texte **extrait de l'ALTO du document**, et cette différence décide si un
+    run de post-correction mesure quelque chose ou se compare à lui-même.
     """
+    layout: tuple[GroundTruthRef, ...] = ()
+    if (gt_xml := f"{stem}.gt.xml") in written:
+        _read_layout(written[gt_xml])  # illisible → 422, comme le texte
+        layout = (GroundTruthRef(type=ArtifactType.LAYOUT, uri=str(written[gt_xml])),)
     txt = next((c for c in (f"{stem}.gt.txt", f"{stem}.txt") if c in written), None)
     if txt is not None:
         ref = GroundTruthRef(type=ArtifactType.RAW_TEXT, uri=str(written[txt]))
-        return (ref,), "text"
+        return (ref, *layout), "text"
     xml = next((c for c in (f"{stem}.gt.xml", f"{stem}.xml") if c in written), None)
     if xml is None:
         return (), ""
     derived = written[xml].with_name(f"{stem}.gt.txt")
     derived.write_text(_xml_to_text(written[xml]), encoding="utf-8")
     ref = GroundTruthRef(type=ArtifactType.RAW_TEXT, uri=str(derived))
-    return (ref,), "layout"
+    return (ref, *layout), "layout"
 
 
 def _xml_to_text(path: Path) -> str:
-    """Texte d'ordre de lecture d'une vérité-terrain ALTO/PAGE.
+    """Texte d'ordre de lecture d'une vérité-terrain ALTO/PAGE (``_read_layout``).
+    Texte vide → rejet propre (``CorpusUploadError`` → 422)."""
+    text = layout_to_text(_read_layout(path), {})
+    if not isinstance(text, str) or not text.strip():
+        raise CorpusUploadError(
+            f"vérité-terrain XML sans texte exploitable : {path.name!r}."
+        )
+    return text
+
+
+def _read_layout(path: Path) -> CanonicalLayout:
+    """Mise en page d'une vérité-terrain ALTO/PAGE.
 
     ALTO ou PAGE selon le marqueur de racine (même heuristique que l'évaluation).
     Le parse passe par la couche 2 (``safe_parse_xml`` durci : pas de XXE/DTD).
-    Parse en échec ou texte vide → rejet propre (``CorpusUploadError`` → 422),
-    jamais un 500.
+    Parse en échec → rejet propre (``CorpusUploadError`` → 422), jamais un 500.
     """
     data = path.read_bytes()
     head = data[:4096].lower()
     is_page = b"pcgts" in head or b"pagecontent" in head
     try:
-        layout = (
+        return (
             page_to_layout(parse_pagexml(data))
             if is_page
             else alto_to_layout(parse_alto(data))
@@ -225,12 +249,6 @@ def _xml_to_text(path: Path) -> str:
         raise CorpusUploadError(
             f"vérité-terrain {kind} illisible : {path.name!r} ({exc})."
         ) from exc
-    text = layout_to_text(layout, {})
-    if not isinstance(text, str) or not text.strip():
-        raise CorpusUploadError(
-            f"vérité-terrain XML sans texte exploitable : {path.name!r}."
-        )
-    return text
 
 
 class CorpusStore:

@@ -32,7 +32,7 @@ from cinoc.domain.errors import AdapterStepError, DeadlineExceeded
 from cinoc.pipeline.fingerprint import ModuleIdentity, step_fingerprint
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext
-from tests.adapters._native_fakes import SdkResponse, wire
+from tests.adapters._native_fakes import SdkResponse, fake_sdk_module, wire
 
 _OPENAI_KEY = "sk-openai-NE-DOIT-PAS-PARTIR-AU-SERVEUR-LOCAL"
 _LOCAL = "http://127.0.0.1:8000/v1"
@@ -53,9 +53,7 @@ def _install(monkeypatch: pytest.MonkeyPatch, seen: list[dict[str, Any]]) -> Non
     class _Erreur(Exception):
         pass
 
-    module = types.ModuleType("openai")
-    module.OpenAI = _Client  # type: ignore[attr-defined]
-    module.OpenAIError = _Erreur  # type: ignore[attr-defined]
+    module = fake_sdk_module("openai", OpenAI=_Client, OpenAIError=_Erreur)
     monkeypatch.setitem(sys.modules, "openai", module)
     monkeypatch.setenv("OPENAI_API_KEY", _OPENAI_KEY)
 

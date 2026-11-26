@@ -113,6 +113,9 @@ ADAPTERS_ALLOWED_PKG = (
 #: en gardant l'identite de ligne, donc l'appariement avant/apres est connu.
 ADAPTERS_ALLOWED_EXT = ALLOWED_EXT | {
     "openai", "anthropic", "mistralai", "httpx", "httpcore",
+    # Le client HTTP de mistralai 3.x (sa dépendance déclarée), que l'adaptateur
+    # construit pour y poser la coupure en vol (S29a, `llm/mistral.mistral_sdk`).
+    "httpx2",
     "datasets", "huggingface_hub", "PIL", "yaml", "paddlex", "kraken",
     # Moteurs OCR/HTR locaux in-tree (extras `[pero]`/`[calamari]`, D-078).
     "pero_ocr", "calamari_ocr", "cv2", "numpy",

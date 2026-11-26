@@ -23,6 +23,10 @@ jusqu'à 15 appels, invisibles.
   transport, attend ``Retry-After`` si le serveur l'indique, sinon un backoff
   exponentiel borné + gigue — sans jamais attendre au-delà de la deadline, et
   interrompu par l'annulation (``RunControl``).
+- **Arrêt en vol** (``cut_on_cancel`` et ses formes ``_async`` / ``_hooks``) :
+  le socket de l'appel est coupé à l'arrêt du run — chez les sept moteurs
+  distants et la correction Ollama (S28a, S29a) ; ``close()`` d'un autre fil
+  ne réveille pas une lecture bloquante.
 - **Tentatives comptées** (``BillingMeter``) : chaque tentative facturable,
   pour l'économie. Règle, la même pour les sept moteurs distants faute de
   source primaire qui la contredise : un **succès** est facturé ; un **refus
@@ -41,12 +45,13 @@ byte-identique. ``N`` = ``CINOC_NETWORK_CONCURRENCY`` (défaut 3, plancher 1).
 
 from __future__ import annotations
 
+import functools
 import logging
 import os
 import random
 import socket
 import threading
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Awaitable, Callable, Iterator, Mapping
 from dataclasses import dataclass
 from typing import Any, TypeVar
 from urllib.parse import urlsplit
@@ -119,22 +124,16 @@ def request_timeout(deadline: Deadline) -> float | None:
     return None if remaining is None else max(remaining, 0.001)
 
 
-def register_close(control: RunControl, client: object) -> None:
-    """Annulation câblée *best-effort* : fermer le client interrompt l'appel
-    en vol. ``close`` (openai, anthropic), sinon la sortie de son contexte
-    (``mistralai`` 3.x n'a que ``__exit__``, qui ferme son transport) ; un
-    client sans l'un ni l'autre reste sous le sondage."""
-    close = getattr(client, "close", None)
-    if callable(close):
-        control.register_cancel_handle(close)
-        return
-    exit_ = getattr(client, "__exit__", None)
-    if callable(exit_):
-        control.register_cancel_handle(lambda: exit_(None, None, None))
-
-
 #: Signature d'une trace ``httpcore`` (extension de requête ``trace``).
 HttpTrace = Callable[[str, Mapping[str, Any]], None]
+#: Événements de trace qui rendent un flux porteur d'un socket : la connexion
+#: TCP (``connection.``, ``socks.``) **et** la poignée de main TLS
+#: (``connection.``, ``proxy.``, ``socks.``). Le second compte : envelopper un
+#: socket en TLS **détache** l'objet d'origine (``SSLSocket`` reprend son
+#: descripteur) — le couper ne coupe plus rien, et toute API cloud est en
+#: HTTPS (mesuré en S29a : rendu à 6 s au lieu de 0,5 s contre un serveur
+#: TLS muet de 6 s).
+_SOCKET_EVENTS = (".connect_tcp.complete", ".start_tls.complete")
 
 
 def cut_on_cancel(control: RunControl) -> HttpTrace:
@@ -148,31 +147,78 @@ def cut_on_cancel(control: RunControl) -> HttpTrace:
     serveur voit la déconnexion. Best-effort comme tout handle : un socket déjà
     fermé n'a rien à couper, et le sondage de ``RunControl`` reste la garantie.
     """
-    sockets: list[socket.socket] = []
+    #: Une coupure par socket gardé : ``shutdown(SHUT_RDWR)``.
+    cuts: list[Callable[[int], None]] = []
     lock = threading.Lock()
 
     def cut() -> None:
         with lock:
-            targets = tuple(sockets)
-        for sock in targets:
+            targets = tuple(cuts)
+        for shutdown in targets:
             try:
-                sock.shutdown(socket.SHUT_RDWR)
-            except OSError as exc:  # déjà fermé : l'appel est fini
+                shutdown(socket.SHUT_RDWR)
+            except OSError as exc:  # déjà fermé, ou détaché par TLS
                 logger.debug("[resilience] socket déjà fermé : %s", exc)
 
     def trace(event: str, info: Mapping[str, Any]) -> None:
-        if event != "connection.connect_tcp.complete":
+        if not event.endswith(_SOCKET_EVENTS):
             return
         extra = getattr(info.get("return_value"), "get_extra_info", None)
         sock = extra("socket") if callable(extra) else None
         if isinstance(sock, socket.socket):
-            with lock:
-                sockets.append(sock)
-            if control.is_cancelled():  # arrêt survenu pendant la connexion
-                cut()
+            # Au niveau du système, pas ``SSLSocket.shutdown`` : celui-ci
+            # retire l'état TLS sous la lecture d'un autre fil.
+            shutdown: Callable[[int], None] = functools.partial(
+                socket.socket.shutdown, sock
+            )
+        elif callable(proxied := getattr(sock, "shutdown", None)):
+            # ``asyncio.TransportSocket`` (client asynchrone, via ``anyio``) :
+            # un mandataire du socket, pas une sous-classe.
+            shutdown = proxied
+        else:
+            return
+        with lock:
+            cuts.append(shutdown)
+        if control.is_cancelled():  # arrêt survenu pendant la connexion
+            cut()
 
     control.register_cancel_handle(cut)
     return trace
+
+
+def cut_on_cancel_async(
+    control: RunControl,
+) -> Callable[[str, Mapping[str, Any]], Awaitable[None]]:
+    """``cut_on_cancel`` pour un ``httpx.AsyncClient`` : ``httpcore`` y attend
+    une **coroutine** de trace. Même socket gardé, même coupure (le socket brut
+    d'``anyio`` n'est pas détaché par TLS : son chiffrement est en mémoire)."""
+    trace = cut_on_cancel(control)
+
+    async def atrace(event: str, info: Mapping[str, Any]) -> None:
+        trace(event, info)
+
+    return atrace
+
+
+def cut_on_cancel_hooks(control: RunControl) -> dict[str, list[Callable[[Any], None]]]:
+    """``cut_on_cancel`` pour un client HTTP dont on n'émet pas soi-même les
+    requêtes : les ``event_hooks`` à passer au ``httpx2.Client`` d'un SDK
+    (``DefaultHttpxClient`` d'openai et d'anthropic, client de mistralai) ou au
+    ``httpx.Client`` d'Azure DI et de Google Vision.
+
+    Le crochet ``request`` pose la trace sur **chaque** requête que le SDK
+    envoie — l'API du client (``event_hooks``) est la même chez ``httpx`` et
+    ``httpx2`` ; la trace, celle de ``httpcore`` et ``httpcore2``. Un arrêt
+    coupe alors l'appel en vol comme chez Ollama : ``close()`` d'un autre fil
+    attendait la fin de la réponse (S28a : 10 s contre un serveur muet de
+    10 s, chez les trois SDK).
+    """
+    trace = cut_on_cancel(control)
+
+    def pose(request: Any) -> None:
+        request.extensions["trace"] = trace
+
+    return {"request": [pose]}
 
 
 @dataclass
@@ -433,12 +479,13 @@ __all__ = [
     "attempt_billed",
     "call_resilient",
     "cut_on_cancel",
+    "cut_on_cancel_async",
+    "cut_on_cancel_hooks",
     "endpoint_slot_key",
     "http_is_retryable",
     "http_retry_after",
     "is_transient",
     "network_slot",
-    "register_close",
     "request_timeout",
     "step_deadline",
     "validate_timeout",

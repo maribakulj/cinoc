@@ -389,7 +389,7 @@ before the correction tests can pass.
 
 `cinoc serve` (or the hosted Space) gives you the interactive surface:
 
-- **Library** — prepare a corpus: drag‑and‑drop ZIP upload, or import from **IIIF / Gallica / eScriptorium / HuggingFace / HTR‑United**. Your curated Cinoc datasets (tagged `cinoc-corpus`) appear **automatically** — your handle is resolved from the Space (`SPACE_ID`) or an HF token, with `CINOC_HF_AUTHOR` as an explicit override; images stay as revision‑pinned remote references (a static‑IIIF layout served from the HF repo), fetched automatically — SSRF‑hardened, size‑capped — when a run needs the pixels.
+- **Library** — prepare a corpus: drag‑and‑drop ZIP upload (page images in PNG, JPEG, TIFF, JPEG 2000 or WebP — one table for every import; an ALTO/PAGE named `<name>.gt.xml` is also the layout truth of the `structure` view, while a bare `<name>.xml` — the ALTO that `alto_source` reads — never is), or import from **IIIF / Gallica / eScriptorium / HuggingFace / HTR‑United**. Your curated Cinoc datasets (tagged `cinoc-corpus`) appear **automatically** — your handle is resolved from the Space (`SPACE_ID`) or an HF token, with `CINOC_HF_AUTHOR` as an explicit override; images stay as revision‑pinned remote references (a static‑IIIF layout served from the HF repo), fetched automatically — SSRF‑hardened, size‑capped — when a run needs the pixels.
 - **Benchmark** — the composer: pick a corpus, then queue **recipes** — named, proven shapes such as *OCR then LLM*, *segment then read each block* or *historic multi-column press* — whose bricks and settings you choose (unavailable bricks are shown greyed out, with the reason), and launch the queue as one compared run (live progress over SSE). *Segment then read each block* composes *segmenter → per‑region OCR/VLM → projected text*, scored side‑by‑side with flat pipelines; a **layout preview** shows the detected regions before you launch. *Correct an existing ALTO* runs structured post‑correction from the same queue. (There is no separate segmentation tab — it lives here.)
 - **Structured post-correction** — point it at a corpus of existing ALTO and correct it *inside* the layout, with the same producers as `cinoc correct` (offline rules, or a local LLM through Ollama — the server only talks to a model server on the operator's allowlist, `CINOC_MODEL_HOSTS`, comma‑separated, `localhost,127.0.0.1` by default — the same list guards an OpenAI-compatible `base_url`; any other host is refused with `403`, whether it comes from this form or from a submitted spec). The corpus must carry a **separate** transcription beside its ALTO: without one the reference is extracted from the ALTO itself, the corrector would start from the very text it is scored against, and the launcher refuses the run rather than publish a meaningless number.
 - **Recipes and specs** — pick a named recipe and fill in the bricks, or drop a full `RunSpec` (*Full spec* on the benchmark page) and run **any** shape the graph admits. A submitted spec never carries its own corpus: that comes from your library, because a spec holds file URIs and accepting them from a client would turn the launcher into a remote disk reader. YAML aliases are refused in a submitted spec (an alias bomb of under a kilobyte expands into minutes of validation). The spec door is **closed in public mode**: a recipe queue is bounded (16 entries), a spec is not.
@@ -455,6 +455,16 @@ pip install -e ".[dev,oracle]"
 pip install --no-deps "dinglehopper==0.11.0" "ocrd==3.13.3"   # ocrd would pull all of OCR-D
 CINOC_REQUIRE_ORACLES=1 python -m pytest -q -m oracle
 python tests/evaluation/test_dinglehopper_golden.py           # regenerate the golden after a version bump
+```
+
+The same job runs the full ROVER parity with crowd-kit (300 merges of `bnl_mini`); the ordinary suite checks a sample of it (100 merges, ~1 s).
+
+**Real provider SDKs.** Elsewhere the adapters run against fake `openai` / `anthropic` / `mistralai` modules. A dedicated CI job, `sdks`, installs the real ones (the pinned majors) and runs `mypy` and `tests/adapters` against them — including the proof that a stop cuts a call in flight (a mute local server, plain and TLS); locally:
+
+```bash
+pip install -e ".[dev,openai,anthropic,mistral,saknussemm]" cryptography
+python -m mypy -p cinoc
+CINOC_REQUIRE_SDKS=1 python -m pytest -q -n auto tests/adapters tests/app/test_models_real_sdk.py tests/guardrails/test_optional_deps_really_installed.py
 ```
 
 Detailed roadmap and decision log: [`MIGRATION_PLAN.md`](MIGRATION_PLAN.md); notable changes: [`CHANGELOG.md`](CHANGELOG.md); working contract: [`CLAUDE.md`](CLAUDE.md).

@@ -37,11 +37,12 @@ from cinoc.domain.artifacts import ArtifactType
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.documents import DocumentRef, GroundTruthRef
 from cinoc.domain.errors import CinocError
+from cinoc.formats.images import IMAGE_SUFFIXES
 
 logger = logging.getLogger(__name__)
 
-#: Extensions d'image reconnues pour nommer le fichier téléchargé.
-_IMAGE_EXT = frozenset({".png", ".jpg", ".jpeg", ".tif", ".tiff", ".jp2"})
+#: Extension du fichier téléchargé quand l'URL n'en dit aucune d'acceptée
+#: (``IMAGE_SUFFIXES``, la table unique des imports).
 _DEFAULT_EXT = ".jpg"
 
 ImageFetcher = Callable[[str], "tuple[IIIFImage, ...]"]
@@ -64,7 +65,7 @@ class CorpusImportError(CinocError):
 
 def _image_ext(image_url: str) -> str:
     suffix = Path(urlsplit(image_url).path).suffix.lower()
-    return suffix if suffix in _IMAGE_EXT else _DEFAULT_EXT
+    return suffix if suffix in IMAGE_SUFFIXES else _DEFAULT_EXT
 
 
 def _download_image(

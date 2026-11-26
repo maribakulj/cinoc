@@ -16,7 +16,8 @@ nommé** au lieu d'un saut. La variable n'est jamais posée en local : hors CI,
 travailler sans ``saknussemm`` reste légitime.
 
 Le job CI ``oracle`` (D-290) tient le même contrat pour ses oracles exécutés
-(``roman``, dinglehopper) : ``CINOC_REQUIRE_ORACLES=1``.
+(``roman``, dinglehopper) : ``CINOC_REQUIRE_ORACLES=1`` ; le job ``sdks``
+(S29a) pour les SDK fournisseurs : ``CINOC_REQUIRE_SDKS=1``.
 """
 
 from __future__ import annotations
@@ -65,4 +66,23 @@ def test_oracles_are_importable_when_their_install_succeeded(module: str) -> Non
     installé mais inimportable ferait sauter ses tests, job vert sur rien."""
     if not os.environ.get(_ORACLES_REQUIS):
         pytest.skip(f"{_ORACLES_REQUIS} non posée : hors du job CI oracle.")
+    importlib.import_module(module)
+
+
+#: Posée par le job CI ``sdks`` après l'installation des SDK fournisseurs (S29a).
+_SDKS_REQUIS = "CINOC_REQUIRE_SDKS"
+
+
+@pytest.mark.parametrize(
+    "module",
+    # ``mistralai.client`` : là où vit ``Mistral`` depuis la 2.x ; ``httpx2`` :
+    # le client HTTP des trois, que les adaptateurs construisent eux-mêmes.
+    ["openai", "anthropic", "mistralai.client", "httpx2"],
+)
+def test_sdks_are_importable_when_their_install_succeeded(module: str) -> None:
+    """Même contrat pour le job ``sdks`` : un SDK installé mais inimportable
+    ferait sauter les tests « vrais SDK », job vert sur rien (D-294 : trois
+    erreurs de typage et un import cassé sont passés faute de ce job)."""
+    if not os.environ.get(_SDKS_REQUIS):
+        pytest.skip(f"{_SDKS_REQUIS} non posée : hors du job CI sdks.")
     importlib.import_module(module)

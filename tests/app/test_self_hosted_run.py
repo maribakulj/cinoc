@@ -27,7 +27,7 @@ from cinoc.domain.pipeline import PipelineSpec, PipelineStep
 from cinoc.domain.run_spec import RunSpec
 from cinoc.evaluation.analysis import EconomicsPayload
 from cinoc.reports import default_report_renderer
-from tests.adapters._native_fakes import SdkResponse, wire
+from tests.adapters._native_fakes import SdkResponse, fake_sdk_module, wire
 
 _KEY = "sk-openai-pour-openai-seulement"
 _LOCAL = "http://127.0.0.1:11434/v1"
@@ -72,9 +72,7 @@ def _install(monkeypatch: pytest.MonkeyPatch, seen: list[dict[str, Any]]) -> Non
     class _Erreur(Exception):
         pass
 
-    module = types.ModuleType("openai")
-    module.OpenAI = _Client  # type: ignore[attr-defined]
-    module.OpenAIError = _Erreur  # type: ignore[attr-defined]
+    module = fake_sdk_module("openai", OpenAI=_Client, OpenAIError=_Erreur)
     monkeypatch.setitem(sys.modules, "openai", module)
     monkeypatch.setenv("OPENAI_API_KEY", _KEY)
 

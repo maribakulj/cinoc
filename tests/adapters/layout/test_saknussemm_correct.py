@@ -294,7 +294,7 @@ def test_vision_without_an_api_key_names_the_missing_key(
     monkeypatch.delenv("MISTRAL_API_KEY", raising=False)
     module = SaknussemmCorrector(label="x", producer="mistral_vision", model="m")
     with pytest.raises(AdapterStepError, match="MISTRAL_API_KEY"):
-        module._build_producer()
+        module._build_producer(RunControl())
 
 
 def test_vision_without_an_image_says_so(

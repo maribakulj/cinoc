@@ -19,12 +19,29 @@ Deux détails qui ne sont pas des détails :
 
 Chaque corps reçu est gardé dans ``responses`` (ordre d'appel), avant d'être
 lu : l'étape de correction l'écrit en sidecar ``NATIVE_JSON``.
+
+**Interruptible en vol** (S29a, comme l'adaptateur Ollama en S28a) : l'appel est
+**diffusé** (``stream: true``) et reconstitué en le corps du mode non diffusé
+(``ChatStream`` : mêmes clés, même texte — le sidecar ne change pas) ; entre
+deux morceaux, l'arrêt du run est sondé ; avant le premier, la trace
+``cut_on_cancel_async`` coupe le socket. Un arrêt lève ``CorrectionAborted``,
+l'annulation du contrat de ``saknussemm`` — ni rejouée ni prise pour une panne
+— que l'étape traduit en ``RunCancelledError``. ``timeout`` borne l'appel
+**entier** : en flux, le délai de lecture du client ne borne plus qu'un
+morceau.
 """
 
 from __future__ import annotations
 
 import json
 from typing import Any
+
+from cinoc.adapters._resilience import cut_on_cancel_async
+from cinoc.adapters.llm.ollama import ChatStream, _completion_from_chat
+from cinoc.domain.deadline import Deadline
+from cinoc.domain.errors import AdapterStepError
+from cinoc.domain.usage import ResourceUsage
+from cinoc.pipeline.run_control import RunControl
 
 _DEFAULT_HOST = "http://localhost:11434"
 #: Le défaut d'ollama (2048) tronque en silence une page de journal.
@@ -40,12 +57,23 @@ class OllamaStructuredClient:
         host: str = _DEFAULT_HOST,
         num_ctx: int = _DEFAULT_NUM_CTX,
         timeout: float = 300.0,
+        control: RunControl | None = None,
     ) -> None:
         self._host = host.rstrip("/")
         self._num_ctx = num_ctx
         self._timeout = timeout
+        self._control = control if control is not None else RunControl()
         #: Corps reçus, dans l'ordre d'appel (réponses rejetées comprises).
         self.responses: list[Any] = []
+
+    def _abort_if_stopped(self, model: str) -> None:
+        """L'arrêt du run → ``CorrectionAborted`` (propagée par ``saknussemm``)."""
+        if self._control.is_cancelled():
+            from saknussemm.errors import (  # type: ignore[import-not-found]  # noqa: PLC0415
+                CorrectionAborted,
+            )
+
+            raise CorrectionAborted(f"ollama ({model}) : run arrêté pendant l'appel.")
 
     async def complete_structured(
         self,
@@ -74,15 +102,35 @@ class OllamaStructuredClient:
                     "content": json.dumps(user_payload, ensure_ascii=False),
                 },
             ],
-            "stream": False,
+            # **En flux** : seule forme où un arrêt coupe une génération en cours.
+            "stream": True,
             "format": _bare_schema(json_schema),
             "options": {"temperature": temperature, "num_ctx": self._num_ctx},
         }
+        self._abort_if_stopped(model)
+        deadline = Deadline.in_seconds(self._timeout)
+        stream = ChatStream(model)
         try:
-            async with httpx.AsyncClient(timeout=self._timeout) as client:
-                response = await client.post(f"{self._host}/api/chat", json=body)
+            async with (
+                httpx.AsyncClient(timeout=self._timeout) as client,
+                client.stream(
+                    "POST",
+                    f"{self._host}/api/chat",
+                    json=body,
+                    extensions={"trace": cut_on_cancel_async(self._control)},
+                ) as response,
+            ):
                 response.raise_for_status()
-                data = response.json()
+                async for line in response.aiter_lines():
+                    self._abort_if_stopped(model)
+                    if deadline.is_expired():
+                        raise ProviderTransientError(
+                            f"ollama ({model}) : délai de {self._timeout:g} s "
+                            "dépassé en génération."
+                        )
+                    if stream.feed(line):
+                        break
+            data = stream.body()
         except httpx.HTTPStatusError as exc:
             status = exc.response.status_code
             message = f"ollama a répondu {status} ({model})"
@@ -91,10 +139,17 @@ class OllamaStructuredClient:
                 raise ProviderPermanentError(message) from exc
             raise ProviderTransientError(message) from exc
         except (httpx.TimeoutException, httpx.TransportError) as exc:
+            self._abort_if_stopped(model)  # le socket coupé par l'arrêt
             raise ProviderTransientError(
                 f"ollama injoignable ({model}) : {exc}"
             ) from exc
+        except AdapterStepError as exc:  # flux illisible ou interrompu
+            raise ProviderTransientError(str(exc)) from exc
 
+        if data.get("error"):
+            # Une erreur en cours de génération arrive dans le flux, en 200 :
+            # pas une réponse (comme l'erreur HTTP du mode non diffusé).
+            raise ProviderTransientError(f"ollama ({model}) : {data['error']}")
         self.responses.append(data)
         content = (data.get("message") or {}).get("content") or ""
         # ``done_reason: length`` : le serveur a coupé (``num_ctx`` épuisé).
@@ -118,6 +173,17 @@ class OllamaStructuredClient:
                 f"ollama ({model}) a rendu {type(parsed).__name__}, pas un objet."
             )
         return parsed, None
+
+
+    def usage(self) -> ResourceUsage | None:
+        """Jetons de toutes les réponses reçues (``prompt_eval_count`` /
+        ``eval_count``), lus comme l'adaptateur Ollama."""
+        total: ResourceUsage | None = None
+        for data in self.responses:
+            part = _completion_from_chat(data, "").usage()
+            if part is not None:
+                total = part if total is None else total.merged_with(part)
+        return total
 
 
 def _bare_schema(json_schema: dict[str, Any]) -> dict[str, Any]:

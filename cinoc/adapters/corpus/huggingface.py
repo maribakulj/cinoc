@@ -25,6 +25,7 @@ from cinoc.adapters.corpus._http import (
     fetch_json,
 )
 from cinoc.domain.errors import CinocError
+from cinoc.formats.images import IMAGE_SUFFIXES
 
 logger = logging.getLogger(__name__)
 
@@ -40,9 +41,6 @@ CURATED_DATASET_TAG = "cinoc-corpus"
 #: segmentation est une extension *future* (non requise ici).
 CINOC_IMAGE_COLUMN = "image"
 CINOC_GT_COLUMN = "ground_truth"
-
-#: Extensions image reconnues (sinon ``.jpg`` par défaut) pour nommer le fichier.
-_IMAGE_EXTS = frozenset({".png", ".jpg", ".jpeg", ".tif", ".tiff", ".jp2", ".webp"})
 
 
 @dataclass(frozen=True)
@@ -263,7 +261,7 @@ def _default_loader(dataset_id: str, split: str) -> Iterable[object]:
 def _ext_from_path(path: object) -> str:
     if isinstance(path, str) and path:
         suffix = PurePosixPath(path).suffix.lower()
-        if suffix in _IMAGE_EXTS:
+        if suffix in IMAGE_SUFFIXES:
             return suffix
     return ".jpg"
 

@@ -27,6 +27,7 @@ from cinoc.domain.layout import (
     Word,
 )
 from cinoc.formats._geometry import Point
+from cinoc.formats._region_ids import RegionIds
 from cinoc.formats.pagexml.types import (
     PageDocument,
     PageGenericRegion,
@@ -46,18 +47,6 @@ _TEXT = "text"
 #: Labels non textuels que lit ``alto_to_layout`` (``Illustration``,
 #: ``GraphicalElement``) : ils ont leur élément PAGE.
 _ALTO_NON_TEXT = {"illustration": "ImageRegion", "graphical": "GraphicRegion"}
-
-
-class _Counter:
-    """Compteur déterministe pour les ``id`` de région manquants."""
-
-    def __init__(self) -> None:
-        self._n = 0
-
-    def next_id(self) -> str:
-        rid = f"region_{self._n}"
-        self._n += 1
-        return rid
 
 
 def _geometry(coords: tuple[Point, ...] | None) -> Geometry | None:
@@ -83,7 +72,7 @@ def _line(line: PageTextLine) -> Line:
     )
 
 
-def _region(region: PageRegion, counter: _Counter) -> Region:
+def _region(region: PageRegion, counter: RegionIds) -> Region:
     rid = region.id or counter.next_id()
     if isinstance(region, PageTextRegion):
         return Region(
@@ -103,7 +92,7 @@ def _region(region: PageRegion, counter: _Counter) -> Region:
     raise AssertionError(f"région PAGE non gérée : {region!r}")  # pragma: no cover
 
 
-def _page(page: PagePage, counter: _Counter) -> LayoutPage:
+def _page(page: PagePage, counter: RegionIds) -> LayoutPage:
     regions = tuple(_region(region, counter) for region in page.regions)
     if page.reading_order is not None:
         reading_order = page.reading_order.flatten()
@@ -119,7 +108,7 @@ def _page(page: PagePage, counter: _Counter) -> LayoutPage:
 
 def page_to_layout(document: PageDocument) -> CanonicalLayout:
     """Projette un ``PageDocument`` parsé vers le ``CanonicalLayout`` neutre."""
-    counter = _Counter()
+    counter = RegionIds()
     return CanonicalLayout(
         pages=tuple(_page(page, counter) for page in document.pages)
     )
