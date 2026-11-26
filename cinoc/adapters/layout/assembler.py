@@ -13,12 +13,14 @@ L'assembleur vit en couche 5 (et non `pipeline`) parce qu'il dépend de `formats
 from __future__ import annotations
 
 from pathlib import Path
+from typing import ClassVar
 
 from cinoc.domain.artifacts import Artifact, ArtifactType, compute_content_hash
 from cinoc.domain.errors import AdapterStepError
 from cinoc.domain.layout import CanonicalLayout
 from cinoc.formats.alto import write_alto
 from cinoc.formats.alto.layout_map import layout_to_alto
+from cinoc.pipeline.params import Param
 from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
@@ -28,6 +30,9 @@ _VERSION = "1.0"
 
 class AltoAssembler:
     """Assemble un ``LAYOUT`` rempli en ``ALTO_XML`` (ALTO 4, déterministe)."""
+
+    #: Réglages acceptés (``pipeline.params``) : tout autre est refusé, nommé.
+    PARAMS: ClassVar[tuple[Param, ...]] = ()
 
     @property
     def name(self) -> str:

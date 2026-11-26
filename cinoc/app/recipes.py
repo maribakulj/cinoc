@@ -56,6 +56,9 @@ class Role:
     fanout: bool = False
     #: Entrées supplémentaires toujours disponibles (l'image initiale).
     aussi: tuple[ArtifactType, ...] = field(default_factory=tuple)
+    #: Mode LLM/VLM que le rôle pose sur sa brique (réglage ``role``) : c'est
+    #: lui qui fait qu'un même adapter lise l'image, ou le texte, ou les deux.
+    mode: str | None = None
 
 
 IMAGE = ArtifactType.IMAGE
@@ -77,8 +80,8 @@ def roles() -> Mapping[str, Role]:
     """
     from cinoc.app.engines import providers_for_mode  # noqa: PLC0415
 
-    correcteurs = tuple(sorted(providers_for_mode("text_only")))
-    affineurs = tuple(sorted(providers_for_mode("refine")))
+    def fournisseurs(mode: str) -> tuple[str, ...]:
+        return tuple(sorted(providers_for_mode(mode)))
     return {
         "preprocess": Role((IMAGE,), (IMAGE,), ("preprocess",)),
         "ocr": Role(
@@ -129,8 +132,25 @@ def roles() -> Mapping[str, Role]:
         "projection": Role((LAYOUT,), (RAW,), ("layout_to_text",)),
         "alto_export": Role((LAYOUT,), (ALTO,), ("alto_assembler",)),
         "page_export": Role((LAYOUT,), (PAGE,), ("page_assembler",)),
-        "correction": Role((RAW,), (CORR,), correcteurs),
-        "refine": Role((CORR,), (CORR,), affineurs),
+        # Les quatre modes que déclarent les adapters LLM/VLM (``llm_modes``),
+        # chacun un rôle : sans ``zero_shot`` ni ``text_and_image``, une recette
+        # ne pouvait pas décrire ce que le composeur décrit déjà (D-258).
+        "correction": Role(
+            (RAW,), (CORR,), fournisseurs("text_only"), mode="text_only"
+        ),
+        "refine": Role((CORR,), (CORR,), fournisseurs("refine"), mode="refine"),
+        # Le VLM lit la page : transcription directe, sans OCR amont.
+        "zero_shot": Role(
+            (IMAGE,), (RAW,), fournisseurs("zero_shot"), mode="zero_shot"
+        ),
+        # Le VLM corrige le texte de l'OCR **en voyant l'image** : le texte vient
+        # de l'étape précédente, l'image de l'entrée initiale.
+        "text_and_image": Role(
+            (RAW, IMAGE),
+            (CORR,),
+            fournisseurs("text_and_image"),
+            mode="text_and_image",
+        ),
         "ner": Role((RAW,), (ENTITIES,), ("ner",)),
         "vote": Role((RAW,), (RAW,), ("vote",)),
     }
@@ -288,9 +308,11 @@ def plan_from_recipe(
                     crop=role.fanout,
                 )
             )
-        reglage = {"label": step.id, **step.params, **reglages.get(step.id, {})}
-        if step.role == "refine":
-            reglage["role"] = "refine"
+        reglage = {
+            **_identite(brique, step.id, role.mode),
+            **step.params,
+            **reglages.get(step.id, {}),
+        }
         kwargs[nom] = reglage
         precedente = step.id
 
@@ -300,6 +322,25 @@ def plan_from_recipe(
         steps=tuple(etapes),
     )
     return spec, kwargs
+
+
+def _identite(
+    brique: str, step_id: str, mode: str | None
+) -> dict[str, str | int | float | bool]:
+    """Le libellé d'instance et le mode LLM que la recette pose — **si la brique
+    les déclare** : ``precomputed`` se nomme par ``source_label``, et un réglage
+    posé sur une brique qui ne le lit pas est refusé (D14), pas ignoré. Une
+    brique sans déclaration (module tiers) reçoit le libellé, par convention."""
+    from cinoc.app.modules.registry import socle_params  # noqa: PLC0415
+
+    declares = socle_params(brique)
+    noms = None if declares is None else {p.name for p in declares}
+    identite: dict[str, str | int | float | bool] = {}
+    if noms is None or "label" in noms:
+        identite["label"] = step_id
+    if mode is not None and (noms is None or "role" in noms):
+        identite["role"] = mode
+    return identite
 
 
 def recipe_by_name(nom: str, directory: Path | None = None) -> Recipe:

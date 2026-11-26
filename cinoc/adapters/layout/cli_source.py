@@ -47,10 +47,13 @@ import shlex
 import subprocess
 import tempfile
 from pathlib import Path
+from typing import ClassVar
 
+from cinoc.adapters._params import label_param, timeout_param
 from cinoc.adapters.layout._base import layout_step_output, read_layout
 from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.errors import AdapterStepError, DeadlineExceeded
+from cinoc.pipeline.params import Param
 from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
@@ -117,6 +120,14 @@ def _absolu(uri: str) -> str:
 
 class CliLayoutSource:
     """``IMAGE → LAYOUT`` en lançant un outil externe qui écrit du PAGE/ALTO."""
+
+    #: Réglages acceptés (``pipeline.params``) : tout autre est refusé, nommé.
+    PARAMS: ClassVar[tuple[Param, ...]] = (
+        label_param(),
+        Param("command", "str", "Commande ({image}, {out})", "Command ({image}, {out})",
+              required=True),
+        timeout_param(600.0),
+    )
 
     #: Vocabulaire **non déclaré** : il dépend de l'outil branché, que cette
     #: brique ne connaît pas. ``None`` dit « je ne me prononce pas » — et le

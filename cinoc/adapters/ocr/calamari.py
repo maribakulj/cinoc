@@ -16,9 +16,13 @@ sans l'extra, comme Kraken/PERO.
 
 from __future__ import annotations
 
+from typing import ClassVar
+
+from cinoc.adapters._params import label_param, model_param
 from cinoc.adapters.ocr._base import run_image_to_text
 from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.errors import AdapterStepError
+from cinoc.pipeline.params import Param
 from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
@@ -57,6 +61,12 @@ def _invoke_calamari(  # pragma: no cover -- lib + modèle requis (cf. 'live')
 
 class CalamariAdapter:
     """OCR Calamari : ``IMAGE`` → ``RAW_TEXT`` (texte de la ligne reconnue)."""
+
+    #: Réglages acceptés (``pipeline.params``) : tout autre est refusé, nommé.
+    PARAMS: ClassVar[tuple[Param, ...]] = (
+        label_param(),
+        model_param("Checkpoint Calamari (chemin)", "Calamari checkpoint (path)"),
+    )
 
     def __init__(self, *, label: str, model: str) -> None:
         if not label or not all(c.isalnum() or c in "_-" for c in label):

@@ -20,6 +20,11 @@ Garanties (contrat runner ↔ module) :
 ``version`` (absent du contrat runtime hérité) alimente le ``RunManifest`` :
 deux exécutions ne sont comparables qu'à version de module égale
 (reproductibilité — CLAUDE.md §12).
+
+Les **réglages** qu'une brique accepte se déclarent hors du ``Protocol``, en
+``ClassVar`` facultatif ``PARAMS`` (``pipeline.params``) — comme ``LABELS`` sur
+les segmenteurs : le contrat d'exécution reste unique, et un module tiers écrit
+avant la déclaration reste conforme sans changer une ligne.
 """
 
 from __future__ import annotations

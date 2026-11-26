@@ -9,10 +9,12 @@ moteur réel. Implémente le ``Module`` Protocol (couche 4) **directement**.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import ClassVar
 
 from cinoc.domain.artifacts import Artifact, ArtifactType, compute_content_hash
 from cinoc.domain.documents import DocumentRef
 from cinoc.domain.errors import AdapterStepError
+from cinoc.pipeline.params import Param
 from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
@@ -22,6 +24,12 @@ _VERSION = "1.0"
 
 class PrecomputedTextAdapter:
     """Lit un texte OCR pré-calculé (``<stem>.<label>.txt`` près de l'image)."""
+
+    #: Réglages acceptés (``pipeline.params``) : tout autre est refusé, nommé.
+    PARAMS: ClassVar[tuple[Param, ...]] = (
+        Param("source_label", "str", "Source pré-calculée (<doc>.<source>.txt)",
+              "Precomputed source (<doc>.<source>.txt)", required=True),
+    )
 
     def __init__(self, *, source_label: str) -> None:
         if not source_label or not all(

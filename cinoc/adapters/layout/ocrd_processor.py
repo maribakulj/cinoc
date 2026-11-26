@@ -22,8 +22,10 @@ adapter_kwargs:
   ocrd:segment:
     label: segment
     processor: ocrd-tesserocr-segment
-    parameters: {find_tables: true}
 ```
+
+(``parameters`` — un objet — ne s'écrit pas dans une spec, dont les réglages
+sont plats ; il n'est donc pas déclaré. Le constructeur l'accepte en Python.)
 
 **Périmètre assumé : ``IMAGE → LAYOUT``.** OCR-D enchaîne aussi PAGE → PAGE ;
 réinjecter un layout dans un workspace est un autre travail, qu'aucun
@@ -47,10 +49,13 @@ import subprocess
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
+from typing import ClassVar
 
+from cinoc.adapters._params import label_param, timeout_param
 from cinoc.adapters.layout._base import layout_step_output, read_layout
 from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.errors import AdapterStepError, DeadlineExceeded
+from cinoc.pipeline.params import Param
 from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
@@ -152,6 +157,15 @@ def _lancer_sous_processus(
 
 class OcrdProcessor:
     """``IMAGE → LAYOUT`` en faisant tourner un processeur OCR-D."""
+
+    #: Réglages acceptés (``pipeline.params``) : tout autre est refusé, nommé.
+    PARAMS: ClassVar[tuple[Param, ...]] = (
+        label_param(),
+        Param("processor", "str", "Processeur OCR-D (ocrd-…)",
+              "OCR-D processor (ocrd-…)", required=True),
+        Param("bin_dir", "str", "Dossier des exécutables", "Executables folder"),
+        timeout_param(900.0),
+    )
 
     #: Vocabulaire non déclaré : il dépend du processeur choisi, que cette
     #: brique ne connaît pas. ``None`` dit « je ne me prononce pas ».

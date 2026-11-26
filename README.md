@@ -193,7 +193,7 @@ The typed graph admits hundreds of valid pipeline shapes. They don't fit in a fo
 cinoc list recipes
 ```
 
-A recipe declares **roles**, never types: the builder knows each role's typed signature, so a recipe cannot describe a mis-wired pipeline — it can only name a role that doesn't exist, which shows up at load time. Recipes are **data**, like normalisation profiles and curated prompts: adding one is a YAML file, not a code change.
+A recipe declares **roles**, never types: the builder knows each role's typed signature, so a recipe cannot describe a mis-wired pipeline — it can only name a role that doesn't exist, which shows up at load time. The four LLM/VLM modes each have their role — `correction` (text), `refine`, `zero_shot` (the model reads the page: recipe `vlm_seul`) and `text_and_image` (it corrects the OCR text while seeing the image: `ocr_puis_vlm`). Recipes are **data**, like normalisation profiles and curated prompts: adding one is a YAML file, not a code change.
 
 ### Knowing what your install can do
 
@@ -202,6 +202,7 @@ The `/engines` page, the composer's model dropdowns and the normalisation previe
 ```bash
 cinoc --version                    # the version every run stamps in its manifest
 cinoc list engines                 # engines, segmenters, NER — and *why* one is unavailable
+cinoc list engines tesseract       # the settings a brick accepts: type, default, bounds
 cinoc list models anthropic        # the models your key allows, asked live; vision and lifecycle when declared
 cinoc list models ollama           # the models installed on the server (--host), with their digest
 cinoc list profiles                # the normalisation profiles
@@ -258,7 +259,12 @@ A target that some pipeline of the run does not have is refused when the spec is
 ```yaml
 adapter_kwargs:
   "ollama:vlm": {label: vlm, model: "qwen2.5vl:3b", role: zero_shot, max_tokens: 4096, num_ctx: 16384}
+  "ollama:fix": {label: fix, model: "qwen2.5vl:3b", role: text_only, prompt_name: correction_press_19c_european}
 ```
+
+`prompt_name` names a curated prompt (`cinoc list prompts`) — the same one the web composer offers; `prompt` sets a free one; not both. It is the prompt's **text** that reaches the adapter, the manifest and the fingerprint: naming a curated prompt or pasting it gives the same unit.
+
+**Every setting is read, or refused.** Each brick declares the settings it accepts — name, type, default, bounds (`cinoc list engines <brick>`). A setting it does not declare is refused **by name** — `tempreature: 0.5` → *unknown setting 'tempreature' — did you mean 'temperature'?* —, as are a wrong type, an out-of-range value and settings for a brick no step uses; at `cinoc run --check`, at the run, and when a spec is submitted to the web app (422). Before, such a setting passed `--check` and was silently ignored. `timeout`, `api_key_env`, `self_hosted` and `prompt_name` are operational: in the manifest, not in the step's fingerprint — raising a time limit to rescue one slow page does not re-run the pages already read.
 
 **Self-hosted OpenAI-compatible servers.** An `openai` instance can target any OpenAI-compatible server — vLLM, SGLang, Ollama's `/v1`, a local server — through its own settings, so one run can compare OpenAI and your server side by side:
 
@@ -274,9 +280,9 @@ adapter_kwargs:
     # api_key_env: VLLM_API_KEY               # the NAME of the variable holding its key
 ```
 
-- `base_url` is per instance; the process-wide `OPENAI_BASE_URL` is **no longer read**. It is written to the manifest as given — a server address, not a secret — and is part of the step's fingerprint: two servers are never taken for the same unit.
+- `base_url` is per instance; the process-wide `OPENAI_BASE_URL` is **no longer read**. It is written to the manifest — a server address, not a secret — without its trailing `/` (`…/v1/` and `…/v1` are the same server, and OpenAI's own endpoint keeps its price), and is part of the step's fingerprint: two servers are never taken for the same unit.
 - `api_key_env` names the environment variable that holds the key — never the key itself. Without `base_url`, it defaults to `OPENAI_API_KEY`; **with** a `base_url`, there is no default key — your OpenAI key does not go to another server unless you name it — and a server without authentication (vLLM or SGLang without `--api-key`, Ollama) gets a placeholder. A named variable that is unset or empty fails the unit with its name.
-- `self_hosted: true` (only with a `base_url`) tells the economics section the server is yours: its cost is machine time, its tokens are shown but not billed, and the report says **self-hosted** — never OpenAI's price for a server that is not OpenAI. A custom `base_url` without it (a paid gateway, say) shows as "unknown price", naming the host.
+- `self_hosted: true` (only with a `base_url`) tells the economics section the server is yours: its cost is machine time, its tokens are shown but not billed, and the report says **self-hosted** — never OpenAI's price for a server that is not OpenAI. A custom `base_url` without it (a paid gateway, say) shows as "unknown price", naming the host. Like `api_key_env` and `timeout`, it is an *operational* setting: written to the manifest, kept **out of the step's fingerprint** — declaring it does not re-run an archived inference.
 - Network slots are per **server** (`host:port`), not per provider: a slow local server does not hold back OpenAI calls, and two instances on the same server share its slots (`CINOC_NETWORK_CONCURRENCY`, default 3) — the native `ollama` adapter included: it and an `openai` instance on `…:11434/v1` share one server's slots.
 - Availability is judged per **instance**: a self-hosted instance (a `base_url`, no `api_key_env`) does not need `OPENAI_API_KEY` — a spec submitted through the web app is no longer refused (409) for lacking it.
 - Through the web app (submitted spec), a `base_url` must be on the operator's allowlist, `CINOC_MODEL_HOSTS` — the same list as the Ollama host of structured post-correction; `api_key_env` is refused over HTTP (it would send a server variable to the spec's host), as is any endpoint setting on a public instance.
@@ -390,6 +396,24 @@ The served flavor is what `GET /reports/{name}` uses: the gallery is paginated a
 ## Extensibility — one public socket, by design
 
 The **only** public extension point is the **pipeline brick** (segmenter, OCR/HTR, VLM, post‑corrector, ALTO builder, NER…). A pip package exposing a `cinoc.modules` entry‑point is discovered at runtime (fail‑closed in public mode). Everything else — metrics, importers, report sections, statistical tests — is first‑party and intentionally **not** pluggable: a single, stable socket rather than many.
+
+A brick **declares its settings** as a class variable, exactly as the built-in ones do — so a typo in a spec is refused by name instead of silently ignored, and `cinoc list engines <brick>` describes them:
+
+```python
+from typing import ClassVar
+from cinoc.adapters.extension import Param
+
+class MySegmenter:
+    PARAMS: ClassVar[tuple[Param, ...]] = (
+        Param("min_score", "float", "Score minimal", "Minimum score",
+              default=0.5, minimum=0.0, maximum=1.0),
+        Param("token", "str", "Jeton", "Token", secret=True),             # never written out
+        Param("timeout", "float", "Délai (s)", "Time limit (s)",
+              default=60.0, affects_output=False),                       # not in the fingerprint
+    )
+```
+
+The declaration is **optional**, because the socket is a public API: a module without `PARAMS` keeps free settings, unchecked, exactly as before (a `token` is still masked by its name); `PARAMS = ()` means "no settings". Full guide: [`docs/PLUGINS.md`](docs/PLUGINS.md).
 
 ---
 

@@ -563,11 +563,9 @@ def test_hybrid_competitor_pipeline_shape(tmp_path: Path) -> None:
     # L'étape texte produit du RAW_TEXT → scoré par la vue texte comme les autres.
     assert text.adapter_name == "layout_to_text:c0"
     assert text.output_types == (ArtifactType.RAW_TEXT,)
-    assert spec.adapter_kwargs["mistral_ocr:c0"] == {
-        "label": "c0",
-        "lang": "fra",
-        "model": "m",
-    }
+    # Mistral OCR n'a pas de ``lang`` : le planificateur ne lui passe que ce
+    # qu'il déclare (D14 — un réglage posé ne doit pas être ignoré en silence).
+    assert spec.adapter_kwargs["mistral_ocr:c0"] == {"label": "c0", "model": "m"}
     assert spec.adapter_kwargs["layout_to_text:c0"] == {"label": "c0"}
 
 

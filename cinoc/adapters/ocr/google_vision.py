@@ -28,8 +28,9 @@ import os
 from base64 import b64encode
 from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
+from cinoc.adapters._params import label_param, timeout_param
 from cinoc.adapters._resilience import (
     DEFAULT_OCR_TIMEOUT,
     BillingMeter,
@@ -44,6 +45,7 @@ from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.confidence import ConfidenceToken
 from cinoc.domain.deadline import Deadline
 from cinoc.domain.errors import AdapterStepError
+from cinoc.pipeline.params import Param
 from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
@@ -189,6 +191,12 @@ def _invoke_google_vision(
 class GoogleVisionAdapter:
     """OCR cloud Google Vision : ``IMAGE`` → ``RAW_TEXT`` + ``NATIVE_JSON`` +
     ``CONFIDENCES``."""
+
+    #: Réglages acceptés (``pipeline.params``) : tout autre est refusé, nommé.
+    PARAMS: ClassVar[tuple[Param, ...]] = (
+        label_param(),
+        timeout_param(DEFAULT_OCR_TIMEOUT),
+    )
 
     def __init__(self, *, label: str, timeout: object = DEFAULT_OCR_TIMEOUT) -> None:
         if not label or not all(c.isalnum() or c in "_-" for c in label):

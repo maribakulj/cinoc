@@ -1,0 +1,16 @@
+# Le VLM lit la page lui-même, sans OCR amont : la transcription « zero-shot »,
+# l'un des pipelines phares du banc, face auquel on juge l'OCR classique.
+name: vlm_seul
+title:
+  fr: Un modèle de vision lit la page
+  en: A vision model reads the page
+description:
+  fr: >-
+    Un modèle de vision transcrit l'image directement, sans OCR. Sait-il lire
+    mieux qu'un moteur dédié, et à quel prix — y compris en lignes inventées ?
+  en: >-
+    A vision model transcribes the image directly, with no OCR. Does it read
+    better than a dedicated engine, and at what cost — invented lines included?
+steps:
+  - id: vlm
+    role: zero_shot

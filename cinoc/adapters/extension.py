@@ -38,6 +38,19 @@ ce qui n'y figure pas est interne et peut bouger.
             layout = to_canonical_layout(detection, min_score=0.0)
             return layout_step_output(layout, context, self.name)
 
+Ses **réglages** se déclarent en ``ClassVar`` (``Param`` : nom, type, libellés
+FR/EN, défaut, bornes, choix, ``secret``, ``affects_output``) ::
+
+        PARAMS: ClassVar[tuple[Param, ...]] = (
+            Param("min_score", "float", "Score minimal", "Minimum score",
+                  default=0.5, minimum=0.0, maximum=1.0),
+        )
+
+cinoc refuse alors, en le nommant, tout réglage de spec que la brique ne déclare
+pas (une faute de frappe ne passe plus en silence), et ``cinoc list engines``
+les décrit. La déclaration est **facultative** : sans ``PARAMS``, les réglages
+restent libres, comme avant ; ``PARAMS = ()`` dit « aucun réglage ».
+
 et, dans son ``pyproject.toml`` ::
 
     [project.entry-points."cinoc.modules"]
@@ -62,6 +75,7 @@ from cinoc.adapters.layout._base import (
 from cinoc.domain.artifacts import Artifact, ArtifactType, compute_content_hash
 from cinoc.domain.errors import AdapterStepError, CinocError
 from cinoc.domain.layout import CanonicalLayout
+from cinoc.pipeline.params import Param
 from cinoc.pipeline.protocols import Module, ParamValue
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
@@ -75,6 +89,7 @@ __all__ = [
     "DetectedRegion",
     "LayoutDetection",
     "Module",
+    "Param",
     "ParamValue",
     "RunContext",
     "RunControl",

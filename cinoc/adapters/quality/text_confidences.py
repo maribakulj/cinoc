@@ -34,11 +34,14 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import ClassVar
 
+from cinoc.adapters._params import label_param, model_param
 from cinoc.adapters._workspace import workspace_artifact_path
 from cinoc.domain.artifacts import Artifact, ArtifactType, compute_content_hash
 from cinoc.domain.confidence import ConfidenceToken
 from cinoc.domain.errors import AdapterStepError
+from cinoc.pipeline.params import Param
 from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
@@ -63,6 +66,16 @@ def confidence_from(need: float) -> float:
 
 class LanguageConfidenceScorer:
     """``RAW_TEXT | CORRECTED_TEXT → CONFIDENCES`` par un modèle de langue."""
+
+    #: Réglages acceptés (``pipeline.params``) : tout autre est refusé, nommé.
+    PARAMS: ClassVar[tuple[Param, ...]] = (
+        label_param(),
+        model_param(
+            "Modèle de langue (vide : le défaut)",
+            "Language model (empty: default)",
+            default="",
+        ),
+    )
 
     def __init__(self, *, label: str, model: str = "") -> None:
         if not label or not all(c.isalnum() or c in "_-" for c in label):

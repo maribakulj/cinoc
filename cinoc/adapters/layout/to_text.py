@@ -14,10 +14,13 @@ lignes d'une région jointes par ``\\n``, régions par ``\\n``, pages par ``\\n`
 from __future__ import annotations
 
 from pathlib import Path
+from typing import ClassVar
 
+from cinoc.adapters._params import label_param
 from cinoc.domain.artifacts import Artifact, ArtifactType, compute_content_hash
 from cinoc.domain.errors import AdapterStepError
 from cinoc.domain.layout import CanonicalLayout, LayoutPage, Region
+from cinoc.pipeline.params import Param
 from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
@@ -85,6 +88,9 @@ def _tous(regions: tuple[Region, ...]) -> list[Region]:
 
 class LayoutToTextExtractor:
     """Aplatit un ``LAYOUT`` rempli en ``RAW_TEXT`` (ordre de lecture, déterministe)."""
+
+    #: Réglages acceptés (``pipeline.params``) : tout autre est refusé, nommé.
+    PARAMS: ClassVar[tuple[Param, ...]] = (label_param(),)
 
     def __init__(self, label: str) -> None:
         self._label = label

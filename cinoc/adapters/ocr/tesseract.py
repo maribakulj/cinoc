@@ -29,12 +29,15 @@ import re
 import subprocess
 import threading
 from collections.abc import Callable, Mapping, MutableMapping
+from typing import ClassVar
 
+from cinoc.adapters._params import label_param, timeout_param
 from cinoc.adapters._workspace import workspace_artifact_path
 from cinoc.domain.artifacts import Artifact, ArtifactType, compute_content_hash
 from cinoc.domain.confidence import ConfidenceToken
 from cinoc.domain.errors import AdapterStepError, DeadlineExceeded
 from cinoc.pipeline.fanout import REGION_TYPE_PARAM
+from cinoc.pipeline.params import Param
 from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
@@ -266,6 +269,24 @@ def parse_psm_by_class(spec: str) -> dict[str, int]:
 
 class TesseractAdapter:
     """OCR Tesseract 5 ; écrit le texte dans le workspace, renvoie un ``RAW_TEXT``."""
+
+    #: Réglages acceptés (``pipeline.params``) : tout autre est refusé, nommé.
+    PARAMS: ClassVar[tuple[Param, ...]] = (
+        label_param(),
+        Param("lang", "str", "Langue(s) (fra+lat)", "Language(s) (fra+lat)",
+              default="fra"),
+        Param("psm", "int", "Découpe de page (psm)", "Page segmentation (psm)",
+              default=6, minimum=0, maximum=13),
+        Param("oem", "int", "Moteur (oem)", "Engine mode (oem)",
+              default=3, minimum=0, maximum=3),
+        Param("alto", "bool", "Produire aussi l'ALTO", "Also produce ALTO",
+              default=False),
+        Param("psm_by_class", "str", "psm par classe de région (classe:psm,…)",
+              "psm per region class (class:psm,…)", default=""),
+        Param("dpi", "int", "Résolution imposée (défaut : celle du fichier)",
+              "Forced resolution (default: the file's)", minimum=70, maximum=2400),
+        timeout_param(DEFAULT_TIMEOUT),
+    )
 
     def __init__(
         self,

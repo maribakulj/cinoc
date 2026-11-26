@@ -36,6 +36,7 @@ from cinoc.adapters.layout._base import (
 )
 from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.errors import AdapterStepError
+from cinoc.pipeline.params import Param
 from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
@@ -144,6 +145,18 @@ def _detect_with_yolo(  # pragma: no cover -- SDK + poids requis (test 'live')
 
 class DocLayoutYoloSegmenter:
     """Segmenteur DocLayout-YOLO : ``IMAGE → LAYOUT`` (régions sans lignes)."""
+
+    #: Réglages acceptés (``pipeline.params``) : tout autre est refusé, nommé.
+    PARAMS: ClassVar[tuple[Param, ...]] = (
+        Param("weights", "str", "Poids (chemin ; défaut : DocStructBench)",
+              "Weights (path; default: DocStructBench)", default=""),
+        Param("imgsz", "int", "Taille d'entrée (px)", "Input size (px)",
+              default=DEFAULT_IMGSZ, minimum=1),
+        Param("min_score", "float", "Score minimal", "Minimum score",
+              default=DEFAULT_MIN_SCORE, minimum=0.0, maximum=1.0),
+        Param("device", "str", "Périphérique (cpu, cuda…)", "Device (cpu, cuda…)",
+              default="cpu"),
+    )
 
     #: Étiquettes que ce modèle **sait** poser, lues sur les poids publiés.
     #:

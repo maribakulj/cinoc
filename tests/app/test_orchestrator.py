@@ -437,13 +437,43 @@ def test_run_result_carries_sorted_usage(
     )
 
 
+def _tiers_sans_declaration(
+    secret_param: str | None = None,
+) -> ModuleRegistry:
+    """Un registre où ``precomputed`` est servi par un module **tiers** : sans
+    déclaration (``PARAMS = None``, réglages libres, comme avant), ou déclarant
+    ``secret_param`` secret — un nom que la liste ``SECRET_KWARGS`` ignore."""
+    from cinoc.adapters.ocr.precomputed import PrecomputedTextAdapter
+    from cinoc.pipeline.params import Param
+
+    params = (
+        None
+        if secret_param is None
+        else (
+            Param("source_label", "str", "s", "s", required=True),
+            Param(secret_param, "str", "x", "x", secret=True),
+        )
+    )
+
+    class Tiers(PrecomputedTextAdapter):
+        PARAMS = params  # type: ignore[assignment]
+
+    registry = ModuleRegistry()
+    registry.register_builder(
+        "precomputed", lambda kw: Tiers(source_label=str(kw["source_label"]))
+    )
+    return registry
+
+
 def test_a_secret_kwarg_never_leaves_the_run(tmp_path: Path) -> None:
     """Un jeton passé à un module ne sort ni dans le JSON ni dans le rapport.
 
     Défaut réel (D-260) : le jeton du segmenteur distant entrait dans
     ``adapter_kwargs``, que le manifeste recopiait et que la section
     « composition » affichait en clair. Le manifeste garde le fait qu'un
-    secret a été fourni, jamais sa valeur.
+    secret a été fourni, jamais sa valeur. Le module est ici un **tiers sans
+    déclaration** : ses réglages restent libres, et un ``token`` y est masqué
+    par son nom (``SECRET_KWARGS``) — le filet de qui ne déclare rien.
     """
     from cinoc.reports.renderer import default_report_renderer
 
@@ -465,8 +495,41 @@ def test_a_secret_kwarg_never_leaves_the_run(tmp_path: Path) -> None:
         evaluation=EvaluationSpec(views=(TEXT_VIEW,)),
         adapter_kwargs={"precomputed:eng": {"source_label": "eng", "token": secret}},
     )
-    result = run(spec, registry=_registry(), code_version="test")
+    result = run(spec, registry=_tiers_sans_declaration(), code_version="test")
 
     assert result.manifest.adapter_kwargs["precomputed:eng"]["token"] == "<secret>"
     assert secret not in result.model_dump_json()
     assert secret not in default_report_renderer().render(result)
+
+
+def test_a_declared_secret_never_leaves_the_run(tmp_path: Path) -> None:
+    """Un réglage que la brique **déclare** secret (``Param.secret``) est masqué
+    même quand son nom n'est pas de ceux que ``SECRET_KWARGS`` reconnaît : la
+    déclaration, pas une liste de noms, dit ce qui est secret."""
+    (tmp_path / "doc1.eng.txt").write_text("abxd", encoding="utf-8")
+    (tmp_path / "doc1.gt.txt").write_text("abcd", encoding="utf-8")
+    document = DocumentRef(
+        id="doc1",
+        image_uri=str(tmp_path / "doc1.png"),
+        ground_truths=(
+            GroundTruthRef(
+                type=ArtifactType.RAW_TEXT, uri=str(tmp_path / "doc1.gt.txt")
+            ),
+        ),
+    )
+    secret = "phrase-de-passe-NEPASFUIR"
+    spec = RunSpec(
+        corpus=CorpusSpec(name="c", documents=(document,)),
+        pipelines=(_pipeline("eng", "eng"),),
+        evaluation=EvaluationSpec(views=(TEXT_VIEW,)),
+        adapter_kwargs={
+            "precomputed:eng": {"source_label": "eng", "passphrase": secret}
+        },
+    )
+    result = run(
+        spec, registry=_tiers_sans_declaration("passphrase"), code_version="test"
+    )
+
+    kwargs = result.manifest.adapter_kwargs["precomputed:eng"]
+    assert kwargs["passphrase"] == "<secret>"
+    assert secret not in result.model_dump_json()

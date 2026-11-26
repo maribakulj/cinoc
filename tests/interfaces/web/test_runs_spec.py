@@ -216,7 +216,39 @@ def test_the_recipe_list_is_bilingual(tmp_path: Path) -> None:
     assert titres_fr != titres_en
 
 
-def test_a_recipe_launches_on_a_stored_corpus(tmp_path: Path) -> None:
+def test_a_recipe_launches_on_a_stored_corpus(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """La brique par défaut (``tesseract``) se construit sans réglage ; sa
+    disponibilité est sondée, rendue indépendante de la machine qui teste."""
+    from cinoc.app import engines
+
+    monkeypatch.setattr(
+        "cinoc.interfaces.web.app.engine_statuses",
+        lambda: engines.engine_statuses(
+            has_binary=lambda _: "/bin/x", has_module=lambda _: True
+        ),
+    )
+    client = _client(tmp_path)
+    corpus_id = _corpus(client)
+    reponse = client.post(
+        "/api/runs/recipe",
+        headers=_CSRF,
+        json={
+            "corpus_id": corpus_id,
+            "recipe": "ocr_simple",
+        },
+    )
+    assert reponse.status_code == 201, reponse.json()
+    assert reponse.json()["job_id"]
+
+
+def test_a_recipe_whose_brick_cannot_be_built_is_refused_before_launch(
+    tmp_path: Path,
+) -> None:
+    """``precomputed`` exige ``source_label``, que la route ne fournit pas : la
+    recette était lancée, et le job échouait à la construction. Refusée
+    désormais, en nommant le réglage manquant (D14)."""
     client = _client(tmp_path)
     corpus_id = _corpus(client)
     reponse = client.post(
@@ -228,8 +260,8 @@ def test_a_recipe_launches_on_a_stored_corpus(tmp_path: Path) -> None:
             "choices": {"ocr": "precomputed"},
         },
     )
-    assert reponse.status_code == 201, reponse.json()
-    assert reponse.json()["job_id"]
+    assert reponse.status_code == 422
+    assert "source_label" in reponse.json()["detail"]
 
 
 def test_an_unknown_recipe_lists_the_known_ones(tmp_path: Path) -> None:

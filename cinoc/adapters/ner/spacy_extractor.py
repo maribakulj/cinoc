@@ -20,11 +20,13 @@ from __future__ import annotations
 import json
 import logging
 from importlib.metadata import PackageNotFoundError, version
-from typing import Any
+from typing import Any, ClassVar
 
+from cinoc.adapters._params import label_param, model_param
 from cinoc.adapters._workspace import workspace_artifact_path
 from cinoc.domain.artifacts import Artifact, ArtifactType, compute_content_hash
 from cinoc.domain.errors import AdapterStepError
+from cinoc.pipeline.params import Param
 from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
@@ -51,6 +53,12 @@ _INPUT_TYPES = frozenset({ArtifactType.RAW_TEXT, ArtifactType.CORRECTED_TEXT})
 
 class SpacyNerExtractor:
     """NER spaCy : ``RAW_TEXT|CORRECTED_TEXT`` → ``ENTITIES`` (fail-closed)."""
+
+    #: Réglages acceptés (``pipeline.params``) : tout autre est refusé, nommé.
+    PARAMS: ClassVar[tuple[Param, ...]] = (
+        label_param(),
+        model_param("Modèle spaCy", "spaCy model", default="fr_core_news_sm"),
+    )
 
     def __init__(
         self,

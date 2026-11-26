@@ -22,10 +22,11 @@ from __future__ import annotations
 import io
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import numpy as np
 
+from cinoc.adapters._params import label_param
 from cinoc.adapters._workspace import workspace_artifact_path
 from cinoc.adapters.preprocess._ops import (
     binarize,
@@ -35,6 +36,7 @@ from cinoc.adapters.preprocess._ops import (
 )
 from cinoc.domain.artifacts import Artifact, ArtifactType, compute_content_hash
 from cinoc.domain.errors import AdapterStepError
+from cinoc.pipeline.params import Param
 from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
@@ -56,6 +58,15 @@ class ImagePreprocessor:
     L'ordre déclaré est respecté tel quel : c'est un choix de l'utilisateur, et
     deux ordres différents sont deux pipelines différents à comparer.
     """
+
+    #: Réglages acceptés (``pipeline.params``) : tout autre est refusé, nommé.
+    PARAMS: ClassVar[tuple[Param, ...]] = (
+        label_param(),
+        Param("operations", "str", "Opérations, dans l'ordre (deskew,binarize…)",
+              "Operations, in order (deskew,binarize…)", default="deskew,binarize"),
+        Param("skew_amplitude_deg", "float", "Inclinaison maximale cherchée (°)",
+              "Maximum skew searched (°)", default=5.0, minimum=0.0),
+    )
 
     def __init__(
         self,

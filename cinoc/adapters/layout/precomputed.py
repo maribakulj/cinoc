@@ -16,11 +16,13 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import ClassVar
 
 from cinoc.domain.artifacts import Artifact, ArtifactType, compute_content_hash
 from cinoc.domain.documents import DocumentRef
 from cinoc.domain.errors import AdapterStepError
 from cinoc.domain.layout import CanonicalLayout
+from cinoc.pipeline.params import Param
 from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
@@ -41,6 +43,9 @@ def _layout_path(image_path: Path) -> Path:
 
 class PrecomputedLayoutSource:
     """Rejoue une mise en page pré-calculée (``<stem>.layout.json``)."""
+
+    #: Réglages acceptés (``pipeline.params``) : tout autre est refusé, nommé.
+    PARAMS: ClassVar[tuple[Param, ...]] = ()
 
     @property
     def name(self) -> str:
@@ -102,6 +107,12 @@ class PrecomputedLayoutSource:
 
 class PrecomputedRegionRecognizer:
     """Rejoue le texte d'une région (``<stem>.<label>.regions.json``)."""
+
+    #: Réglages acceptés (``pipeline.params``) : tout autre est refusé, nommé.
+    PARAMS: ClassVar[tuple[Param, ...]] = (
+        Param("source_label", "str", "Source pré-calculée", "Precomputed source",
+              required=True),
+    )
 
     def __init__(self, *, source_label: str) -> None:
         if not source_label or not all(

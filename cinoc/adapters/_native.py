@@ -118,7 +118,8 @@ def validate_endpoint(value: object, owner: str) -> str:
     l'empreinte de l'étape ne doivent en recevoir (les messages ne citent pas
     l'URL refusée, pour la même raison). Une URL acceptée est donc
     égale à sa forme publique (``public_endpoint``) : celle qu'on appelle est
-    celle qu'on écrit. La clé, elle, se nomme à part (``api_key_env``).
+    celle qu'on écrit, au ``/`` final près (retiré). La clé, elle, se nomme à
+    part (``api_key_env``).
     """
     if not isinstance(value, str):
         raise AdapterStepError(
@@ -148,7 +149,11 @@ def validate_endpoint(value: object, owner: str) -> str:
         )
     if parts.fragment:
         raise AdapterStepError(f"{owner} : base_url refusé, il porte un fragment.")
-    return url
+    # Forme **normalisée** : sans ``/`` final. ``…/v1`` et ``…/v1/`` désignent le
+    # même serveur (le SDK joint le chemin de la route lui-même) ; sans cela, un
+    # ``/`` changeait l'empreinte de l'étape — donc réexécutait des unités déjà
+    # payées — et l'endpoint d'OpenAI saisi ``…/v1/`` perdait son tarif.
+    return url.rstrip("/")
 
 
 __all__ = [

@@ -318,9 +318,9 @@ verticale, verte de bout en bout, fusionnée avant la suivante.
 
 | # | Tranche | Pourquoi là |
 |---|---|---|
-| **1** | La troisième clause du garde-fou de parité | Elle tient tout le reste : sans elle, les sept autres sont des intentions. Rend rouges les trois routes de recette, qui s'inscrivent en dettes datées. |
-| **2** | Les deux rôles manquants (`zero_shot`, `text_and_image`) | Préalable à toute convergence : sans eux, une recette ne peut pas décrire ce que le formulaire décrit déjà. |
-| **3** | La déclaration des paramètres au contrat de module | Préalable à la couche 2, et d'enveloppe : on ne l'incrémente pas au besoin. |
+| **1** ✅ | La troisième clause du garde-fou de parité | Elle tient tout le reste : sans elle, les sept autres sont des intentions. Rend rouges les trois routes de recette, qui s'inscrivent en dettes datées. — *livrée (table `FRONT` de `test_web_cli_parity`, dette `recettes-web`)* |
+| **2** ✅ | Les deux rôles manquants (`zero_shot`, `text_and_image`) | Préalable à toute convergence : sans eux, une recette ne peut pas décrire ce que le formulaire décrit déjà. — *livrée en S23 (D-295) : `Role.mode`, recettes `vlm_seul` et `ocr_puis_vlm`* |
+| **3** ✅ | La déclaration des paramètres au contrat de module | Préalable à la couche 2, et d'enveloppe : on ne l'incrémente pas au besoin. — *livrée en S23 (D-295) : `PARAMS` (`pipeline.params.Param`) sur les 31 briques du socle, appliquée par le registre (CLI et web), décrite par `cinoc list engines <brique>`* |
 | **4** | Couche 1 — catalogue de recettes branché à la file | La valeur visible la plus vite : cinq formes deviennent atteignables sans une ligne de nouveau pipeline. |
 | **5** | Couche 2 — le pli réglages, généré depuis 3 | `--dpi 300` cesse d'être réservé au terminal. |
 | **6** | La bascule : les quatre onglets deviennent des recettes ; l'ancien constructeur meurt | Interdit de traîner deux chemins. Daté ici. |

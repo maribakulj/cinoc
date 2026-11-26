@@ -94,6 +94,48 @@ my_ocr = "mon_paquet.seg:build_my_ocr"
 registre runtime **comme le socle**. Le `kind` (`my_ocr`) devient référençable
 dans une spec (`adapter_name = "my_ocr:c0"`).
 
+## Déclarer ses réglages (`PARAMS`) — facultatif, recommandé
+
+Ce qu'une spec pose en `adapter_kwargs.<brique>` arrive au builder. Sans
+déclaration, rien ne dit quels réglages la brique lit : une faute de frappe
+(`modle`, `min_scroe`) entre dans la spec, n'est lue par personne, et le run
+tourne sans elle. Une brique **déclare** donc ses réglages, en `ClassVar` sur sa
+classe — la même forme que les briques du socle :
+
+```python
+from typing import ClassVar
+from cinoc.adapters.extension import Param
+
+
+class MyOCR:
+    PARAMS: ClassVar[tuple[Param, ...]] = (
+        Param("label", "str", "Libellé", "Label", required=True),
+        Param("model", "str", "Modèle", "Model", required=True),
+        Param("min_score", "float", "Score minimal", "Minimum score",
+              default=0.5, minimum=0.0, maximum=1.0),
+        Param("token", "str", "Jeton", "Token", secret=True),
+        Param("timeout", "float", "Délai (s)", "Time limit (s)",
+              default=60.0, affects_output=False),
+    )
+```
+
+| Champ | Effet |
+|---|---|
+| `name`, `type` (`str`/`int`/`float`/`bool`) | un réglage hors de la liste, ou d'un autre type, est **refusé en le nommant** — à `cinoc run --check`, au run, au dépôt d'une spec web —, avec le nom déclaré le plus proche (« vouliez-vous `min_score` ? ») |
+| `label_fr`, `label_en` | libellés de `cinoc list engines my_ocr` (et, demain, du formulaire de réglages) |
+| `default`, `required`, `choices`, `minimum`/`maximum` | défaut affiché ; requis absent, valeur hors choix ou hors bornes refusés |
+| `secret=True` | jamais écrit : au manifeste, au rapport et dans l'empreinte, seul le **fait** qu'il a été fourni (`<secret>`) ; caviardé des messages d'échec |
+| `affects_output=False` | réglage d'**exploitation** : écrit au manifeste, mais **hors de l'empreinte** de l'étape — le changer ne fait réexécuter aucune unité archivée (un délai, un nom de variable de clé) |
+
+La déclaration est **lue sur la classe** du module construit : elle s'applique
+à un module tiers sans rien changer au builder. Elle est **facultative** — c'est
+une API publique, un module écrit avant elle doit continuer de tourner : sans
+`PARAMS` (ou `PARAMS = None`), les réglages restent libres et rien n'est vérifié,
+exactement comme avant ; un `token`, un `api_key`, un `password` y sont tout de
+même masqués par leur nom. `PARAMS = ()` affirme « aucun réglage » : tout
+réglage posé est alors refusé. Une déclaration mal formée (un nom répété, un
+défaut d'un autre type) est refusée, pas ignorée.
+
 ## Trois contreparties (à tenir)
 
 1. **API publique** = engagement de stabilité → on limite les points d'extension à
@@ -208,9 +250,12 @@ adapter_kwargs:
   ocrd:segment:
     label: segment
     processor: ocrd-tesserocr-segment
-    parameters: {find_tables: true}
     bin_dir: ~/outils/ocrd-env/bin   # facultatif : sinon le PATH
 ```
+
+(Les réglages d'une spec sont **plats** — chaîne, nombre, booléen : les
+paramètres propres d'un processeur, un objet, ne s'y écrivent pas encore. Le
+constructeur les accepte en Python ; la spec, non.)
 
 Le gain est le même qu'avec `cli_layout` — *une brique, une famille* : la
 centaine de processeurs OCR-D (binarisation, redressement, segmentation,

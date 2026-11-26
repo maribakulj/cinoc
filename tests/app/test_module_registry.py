@@ -129,7 +129,7 @@ def test_remote_segmenter_requires_endpoint() -> None:
 
 
 def test_builds_azure_di_module() -> None:
-    module = _registry().build("azure_di:c0", {"label": "c0", "lang": "fra"})
+    module = _registry().build("azure_di:c0", {"label": "c0"})
     assert module.name == "azure_di:c0"
     assert module.input_types == frozenset({ArtifactType.IMAGE})
     assert module.output_types == frozenset(
@@ -138,9 +138,7 @@ def test_builds_azure_di_module() -> None:
 
 
 def test_builds_google_vision_module() -> None:
-    # Le planificateur passe un `lang` à tout moteur OCR : le builder le tolère
-    # (Vision détecte la langue, pas de hint) et résout le bon module.
-    module = _registry().build("google_vision:c0", {"label": "c0", "lang": "fra"})
+    module = _registry().build("google_vision:c0", {"label": "c0"})
     assert module.name == "google_vision:c0"
     assert module.input_types == frozenset({ArtifactType.IMAGE})
     assert module.output_types == frozenset(
@@ -182,3 +180,11 @@ def test_name_mismatch_raises() -> None:
     # nom déclaré "tesseract" mais kwargs construisent "pero" -> incohérence
     with pytest.raises(ModuleResolutionError):
         _registry().build("precomputed:tesseract", {"source_label": "pero"})
+
+
+@pytest.mark.parametrize("kind", ["google_vision", "azure_di"])
+def test_a_language_is_refused_by_an_engine_that_detects_it(kind: str) -> None:
+    """Vision et Azure détectent la langue : un ``lang`` posé était accepté et
+    ignoré en silence (le builder le « tolérait »). Refusé, nommé (D14)."""
+    with pytest.raises(ModuleResolutionError, match="réglage inconnu 'lang'"):
+        _registry().build(f"{kind}:c0", {"label": "c0", "lang": "fra"})

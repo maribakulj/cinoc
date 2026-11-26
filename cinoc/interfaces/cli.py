@@ -195,7 +195,7 @@ def _report_alto(out_dir: Path, outputs: PipelineOutputs) -> None:
     print(f"{len(ecrits)} ALTO écrit(s) dans {out_dir}")
 
 
-def _print_plan(spec: RunSpec) -> int:
+def _print_plan(spec: RunSpec, registry: ModuleRegistry) -> int:
     """Décrit ce qu'un run **ferait**, sans rien exécuter.
 
     Une spec de benchmark engage des appels facturés et des heures de calcul ;
@@ -203,15 +203,19 @@ def _print_plan(spec: RunSpec) -> int:
 
     La cohérence est contrôlée **ici aussi**, et pas seulement au run : une spec
     dont le montage ne ferait pas ce qu'il annonce doit être refusée avant le
-    premier appel facturé, pas après.
+    premier appel facturé, pas après. De même pour les réglages : chaque brique
+    est construite (sans rien exécuter), donc un réglage qu'elle ne déclare pas
+    est refusé ici, nommé — pas accepté puis ignoré au run (D14).
     """
     from cinoc.app.models import check_spec_models  # noqa: PLC0415
+    from cinoc.app.modules.registry import check_spec_settings  # noqa: PLC0415
     from cinoc.app.spec_coherence import check  # noqa: PLC0415
 
     check(spec)
     # Chaque modèle nommé est demandé **en direct** au fournisseur (D13) : un
     # modèle absent est refusé ; une liste illisible est dite, pas tranchée.
     notes = check_spec_models(spec, live=True)
+    check_spec_settings(spec, registry)
     print(f"Corpus     : {spec.corpus.name} — {len(spec.corpus.documents)} document(s)")
     print(f"Pipelines  : {len(spec.pipelines)}")
     for pipeline in spec.pipelines:
@@ -265,14 +269,16 @@ def _run_config(
         # Valider **sans exécuter** : le chargement a déjà refusé une spec
         # invalide (Pydantic + chemins sécurisés) ; reste à montrer ce qui
         # serait lancé, pour qu'on le lise avant de payer des appels d'API.
-        return _print_plan(spec)
+        return _print_plan(spec, registry)
     # Même contrôle hors ``--check`` : un run lancé sans relecture ne doit pas
     # échapper à ce qu'une relecture aurait refusé.
     from cinoc.app.models import check_spec_models  # noqa: PLC0415
+    from cinoc.app.modules.registry import check_spec_settings  # noqa: PLC0415
     from cinoc.app.spec_coherence import check as _coherent  # noqa: PLC0415
 
     _coherent(spec)
     check_spec_models(spec, live=False)  # aucun modèle par défaut
+    check_spec_settings(spec, registry)  # aucun réglage ignoré en silence
     resume_store = ResumeStore(Path(resume_dir)) if resume_dir else None
     # Export HIPE = sink d'artefacts (les textes sont lus avant le nettoyage du
     # workspace) — le format JSONL porte les textes, pas les scores.

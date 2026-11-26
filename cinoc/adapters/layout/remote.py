@@ -23,7 +23,9 @@ Le détecteur est **injectable** (``detector=``) : la conversion détections →
 from __future__ import annotations
 
 from pathlib import Path
+from typing import ClassVar
 
+from cinoc.adapters._params import timeout_param
 from cinoc.adapters.corpus._http import HttpFetchError, SsrfError, post_json
 from cinoc.adapters.layout._base import (
     DetectedRegion,
@@ -34,6 +36,7 @@ from cinoc.adapters.layout._base import (
 )
 from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.errors import AdapterStepError
+from cinoc.pipeline.params import Param
 from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
@@ -106,6 +109,16 @@ def _image_dims(image_path: str) -> tuple[int, int]:
 
 class RemoteSegmenter:
     """Segmenteur ``IMAGE → LAYOUT`` délégué à un endpoint object-detection."""
+
+    #: Réglages acceptés (``pipeline.params``) : tout autre est refusé, nommé.
+    PARAMS: ClassVar[tuple[Param, ...]] = (
+        Param("endpoint", "str", "Adresse du segmenteur", "Segmenter address",
+              required=True),
+        Param("token", "str", "Jeton d'accès", "Access token", secret=True),
+        Param("min_score", "float", "Score minimal", "Minimum score",
+              default=0.5, minimum=0.0, maximum=1.0),
+        timeout_param(60.0),
+    )
 
     def __init__(
         self,

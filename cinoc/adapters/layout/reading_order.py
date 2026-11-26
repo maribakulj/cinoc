@@ -17,10 +17,14 @@ le texte, et le banc peut départager deux stratégies sur le même corpus.
 
 from __future__ import annotations
 
+from typing import ClassVar
+
+from cinoc.adapters._params import label_param
 from cinoc.adapters._workspace import workspace_artifact_path
 from cinoc.domain.artifacts import Artifact, ArtifactType, compute_content_hash
 from cinoc.domain.errors import AdapterStepError
 from cinoc.domain.layout import CanonicalLayout, LayoutPage, Region
+from cinoc.pipeline.params import Param
 from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
@@ -167,6 +171,13 @@ def _tri_topologique(avant: list[list[int]]) -> list[int]:
 
 class ReadingOrderModule:
     """Calcule l'ordre de lecture d'une mise en page, sans la modifier autrement."""
+
+    #: Réglages acceptés (``pipeline.params``) : tout autre est refusé, nommé.
+    PARAMS: ClassVar[tuple[Param, ...]] = (
+        label_param(),
+        Param("strategy", "str", "Stratégie", "Strategy", default="columns",
+              choices=STRATEGIES),
+    )
 
     def __init__(self, *, label: str, strategy: str = "columns") -> None:
         if strategy not in STRATEGIES:
