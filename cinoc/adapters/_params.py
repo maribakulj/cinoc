@@ -25,6 +25,29 @@ def label_param() -> Param:
     )
 
 
+def instance_label_param() -> Param:
+    """Le libellé d'instance **facultatif** d'une brique qui se nomme par son
+    kind : sans lui ``<kind>``, avec lui ``<kind>:<label>`` (:func:`instance_name`).
+
+    Facultatif pour que les specs qui l'écrivaient nu gardent leur nom — donc
+    leur empreinte. Il existe parce qu'une recette nomme **chaque** étape : deux
+    étapes ``tesseract_layout`` (segmenter, puis lire chaque bloc) sont deux
+    instances, et un nom ``tesseract_layout:seg`` que le module ne portait pas
+    faisait refuser la recette à la construction.
+    """
+    return Param(
+        "label",
+        "str",
+        "Libellé d'instance (facultatif : nom <brique>:<libellé>)",
+        "Instance label (optional: name <brick>:<label>)",
+    )
+
+
+def instance_name(kind: str, label: str | None) -> str:
+    """``<kind>`` sans libellé, ``<kind>:<label>`` avec — la convention du registre."""
+    return f"{kind}:{label}" if label else kind
+
+
 def timeout_param(default: float) -> Param:
     """Le délai d'une étape, retries compris — réglage d'**exploitation**.
 
@@ -51,4 +74,11 @@ def model_param(label_fr: str, label_en: str, *, default: str | None = None) -> 
     )
 
 
-__all__ = ["TIMEOUT_MAX", "label_param", "model_param", "timeout_param"]
+__all__ = [
+    "TIMEOUT_MAX",
+    "instance_label_param",
+    "instance_name",
+    "label_param",
+    "model_param",
+    "timeout_param",
+]

@@ -27,6 +27,7 @@ from __future__ import annotations
 
 from typing import ClassVar
 
+from cinoc.adapters._params import instance_label_param, instance_name
 from cinoc.adapters.layout._base import (
     DetectedRegion,
     DetectorFn,
@@ -156,6 +157,7 @@ class DocLayoutYoloSegmenter:
               default=DEFAULT_MIN_SCORE, minimum=0.0, maximum=1.0),
         Param("device", "str", "Périphérique (cpu, cuda…)", "Device (cpu, cuda…)",
               default="cpu"),
+        instance_label_param(),
     )
 
     #: Étiquettes que ce modèle **sait** poser, lues sur les poids publiés.
@@ -184,6 +186,7 @@ class DocLayoutYoloSegmenter:
         imgsz: int = DEFAULT_IMGSZ,
         min_score: float = DEFAULT_MIN_SCORE,
         device: str = "cpu",
+        label: str | None = None,
         detector: DetectorFn | None = None,
     ) -> None:
         if not 0.0 <= min_score <= 1.0:
@@ -198,11 +201,12 @@ class DocLayoutYoloSegmenter:
         self._imgsz = imgsz
         self._min_score = min_score
         self._device = device
+        self._label = label
         self._detector = detector
 
     @property
     def name(self) -> str:
-        return "doclayout_yolo"
+        return instance_name("doclayout_yolo", self._label)
 
     @property
     def version(self) -> str:

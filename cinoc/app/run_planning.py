@@ -28,7 +28,9 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict, Field
 
 from cinoc.app.engines import EngineStatus, providers_for_mode
-from cinoc.app.models import ModelChoiceError, check_spec_models
+from cinoc.app.models import check_spec_models
+from cinoc.app.modules import ModuleRegistry, register_default_modules
+from cinoc.app.modules.registry import check_spec_settings
 from cinoc.app.text_views import text_views
 from cinoc.domain.artifacts import ArtifactType
 from cinoc.domain.corpus import CorpusSpec
@@ -315,10 +317,12 @@ def _ocr_kwargs(
     kind: str, suffix: str, comp: Competitor, model: str | None
 ) -> dict[str, str | int | float | bool]:
     """Réglages d'un OCR : ceux du formulaire **que la brique déclare** (D14) —
-    Google et Azure n'ont pas de ``lang``, Tesseract pas de ``model``."""
+    Google et Azure n'ont pas de ``lang``, Tesseract pas de ``model``. Le rejeu
+    (``precomputed_region``) se nomme par ``source_label``, pas ``label``."""
     from cinoc.app.modules.registry import socle_params  # noqa: PLC0415
 
-    saisis = {"label": suffix, "lang": comp.lang, "alto": comp.alto or None}
+    saisis = {"label": suffix, "source_label": suffix, "lang": comp.lang,
+              "alto": comp.alto or None}
     declares = {p.name for p in socle_params(kind) or ()}
     return {
         k: v for k, v in {**saisis, "model": model}.items() if v and k in declares
@@ -699,10 +703,14 @@ def plan_benchmark_run(
             "archaic_list_hash": resolved.list_hash,
         },
     )
-    # Aucun modèle par défaut : refusé ici (422), en listant les disponibles.
+    # Aucun modèle par défaut (listés), puis chaque brique se construit avec
+    # ses réglages : refusé ici, nommé (422), pas dans le job (D14).
+    registre = ModuleRegistry()
+    register_default_modules(registre)
     try:
         check_spec_models(spec, live=False)
-    except ModelChoiceError as exc:
+        check_spec_settings(spec, registre)
+    except CinocError as exc:
         raise RunPlanningError(str(exc)) from exc
     return lambda _ws: spec
 

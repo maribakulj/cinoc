@@ -25,7 +25,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import ClassVar
 
-from cinoc.adapters._params import timeout_param
+from cinoc.adapters._params import instance_label_param, instance_name, timeout_param
 from cinoc.adapters.corpus._http import HttpFetchError, SsrfError, post_json
 from cinoc.adapters.layout._base import (
     DetectedRegion,
@@ -118,6 +118,7 @@ class RemoteSegmenter:
         Param("min_score", "float", "Score minimal", "Minimum score",
               default=0.5, minimum=0.0, maximum=1.0),
         timeout_param(60.0),
+        instance_label_param(),
     )
 
     def __init__(
@@ -127,6 +128,7 @@ class RemoteSegmenter:
         token: str | None = None,
         min_score: float = _DEFAULT_MIN_SCORE,
         timeout: float = _DEFAULT_TIMEOUT,
+        label: str | None = None,
         detector: DetectorFn | None = None,
     ) -> None:
         if not endpoint:
@@ -139,11 +141,12 @@ class RemoteSegmenter:
         self._token = token
         self._min_score = min_score
         self._timeout = timeout
+        self._label = label
         self._detector = detector
 
     @property
     def name(self) -> str:
-        return "remote_segmenter"
+        return instance_name("remote_segmenter", self._label)
 
     @property
     def version(self) -> str:

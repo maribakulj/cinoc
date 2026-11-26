@@ -36,7 +36,7 @@ import json
 from pathlib import Path
 from typing import Any, ClassVar
 
-from cinoc.adapters._native import native_artifact, served_model
+from cinoc.adapters._native import native_artifact, served_model, validate_endpoint
 from cinoc.adapters._params import label_param
 from cinoc.adapters._workspace import workspace_artifact_path
 from cinoc.adapters.layout.to_text import _page_text
@@ -144,7 +144,7 @@ class SaknussemmCorrector:
         self._label = label
         self._producer = producer
         self._model = model
-        self._host = host
+        self._host = validate_endpoint(host, "SaknussemmCorrector", "host")
         self._xml_scale = xml_scale
         self._qe = qe
         self._qe_skip = qe_skip

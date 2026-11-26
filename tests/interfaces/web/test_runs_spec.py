@@ -204,7 +204,7 @@ def test_the_recipes_are_listed_with_what_to_choose(tmp_path: Path) -> None:
     une = next(r for r in recettes if r["name"] == "ocr_simple")
     assert une["shape"] == ["ocr"]
     assert une["title"] and une["description"]
-    assert any(c["step"] == "ocr" for c in une["choices"])
+    assert any(e["step"] == "ocr" and e["bricks"] for e in une["steps"])
 
 
 def test_the_recipe_list_is_bilingual(tmp_path: Path) -> None:
@@ -234,10 +234,7 @@ def test_a_recipe_launches_on_a_stored_corpus(
     reponse = client.post(
         "/api/runs/recipe",
         headers=_CSRF,
-        json={
-            "corpus_id": corpus_id,
-            "recipe": "ocr_simple",
-        },
+        json={"corpus_id": corpus_id, "entries": [{"recipe": "ocr_simple"}]},
     )
     assert reponse.status_code == 201, reponse.json()
     assert reponse.json()["job_id"]
@@ -246,9 +243,9 @@ def test_a_recipe_launches_on_a_stored_corpus(
 def test_a_recipe_whose_brick_cannot_be_built_is_refused_before_launch(
     tmp_path: Path,
 ) -> None:
-    """``precomputed`` exige ``source_label``, que la route ne fournit pas : la
-    recette était lancée, et le job échouait à la construction. Refusée
-    désormais, en nommant le réglage manquant (D14)."""
+    """Un réglage que la brique ne déclare pas (``psm`` posé sur ``precomputed``) :
+    la recette était lancée et le job échouait à la construction. Refusée
+    désormais, en nommant le réglage (D14)."""
     client = _client(tmp_path)
     corpus_id = _corpus(client)
     reponse = client.post(
@@ -256,12 +253,17 @@ def test_a_recipe_whose_brick_cannot_be_built_is_refused_before_launch(
         headers=_CSRF,
         json={
             "corpus_id": corpus_id,
-            "recipe": "ocr_simple",
-            "choices": {"ocr": "precomputed"},
+            "entries": [
+                {
+                    "recipe": "ocr_simple",
+                    "choices": {"ocr": "precomputed"},
+                    "params": {"ocr": {"psm": 6}},
+                }
+            ],
         },
     )
     assert reponse.status_code == 422
-    assert "source_label" in reponse.json()["detail"]
+    assert "psm" in reponse.json()["detail"]
 
 
 def test_an_unknown_recipe_lists_the_known_ones(tmp_path: Path) -> None:
@@ -270,7 +272,7 @@ def test_an_unknown_recipe_lists_the_known_ones(tmp_path: Path) -> None:
     reponse = client.post(
         "/api/runs/recipe",
         headers=_CSRF,
-        json={"corpus_id": corpus_id, "recipe": "inexistante"},
+        json={"corpus_id": corpus_id, "entries": [{"recipe": "inexistante"}]},
     )
     assert reponse.status_code == 422
     assert "connues" in reponse.json()["detail"]
@@ -285,8 +287,7 @@ def test_a_brick_outside_the_role_is_refused(tmp_path: Path) -> None:
         headers=_CSRF,
         json={
             "corpus_id": corpus_id,
-            "recipe": "ocr_simple",
-            "choices": {"ocr": "openai"},
+            "entries": [{"recipe": "ocr_simple", "choices": {"ocr": "openai"}}],
         },
     )
     assert reponse.status_code == 422

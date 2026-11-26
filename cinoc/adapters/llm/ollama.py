@@ -39,7 +39,7 @@ from __future__ import annotations
 import logging
 from typing import Any, ClassVar, NoReturn
 
-from cinoc.adapters._native import public_endpoint, served_model
+from cinoc.adapters._native import public_endpoint, served_model, validate_endpoint
 from cinoc.adapters._resilience import (
     DEFAULT_LLM_TIMEOUT,
     call_resilient,
@@ -269,6 +269,7 @@ def list_models(
     """
     import httpx
 
+    host = host.rstrip("/")  # ``…:11434/`` → ``//api/tags`` sinon
     try:
         with httpx.Client(timeout=timeout) as client:
             response = client.get(f"{host}/api/tags")
@@ -355,7 +356,9 @@ class OllamaAdapter:
             )
         self._num_ctx = num_ctx
         self._model = require_model(model, "OllamaAdapter")
-        self._host = host
+        # Normalisé comme ``base_url`` (sans ``/`` final : ``…:11434/`` postait
+        # sur ``//api/chat`` et changeait l'empreinte ; ni identifiants ni query).
+        self._host = validate_endpoint(host, "OllamaAdapter", "host")
         self._role: PipelineMode = validate_role(
             role, "OllamaAdapter", self.SUPPORTED_MODES
         )

@@ -50,11 +50,9 @@ from cinoc.interfaces._cli_parser import SUBCOMMANDS
 #: datée, plutôt que tolérée en silence — comme l'a été pendant des mois
 #: l'absence de surface web de la post-correction.
 DETTES: dict[str, str] = {
-    # Les trois routes du composeur ouvert (D-240) n'ont jamais été appelées par
-    # la page. C'est le défaut qui a fait écrire la troisième clause.
-    "recettes-web": (
-        "P5c item 4 — le catalogue de recettes branché à la file du composeur."
-    ),
+    # Des trois routes du composeur ouvert (D-240), jamais appelées par la page
+    # — le défaut qui a fait écrire la troisième clause —, les deux routes de
+    # recettes sont fermées par D-296 (S24). Reste la spec complète.
     "spec-web": (
         "P5c item 8 — une zone de dépôt pour une spec complète, ou "
         "`front-absent` assumé et motivé."
@@ -360,6 +358,10 @@ FRONT: dict[str, str] = {
     "POST /api/runs": "page:static/js/benchmark.js",
     "POST /api/runs/config": "page:static/js/benchmark.js",
     "POST /api/runs/correction": "page:static/js/benchmark.js",
+    # Le catalogue de recettes (D-296) : `recipes.js` le lit et pose l'entrée
+    # choisie dans la file ; `benchmark.js` lance la file par la route.
+    "GET /api/recipes": "page:static/js/recipes.js",
+    "POST /api/runs/recipe": "page:static/js/benchmark.js",
     "GET /api/runs/{job_id}": "page:static/js/benchmark.js",
     "GET /api/runs/{job_id}/events": "page:static/js/benchmark.js",
     "GET /api/segmentation/preview": "page:static/js/benchmark.js",
@@ -375,8 +377,6 @@ FRONT: dict[str, str] = {
     "GET /reports/{name}/alto.zip": "page:routers/home.py",
     "GET /reports/{name}/bundle.zip": "page:routers/home.py",
     # --- Dettes : servies, joignables par personne. --------------------------
-    "GET /api/recipes": "dette:recettes-web",
-    "POST /api/runs/recipe": "dette:recettes-web",
     "POST /api/runs/spec": "dette:spec-web",
     "POST /api/runs/{job_id}/cancel": "dette:annulation-web",
 }

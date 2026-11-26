@@ -23,6 +23,7 @@ from __future__ import annotations
 
 from typing import ClassVar
 
+from cinoc.adapters._params import instance_label_param, instance_name
 from cinoc.adapters.layout._base import (
     DetectedRegion,
     DetectorFn,
@@ -94,6 +95,7 @@ class PPDocLayoutSegmenter:
         Param("model", "str",
               "Variante (défaut : CINOC_PPDOCLAYOUT_MODEL, sinon PP-DocLayout-L)",
               "Variant (default: CINOC_PPDOCLAYOUT_MODEL, else PP-DocLayout-L)"),
+        instance_label_param(),
     )
 
     def __init__(
@@ -101,6 +103,7 @@ class PPDocLayoutSegmenter:
         *,
         model: str = _DEFAULT_MODEL,
         min_score: float = _DEFAULT_MIN_SCORE,
+        label: str | None = None,
         detector: DetectorFn | None = None,
     ) -> None:
         if not 0.0 <= min_score <= 1.0:
@@ -109,11 +112,12 @@ class PPDocLayoutSegmenter:
             )
         self._model = model
         self._min_score = min_score
+        self._label = label
         self._detector = detector
 
     @property
     def name(self) -> str:
-        return "pp_doclayout"
+        return instance_name("pp_doclayout", self._label)
 
     @property
     def version(self) -> str:

@@ -303,6 +303,7 @@
     }
 
     function summarize(entry) {
+      if (entry.request) return { label: entry.label, meta: entry.meta };
       if (entry.mode === "ocr_only") {
         return {
           label: queueLabels.ocr,
@@ -452,6 +453,7 @@
     function payloadCompetitors() {
       var out = [];
       for (var i = 0; i < queue.length; i++) {
+        if (queue[i].request) continue; // une recette n'est pas un Competitor
         var entry = {};
         entry.engine = queue[i].engine;
         // ``ocr_only`` et ``hybrid`` n'ont pas de ``mode`` côté serveur (l'hybride
@@ -498,6 +500,8 @@
     }
 
     function exportConfig() {
+      var fb = document.getElementById("config-feedback");
+      if (fb && recipeEntries().length) fb.textContent = fb.dataset.recipes || "";
       var text = JSON.stringify(collectConfig(), null, 2);
       var uri = "data:application/json;charset=utf-8," + encodeURIComponent(text);
       var a = document.createElement("a");
@@ -699,6 +703,11 @@
       });
     }
     renderQueue();
+    // La file accueille aussi les recettes (recipes.js) : une seule file.
+    window.cinocQueue = { add: function (e) { queue.push(e); renderQueue(); } };
+    function recipeEntries() {
+      return queue.filter(function (e) { return e.request; });
+    }
 
     applyQueryCorpus();
 
@@ -717,6 +726,17 @@
     launchBtn.addEventListener("click", function () {
       var payload = { competitors: payloadCompetitors() };
       var corpusId = currentCorpusId();
+      var recipes = recipeEntries();
+      if (recipes.length) {
+        // Deux constructeurs encore distincts : un seul en S25-S26 (PLAN_UI §7).
+        var why = recipes.length < queue.length ? "mixed" : !corpusId && "noCorpus";
+        if (why) { resultEl.textContent = queueList.dataset[why] || why; return; }
+        launchAndFollow("/api/runs/recipe", {
+          corpus_id: corpusId,
+          entries: recipes.map(function (e) { return e.request; }),
+        }, launchBtn);
+        return;
+      }
       if (corpusId) payload.corpus_id = corpusId;
       if (normalization && normalization.value) payload.normalization = normalization.value;
       if (charExclude && charExclude.value) payload.char_exclude = charExclude.value;

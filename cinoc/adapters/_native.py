@@ -108,8 +108,9 @@ def public_endpoint(url: str) -> str:
     return urlunsplit((parts.scheme, host, parts.path, "", "")) or url
 
 
-def validate_endpoint(value: object, owner: str) -> str:
-    """Un endpoint saisi **par instance** (``base_url``) : une URL ``http(s)``
+def validate_endpoint(value: object, owner: str, field: str = "base_url") -> str:
+    """Un endpoint saisi **par instance** (``base_url``, ``host`` d'Ollama —
+    ``field`` le nomme dans les refus) : une URL ``http(s)``
     qui ne porte rien d'autre que la cible.
 
     Refusés : un autre schéma (``file:``, ``ftp:``), l'absence d'hôte, un port
@@ -123,32 +124,32 @@ def validate_endpoint(value: object, owner: str) -> str:
     """
     if not isinstance(value, str):
         raise AdapterStepError(
-            f"{owner} : base_url (str) attendu, reçu {type(value).__name__}."
+            f"{owner} : {field} (str) attendu, reçu {type(value).__name__}."
         )
     url = value.strip()
     parts = urlsplit(url)
     if parts.scheme not in {"http", "https"}:
         raise AdapterStepError(
-            f"{owner} : base_url illisible (attendu http(s)://hôte[:port]/…)."
+            f"{owner} : {field} illisible (attendu http(s)://hôte[:port]/…)."
         )
     if parts.username is not None or parts.password is not None:
         raise AdapterStepError(
-            f"{owner} : base_url refusé, il porte des identifiants — nommer la "
+            f"{owner} : {field} refusé, il porte des identifiants — nommer la "
             "variable de la clé par api_key_env."
         )
     if not parts.hostname:
-        raise AdapterStepError(f"{owner} : base_url sans hôte.")
+        raise AdapterStepError(f"{owner} : {field} sans hôte.")
     try:
         parts.port  # noqa: B018 — lecture qui valide
     except ValueError as exc:
-        raise AdapterStepError(f"{owner} : base_url, port illisible.") from exc
+        raise AdapterStepError(f"{owner} : {field}, port illisible.") from exc
     if parts.query:
         raise AdapterStepError(
-            f"{owner} : base_url refusé, il porte une query string (un jeton "
+            f"{owner} : {field} refusé, il porte une query string (un jeton "
             "peut y voyager)."
         )
     if parts.fragment:
-        raise AdapterStepError(f"{owner} : base_url refusé, il porte un fragment.")
+        raise AdapterStepError(f"{owner} : {field} refusé, il porte un fragment.")
     # Forme **normalisée** : sans ``/`` final. ``…/v1`` et ``…/v1/`` désignent le
     # même serveur (le SDK joint le chemin de la route lui-même) ; sans cela, un
     # ``/`` changeait l'empreinte de l'étape — donc réexécutait des unités déjà

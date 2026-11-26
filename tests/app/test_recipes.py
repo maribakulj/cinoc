@@ -267,14 +267,16 @@ def test_an_unreadable_spec_is_named_not_swallowed() -> None:
 def test_referenced_kinds_reads_the_adapter_convention() -> None:
     """``<kind>:<label>`` : c'est ce qui permet de garder une spec arbitraire
     sans avoir à la comprendre."""
-    from cinoc.app.recipes import plan_recipe_run, referenced_kinds
+    from cinoc.app.recipes import RecipeEntry, plan_recipe_run, referenced_kinds
     from cinoc.domain.corpus import CorpusSpec
     from cinoc.domain.documents import DocumentRef
 
     corpus = CorpusSpec(
         name="c", documents=(DocumentRef(id="d", image_uri="d.png", ground_truths=()),)
     )
-    spec = plan_recipe_run(corpus, "presse_ancienne", run_id="r")
+    spec = plan_recipe_run(
+        corpus, (RecipeEntry(recipe="presse_ancienne"),), run_id="r"
+    )
     assert "preprocess" in referenced_kinds(spec)
     assert "reading_order" in referenced_kinds(spec)
 
@@ -282,17 +284,19 @@ def test_referenced_kinds_reads_the_adapter_convention() -> None:
 def test_the_evaluation_follows_what_the_pipeline_produces() -> None:
     """Imposer une vue fixe en donnerait une **vide** sur la moitié des recettes,
     et une vue vide vaut moins que pas de vue."""
-    from cinoc.app.recipes import plan_recipe_run
+    from cinoc.app.recipes import RecipeEntry, plan_recipe_run
     from cinoc.domain.corpus import CorpusSpec
     from cinoc.domain.documents import DocumentRef
 
     corpus = CorpusSpec(
         name="c", documents=(DocumentRef(id="d", image_uri="d.png", ground_truths=()),)
     )
-    texte = plan_recipe_run(corpus, "ocr_simple", run_id="r")
+    texte = plan_recipe_run(corpus, (RecipeEntry(recipe="ocr_simple"),), run_id="r")
     assert [v.name for v in texte.evaluation.views] == ["texte"]
 
-    structure = plan_recipe_run(corpus, "presse_ancienne", run_id="r")
+    structure = plan_recipe_run(
+        corpus, (RecipeEntry(recipe="presse_ancienne"),), run_id="r"
+    )
     noms = {v.name for v in structure.evaluation.views}
     assert {"texte", "structure"} <= noms
 
@@ -300,7 +304,7 @@ def test_the_evaluation_follows_what_the_pipeline_produces() -> None:
 def test_the_catalogue_is_the_same_for_both_transports() -> None:
     """``cinoc list recipes`` et l'API lisent le **même** catalogue : deux
     transports d'une même donnée ne doivent pas la décrire différemment."""
-    from cinoc.app.recipes import recipe_catalog
+    from cinoc.app.recipe_catalog import recipe_catalog
 
     catalogue = recipe_catalog("fr")
     assert {c["name"] for c in catalogue} == {r.name for r in load_recipes()}

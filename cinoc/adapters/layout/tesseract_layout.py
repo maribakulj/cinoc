@@ -28,7 +28,7 @@ from __future__ import annotations
 
 from typing import ClassVar
 
-from cinoc.adapters._params import timeout_param
+from cinoc.adapters._params import instance_label_param, instance_name, timeout_param
 from cinoc.adapters.layout._base import layout_step_output
 from cinoc.adapters.ocr.tesseract import invoke_tesseract_alto
 from cinoc.domain.artifacts import Artifact, ArtifactType
@@ -68,6 +68,7 @@ class TesseractLayoutSegmenter:
         Param("dpi", "int", "Résolution imposée (défaut : celle du fichier)",
               "Forced resolution (default: the file's)", minimum=70, maximum=2400),
         timeout_param(DEFAULT_TIMEOUT),
+        instance_label_param(),
     )
 
     #: **Vide, et ce n'est pas un oubli.** Tesseract découpe la page en blocs
@@ -88,6 +89,7 @@ class TesseractLayoutSegmenter:
         oem: int = 3,
         dpi: int | None = None,
         timeout: float = DEFAULT_TIMEOUT,
+        label: str | None = None,
     ) -> None:
         if not 0 <= psm <= 13:
             raise AdapterStepError(
@@ -116,10 +118,11 @@ class TesseractLayoutSegmenter:
         #: fichier : une numérisation déclarée à 96 DPI lui fait conclure une page
         #: d'un mètre de large, et son analyse de page rend « Empty page!! ».
         self._dpi = dpi
+        self._label = label
 
     @property
     def name(self) -> str:
-        return "tesseract_layout"
+        return instance_name("tesseract_layout", self._label)
 
     @property
     def version(self) -> str:

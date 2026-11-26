@@ -79,6 +79,26 @@ _STRINGS: dict[str, dict[str, str]] = {
         "bench_mode_image": "OCR → LLM (image+texte)",
         "bench_mode_vlm": "VLM (zero-shot)",
         "bench_mode_hybrid": "Hybride (segmentation)",
+        "bench_mode_recipe": "Recette",
+        "bench_recipe_pick": "Choisir une forme",
+        "bench_recipe_add": "Ajouter à la file",
+        "bench_recipe_fanout": "↳ une fois par bloc détecté",
+        "bench_recipe_loading": "Chargement des recettes…",
+        "bench_recipe_error": "Catalogue des recettes indisponible.",
+        "bench_recipe_missing": "Réglage requis à remplir :",
+        "bench_recipe_unrunnable": "Aucune brique disponible pour l'étape :",
+        "bench_recipe_added": "Ajoutée à la file.",
+        "bench_recipe_hint": "Une recette est une forme éprouvée, nommée par ce "
+        "qu'elle cherche à savoir ; tu ne choisis que ses briques. Sa notation "
+        "suit ce qu'elle produit (CER/WER, structure si mise en page) : la "
+        "normalisation, les caractères exclus et le profil de métriques ne s'y "
+        "appliquent pas encore.",
+        "bench_recipe_mixed": "Une recette et un concurrent composé ne se "
+        "comparent pas encore dans le même run : lance-les séparément.",
+        "bench_recipe_no_corpus": "Une recette s'exécute sur un corpus : "
+        "choisis-en un.",
+        "bench_config_recipes": "Les recettes de la file ne sont pas exportées "
+        "(seuls les concurrents composés le sont).",
         "bench_ocr_engine": "Moteur OCR",
         "bench_segmenter": "Segmenteur",
         "bench_segmenter_hint": "Détecte les régions en tête de pipeline ; le "
@@ -345,6 +365,24 @@ _STRINGS: dict[str, dict[str, str]] = {
         "bench_mode_image": "OCR → LLM (image+text)",
         "bench_mode_vlm": "VLM (zero-shot)",
         "bench_mode_hybrid": "Hybrid (segmentation)",
+        "bench_mode_recipe": "Recipe",
+        "bench_recipe_pick": "Pick a shape",
+        "bench_recipe_add": "Add to the queue",
+        "bench_recipe_fanout": "↳ once per detected block",
+        "bench_recipe_loading": "Loading recipes…",
+        "bench_recipe_error": "Recipe catalogue unavailable.",
+        "bench_recipe_missing": "Required setting to fill in:",
+        "bench_recipe_unrunnable": "No brick available for the step:",
+        "bench_recipe_added": "Added to the queue.",
+        "bench_recipe_hint": "A recipe is a proven shape, named by what it asks; "
+        "you only pick its bricks. It is scored on what it produces (CER/WER, "
+        "structure for a layout): normalisation, excluded characters and the "
+        "metric profile do not apply to it yet.",
+        "bench_recipe_mixed": "A recipe and a composed competitor cannot share "
+        "a run yet: launch them separately.",
+        "bench_recipe_no_corpus": "A recipe runs on a corpus: pick one.",
+        "bench_config_recipes": "Recipes in the queue are not exported (only "
+        "composed competitors are).",
         "bench_ocr_engine": "OCR engine",
         "bench_segmenter": "Segmenter",
         "bench_segmenter_hint": "Detects regions at the head of the pipeline; the "
