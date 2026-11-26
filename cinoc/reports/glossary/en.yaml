@@ -37,8 +37,10 @@ cer:
   oracle: >-
     Reference: the CER of ISRI (ocreval), jiwer and dinglehopper.
     Checked against: jiwer 4.0.0 (cer), recomputed in CI, and
-    dinglehopper 0.11.0 on ten convention cases (normalization gaps
-    stated case by case).
+    dinglehopper 0.11.0, run in CI (oracle job) on ten convention cases
+    and on the 150 pairs of bnl_mini, "text (lines)" view: each gap is
+    named (repeated spaces; the ’/' apostrophe and dashes of its SBB
+    table) and together they give dinglehopper's figure exactly.
 
 cer_diplo:
   title: "Diplomatic CER"
@@ -75,7 +77,9 @@ wer:
     can hide a low CER.
   oracle: >-
     Reference: jiwer's WER (word-level edit distance, words split on
-    whitespace). Checked against: jiwer 4.0.0 (wer), recomputed in CI.
+    whitespace). Checked against: jiwer 4.0.0 (wer), recomputed in CI;
+    compared with dinglehopper 0.11.0 (oracle job, bnl_mini), whose WER
+    has another definition — UAX #29 words, punctuation dropped.
 
 mer:
   title: "MER — match error rate"

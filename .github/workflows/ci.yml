@@ -51,6 +51,33 @@ jobs:
         # ainsi les runs locaux restent rapides par défaut (cf. Makefile/pyproject).
         run: python -m pytest -q --cov=cinoc --cov-report=term-missing --cov-fail-under=85
 
+  # Oracles externes EXÉCUTÉS (P5e 10, D-290) : dinglehopper (golden CER/WER
+  # sur bnl_mini, parité de convention) et le paquet `roman` (numéraux). Les
+  # tests marqués `oracle` ne tournent qu'ici ; ailleurs, faute du paquet, ils
+  # sautent. Une seule version de Python : l'oracle juge le calcul, pas
+  # l'interpréteur (la matrice `test` s'en charge).
+  oracle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install
+        run: |
+          pip install -e ".[dev,oracle]"
+          # dinglehopper déclare `ocrd>=3.3`, qui tire tout OCR-D : les deux en
+          # --no-deps ; ce que leurs imports exigent vraiment est dans l'extra
+          # `oracle` (pyproject.toml). Le golden écrit la version qui l'a
+          # produit : changer celle-ci sans le régénérer fait échouer ce job.
+          pip install --no-deps "dinglehopper==0.11.0" "ocrd==3.13.3"
+      - name: Test (oracles seuls)
+        env:
+          # Installation réussie -> oracles importables, sinon échec nommé (et
+          # non des tests sautés en silence, job vert sur rien).
+          CINOC_REQUIRE_ORACLES: "1"
+        run: python -m pytest -q -m oracle
+
   # Le paquet DISTRIBUÉ, pas l'environnement de dev : la roue construite,
   # installée sans aucun extra dans un venv vierge, lancée hors du dépôt. Le
   # job `test` installe toujours `[dev]`, qui tire des dépendances que la base
