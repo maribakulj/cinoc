@@ -258,6 +258,44 @@ def check_spec_settings(spec: RunSpec, registry: ModuleRegistry) -> None:
         registry.build(name, spec.adapter_kwargs.get(name, {}))
 
 
+def check_replay_sources(spec: RunSpec, registry: ModuleRegistry) -> None:
+    """Une brique qui **rejoue** des fichiers déposés à côté des images
+    (``precomputed``, ``precomputed_layout``, ``precomputed_region``,
+    ``alto_source``) doit en trouver pour **au moins une** page du corpus.
+
+    Elle les déclare par le hook ``unit_inputs`` (celui de la reprise) : sans
+    aucun de ces fichiers, chaque page échouerait une à une, sans refus
+    préalable (D-299). Un fichier manquant sur une partie des pages reste un
+    échec d'unité, nommé au rapport. Seuls les corpus à images **locales**
+    sont sondés ; le refus nomme le fichier attendu, jamais un chemin.
+    """
+    documents = [
+        d
+        for d in spec.corpus.documents
+        if d.image_uri is not None and "://" not in d.image_uri
+    ]
+    if not documents:
+        return
+    used = sorted({s.adapter_name for p in spec.pipelines for s in p.steps})
+    for name in used:
+        module = registry.build(name, spec.adapter_kwargs.get(name, {}))
+        probe = getattr(module, "unit_inputs", None)
+        if probe is None:
+            continue
+        attendus = [tuple(probe(d)) for d in documents]
+        if not any(attendus) or any(
+            chemin.exists() for chemins in attendus for chemin in chemins
+        ):
+            continue
+        exemple = next(chemins[0].name for chemins in attendus if chemins)
+        raise ModuleSettingsError(
+            f"{name!r} rejoue des fichiers déposés avec le corpus, et n'en "
+            f"trouve pour aucune de ses {len(documents)} page(s) — par exemple "
+            f"{exemple!r}. Dépose-les à côté des images, ou choisis une "
+            "autre brique."
+        )
+
+
 def socle_params(kind: str) -> tuple[Param, ...] | None:
     """La déclaration d'une brique du **socle**, sans registre à construire."""
     for socle_kind, path, _ in _SOCLE:
@@ -276,6 +314,7 @@ def register_default_modules(registry: ModuleRegistry) -> None:
 
 __all__ = [
     "ModuleBuilder",
+    "check_replay_sources",
     "check_spec_settings",
     "ModuleRegistry",
     "ModuleResolutionError",

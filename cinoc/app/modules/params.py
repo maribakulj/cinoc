@@ -43,21 +43,24 @@ def closest_hint(name: str, known: list[str]) -> str:
 
 def _check_value(adapter_name: str, param: Param, value: object) -> None:
     where = f"{adapter_name!r}, réglage {param.name!r}"
+    # Un refus voyage (réponse HTTP, terminal, journal) : la valeur d'un
+    # secret n'y est jamais recopiée, seul son type l'est (D-299).
+    shown = "<secret>" if param.secret else repr(value)
     if not value_matches(param.type, value):
         raise ModuleSettingsError(
-            f"{where} : {param.type} attendu, reçu {value!r} "
+            f"{where} : {param.type} attendu, reçu {shown} "
             f"({type(value).__name__})."
         )
     if param.choices and value not in param.choices:
         raise ModuleSettingsError(
-            f"{where} : {value!r} hors des choix "
+            f"{where} : {shown} hors des choix "
             f"({', '.join(repr(c) for c in param.choices)})."
         )
     if isinstance(value, (int, float)) and not isinstance(value, bool):
         if param.minimum is not None and value < param.minimum:
-            raise ModuleSettingsError(f"{where} : {value} < {param.minimum:g}.")
+            raise ModuleSettingsError(f"{where} : {shown} < {param.minimum:g}.")
         if param.maximum is not None and value > param.maximum:
-            raise ModuleSettingsError(f"{where} : {value} > {param.maximum:g}.")
+            raise ModuleSettingsError(f"{where} : {shown} > {param.maximum:g}.")
 
 
 def check_settings(

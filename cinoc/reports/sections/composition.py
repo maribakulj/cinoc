@@ -166,8 +166,9 @@ class CompositionSection:
                     if depart
                     else ""
                 )
-                + f'<table class="tbl"><thead><tr>{entete}</tr></thead>'
-                + f"<tbody>{''.join(lignes)}</tbody></table>"
+                + '<div class="table-scroll"><table class="data">'
+                + f"<thead><tr>{entete}</tr></thead>"
+                + f"<tbody>{''.join(lignes)}</tbody></table></div>"
             )
 
         titre = localized(lang, "Composition des chaînes", "Pipeline composition")

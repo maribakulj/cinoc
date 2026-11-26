@@ -15,6 +15,11 @@ Le YAML porte la clé ``corpus``, celle d'un ``RunSpec`` : il se complète de
 ``pipelines:`` / ``evaluation:``. Ses chemins sont relatifs à **son** dossier :
 collé dans un fichier de run rangé ailleurs, il ne retrouverait pas ses fichiers.
 
+Un verbe de plus, dans l'autre sens : ``standardize`` **produit** un dataset
+curé (``app/dataset_standardize``, D-202) — un dossier publiable que
+``scripts/publish_dataset.py`` pousse sur HuggingFace et que ``curated``
+réimporte. Capacité de curateur, sur son disque : sans pendant web (D-299).
+
 Ce module reçoit le ``Namespace`` d'``argparse``. C'est délibéré : il est
 lui-même du **transport CLI**, et lui faire traverser six signatures distinctes
 (une par source, chacune avec ses options) n'aurait rien clarifié. Aucune
@@ -24,6 +29,7 @@ logique ici — la couche ``app`` porte tout.
 from __future__ import annotations
 
 import argparse
+import json
 from collections.abc import Callable
 from pathlib import Path
 
@@ -39,6 +45,7 @@ from cinoc.app.corpus_import import (
     resolve_curated_author,
 )
 from cinoc.app.corpus_upload import extract_corpus_zip
+from cinoc.app.dataset_standardize import StandardizeConfig, standardize_corpus
 from cinoc.app.loader import dump_corpus_spec
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.errors import CinocError
@@ -95,14 +102,18 @@ def _builder(args: argparse.Namespace) -> Callable[[Path], CorpusSpec]:
             raise CinocError(f"source de corpus inconnue : {args.source!r}.")
 
 
-def run_corpus_import(args: argparse.Namespace) -> int:
-    """Matérialise un corpus sous ``--dest`` et écrit son YAML."""
-    dest = Path(args.dest)
+def _dossier_neuf(dest: Path) -> None:
     if dest.exists() and any(dest.iterdir()):
         raise CinocError(
             f"{dest} n'est pas vide. Un import écrit dans un dossier neuf : "
             "réutiliser un dossier peuplé mêlerait deux corpus sans le dire."
         )
+
+
+def run_corpus_import(args: argparse.Namespace) -> int:
+    """Matérialise un corpus sous ``--dest`` et écrit son YAML."""
+    dest = Path(args.dest)
+    _dossier_neuf(dest)
     spec = materialize_corpus(dest, _builder(args))
     sortie = dump_corpus_spec(spec, args.output or dest / "corpus.yaml")
     print(
@@ -115,6 +126,56 @@ def run_corpus_import(args: argparse.Namespace) -> int:
         "complète-le sur place de `pipelines:` et `evaluation:`, puis : "
         "cinoc run <fichier>. Collé dans un fichier de run rangé ailleurs, son "
         "bloc `corpus:` n'y retrouverait pas ses fichiers."
+    )
+    return 0
+
+
+#: Métadonnées de curation : (option, attribut de ``StandardizeConfig``, aide).
+#: Toutes requises — une licence, des droits, une attribution ne se devinent pas.
+_CURATION = (
+    ("--name", "name", "Nom du dataset."),
+    ("--stratum", "stratum", "Strate (ex. de/17e/kurrent)."),
+    ("--language", "language", "Langue (code, ex. de)."),
+    ("--license", "transcription_license", "Licence des transcriptions (slug HF)."),
+    ("--image-rights", "image_rights", "Droits des images."),
+    ("--attribution", "attribution", "Attribution à citer."),
+)
+
+
+def add_standardize_parser(
+    verbes: argparse._SubParsersAction[argparse.ArgumentParser],  # noqa: SLF001
+) -> None:
+    """``cinoc corpus standardize`` : un corpus brut → un dataset curé."""
+    std = verbes.add_parser(
+        "standardize",
+        help="Prépare un corpus brut (<raw>/page/*.xml PAGE + <raw>/jpg/*.jpg) "
+        "en dataset curé publiable (IIIF statique + vérité terrain + carte HF).",
+    )
+    std.add_argument("raw", help="Dossier brut : page/ (PAGE XML) et jpg/.")
+    std.add_argument("--dest", required=True, help="Dossier de sortie (neuf).")
+    for option, attribut, aide in _CURATION:
+        std.add_argument(option, dest=attribut, required=True, help=aide)
+    std.add_argument(
+        "--base-url", default="", help="Préfixe URL du dataset publié (id IIIF)."
+    )
+
+
+def run_corpus_standardize(args: argparse.Namespace) -> int:
+    """Écrit le dataset curé sous ``--dest`` et dit comment le publier."""
+    dest = Path(args.dest)
+    _dossier_neuf(dest)
+    config = StandardizeConfig(
+        **{attribut: getattr(args, attribut) for _, attribut, _ in _CURATION},
+        base_url=args.base_url,
+    )
+    sortie = standardize_corpus(args.raw, dest, config)
+    corpus = json.loads((sortie / "corpus.json").read_text(encoding="utf-8"))
+    n = len(corpus["documents"])
+    print(f"{n} page(s) standardisée(s) — dataset « {config.name} » dans {sortie}")
+    print(
+        "Publier : python scripts/publish_dataset.py "
+        f"{sortie} <owner/dataset> ; puis cinoc corpus import curated "
+        "<owner/dataset> --revision <sha>."
     )
     return 0
 
@@ -160,4 +221,10 @@ def run_corpus_discover(args: argparse.Namespace) -> int:
     return 0
 
 
-__all__ = ["run_corpus_discover", "run_corpus_import", "run_corpus_search"]
+__all__ = [
+    "add_standardize_parser",
+    "run_corpus_discover",
+    "run_corpus_import",
+    "run_corpus_search",
+    "run_corpus_standardize",
+]

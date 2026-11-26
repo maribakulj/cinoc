@@ -124,6 +124,9 @@ _CSS = (
     "gap:0 26px;align-items:start;}"
     "@media (max-width:760px){.tcols{grid-template-columns:1fr;}}"
     ".table-scroll{overflow-x:auto;}"
+    # Téléphone : un tableau large défile dans sa boîte, jamais la page (D-299).
+    "@media (max-width:720px){table.data{display:block;overflow-x:auto;"
+    "max-width:100%;}}"
     ".table-scroll table.data{min-width:max-content;}"
     "table.data.compact{width:auto;max-width:540px;}"
     "table.data td.lbl{text-align:left;color:var(--g-700);}"

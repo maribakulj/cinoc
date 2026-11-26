@@ -271,6 +271,45 @@ def test_a_busy_slot_does_not_outlive_the_deadline(
         slot.release()
 
 
+def test_a_unit_waiting_for_a_slot_makes_no_call_once_stopped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """« Arrêter » pendant qu'une unité attend son créneau réseau : quand le
+    créneau se libère, elle **n'appelle pas** — un appel facturé lancé après
+    l'arrêt est exactement ce que le bouton doit empêcher (D-299, trouvé au
+    navigateur : la seconde page d'un VLM Ollama partait après l'arrêt)."""
+    monkeypatch.setenv("CINOC_NETWORK_CONCURRENCY", "1")
+    provider = "test-stop-waiting"
+    slot = network_slot(provider)
+    slot.acquire()
+    control = RunControl()
+    appels: list[str] = []
+    issue: list[BaseException] = []
+
+    def unite() -> None:
+        try:
+            call_resilient(
+                provider,
+                lambda: appels.append("appel") or "ok",
+                deadline=Deadline.in_seconds(10.0),
+                control=control,
+            )
+        except BaseException as exc:  # noqa: BLE001 -- constaté par le test
+            issue.append(exc)
+
+    fil = threading.Thread(target=unite)
+    fil.start()
+    time.sleep(0.05)
+    control.trigger_cancel()
+    slot.release()
+    fil.join(5.0)
+    assert appels == []
+    assert len(issue) == 1 and isinstance(issue[0], RunCancelledError)
+    # Le créneau rendu : une autre unité peut le prendre.
+    assert slot.acquire(timeout=0.5)
+    slot.release()
+
+
 def test_transport_errors_are_transient() -> None:
     import httpx
 

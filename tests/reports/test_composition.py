@@ -252,3 +252,15 @@ def test_a_long_setting_is_abbreviated_and_kept_whole_in_its_tooltip() -> None:
     assert "model=gpt-4o-mini" in html
     assert f'title="{prompt}"' in html
     assert "prompt=<span" in html and "image Transcris fidè…</span>" in html
+
+
+def test_the_table_scrolls_inside_its_frame_on_a_narrow_screen() -> None:
+    """Sur un téléphone (390 px), le tableau de composition — sans classe
+    stylée, ``tbl`` — élargissait la page entière à ~510 px (D-299). Il suit
+    désormais la forme des autres tableaux du rapport : ``table.data`` dans un
+    cadre ``.table-scroll`` qui défile seul."""
+    html = _rendu(
+        [_spec("P", [_etape("s", "tesseract_layout", ["image"], ["layout"])])]
+    )
+    assert '<div class="table-scroll"><table class="data">' in html
+    assert 'class="tbl"' not in html

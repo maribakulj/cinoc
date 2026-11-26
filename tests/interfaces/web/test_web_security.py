@@ -170,3 +170,15 @@ def test_rate_limit_counts_unknown_client() -> None:
     asyncio.run(mw(scope, _capture, _capture))
     asyncio.run(mw(scope, _capture, _capture))
     assert 200 in sent and 429 in sent
+
+
+def test_the_served_report_may_load_its_embedded_fonts() -> None:
+    """Le rapport **autonome** embarque ses polices en ``data:`` (un seul
+    fichier, aucun réseau) : servi sous ``/reports/``, ``font-src 'self'``
+    les bloquait — neuf erreurs console, texte en police de repli (D-299, vu
+    au navigateur). ``data:`` n'est ouvert **que** là ; la coquille garde ses
+    polices auto-hébergées, en ``'self'`` seul."""
+    assert "font-src 'self' data:;" in get_csp_policy("/reports/r")
+    assert "font-src 'self';" in get_csp_policy("/benchmark")
+    assert "font-src 'self';" in get_csp_policy("/api/runs")
+    assert "font-src 'self';" in CONTENT_SECURITY_POLICY

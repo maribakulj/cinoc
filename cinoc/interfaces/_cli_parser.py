@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING
 # une interface qui énumère est une interface qui dérive.
 from cinoc.app.alto_corpus import PRODUCERS
 from cinoc.app.evaluation_views import METRIC_PROFILES
+from cinoc.interfaces._corpus_command import add_standardize_parser
 
 if TYPE_CHECKING:  # pragma: no cover
     # Type de l'objet rendu par ``add_subparsers`` : ``argparse`` n'en publie
@@ -135,7 +136,7 @@ def _add_corpus(subparsers: _SousCommandes) -> None:
     corpus_cmd = subparsers.add_parser(
         "corpus",
         help="Acquiert un corpus (IIIF, Gallica, eScriptorium, HF, ZIP) et "
-        "écrit son YAML.",
+        "écrit son YAML ; ou standardise un corpus brut en dataset curé.",
     )
     verbes = corpus_cmd.add_subparsers(dest="corpus_command", required=True)
 
@@ -211,6 +212,7 @@ def _add_corpus(subparsers: _SousCommandes) -> None:
         "--limit", type=int, default=20, help="Entrées affichées (défaut : 20)."
     )
 
+    add_standardize_parser(verbes)
     trouve = verbes.add_parser(
         "discover", help="Liste les datasets curés Cinoc d'un compte HuggingFace."
     )

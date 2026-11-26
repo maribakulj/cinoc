@@ -332,6 +332,11 @@ def call_resilient(
         slot = network_slot(slot_key)
         if not slot.acquire(timeout=request_timeout(deadline)):
             raise _expired(provider, "en attendant un créneau réseau", meter)
+        if ctrl.is_cancelled():
+            # Arrêté pendant l'attente du créneau : aucun appel (facturé)
+            # ne part après l'arrêt (D-299).
+            slot.release()
+            raise RunCancelledError(f"{provider} : run annulé avant l'appel.")
         delay = 0.0
         try:
             result = fn()

@@ -365,13 +365,14 @@ class NormalizationProfile(BaseModel):
     ) -> NormalizationProfile:
         """Charge un profil depuis du **texte YAML** (pas un fichier).
 
-        Pour une entrée non fiable (aperçu web d'une config saisie) : ``safe_load``
-        seul, **objet attendu** (sinon ``ValueError``), aucun accès disque. La
-        validation Pydantic (clés inconnues interdites) protège le reste.
+        Pour une entrée non fiable (aperçu web d'une config saisie) :
+        ``safe_load_yaml`` (aucun alias), **objet attendu** (sinon
+        ``ValueError``), aucun accès disque. La validation Pydantic (clés
+        inconnues interdites) protège le reste.
         """
-        import yaml  # type: ignore[import-untyped]
+        from cinoc.formats._yaml import safe_load_yaml
 
-        raw = yaml.safe_load(text) or {}
+        raw = safe_load_yaml(text) or {}
         if not isinstance(raw, dict):
             raise ValueError("profil YAML invalide (objet attendu).")
         raw.setdefault("name", default_name)

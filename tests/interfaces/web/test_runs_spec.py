@@ -38,6 +38,8 @@ def _corpus(client: TestClient) -> str:
     with zipfile.ZipFile(buf, "w") as zf:
         zf.writestr("p1.png", _PNG)
         zf.writestr("p1.gt.txt", "le soleil")
+        # La lecture que rejoue ``precomputed:ocr`` (sans elle : 422, D-299).
+        zf.writestr("p1.ocr.txt", "le so1eil")
     reponse = client.post(
         "/api/corpus",
         files={"file": ("c.zip", buf.getvalue(), "application/zip")},
@@ -175,20 +177,62 @@ def test_an_unknown_brick_is_named(tmp_path: Path) -> None:
     assert "magie" in reponse.json()["detail"]
 
 
-def test_public_mode_gates_a_spec_like_it_gates_the_form(tmp_path: Path) -> None:
-    """Une spec composée à la main ne doit pas ouvrir une porte que le
-    formulaire ferme — ce serait un contournement, pas une fonctionnalité."""
+def test_public_mode_closes_the_spec_door(tmp_path: Path) -> None:
+    """Mode public : la porte « spec complète » est **fermée**, même pour une
+    spec qui ne nomme que des briques du socle gratuit (D-299). Une file de
+    recettes est bornée (16 entrées) ; une spec ne l'est pas — un visiteur
+    anonyme y décrirait mille pipelines. *Fail-closed*, comme le reste du
+    mode public ; une instance privée la garde, et la page l'offre."""
     client = _client(tmp_path, public_mode=True)
     corpus_id = _corpus(client)
-    spec = yaml.safe_load(_spec_minimale())
-    spec["pipelines"][0]["steps"][0]["adapter_name"] = "openai:x"
+    for adapter in ("precomputed:ocr", "openai:x"):
+        spec = yaml.safe_load(_spec_minimale())
+        spec["pipelines"][0]["steps"][0]["adapter_name"] = adapter
+        reponse = client.post(
+            "/api/runs/spec",
+            headers=_CSRF,
+            json={"corpus_id": corpus_id, "spec": yaml.safe_dump(spec)},
+        )
+        assert reponse.status_code == 403
+        assert "mode public" in reponse.json()["detail"]
+
+
+def test_the_page_offers_the_spec_door_on_a_private_instance_only(
+    tmp_path: Path,
+) -> None:
+    """La zone de dépôt est sur la page d'une instance privée, absente d'une
+    instance publique — qui refuserait de toute façon (403)."""
+    prive = _client(tmp_path).get("/benchmark").text
+    public = _client(tmp_path, public_mode=True).get("/benchmark").text
+    assert 'id="spec-file"' in prive
+    assert 'id="spec-file"' not in public
+    script = (
+        Path(__file__).resolve().parents[3]
+        / "cinoc/interfaces/web/static/js/benchmark.js"
+    ).read_text(encoding="utf-8")
+    assert '"/api/runs/spec"' in script
+
+
+def test_a_yaml_alias_bomb_is_refused_fast(tmp_path: Path) -> None:
+    """« Billion laughs » en YAML : 9 alias de 9 alias, moins d'un kilo-octet,
+    des minutes de validation avant correction. Refusé en 422, aussitôt."""
+    import time
+
+    lignes = ['a0: &a0 ["l","l","l","l","l","l","l","l","l"]']
+    for i in range(1, 9):
+        lignes.append(f"a{i}: &a{i} [" + ",".join([f"*a{i - 1}"] * 9) + "]")
+    bombe = "x:\n" + "\n".join("  " + ligne for ligne in lignes)
+    client = _client(tmp_path)
+    corpus_id = _corpus(client)
+    debut = time.monotonic()
     reponse = client.post(
         "/api/runs/spec",
         headers=_CSRF,
-        json={"corpus_id": corpus_id, "spec": yaml.safe_dump(spec)},
+        json={"corpus_id": corpus_id, "spec": bombe + "\nmetadata: {b: *a8}\n"},
     )
-    assert reponse.status_code == 403
-    assert "public" in reponse.json()["detail"]
+    assert reponse.status_code == 422
+    assert "alias" in reponse.json()["detail"]
+    assert time.monotonic() - debut < 2.0
 
 
 # --------------------------------------------------------------------------- #
@@ -533,20 +577,27 @@ def test_a_client_cannot_name_a_server_variable_as_the_key(
 def test_public_mode_accepts_no_endpoint_at_all(
     tmp_path: Path, reglages: dict[str, object]
 ) -> None:
-    """Mode public : *fail-closed*, même sur l'hôte par défaut de la liste."""
+    """Mode public : *fail-closed*, même sur l'hôte par défaut de la liste.
+
+    Par la file de recettes : la porte « spec complète » est fermée en mode
+    public (D-299), la garde d'hôte s'y applique à la file."""
     client = _client(tmp_path, public_mode=True)
     corpus_id = _corpus(client)
-    spec = yaml.safe_load(_spec_minimale())
-    spec["adapter_kwargs"]["precomputed:ocr"].update(reglages)
+    entree = {
+        "recipe": "ocr_simple",
+        "choices": {"ocr": "precomputed"},
+        "params": {"ocr": reglages},
+    }
 
     reponse = client.post(
-        "/api/runs/spec",
+        "/api/runs",
         headers=_CSRF,
-        json={"corpus_id": corpus_id, "spec": yaml.safe_dump(spec)},
+        json={"corpus_id": corpus_id, "entries": [entree]},
     )
 
     assert reponse.status_code == 403, reponse.json()
     assert "mode public" in reponse.json()["detail"]
+    assert "spec complète" not in reponse.json()["detail"]
 
 
 def _sdk_openai_present(monkeypatch: pytest.MonkeyPatch) -> None:

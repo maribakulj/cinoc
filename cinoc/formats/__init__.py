@@ -8,6 +8,7 @@ lib de métrique (``jiwer``, ``rapidfuzz``) ni un moteur OCR.
 Surface publique :
 
 - sécurité XML (``safe_parse_xml``) — point d'entrée unique de tout parsing XML ;
+- YAML d'une entrée non fiable (``safe_load_yaml``) — sans alias ;
 - format ALTO (``parse_alto`` / ``write_alto`` + types) ;
 - format PAGE (``parse_pagexml`` / ``write_pagexml`` + types) ;
 - normalisation de comparaison (``NormalizationProfile`` & profils) ;
@@ -17,6 +18,7 @@ Surface publique :
 from __future__ import annotations
 
 from cinoc.formats._xml import safe_parse_xml
+from cinoc.formats._yaml import safe_load_yaml
 from cinoc.formats.alto import (
     AltoBBox,
     AltoDocument,
@@ -47,6 +49,7 @@ from cinoc.formats.text import (
 
 __all__ = [
     "safe_parse_xml",
+    "safe_load_yaml",
     "parse_alto",
     "write_alto",
     "AltoDocument",

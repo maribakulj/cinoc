@@ -46,6 +46,30 @@ _STRINGS: dict[str, dict[str, str]] = {
         "bench_log": "Journal",
         "bench_idle": "Prêt.",
         "bench_net_error": "Erreur réseau.",
+        # Arrêt d'un run (annulation coopérative) et ses états lisibles.
+        "bench_stop": "Arrêter",
+        "bench_stopping": "Arrêt demandé…",
+        "bench_stop_late": "Déjà terminé",
+        "bench_state_pending": "En attente",
+        "bench_state_running": "En cours",
+        "bench_state_done": "Terminé",
+        "bench_state_failed": "Échoué",
+        "bench_state_cancelled": "Arrêté",
+        "bench_cancelled_result": "Run arrêté à ta demande. Aucun rapport : un "
+        "run interrompu n'en écrit pas de partiel, et les pages déjà lues ne "
+        "sont pas gardées.",
+        # Un secret retiré de la configuration exportée (D-299).
+        "bench_secret_label": "à ressaisir (retiré de l'export)",
+        "bench_secret_missing": "Un secret retiré de la configuration exportée "
+        "est à ressaisir dans la file avant de lancer.",
+        "bench_config_secrets": "Un ou plusieurs secrets sont à ressaisir "
+        "dans la file.",
+        # La porte « spec complète » (instance privée seulement, D-299).
+        "bench_spec": "Spec complète (YAML)",
+        "bench_spec_pick": "Déposer et lancer…",
+        "bench_spec_hint": "Un RunSpec écrit à la main, comme pour « cinoc run "
+        "spec.yaml » : tout le graphe, sur le corpus choisi plus haut (le corpus "
+        "de la spec est ignoré). Lancé aussitôt, mêmes gardes que la file.",
         "bench_corpus": "Corpus",
         "bench_corpus_none": "aucun corpus (démo)",
         "bench_corpus_prepare": "Choisir dans la Bibliothèque",
@@ -100,7 +124,8 @@ _STRINGS: dict[str, dict[str, str]] = {
         "bench_config_loaded": "Configuration chargée.",
         "bench_config_invalid": "Fichier de configuration invalide.",
         "bench_config_hint": "Sauvegarde l'état du formulaire (file de recettes "
-        "+ options) en JSON ; rechargeable plus tard. Aucune persistance serveur.",
+        "+ options) en JSON ; rechargeable plus tard. Aucune persistance serveur. "
+        "Un secret (jeton) n'y est jamais écrit : il est redemandé à l'import.",
         "bench_options": "Options",
         "bench_execute_desc": "Lance le run puis ouvre le rapport final ou la "
         "vue de segmentation.",
@@ -277,6 +302,27 @@ _STRINGS: dict[str, dict[str, str]] = {
         "bench_log": "Log",
         "bench_idle": "Ready.",
         "bench_net_error": "Network error.",
+        "bench_stop": "Stop",
+        "bench_stopping": "Stop requested…",
+        "bench_stop_late": "Already finished",
+        "bench_state_pending": "Pending",
+        "bench_state_running": "Running",
+        "bench_state_done": "Done",
+        "bench_state_failed": "Failed",
+        "bench_state_cancelled": "Stopped",
+        "bench_cancelled_result": "Run stopped at your request. No report: an "
+        "interrupted run writes no partial one, and pages already read are not "
+        "kept.",
+        "bench_secret_label": "re-enter (removed from the export)",
+        "bench_secret_missing": "A secret removed from the exported configuration "
+        "must be re-entered in the queue before launching.",
+        "bench_config_secrets": "One or more secrets must be re-entered in the "
+        "queue.",
+        "bench_spec": "Full spec (YAML)",
+        "bench_spec_pick": "Drop and run…",
+        "bench_spec_hint": "A hand-written RunSpec, as for “cinoc run spec.yaml”: "
+        "the whole graph, on the corpus chosen above (the spec's own corpus is "
+        "ignored). Launched at once, under the queue's guards.",
         "bench_corpus": "Corpus",
         "bench_corpus_none": "no corpus (demo)",
         "bench_corpus_prepare": "Choose in the Library",
@@ -326,7 +372,8 @@ _STRINGS: dict[str, dict[str, str]] = {
         "bench_config_loaded": "Configuration loaded.",
         "bench_config_invalid": "Invalid configuration file.",
         "bench_config_hint": "Saves the form state (recipe queue + options) as "
-        "JSON; reloadable later. No server persistence.",
+        "JSON; reloadable later. No server persistence. A secret (token) is "
+        "never written to it: it is asked again on import.",
         "bench_metric_profile": "Metric profile",
         "bench_metric_profile_hint": "Picks the report's ranking columns; does not "
         "drop collected data (sections unchanged).",
