@@ -27,7 +27,7 @@ import shutil
 import threading
 import uuid
 import zipfile
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
 
 from pydantic import ValidationError
@@ -190,48 +190,63 @@ def _pair_documents(written: dict[str, Path]) -> tuple[DocumentRef, ...]:
     return tuple(documents)
 
 
+def truths_beside(
+    stem: str, files: Mapping[str, Path]
+) -> tuple[tuple[GroundTruthRef, ...], str]:
+    """Vérités-terrain **déposées** à côté d'une image, et la provenance du texte.
+
+    Une seule règle pour un ZIP déposé (web, ``cinoc corpus import zip``) et un
+    dossier d'ALTO à corriger (``cinoc correct``, D-307) :
+
+    - texte (``RAW_TEXT``) : ``<rad>.gt.txt`` puis ``<rad>.txt`` → ``"text"`` ;
+    - mise en page (``LAYOUT``) : ``<rad>.gt.xml`` **seul** — une mise en page
+      n'est une vérité que nommée comme telle. ``<rad>.xml`` est la source que
+      lit ``alto_source`` (l'ALTO à corriger, le plus souvent celui d'un OCR) :
+      en faire la vérité de la vue ``structure`` noterait ``alto_corrige``
+      contre son propre ALTO, et tout autre pipeline contre l'accord avec un
+      OCR. ``alto_source`` ne lit jamais ``<rad>.gt.xml`` : l'auto-comparaison
+      est impossible par construction.
+
+    ``files`` : nom de fichier → chemin, pour les fichiers du dossier.
+    """
+    layout: tuple[GroundTruthRef, ...] = ()
+    if (gt_xml := f"{stem}.gt.xml") in files:
+        _read_layout(files[gt_xml])  # illisible → 422, comme le texte
+        layout = (GroundTruthRef(type=ArtifactType.LAYOUT, uri=str(files[gt_xml])),)
+    txt = next((c for c in (f"{stem}.gt.txt", f"{stem}.txt") if c in files), None)
+    if txt is None:
+        return layout, ""
+    ref = GroundTruthRef(type=ArtifactType.RAW_TEXT, uri=str(files[txt]))
+    return (ref, *layout), "text"
+
+
 def _ground_truth_for(
     stem: str, written: dict[str, Path]
 ) -> tuple[tuple[GroundTruthRef, ...], str]:
-    """Vérités-terrain d'un radical, **et la provenance de son texte**.
+    """Vérités-terrain d'un radical déposé par ZIP, **et la provenance de son texte**.
 
-    Texte (``RAW_TEXT``) :
-
-    1. ``.txt`` manuel (``<rad>.gt.txt`` puis ``<rad>.txt``) — chemin direct.
-    2. À défaut, ALTO/PAGE (``<rad>.gt.xml`` puis ``<rad>.xml``) : texte d'ordre
-       de lecture extrait par ``layout_to_text`` (la **projection même** du
-       scoring), matérialisé en ``<rad>.gt.txt`` dérivé → le GT reste un
+    1. Ce qui est déposé comme vérité (:func:`truths_beside`).
+    2. À défaut de texte, ALTO/PAGE (``<rad>.gt.xml`` puis ``<rad>.xml``) : texte
+       d'ordre de lecture extrait par ``layout_to_text`` (la **projection même**
+       du scoring), matérialisé en ``<rad>.gt.txt`` dérivé → le GT reste un
        ``RAW_TEXT``, un seul chemin d'évaluation, déterministe.
     3. Sinon ``()`` : le run reste exécutable, simplement non scoré.
-
-    Mise en page (``LAYOUT``, S29a) : ``<rad>.gt.xml`` **seul** — une mise en
-    page n'est une vérité que nommée comme telle. ``<rad>.xml`` est la source
-    que lit ``alto_source`` (l'ALTO à corriger, le plus souvent celui d'un
-    OCR) : en faire la vérité de la vue ``structure`` noterait ``alto_corrige``
-    contre son propre ALTO, et tout autre pipeline contre l'accord avec un OCR.
-    ``alto_source`` ne lit jamais ``<rad>.gt.xml`` : l'auto-comparaison est
-    impossible par construction.
 
     La **provenance** est retournée avec les références (``"text"`` /
     ``"layout"`` / ``""``) : elle seule distingue une transcription fournie d'un
     texte **extrait de l'ALTO du document**, et cette différence décide si un
     run de post-correction mesure quelque chose ou se compare à lui-même.
     """
-    layout: tuple[GroundTruthRef, ...] = ()
-    if (gt_xml := f"{stem}.gt.xml") in written:
-        _read_layout(written[gt_xml])  # illisible → 422, comme le texte
-        layout = (GroundTruthRef(type=ArtifactType.LAYOUT, uri=str(written[gt_xml])),)
-    txt = next((c for c in (f"{stem}.gt.txt", f"{stem}.txt") if c in written), None)
-    if txt is not None:
-        ref = GroundTruthRef(type=ArtifactType.RAW_TEXT, uri=str(written[txt]))
-        return (ref, *layout), "text"
+    refs, source = truths_beside(stem, written)
+    if source:
+        return refs, source
     xml = next((c for c in (f"{stem}.gt.xml", f"{stem}.xml") if c in written), None)
     if xml is None:
-        return (), ""
+        return refs, ""
     derived = written[xml].with_name(f"{stem}.gt.txt")
     derived.write_text(_xml_to_text(written[xml]), encoding="utf-8")
     ref = GroundTruthRef(type=ArtifactType.RAW_TEXT, uri=str(derived))
-    return (ref, *layout), "layout"
+    return (ref, *refs), "layout"
 
 
 def _xml_to_text(path: Path) -> str:
@@ -353,4 +368,5 @@ __all__ = [
     "CorpusStore",
     "CorpusUploadError",
     "extract_corpus_zip",
+    "truths_beside",
 ]

@@ -10,7 +10,7 @@ des métriques.
 
 from __future__ import annotations
 
-from cinoc.evaluation.result import RunResult
+from cinoc.evaluation.result import PipelineResult, RunResult
 from cinoc.reports.engine_badges import engine_cell, engine_order
 from cinoc.reports.html import escape, localized, view_label
 from cinoc.reports.metric_categories import category_legend, category_mark
@@ -147,6 +147,10 @@ def _table_for_view(
     order = engine_order(p.pipeline for p in result.pipelines)
     rows = [p.aggregate for p in pipelines]
     keep = nonempty_metric_indices(rows)  # masque les colonnes tout-« — »
+    if not keep:
+        # Un tableau d'en-têtes sans une valeur ne dit rien — pire, il laisse
+        # croire à un rendu cassé. On dit pourquoi rien n'est noté (D-307).
+        return _unscored_note(result, pipelines, view_name, lang, multi=multi)
     all_metrics = tuple(score.metric for score in pipelines[0].aggregate)
     metrics = [all_metrics[i] for i in keep]
     header = "".join(
@@ -177,6 +181,46 @@ def _table_for_view(
         f"<tbody>{''.join(body_rows)}</tbody>\n</table></div>\n"
         f"{bar_legend(lang)}{category_legend(metrics, lang)}"
     )
+
+
+def _unscored_note(
+    result: RunResult,
+    pipelines: list[PipelineResult],
+    view_name: str,
+    lang: str,
+    *,
+    multi: bool,
+) -> str:
+    """Une vue sans aucun chiffre : faute de vérité terrain, ou d'unité réussie."""
+    noms = {p.pipeline for p in pipelines}
+    unites = [u for u in result.usage if u.pipeline in noms]
+    head = ""
+    if multi:
+        view_caption = localized(lang, "Vue", "View")
+        head = f"<h2>{view_caption} : {escape(view_label(view_name, lang))}</h2>\n"
+    if unites and all(u.outcome == "failed" for u in unites):
+        texte = localized(
+            lang,
+            "Aucun chiffre dans cette vue : toutes ses unités ont échoué "
+            "(détail ci-dessus).",
+            "No figure in this view: all its units failed (detail above).",
+        )
+    else:
+        texte = localized(
+            lang,
+            "<strong>Rien n'est noté dans cette vue</strong> : aucune sortie n'y "
+            "avait de vérité terrain à laquelle se comparer. Les autres sections "
+            "décrivent ce qui a été produit — et, pour une correction, ce qui a "
+            "été changé ou refusé —, pas son exactitude. Une transcription "
+            "<code>&lt;nom&gt;.gt.txt</code> déposée à côté de chaque image en "
+            "donne une.",
+            "<strong>Nothing is scored in this view</strong>: no output had a "
+            "ground truth to be compared with. The other sections describe what "
+            "was produced — and, for a correction, what was changed or refused —, "
+            "not how accurate it is. A transcription "
+            "<code>&lt;name&gt;.gt.txt</code> next to each image provides one.",
+        )
+    return f'{head}<p class="muted">{texte}</p>\n'
 
 
 __all__ = ["REASON_LABELS", "OverviewSection"]

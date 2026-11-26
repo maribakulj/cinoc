@@ -7,9 +7,15 @@ accompagné de son ALTO, et rien ne permettait de le faire entrer autrement
 qu'aplati en texte.
 
 Convention de ``PrecomputedLayoutSource`` reprise telle quelle — l'ALTO est
-cherché **à côté de l'image**, ``<stem>.xml`` près de ``<stem>.png``. C'est la
-façon dont les corpus de ce dépôt sont rangés, et ça évite d'ajouter un type
-d'entrée initial au planificateur.
+cherché **à côté de l'image**, ``<stem>.xml`` (puis ``<stem>.alto.xml``) près
+de ``<stem>.png``. C'est la façon dont les corpus de ce dépôt sont rangés, et ça
+évite d'ajouter un type d'entrée initial au planificateur.
+
+**L'ALTO qu'un pipeline Cinoc a écrit** porte un autre nom, celui que fabrique
+:func:`alto_file_name` — ``<document>.<pipeline>.alto.xml``, le même pour
+``cinoc run --alto-dir``, ``cinoc hybrid`` et l'export web (D-307). Le réglage
+``pipeline`` le fait lire, et **seulement** lui : un ``<stem>.xml`` voisin n'est
+pas un repli, ce serait lire un autre ALTO que celui qu'on a nommé.
 
 Ce que la lecture conserve, et qui n'a de valeur que conservé : l'identifiant
 de ligne (une identité, pas un rang), la géométrie, la confiance du moteur
@@ -20,6 +26,7 @@ d'origine, et la césure (``SUBS_TYPE``/``SUBS_CONTENT`` + la marque portée par
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Iterator
 from pathlib import Path
 from typing import ClassVar
@@ -41,6 +48,34 @@ _VERSION = "1.0"
 
 #: Extensions tentées à côté de l'image, dans l'ordre.
 _SUFFIXES = (".xml", ".alto.xml")
+
+#: Hors de ces caractères, un nom de pipeline n'a rien à faire dans un nom de
+#: fichier (``ocr_simple · tesseract``, ``… → ollama (qwen2.5vl:3b)``).
+_HORS_PIPELINE = re.compile(r"[^A-Za-z0-9_-]+")
+#: Un identifiant de document garde ses points (``page.v2``) : il nomme une
+#: image, pas une extension. ``/`` (sous-dossier) devient ``_``.
+_HORS_DOCUMENT = re.compile(r"[^A-Za-z0-9_.-]+")
+
+
+def file_component(name: str) -> str:
+    """Un nom de pipeline réduit à ``[A-Za-z0-9_-]`` — idempotent.
+
+    Chaque suite de caractères hors de cet ensemble devient un ``_`` :
+    ``segmentation_puis_lecture · tesseract_layout → tesseract + alto`` →
+    ``segmentation_puis_lecture_tesseract_layout_tesseract_alto``.
+    """
+    return _HORS_PIPELINE.sub("_", name).strip("_")
+
+
+def alto_file_name(document_id: str, pipeline: str) -> str:
+    """Le nom de l'ALTO d'un document produit par un pipeline Cinoc.
+
+    ``<document>.<pipeline>.alto.xml`` — **une** fonction, que l'écrivain de la
+    CLI, celui du web et le lecteur (``alto_source``, réglage ``pipeline``)
+    appellent : le nom écrit est le nom lu, par construction.
+    """
+    document = _HORS_DOCUMENT.sub("_", document_id).strip("_")
+    return f"{document}.{file_component(pipeline)}.alto.xml"
 
 
 class AltoLayoutSource:
@@ -66,11 +101,30 @@ class AltoLayoutSource:
     PARAMS: ClassVar[tuple[Param, ...]] = (
         Param("ocr_sidecar", "str", "Sidecar d'OCR du corpus (suffixe)",
               "Corpus OCR sidecar (suffix)", default=""),
+        Param(
+            "pipeline",
+            "str",
+            "Pipeline Cinoc dont lire l'ALTO (<document>.<pipeline>.alto.xml)",
+            "Cinoc pipeline whose ALTO to read (<document>.<pipeline>.alto.xml)",
+            default="",
+        ),
         instance_label_param(),
     )
 
-    def __init__(self, *, ocr_sidecar: str = "", label: str | None = None) -> None:
+    def __init__(
+        self, *, ocr_sidecar: str = "", pipeline: str = "", label: str | None = None
+    ) -> None:
+        if pipeline and file_component(pipeline) != pipeline:
+            # Refusé plutôt qu'assaini : ``../x`` n'est pas un nom de pipeline,
+            # et un nom assaini en silence lirait un autre fichier que celui
+            # qu'on croit avoir nommé.
+            raise AdapterStepError(
+                f"alto_source : réglage 'pipeline' {pipeline!r} — le nom tel "
+                f"qu'il figure dans le fichier ({file_component(pipeline)!r} ?), "
+                "lettres, chiffres, '_' et '-' seulement."
+            )
         self._sidecar = ocr_sidecar
+        self._pipeline = pipeline
         self._label = label
 
     @property
@@ -99,13 +153,20 @@ class AltoLayoutSource:
         if document.image_uri is None:
             return ()
         sidecar = (Path(self._sidecar),) if self._sidecar else ()
-        return (*_candidates(Path(document.image_uri)), *sidecar)
+        return (*self._candidates(Path(document.image_uri), document.id), *sidecar)
 
-    def _locate(self, image_path: Path) -> Path:
-        for candidate in _candidates(image_path):
+    def _candidates(self, image_path: Path, document_id: str) -> tuple[Path, ...]:
+        """Les ALTO cherchés pour un document, dans l'ordre où ils sont tentés."""
+        if self._pipeline:
+            return (image_path.with_name(alto_file_name(document_id, self._pipeline)),)
+        return alto_candidates(image_path)
+
+    def _locate(self, image_path: Path, document_id: str) -> Path:
+        candidats = self._candidates(image_path, document_id)
+        for candidate in candidats:
             if candidate.is_file():
                 return candidate
-        attendus = " ou ".join(repr(image_path.stem + s) for s in _SUFFIXES)
+        attendus = " ou ".join(repr(c.name) for c in candidats)
         raise AdapterStepError(
             f"{self.name} : aucun ALTO près de {image_path.name!r} "
             f"({attendus} attendu dans {image_path.parent})."
@@ -144,7 +205,7 @@ class AltoLayoutSource:
             raise AdapterStepError(
                 f"{self.name} : artefact IMAGE manquant ou sans URI."
             )
-        alto_path = self._locate(Path(image.uri))
+        alto_path = self._locate(Path(image.uri), context.document_id)
         try:
             layout = alto_to_layout(parse_alto(alto_path.read_bytes()))
         except CinocError as exc:
@@ -209,8 +270,10 @@ class AltoLayoutSource:
         )
 
 
-def _candidates(image_path: Path) -> tuple[Path, ...]:
-    """Les ALTO cherchés près de l'image, dans l'ordre où ils sont tentés."""
+def alto_candidates(image_path: Path) -> tuple[Path, ...]:
+    """Les ALTO **d'un autre outil** cherchés près de l'image, dans l'ordre
+    (``<stem>.xml`` puis ``<stem>.alto.xml``) — la règle que ``cinoc correct``
+    reprend pour apparier un dossier."""
     return tuple(image_path.with_name(image_path.stem + s) for s in _SUFFIXES)
 
 
@@ -265,4 +328,4 @@ def _apply_ocr(
     return layout.model_copy(update={"pages": pages}), remplacees, total
 
 
-__all__ = ["AltoLayoutSource"]
+__all__ = ["AltoLayoutSource", "alto_candidates", "alto_file_name", "file_component"]

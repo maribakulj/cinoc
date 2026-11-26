@@ -16,8 +16,8 @@ les commencer :
    transcriptions, ``cinoc corpus import zip``, un premier vrai OCR Tesseract,
    son rapport ; puis ``cinoc serve --reports-dir`` qui sert ce rapport **avec
    ses images** (D-282), et un run lancé depuis la page sur le même ZIP ;
-3. **corriger un ALTO existant** — ``cinoc correct`` sur l'ALTO que le
-   parcours 2 a produit.
+3. **corriger un ALTO existant** — ``cinoc correct --pipeline`` sur l'ALTO
+   que le parcours 2 a produit à côté de ses images.
 
 Opt-in : ``CINOC_INSTALLED_VENV`` nomme le venv à éprouver (job CI
 ``install-bare``). Sans lui, ces tests sautent — ils ne jugent pas l'arbre de
@@ -180,7 +180,7 @@ def first_run(tmp_path_factory: pytest.TempPathFactory) -> Path:
     cinoc("run", "corpus/corpus.yaml", "--recipe", "ocr_simple",
           "--set", "ocr.lang=eng", "--set", "ocr.alto=true",
           "-o", "rapport.html", "--json", "corpus/premier.json",
-          "--alto-dir", "alto", cwd=work)
+          "--alto-dir", "corpus", cwd=work)
     return work
 
 
@@ -201,7 +201,8 @@ def test_a_first_tesseract_run_reads_the_pages(first_run: Path) -> None:
         # Deux lignes nettes en 34 px : un vrai OCR les lit presque sans faute
         # (0,0 avec Tesseract 5.3.4). Le seuil dit « il a lu », pas « il est bon ».
         assert cer is not None and cer < 0.1, document
-    assert sorted(p.name for p in (first_run / "alto").iterdir()) == [
+    # À côté des images, sous le nom que ``cinoc correct --pipeline`` relit.
+    assert sorted(p.name for p in (first_run / "corpus").glob("*.alto.xml")) == [
         "page_001.ocr_simple_tesseract.alto.xml",
         "page_002.ocr_simple_tesseract.alto.xml",
     ]
@@ -212,19 +213,17 @@ def test_a_first_tesseract_run_reads_the_pages(first_run: Path) -> None:
 
 @installed
 def test_an_existing_alto_is_corrected(first_run: Path, tmp_path: Path) -> None:
+    """L'ALTO que le parcours 2 a écrit, corrigé **là où il est** — ni copie,
+    ni renommage (D-307) ; les transcriptions du corpus en sont la vérité."""
     _need("saknussemm")
-    alto = tmp_path / "alto"
-    alto.mkdir()
-    for page in ("page_001", "page_002"):
-        shutil.copy(first_run / "alto" / f"{page}.ocr_simple_tesseract.alto.xml",
-                    alto / f"{page}.xml")
-        shutil.copy(FIRST_CORPUS / f"{page}.png", alto / f"{page}.png")
-    done = cinoc("correct", "alto", "--no-ground-truth", "-o", "correction.html",
-                 cwd=tmp_path)
+    rapport = tmp_path / "correction.html"
+    sans = cinoc("correct", "corpus", "-o", str(rapport), cwd=first_run, expect=1)
+    assert "--pipeline (ocr_simple_tesseract)" in sans.stderr
+    done = cinoc("correct", "corpus", "--pipeline", "ocr_simple_tesseract",
+                 "-o", str(rapport), cwd=first_run)
+    assert "Vérité terrain texte : 2/2" in done.stdout
     assert "aucune en échec" in done.stdout
-    assert (tmp_path / "correction.html").read_text(encoding="utf-8").startswith(
-        "<!DOCTYPE html>"
-    )
+    assert rapport.read_text(encoding="utf-8").startswith("<!DOCTYPE html>")
 
 
 # --- parcours 2, suite : la page ---------------------------------------------

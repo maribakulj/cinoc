@@ -473,6 +473,7 @@ def main(argv: list[str] | None = None) -> int:
             return run_correction(
                 args.alto_dir,
                 args.output,
+                pipeline=args.pipeline,
                 producer=args.producer,
                 model=args.model,
                 host=args.host,

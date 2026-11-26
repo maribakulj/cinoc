@@ -94,7 +94,7 @@ and every other view: [`campaigns/2026-11-26-reference/README.md`](campaigns/202
 |---|---|---|
 | transcriptions from another tool (text or ALTO) | `precomputed` reads `page.<label>.txt` beside each image — no engine | [guide](docs/guide.md#scoring-ocr-that-cinoc-did-not-produce) |
 | a corpus and several candidate engines | `cinoc run` with recipes or a full YAML spec | [guide](docs/guide.md#the-run-config) |
-| ALTO to post‑correct inside its layout | `cinoc correct alto/` (extra `[saknussemm]`) | [guide](docs/guide.md#getting-a-corpus) |
+| ALTO to post‑correct inside its layout | `cinoc correct alto/` (extra `[saknussemm]`; `--pipeline <p>` for the ALTO of a Cinoc run; `<page>.gt.txt` beside it is the ground truth) | [guide](docs/guide.md#getting-a-corpus) |
 
 Each of these is run end to end on the **installed wheel** by CI
 (`tests/installed/`).

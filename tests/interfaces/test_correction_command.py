@@ -249,3 +249,72 @@ def test_a_clean_correction_says_so(
     )
     assert code == 0
     assert "Bilan : 2 unité(s), aucune en échec." in capsys.readouterr().out
+
+
+# --------------------------------------------------------------------------- #
+# Ce que mesurent les chiffres (D-307)
+# --------------------------------------------------------------------------- #
+
+
+def _correct(dossier: Path, sortie: Path, *extra: str) -> int:
+    from cinoc.interfaces.cli import main
+
+    return main(["correct", str(dossier), "-o", str(sortie), *extra])
+
+
+@_needs_saknussemm
+def test_an_ocr_alto_no_longer_scores_against_itself(
+    dossier_alto: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Le testeur : ``F1 RÉG. 1,0000 · CER RÉG. 0,0000`` sur un ALTO d'OCR, sans
+    un mot — la sortie comparée à sa propre entrée."""
+    sortie = tmp_path / "r.html"
+    assert _correct(dossier_alto, sortie) == 0
+    html = sortie.read_text(encoding="utf-8")
+    assert 'title="line_identity_cer"' not in html
+    assert "Rien n&#x27;est noté dans cette vue" in html or (
+        "Rien n'est noté dans cette vue" in html
+    )
+    assert "rien n'est noté" in capsys.readouterr().out
+
+
+@_needs_saknussemm
+def test_a_transcription_beside_the_alto_gives_a_real_cer(
+    dossier_alto: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    for nom in ("page1", "page2"):
+        (dossier_alto / f"{nom}.gt.txt").write_text(
+            "le soleil\nrien ici", encoding="utf-8"
+        )
+    sortie = tmp_path / "r.html"
+    assert _correct(dossier_alto, sortie) == 0
+    assert 'title="cer"' in sortie.read_text(encoding="utf-8")
+    assert "Vérité terrain texte : 2/2" in capsys.readouterr().out
+
+
+@_needs_saknussemm
+def test_no_ground_truth_says_why_the_table_is_empty(
+    dossier_alto: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (dossier_alto / "page1.gt.txt").write_text("le soleil", encoding="utf-8")
+    sortie = tmp_path / "r.html"
+    assert _correct(dossier_alto, sortie, "--no-ground-truth") == 0
+    assert 'title="cer"' not in sortie.read_text(encoding="utf-8")
+    assert "rien n'est noté" in capsys.readouterr().out
+
+
+@_needs_saknussemm
+def test_the_alto_of_a_cinoc_run_is_corrected_with_its_pipeline(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``cinoc hybrid`` / ``--alto-dir`` écrivent ``<doc>.<pipeline>.alto.xml`` :
+    ``cinoc correct`` le lisait pas (« aucune paire »)."""
+    dossier = tmp_path / "hybrid"
+    dossier.mkdir()
+    (dossier / "page1.ocr_simple_tesseract.alto.xml").write_bytes(_ALTO)
+    (dossier / "page1.png").write_bytes(b"pas une vraie image")
+    sortie = tmp_path / "r.html"
+    assert _correct(dossier, sortie) == 1
+    assert "--pipeline (ocr_simple_tesseract)" in capsys.readouterr().err
+    assert _correct(dossier, sortie, "--pipeline", "ocr_simple_tesseract") == 0
+    assert "1 document(s) corrigé(s)" in capsys.readouterr().out

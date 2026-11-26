@@ -63,7 +63,8 @@ def dossier(tmp_path: Path) -> Path:
 def test_a_corpus_pairs_each_alto_with_its_image(dossier: Path) -> None:
     corpus = corpus_from_alto(dossier)
     assert [d.id for d in corpus.documents] == ["a", "b"]
-    assert corpus.documents[0].gt_for(ArtifactType.LAYOUT) is not None
+    # Sans sidecar, l'ALTO est le texte de départ, jamais sa propre vérité (D-307).
+    assert corpus.documents[0].gt_for(ArtifactType.LAYOUT) is None
 
 
 def test_an_alto_without_its_image_is_skipped(tmp_path: Path) -> None:
@@ -85,9 +86,13 @@ def test_ocr_alto_declares_no_ground_truth(dossier: Path) -> None:
 
 
 def test_ground_truth_adds_the_structure_view(dossier: Path) -> None:
-    """Un ALTO transcrit juge la structure ; il ne juge pas le texte à plat — la
-    vue ``texte`` n'aurait aucune GT ``RAW_TEXT`` à lire, donc rien à noter."""
-    spec = plan_correction(corpus_from_alto(dossier))
+    """Un ALTO transcrit (le texte de départ venant d'un sidecar d'OCR) juge la
+    structure ; il ne juge pas le texte à plat — la vue ``texte`` n'aurait
+    aucune GT ``RAW_TEXT`` à lire, donc rien à noter."""
+    spec = plan_correction(
+        corpus_from_alto(dossier, ocr_sidecar="ocr.json"),
+        source__ocr_sidecar="ocr.json",
+    )
     noms = [v.name for v in spec.evaluation.views]
     assert noms == ["structure"]
     structure = spec.evaluation.views[0]

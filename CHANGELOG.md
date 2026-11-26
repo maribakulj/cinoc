@@ -48,6 +48,30 @@ publier, et son moment, appartiennent au mainteneur.
 
 ### Corrigé
 
+- **`cinoc correct` ne note plus un ALTO contre lui-même.** Sur un ALTO
+  d'OCR, la commande déclarait cet ALTO vérité terrain de la vue `structure`
+  et affichait `F1 1,0 · CER 0,0` — la sortie comparée à sa propre entrée —,
+  sans un mot ; une transcription `<nom>.gt.txt` posée à côté était ignorée.
+  La règle est désormais celle du dépôt ZIP : `<nom>.gt.txt` (ou `<nom>.txt`)
+  est la vérité du texte, `<nom>.gt.xml` celle de la mise en page, et l'ALTO
+  corrigé n'est une vérité que sous `--ocr-sidecar`. La commande dit avant le
+  run ce que mesureront les chiffres ; une vue sans aucun chiffre le dit dans
+  le rapport (FR/EN) au lieu d'un tableau vide. **Changement de
+  comportement** : sans `--ocr-sidecar`, la vue `structure` n'est plus
+  ajoutée ; `--no-ground-truth` ignore désormais toute vérité, `.gt.txt`
+  compris.
+
+- **L'ALTO qu'écrit Cinoc se relit.** `cinoc run --alto-dir`, `cinoc hybrid`
+  et l'`alto.zip` du web nomment tous l'ALTO `<doc>.<pipeline>.alto.xml`
+  (l'export web portait un autre nom, et l'identifiant de document perdait ses
+  points) ; `cinoc correct --pipeline <p>` et le réglage `pipeline` de la
+  brique `alto_source` (recette `alto_corrige`, web compris) le lisent à côté
+  de l'image. Un dossier qui n'en porte que de tels est refusé en nommant les
+  pipelines trouvés ; `<nom>.alto.xml` est apparié comme `<nom>.xml`. Deux
+  pipelines qui écriraient le même fichier sont refusés au lieu de
+  s'écraser. **Changement de comportement** : noms des fichiers de
+  l'`alto.zip` web.
+
 - **`cinoc serve` garde ce qu'on fait dans la page.** Un corpus déposé, un run
   lancé et son historique disparaissaient au redémarrage : le dossier de
   données était un temporaire neuf à chaque lancement, et la liste des corpus
