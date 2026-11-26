@@ -1,0 +1,3390 @@
+{
+  "schema_version": 4,
+  "manifest": {
+    "run_id": "pilote-bnl-s10",
+    "corpus_name": "bnl-pilote",
+    "n_documents": 10,
+    "pipeline_specs": [
+      {
+        "name": "tesseract_fra_deu",
+        "description": "",
+        "initial_inputs": [
+          "image"
+        ],
+        "steps": [
+          {
+            "id": "ocr",
+            "kind": "ocr",
+            "adapter_name": "tesseract:fra_deu",
+            "params": {},
+            "input_types": [
+              "image"
+            ],
+            "output_types": [
+              "raw_text"
+            ],
+            "inputs_from": {},
+            "fanout": false,
+            "crop": false,
+            "merge_from": []
+          }
+        ]
+      },
+      {
+        "name": "tesseract_fraktur_fra",
+        "description": "",
+        "initial_inputs": [
+          "image"
+        ],
+        "steps": [
+          {
+            "id": "ocr",
+            "kind": "ocr",
+            "adapter_name": "tesseract:fraktur_fra",
+            "params": {},
+            "input_types": [
+              "image"
+            ],
+            "output_types": [
+              "raw_text"
+            ],
+            "inputs_from": {},
+            "fanout": false,
+            "crop": false,
+            "merge_from": []
+          }
+        ]
+      },
+      {
+        "name": "qwen25vl_3b_zero_shot",
+        "description": "",
+        "initial_inputs": [
+          "image"
+        ],
+        "steps": [
+          {
+            "id": "vlm",
+            "kind": "llm",
+            "adapter_name": "ollama:qwen_vlm",
+            "params": {},
+            "input_types": [
+              "image"
+            ],
+            "output_types": [
+              "raw_text"
+            ],
+            "inputs_from": {},
+            "fanout": false,
+            "crop": false,
+            "merge_from": []
+          }
+        ]
+      },
+      {
+        "name": "tesseract_fraktur_fra_qwen_corr",
+        "description": "",
+        "initial_inputs": [
+          "image"
+        ],
+        "steps": [
+          {
+            "id": "ocr",
+            "kind": "ocr",
+            "adapter_name": "tesseract:fraktur_fra",
+            "params": {},
+            "input_types": [
+              "image"
+            ],
+            "output_types": [
+              "raw_text"
+            ],
+            "inputs_from": {},
+            "fanout": false,
+            "crop": false,
+            "merge_from": []
+          },
+          {
+            "id": "corr",
+            "kind": "llm",
+            "adapter_name": "ollama:qwen_corr",
+            "params": {},
+            "input_types": [
+              "raw_text"
+            ],
+            "output_types": [
+              "corrected_text"
+            ],
+            "inputs_from": {},
+            "fanout": false,
+            "crop": false,
+            "merge_from": []
+          }
+        ]
+      }
+    ],
+    "adapter_kwargs": {
+      "ollama:qwen_corr": {
+        "label": "qwen_corr",
+        "model": "qwen2.5vl:3b",
+        "host": "http://127.0.0.1:11434",
+        "role": "text_only",
+        "max_tokens": 2048,
+        "prompt": "Tu es un expert en presse européenne du XIXe siècle et en transcription de journaux multilingues (1800–1914), couvrant notamment le français, l'anglais, l'allemand, l'italien, l'espagnol et le néerlandais.\n\nOn te fournit la sortie brute d'un moteur OCR appliqué à une page de presse ancienne pouvant mêler plusieurs langues : titres, dépêches télégraphiques étrangères, annonces, citations, sections bilingues.\nTa tâche est de corriger les erreurs de transcription en te basant sur :\n- L'identification de la langue de CHAQUE segment, sans jamais traduire ni uniformiser : chaque passage reste dans sa langue d'origine\n- Les conventions typographiques propres à chaque aire : ſ long et Fraktur pour l'allemand, accents romans (à/è/ì/ò/ù, ñ, ç), tréma néerlandais, guillemets variables (« », „ \", \" \")\n- Les contraintes matérielles de la presse XIXe : encre passée, transparence du verso, caractères cassés, bruit du microfilm\n- La mise en page multi-colonnes et la césure de fin de ligne/colonne à recoller, langue par langue\n- Les changements de langue en cours d'article (citations, dépêches) : ne pas « corriger » un mot étranger vers la langue dominante de la page\n\nRÈGLES IMPÉRATIVES :\n1. Retourne UNIQUEMENT le texte corrigé — sans commentaire, sans explication, sans balise, sans annotation de langue\n2. Conserve FIDÈLEMENT l'orthographe d'époque de CHAQUE langue : ne modernise ni ne traduis aucun passage\n3. Recolle les mots coupés par césure en respectant la langue du mot ; ne supprime pas les traits d'union légitimes\n4. Conserve la ponctuation, les guillemets, les capitales et la casse propres à chaque langue\n5. N'harmonise PAS les langues entre elles et n'invente aucun texte pour combler une coupe de colonne\n6. En cas de doute sur un passage ou sa langue, conserve la forme OCR plutôt que d'inventer\n\nOCR BRUT :\n{ocr_text}\n",
+        "temperature": 0.0,
+        "top_p": null,
+        "seed": 0,
+        "num_ctx": 16384
+      },
+      "ollama:qwen_vlm": {
+        "label": "qwen_vlm",
+        "model": "qwen2.5vl:3b",
+        "host": "http://127.0.0.1:11434",
+        "role": "zero_shot",
+        "max_tokens": 2048,
+        "prompt": "Transcris fidèlement le texte de cette image de document patrimonial. Conserve l'orthographe historique et la ponctuation d'origine. N'ajoute aucun commentaire : réponds par le seul texte transcrit.",
+        "temperature": 0.0,
+        "top_p": null,
+        "seed": 0,
+        "num_ctx": 16384
+      },
+      "tesseract:fra_deu": {
+        "label": "fra_deu",
+        "lang": "fra+deu+ltz"
+      },
+      "tesseract:fraktur_fra": {
+        "label": "fraktur_fra",
+        "lang": "Fraktur+fra"
+      }
+    },
+    "view_specs": [
+      {
+        "name": "texte",
+        "description": "",
+        "candidate_types": [
+          "raw_text",
+          "corrected_text"
+        ],
+        "projection": null,
+        "projections_by_source_type": {},
+        "normalization_profile": "nfc",
+        "char_exclude": null,
+        "metric_names": [
+          "cer",
+          "wer",
+          "cer_diplo",
+          "mer",
+          "hallucination"
+        ],
+        "ignored_dimensions": [],
+        "warnings": []
+      },
+      {
+        "name": "sans_cesure",
+        "description": "",
+        "candidate_types": [
+          "raw_text",
+          "corrected_text"
+        ],
+        "projection": null,
+        "projections_by_source_type": {},
+        "normalization_profile": "dehyphenated",
+        "char_exclude": null,
+        "metric_names": [
+          "cer",
+          "wer"
+        ],
+        "ignored_dimensions": [],
+        "warnings": []
+      }
+    ],
+    "failure_policy": "exclude",
+    "code_version": "0.1.1.dev159+g78c21e6ef",
+    "started_at": "2026-11-26T03:27:54.234999Z",
+    "completed_at": "2026-11-26T03:33:00.566594Z",
+    "dependencies_lock": {
+      "cinoc": "0.1.1.dev159+g78c21e6ef",
+      "fastapi": "0.165.0",
+      "httpcore": "1.0.9",
+      "httpx": "0.28.1",
+      "jinja2": "3.1.6",
+      "lxml": "6.1.3",
+      "numpy": "2.4.6",
+      "pillow": "13.0.0.post1",
+      "pydantic": "2.13.5",
+      "pytesseract": "0.3.13",
+      "python-multipart": "0.0.32",
+      "pyyaml": "6.0.3",
+      "rapidfuzz": "3.14.6",
+      "saknussemm": "0.9.0",
+      "scipy": "1.18.1",
+      "uvicorn": "0.54.0"
+    },
+    "system_binaries_lock": {
+      "tesseract": "tesseract 5.3.4"
+    },
+    "unicode_version": "15.1.0",
+    "module_versions": {
+      "ollama:qwen_corr": "2.1",
+      "ollama:qwen_vlm": "2.1",
+      "tesseract:fra_deu": "1.0",
+      "tesseract:fraktur_fra": "1.0"
+    },
+    "served_models": {
+      "ollama:qwen_corr": [
+        "qwen2.5vl:3b"
+      ],
+      "ollama:qwen_vlm": [
+        "qwen2.5vl:3b"
+      ]
+    },
+    "metadata": {},
+    "artifacts_dir": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/archive"
+  },
+  "pipelines": [
+    {
+      "pipeline": "tesseract_fra_deu",
+      "view": "texte",
+      "aggregate": [
+        {
+          "metric": "cer",
+          "value": 0.10384507437552624,
+          "support": 10,
+          "expected": 10
+        },
+        {
+          "metric": "wer",
+          "value": 0.31527531083481347,
+          "support": 10,
+          "expected": 10
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.10384507437552624,
+          "support": 10,
+          "expected": 10
+        },
+        {
+          "metric": "mer",
+          "value": 0.308964316797215,
+          "support": 10,
+          "expected": 10
+        },
+        {
+          "metric": "hallucination",
+          "value": 0.16189931350114417,
+          "support": 10,
+          "expected": 10
+        }
+      ]
+    },
+    {
+      "pipeline": "tesseract_fraktur_fra",
+      "view": "texte",
+      "aggregate": [
+        {
+          "metric": "cer",
+          "value": 0.09149593039573393,
+          "support": 10,
+          "expected": 10
+        },
+        {
+          "metric": "wer",
+          "value": 0.31438721136767317,
+          "support": 10,
+          "expected": 10
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.07634016278417065,
+          "support": 10,
+          "expected": 10
+        },
+        {
+          "metric": "mer",
+          "value": 0.30569948186528495,
+          "support": 10,
+          "expected": 10
+        },
+        {
+          "metric": "hallucination",
+          "value": 0.16203178206583427,
+          "support": 10,
+          "expected": 10
+        }
+      ]
+    },
+    {
+      "pipeline": "qwen25vl_3b_zero_shot",
+      "view": "texte",
+      "aggregate": [
+        {
+          "metric": "cer",
+          "value": 0.05304518664047151,
+          "support": 10,
+          "expected": 10
+        },
+        {
+          "metric": "wer",
+          "value": 0.15452930728241562,
+          "support": 10,
+          "expected": 10
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.05304518664047151,
+          "support": 10,
+          "expected": 10
+        },
+        {
+          "metric": "mer",
+          "value": 0.15398230088495576,
+          "support": 10,
+          "expected": 10
+        },
+        {
+          "metric": "hallucination",
+          "value": 0.05877281218565886,
+          "support": 10,
+          "expected": 10
+        }
+      ]
+    },
+    {
+      "pipeline": "tesseract_fraktur_fra_qwen_corr",
+      "view": "texte",
+      "aggregate": [
+        {
+          "metric": "cer",
+          "value": 0.11100196463654224,
+          "support": 10,
+          "expected": 10
+        },
+        {
+          "metric": "wer",
+          "value": 0.2912966252220249,
+          "support": 10,
+          "expected": 10
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.10707269155206287,
+          "support": 10,
+          "expected": 10
+        },
+        {
+          "metric": "mer",
+          "value": 0.2847222222222222,
+          "support": 10,
+          "expected": 10
+        },
+        {
+          "metric": "hallucination",
+          "value": 0.1391053391053391,
+          "support": 10,
+          "expected": 10
+        }
+      ]
+    },
+    {
+      "pipeline": "tesseract_fra_deu",
+      "view": "sans_cesure",
+      "aggregate": [
+        {
+          "metric": "cer",
+          "value": 0.10416076988395132,
+          "support": 10,
+          "expected": 10
+        },
+        {
+          "metric": "wer",
+          "value": 0.32755474452554745,
+          "support": 10,
+          "expected": 10
+        }
+      ]
+    },
+    {
+      "pipeline": "tesseract_fraktur_fra",
+      "view": "sans_cesure",
+      "aggregate": [
+        {
+          "metric": "cer",
+          "value": 0.09128219643362581,
+          "support": 10,
+          "expected": 10
+        },
+        {
+          "metric": "wer",
+          "value": 0.32116788321167883,
+          "support": 10,
+          "expected": 10
+        }
+      ]
+    },
+    {
+      "pipeline": "qwen25vl_3b_zero_shot",
+      "view": "sans_cesure",
+      "aggregate": [
+        {
+          "metric": "cer",
+          "value": 0.04684404189074441,
+          "support": 10,
+          "expected": 10
+        },
+        {
+          "metric": "wer",
+          "value": 0.1177007299270073,
+          "support": 10,
+          "expected": 10
+        }
+      ]
+    },
+    {
+      "pipeline": "tesseract_fraktur_fra_qwen_corr",
+      "view": "sans_cesure",
+      "aggregate": [
+        {
+          "metric": "cer",
+          "value": 0.10769883951316161,
+          "support": 10,
+          "expected": 10
+        },
+        {
+          "metric": "wer",
+          "value": 0.28102189781021897,
+          "support": 10,
+          "expected": 10
+        }
+      ]
+    }
+  ],
+  "documents": [
+    {
+      "document_id": "0000",
+      "pipeline": "tesseract_fra_deu",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.0772626931567329,
+          "support": 906,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.2138364779874214,
+          "support": 159,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.0772626931567329,
+          "support": 906,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.20606060606060606,
+          "support": 165,
+          "expected": null
+        },
+        {
+          "metric": "hallucination",
+          "value": 0.11210762331838565,
+          "support": 892,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0000.png"
+    },
+    {
+      "document_id": "0003",
+      "pipeline": "tesseract_fra_deu",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.11061285500747384,
+          "support": 669,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.46875,
+          "support": 96,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.11061285500747384,
+          "support": 669,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.4639175257731959,
+          "support": 97,
+          "expected": null
+        },
+        {
+          "metric": "hallucination",
+          "value": 0.20916030534351146,
+          "support": 655,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0003.png"
+    },
+    {
+      "document_id": "0006",
+      "pipeline": "tesseract_fra_deu",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.022727272727272728,
+          "support": 572,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.10891089108910891,
+          "support": 101,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.022727272727272728,
+          "support": 572,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.10576923076923077,
+          "support": 104,
+          "expected": null
+        },
+        {
+          "metric": "hallucination",
+          "value": 0.04553415061295972,
+          "support": 571,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0006.png"
+    },
+    {
+      "document_id": "0009",
+      "pipeline": "tesseract_fra_deu",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.15903413821815154,
+          "support": 1201,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.5,
+          "support": 202,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.15903413821815154,
+          "support": 1201,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.48792270531400966,
+          "support": 207,
+          "expected": null
+        },
+        {
+          "metric": "hallucination",
+          "value": 0.2521150592216582,
+          "support": 1182,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0009.png"
+    },
+    {
+      "document_id": "0011",
+      "pipeline": "tesseract_fra_deu",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.1836734693877551,
+          "support": 98,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.45454545454545453,
+          "support": 22,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.1836734693877551,
+          "support": 98,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.43478260869565216,
+          "support": 23,
+          "expected": null
+        },
+        {
+          "metric": "hallucination",
+          "value": 0.3020833333333333,
+          "support": 96,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0011.png"
+    },
+    {
+      "document_id": "0012",
+      "pipeline": "tesseract_fra_deu",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.045743329097839895,
+          "support": 787,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.16153846153846155,
+          "support": 130,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.045743329097839895,
+          "support": 787,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.15555555555555556,
+          "support": 135,
+          "expected": null
+        },
+        {
+          "metric": "hallucination",
+          "value": 0.08260325406758448,
+          "support": 799,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0012.png"
+    },
+    {
+      "document_id": "0015",
+      "pipeline": "tesseract_fra_deu",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.3064516129032258,
+          "support": 496,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.45569620253164556,
+          "support": 79,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.3064516129032258,
+          "support": 496,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.4444444444444444,
+          "support": 81,
+          "expected": null
+        },
+        {
+          "metric": "hallucination",
+          "value": 0.27790973871733965,
+          "support": 421,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0015.png"
+    },
+    {
+      "document_id": "0022",
+      "pipeline": "tesseract_fra_deu",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.0704529115744069,
+          "support": 1391,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.24102564102564103,
+          "support": 195,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.0704529115744069,
+          "support": 1391,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.24102564102564103,
+          "support": 195,
+          "expected": null
+        },
+        {
+          "metric": "hallucination",
+          "value": 0.12807525325615052,
+          "support": 1382,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0022.png"
+    },
+    {
+      "document_id": "0023",
+      "pipeline": "tesseract_fra_deu",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.0,
+          "support": 51,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.0,
+          "support": 6,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.0,
+          "support": 51,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.0,
+          "support": 6,
+          "expected": null
+        },
+        {
+          "metric": "hallucination",
+          "value": 0.0,
+          "support": 49,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0023.png"
+    },
+    {
+      "document_id": "0031",
+      "pipeline": "tesseract_fra_deu",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.09214659685863874,
+          "support": 955,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.36764705882352944,
+          "support": 136,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.09214659685863874,
+          "support": 955,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.36764705882352944,
+          "support": 136,
+          "expected": null
+        },
+        {
+          "metric": "hallucination",
+          "value": 0.1925925925925926,
+          "support": 945,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0031.png"
+    },
+    {
+      "document_id": "0000",
+      "pipeline": "tesseract_fraktur_fra",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.07947019867549669,
+          "support": 906,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.23270440251572327,
+          "support": 159,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.07947019867549669,
+          "support": 906,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.2215568862275449,
+          "support": 167,
+          "expected": null
+        },
+        {
+          "metric": "hallucination",
+          "value": 0.11447811447811448,
+          "support": 891,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0000.png"
+    },
+    {
+      "document_id": "0003",
+      "pipeline": "tesseract_fraktur_fra",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.07473841554559044,
+          "support": 669,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.375,
+          "support": 96,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.04484304932735426,
+          "support": 669,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.3711340206185567,
+          "support": 97,
+          "expected": null
+        },
+        {
+          "metric": "hallucination",
+          "value": 0.16767371601208458,
+          "support": 662,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0003.png"
+    },
+    {
+      "document_id": "0006",
+      "pipeline": "tesseract_fraktur_fra",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.013986013986013986,
+          "support": 572,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.07920792079207921,
+          "support": 101,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.013986013986013986,
+          "support": 572,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.07766990291262135,
+          "support": 103,
+          "expected": null
+        },
+        {
+          "metric": "hallucination",
+          "value": 0.034904013961605584,
+          "support": 573,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0006.png"
+    },
+    {
+      "document_id": "0009",
+      "pipeline": "tesseract_fraktur_fra",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.16319733555370525,
+          "support": 1201,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.5742574257425742,
+          "support": 202,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.1398834304746045,
+          "support": 1201,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.5658536585365853,
+          "support": 205,
+          "expected": null
+        },
+        {
+          "metric": "hallucination",
+          "value": 0.3248355263157895,
+          "support": 1216,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0009.png"
+    },
+    {
+      "document_id": "0011",
+      "pipeline": "tesseract_fraktur_fra",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.12244897959183673,
+          "support": 98,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.3181818181818182,
+          "support": 22,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.12244897959183673,
+          "support": 98,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.3181818181818182,
+          "support": 22,
+          "expected": null
+        },
+        {
+          "metric": "hallucination",
+          "value": 0.21505376344086022,
+          "support": 93,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0011.png"
+    },
+    {
+      "document_id": "0012",
+      "pipeline": "tesseract_fraktur_fra",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.048284625158831,
+          "support": 787,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.16923076923076924,
+          "support": 130,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.048284625158831,
+          "support": 787,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.16176470588235295,
+          "support": 136,
+          "expected": null
+        },
+        {
+          "metric": "hallucination",
+          "value": 0.08260325406758448,
+          "support": 799,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0012.png"
+    },
+    {
+      "document_id": "0015",
+      "pipeline": "tesseract_fraktur_fra",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.2903225806451613,
+          "support": 496,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.5189873417721519,
+          "support": 79,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.2903225806451613,
+          "support": 496,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.4659090909090909,
+          "support": 88,
+          "expected": null
+        },
+        {
+          "metric": "hallucination",
+          "value": 0.2899543378995434,
+          "support": 438,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0015.png"
+    },
+    {
+      "document_id": "0022",
+      "pipeline": "tesseract_fraktur_fra",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.05966930265995687,
+          "support": 1391,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.2512820512820513,
+          "support": 195,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.037383177570093455,
+          "support": 1391,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.2474747474747475,
+          "support": 198,
+          "expected": null
+        },
+        {
+          "metric": "hallucination",
+          "value": 0.12608695652173912,
+          "support": 1380,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0022.png"
+    },
+    {
+      "document_id": "0023",
+      "pipeline": "tesseract_fraktur_fra",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.0,
+          "support": 51,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.0,
+          "support": 6,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.0,
+          "support": 51,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.0,
+          "support": 6,
+          "expected": null
+        },
+        {
+          "metric": "hallucination",
+          "value": 0.0,
+          "support": 49,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0023.png"
+    },
+    {
+      "document_id": "0031",
+      "pipeline": "tesseract_fraktur_fra",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.05130890052356021,
+          "support": 955,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.27941176470588236,
+          "support": 136,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.020942408376963352,
+          "support": 955,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.27941176470588236,
+          "support": 136,
+          "expected": null
+        },
+        {
+          "metric": "hallucination",
+          "value": 0.1341077085533263,
+          "support": 947,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0031.png"
+    },
+    {
+      "document_id": "0000",
+      "pipeline": "qwen25vl_3b_zero_shot",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.04304635761589404,
+          "support": 906,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.15723270440251572,
+          "support": 159,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.04304635761589404,
+          "support": 906,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.15723270440251572,
+          "support": 159,
+          "expected": null
+        },
+        {
+          "metric": "hallucination",
+          "value": 0.066815144766147,
+          "support": 898,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0000.png"
+    },
+    {
+      "document_id": "0003",
+      "pipeline": "qwen25vl_3b_zero_shot",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.0343796711509716,
+          "support": 669,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.10416666666666667,
+          "support": 96,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.0343796711509716,
+          "support": 669,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.10416666666666667,
+          "support": 96,
+          "expected": null
+        },
+        {
+          "metric": "hallucination",
+          "value": 0.03474320241691843,
+          "support": 662,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0003.png"
+    },
+    {
+      "document_id": "0006",
+      "pipeline": "qwen25vl_3b_zero_shot",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.03671328671328671,
+          "support": 572,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.12871287128712872,
+          "support": 101,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.03671328671328671,
+          "support": 572,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.1262135922330097,
+          "support": 103,
+          "expected": null
+        },
+        {
+          "metric": "hallucination",
+          "value": 0.056338028169014086,
+          "support": 568,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0006.png"
+    },
+    {
+      "document_id": "0009",
+      "pipeline": "qwen25vl_3b_zero_shot",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.03413821815154038,
+          "support": 1201,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.10396039603960396,
+          "support": 202,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.03413821815154038,
+          "support": 1201,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.10396039603960396,
+          "support": 202,
+          "expected": null
+        },
+        {
+          "metric": "hallucination",
+          "value": 0.0379746835443038,
+          "support": 1185,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0009.png"
+    },
+    {
+      "document_id": "0011",
+      "pipeline": "qwen25vl_3b_zero_shot",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.10204081632653061,
+          "support": 98,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.3181818181818182,
+          "support": 22,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.10204081632653061,
+          "support": 98,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.3181818181818182,
+          "support": 22,
+          "expected": null
+        },
+        {
+          "metric": "hallucination",
+          "value": 0.23232323232323232,
+          "support": 99,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0011.png"
+    },
+    {
+      "document_id": "0012",
+      "pipeline": "qwen25vl_3b_zero_shot",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.06480304955527319,
+          "support": 787,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.3076923076923077,
+          "support": 130,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.06480304955527319,
+          "support": 787,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.30303030303030304,
+          "support": 132,
+          "expected": null
+        },
+        {
+          "metric": "hallucination",
+          "value": 0.09455958549222798,
+          "support": 772,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0012.png"
+    },
+    {
+      "document_id": "0015",
+      "pipeline": "qwen25vl_3b_zero_shot",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.22379032258064516,
+          "support": 496,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.25316455696202533,
+          "support": 79,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.22379032258064516,
+          "support": 496,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.25316455696202533,
+          "support": 79,
+          "expected": null
+        },
+        {
+          "metric": "hallucination",
+          "value": 0.05454545454545454,
+          "support": 385,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0015.png"
+    },
+    {
+      "document_id": "0022",
+      "pipeline": "qwen25vl_3b_zero_shot",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.026599568655643422,
+          "support": 1391,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.08717948717948718,
+          "support": 195,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.026599568655643422,
+          "support": 1391,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.08717948717948718,
+          "support": 195,
+          "expected": null
+        },
+        {
+          "metric": "hallucination",
+          "value": 0.04232424677187949,
+          "support": 1394,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0022.png"
+    },
+    {
+      "document_id": "0023",
+      "pipeline": "qwen25vl_3b_zero_shot",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.0196078431372549,
+          "support": 51,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.0,
+          "support": 6,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.0196078431372549,
+          "support": 51,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.0,
+          "support": 6,
+          "expected": null
+        },
+        {
+          "metric": "hallucination",
+          "value": 0.061224489795918366,
+          "support": 49,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0023.png"
+    },
+    {
+      "document_id": "0031",
+      "pipeline": "qwen25vl_3b_zero_shot",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.04607329842931937,
+          "support": 955,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.15441176470588236,
+          "support": 136,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.04607329842931937,
+          "support": 955,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.15441176470588236,
+          "support": 136,
+          "expected": null
+        },
+        {
+          "metric": "hallucination",
+          "value": 0.07391763463569166,
+          "support": 947,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0031.png"
+    },
+    {
+      "document_id": "0000",
+      "pipeline": "tesseract_fraktur_fra_qwen_corr",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.08719646799116998,
+          "support": 906,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.27044025157232704,
+          "support": 159,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.08719646799116998,
+          "support": 906,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.25748502994011974,
+          "support": 167,
+          "expected": null
+        },
+        {
+          "metric": "hallucination",
+          "value": 0.13804713804713806,
+          "support": 891,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0000.png"
+    },
+    {
+      "document_id": "0003",
+      "pipeline": "tesseract_fraktur_fra_qwen_corr",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.11210762331838565,
+          "support": 669,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.23958333333333334,
+          "support": 96,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.11210762331838565,
+          "support": 669,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.23958333333333334,
+          "support": 96,
+          "expected": null
+        },
+        {
+          "metric": "hallucination",
+          "value": 0.08874801901743265,
+          "support": 631,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0003.png"
+    },
+    {
+      "document_id": "0006",
+      "pipeline": "tesseract_fraktur_fra_qwen_corr",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.03496503496503497,
+          "support": 572,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.10891089108910891,
+          "support": 101,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.03496503496503497,
+          "support": 572,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.10891089108910891,
+          "support": 101,
+          "expected": null
+        },
+        {
+          "metric": "hallucination",
+          "value": 0.05132743362831858,
+          "support": 565,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0006.png"
+    },
+    {
+      "document_id": "0009",
+      "pipeline": "tesseract_fraktur_fra_qwen_corr",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.1623646960865945,
+          "support": 1201,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.5742574257425742,
+          "support": 202,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.13905079100749376,
+          "support": 1201,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.5658536585365853,
+          "support": 205,
+          "expected": null
+        },
+        {
+          "metric": "hallucination",
+          "value": 0.3242798353909465,
+          "support": 1215,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0009.png"
+    },
+    {
+      "document_id": "0011",
+      "pipeline": "tesseract_fraktur_fra_qwen_corr",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.12244897959183673,
+          "support": 98,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.3181818181818182,
+          "support": 22,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.12244897959183673,
+          "support": 98,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.3181818181818182,
+          "support": 22,
+          "expected": null
+        },
+        {
+          "metric": "hallucination",
+          "value": 0.21505376344086022,
+          "support": 93,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0011.png"
+    },
+    {
+      "document_id": "0012",
+      "pipeline": "tesseract_fraktur_fra_qwen_corr",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.06353240152477764,
+          "support": 787,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.23076923076923078,
+          "support": 130,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.06353240152477764,
+          "support": 787,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.2222222222222222,
+          "support": 135,
+          "expected": null
+        },
+        {
+          "metric": "hallucination",
+          "value": 0.1,
+          "support": 790,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0012.png"
+    },
+    {
+      "document_id": "0015",
+      "pipeline": "tesseract_fraktur_fra_qwen_corr",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.2903225806451613,
+          "support": 496,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.5189873417721519,
+          "support": 79,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.2903225806451613,
+          "support": 496,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.4659090909090909,
+          "support": 88,
+          "expected": null
+        },
+        {
+          "metric": "hallucination",
+          "value": 0.2899543378995434,
+          "support": 438,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0015.png"
+    },
+    {
+      "document_id": "0022",
+      "pipeline": "tesseract_fraktur_fra_qwen_corr",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.09202012940330698,
+          "support": 1391,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.15384615384615385,
+          "support": 195,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.09202012940330698,
+          "support": 1391,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.15306122448979592,
+          "support": 196,
+          "expected": null
+        },
+        {
+          "metric": "hallucination",
+          "value": 0.048265460030165915,
+          "support": 1326,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0022.png"
+    },
+    {
+      "document_id": "0023",
+      "pipeline": "tesseract_fraktur_fra_qwen_corr",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.23529411764705882,
+          "support": 51,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.16666666666666666,
+          "support": 6,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.23529411764705882,
+          "support": 51,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.16666666666666666,
+          "support": 6,
+          "expected": null
+        },
+        {
+          "metric": "hallucination",
+          "value": 0.0,
+          "support": 37,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0023.png"
+    },
+    {
+      "document_id": "0031",
+      "pipeline": "tesseract_fraktur_fra_qwen_corr",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.07958115183246073,
+          "support": 955,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.19117647058823528,
+          "support": 136,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.07958115183246073,
+          "support": 955,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.19117647058823528,
+          "support": 136,
+          "expected": null
+        },
+        {
+          "metric": "hallucination",
+          "value": 0.07627118644067797,
+          "support": 944,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0031.png"
+    },
+    {
+      "document_id": "0000",
+      "pipeline": "tesseract_fra_deu",
+      "view": "sans_cesure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.07683741648106904,
+          "support": 898,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.22580645161290322,
+          "support": 155,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0000.png"
+    },
+    {
+      "document_id": "0003",
+      "pipeline": "tesseract_fra_deu",
+      "view": "sans_cesure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.11346444780635401,
+          "support": 661,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.5108695652173914,
+          "support": 92,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0003.png"
+    },
+    {
+      "document_id": "0006",
+      "pipeline": "tesseract_fra_deu",
+      "view": "sans_cesure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.022887323943661973,
+          "support": 568,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.1111111111111111,
+          "support": 99,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0006.png"
+    },
+    {
+      "document_id": "0009",
+      "pipeline": "tesseract_fra_deu",
+      "view": "sans_cesure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.16063919259882253,
+          "support": 1189,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.5255102040816326,
+          "support": 196,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0009.png"
+    },
+    {
+      "document_id": "0011",
+      "pipeline": "tesseract_fra_deu",
+      "view": "sans_cesure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.1836734693877551,
+          "support": 98,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.45454545454545453,
+          "support": 22,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0011.png"
+    },
+    {
+      "document_id": "0012",
+      "pipeline": "tesseract_fra_deu",
+      "view": "sans_cesure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.0469361147327249,
+          "support": 767,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.18333333333333332,
+          "support": 120,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0012.png"
+    },
+    {
+      "document_id": "0015",
+      "pipeline": "tesseract_fra_deu",
+      "view": "sans_cesure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.3064516129032258,
+          "support": 496,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.45569620253164556,
+          "support": 79,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0015.png"
+    },
+    {
+      "document_id": "0022",
+      "pipeline": "tesseract_fra_deu",
+      "view": "sans_cesure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.0704529115744069,
+          "support": 1391,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.24102564102564103,
+          "support": 195,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0022.png"
+    },
+    {
+      "document_id": "0023",
+      "pipeline": "tesseract_fra_deu",
+      "view": "sans_cesure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.0,
+          "support": 51,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.0,
+          "support": 6,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0023.png"
+    },
+    {
+      "document_id": "0031",
+      "pipeline": "tesseract_fra_deu",
+      "view": "sans_cesure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.08870116156282999,
+          "support": 947,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.36363636363636365,
+          "support": 132,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0031.png"
+    },
+    {
+      "document_id": "0000",
+      "pipeline": "tesseract_fraktur_fra",
+      "view": "sans_cesure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.07906458797327394,
+          "support": 898,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.24516129032258063,
+          "support": 155,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0000.png"
+    },
+    {
+      "document_id": "0003",
+      "pipeline": "tesseract_fraktur_fra",
+      "view": "sans_cesure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.07715582450832073,
+          "support": 661,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.41304347826086957,
+          "support": 92,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0003.png"
+    },
+    {
+      "document_id": "0006",
+      "pipeline": "tesseract_fraktur_fra",
+      "view": "sans_cesure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.014084507042253521,
+          "support": 568,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.08080808080808081,
+          "support": 99,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0006.png"
+    },
+    {
+      "document_id": "0009",
+      "pipeline": "tesseract_fraktur_fra",
+      "view": "sans_cesure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.16232127838519764,
+          "support": 1189,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.5816326530612245,
+          "support": 196,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0009.png"
+    },
+    {
+      "document_id": "0011",
+      "pipeline": "tesseract_fraktur_fra",
+      "view": "sans_cesure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.12244897959183673,
+          "support": 98,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.3181818181818182,
+          "support": 22,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0011.png"
+    },
+    {
+      "document_id": "0012",
+      "pipeline": "tesseract_fraktur_fra",
+      "view": "sans_cesure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.04954367666232073,
+          "support": 767,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.19166666666666668,
+          "support": 120,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0012.png"
+    },
+    {
+      "document_id": "0015",
+      "pipeline": "tesseract_fraktur_fra",
+      "view": "sans_cesure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.2903225806451613,
+          "support": 496,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.5189873417721519,
+          "support": 79,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0015.png"
+    },
+    {
+      "document_id": "0022",
+      "pipeline": "tesseract_fraktur_fra",
+      "view": "sans_cesure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.05966930265995687,
+          "support": 1391,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.2512820512820513,
+          "support": 195,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0022.png"
+    },
+    {
+      "document_id": "0023",
+      "pipeline": "tesseract_fraktur_fra",
+      "view": "sans_cesure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.0,
+          "support": 51,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.0,
+          "support": 6,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0023.png"
+    },
+    {
+      "document_id": "0031",
+      "pipeline": "tesseract_fraktur_fra",
+      "view": "sans_cesure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.04751847940865892,
+          "support": 947,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.25757575757575757,
+          "support": 132,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0031.png"
+    },
+    {
+      "document_id": "0000",
+      "pipeline": "qwen25vl_3b_zero_shot",
+      "view": "sans_cesure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.036748329621380846,
+          "support": 898,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.11612903225806452,
+          "support": 155,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0000.png"
+    },
+    {
+      "document_id": "0003",
+      "pipeline": "qwen25vl_3b_zero_shot",
+      "view": "sans_cesure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.025718608169440244,
+          "support": 661,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.08695652173913043,
+          "support": 92,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0003.png"
+    },
+    {
+      "document_id": "0006",
+      "pipeline": "qwen25vl_3b_zero_shot",
+      "view": "sans_cesure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.02992957746478873,
+          "support": 568,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.09090909090909091,
+          "support": 99,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0006.png"
+    },
+    {
+      "document_id": "0009",
+      "pipeline": "qwen25vl_3b_zero_shot",
+      "view": "sans_cesure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.025231286795626577,
+          "support": 1189,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.05102040816326531,
+          "support": 196,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0009.png"
+    },
+    {
+      "document_id": "0011",
+      "pipeline": "qwen25vl_3b_zero_shot",
+      "view": "sans_cesure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.10204081632653061,
+          "support": 98,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.3181818181818182,
+          "support": 22,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0011.png"
+    },
+    {
+      "document_id": "0012",
+      "pipeline": "qwen25vl_3b_zero_shot",
+      "view": "sans_cesure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.048239895697522815,
+          "support": 767,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.2,
+          "support": 120,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0012.png"
+    },
+    {
+      "document_id": "0015",
+      "pipeline": "qwen25vl_3b_zero_shot",
+      "view": "sans_cesure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.22379032258064516,
+          "support": 496,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.25316455696202533,
+          "support": 79,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0015.png"
+    },
+    {
+      "document_id": "0022",
+      "pipeline": "qwen25vl_3b_zero_shot",
+      "view": "sans_cesure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.026599568655643422,
+          "support": 1391,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.08717948717948718,
+          "support": 195,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0022.png"
+    },
+    {
+      "document_id": "0023",
+      "pipeline": "qwen25vl_3b_zero_shot",
+      "view": "sans_cesure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.0196078431372549,
+          "support": 51,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.0,
+          "support": 6,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0023.png"
+    },
+    {
+      "document_id": "0031",
+      "pipeline": "qwen25vl_3b_zero_shot",
+      "view": "sans_cesure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.04012671594508976,
+          "support": 947,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.12121212121212122,
+          "support": 132,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0031.png"
+    },
+    {
+      "document_id": "0000",
+      "pipeline": "tesseract_fraktur_fra_qwen_corr",
+      "view": "sans_cesure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.08685968819599109,
+          "support": 898,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.2838709677419355,
+          "support": 155,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0000.png"
+    },
+    {
+      "document_id": "0003",
+      "pipeline": "tesseract_fraktur_fra_qwen_corr",
+      "view": "sans_cesure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.10287443267776097,
+          "support": 661,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.1956521739130435,
+          "support": 92,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0003.png"
+    },
+    {
+      "document_id": "0006",
+      "pipeline": "tesseract_fraktur_fra_qwen_corr",
+      "view": "sans_cesure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.028169014084507043,
+          "support": 568,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.0707070707070707,
+          "support": 99,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0006.png"
+    },
+    {
+      "document_id": "0009",
+      "pipeline": "tesseract_fraktur_fra_qwen_corr",
+      "view": "sans_cesure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.1614802354920101,
+          "support": 1189,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.5816326530612245,
+          "support": 196,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0009.png"
+    },
+    {
+      "document_id": "0011",
+      "pipeline": "tesseract_fraktur_fra_qwen_corr",
+      "view": "sans_cesure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.12244897959183673,
+          "support": 98,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.3181818181818182,
+          "support": 22,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0011.png"
+    },
+    {
+      "document_id": "0012",
+      "pipeline": "tesseract_fraktur_fra_qwen_corr",
+      "view": "sans_cesure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.054758800521512385,
+          "support": 767,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.20833333333333334,
+          "support": 120,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0012.png"
+    },
+    {
+      "document_id": "0015",
+      "pipeline": "tesseract_fraktur_fra_qwen_corr",
+      "view": "sans_cesure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.2903225806451613,
+          "support": 496,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.5189873417721519,
+          "support": 79,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0015.png"
+    },
+    {
+      "document_id": "0022",
+      "pipeline": "tesseract_fraktur_fra_qwen_corr",
+      "view": "sans_cesure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.09202012940330698,
+          "support": 1391,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.15384615384615385,
+          "support": 195,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0022.png"
+    },
+    {
+      "document_id": "0023",
+      "pipeline": "tesseract_fraktur_fra_qwen_corr",
+      "view": "sans_cesure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.23529411764705882,
+          "support": 51,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.16666666666666666,
+          "support": 6,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0023.png"
+    },
+    {
+      "document_id": "0031",
+      "pipeline": "tesseract_fraktur_fra_qwen_corr",
+      "view": "sans_cesure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.07286166842661035,
+          "support": 947,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.1590909090909091,
+          "support": 132,
+          "expected": null
+        }
+      ],
+      "stratum": null,
+      "image_ref": "/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s10/corpus/0031.png"
+    }
+  ],
+  "cross_engine": [
+    {
+      "metric": "texte:cer:significance_p",
+      "value": 0.057162446248179406,
+      "support": 10,
+      "expected": null
+    },
+    {
+      "metric": "texte:wer:significance_p",
+      "value": 0.2078243875930195,
+      "support": 10,
+      "expected": null
+    },
+    {
+      "metric": "texte:cer_diplo:significance_p",
+      "value": 0.06382777416010892,
+      "support": 10,
+      "expected": null
+    },
+    {
+      "metric": "texte:mer:significance_p",
+      "value": 0.1978971262103684,
+      "support": 10,
+      "expected": null
+    },
+    {
+      "metric": "texte:hallucination:significance_p",
+      "value": 0.5143773783825503,
+      "support": 10,
+      "expected": null
+    },
+    {
+      "metric": "sans_cesure:cer:significance_p",
+      "value": 0.023386260410238245,
+      "support": 10,
+      "expected": null
+    },
+    {
+      "metric": "sans_cesure:wer:significance_p",
+      "value": 0.06578905268507128,
+      "support": 10,
+      "expected": null
+    }
+  ],
+  "usage": [
+    {
+      "document_id": "0000",
+      "pipeline": "qwen25vl_3b_zero_shot",
+      "usage": {
+        "duration_seconds": 64.11045744500007,
+        "tokens_in": 1118,
+        "tokens_out": 248
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null
+    },
+    {
+      "document_id": "0003",
+      "pipeline": "qwen25vl_3b_zero_shot",
+      "usage": {
+        "duration_seconds": 50.42131345999951,
+        "tokens_in": 1147,
+        "tokens_out": 178
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null
+    },
+    {
+      "document_id": "0006",
+      "pipeline": "qwen25vl_3b_zero_shot",
+      "usage": {
+        "duration_seconds": 47.61485169600019,
+        "tokens_in": 1106,
+        "tokens_out": 166
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null
+    },
+    {
+      "document_id": "0009",
+      "pipeline": "qwen25vl_3b_zero_shot",
+      "usage": {
+        "duration_seconds": 85.39965878799921,
+        "tokens_in": 1592,
+        "tokens_out": 349
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null
+    },
+    {
+      "document_id": "0011",
+      "pipeline": "qwen25vl_3b_zero_shot",
+      "usage": {
+        "duration_seconds": 38.10378741799832,
+        "tokens_in": 1140,
+        "tokens_out": 55
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null
+    },
+    {
+      "document_id": "0012",
+      "pipeline": "qwen25vl_3b_zero_shot",
+      "usage": {
+        "duration_seconds": 56.15519251300066,
+        "tokens_in": 1124,
+        "tokens_out": 256
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null
+    },
+    {
+      "document_id": "0015",
+      "pipeline": "qwen25vl_3b_zero_shot",
+      "usage": {
+        "duration_seconds": 55.85851586299941,
+        "tokens_in": 1128,
+        "tokens_out": 247
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null
+    },
+    {
+      "document_id": "0022",
+      "pipeline": "qwen25vl_3b_zero_shot",
+      "usage": {
+        "duration_seconds": 135.93981464399985,
+        "tokens_in": 2483,
+        "tokens_out": 391
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null
+    },
+    {
+      "document_id": "0023",
+      "pipeline": "qwen25vl_3b_zero_shot",
+      "usage": {
+        "duration_seconds": 36.526740921000965,
+        "tokens_in": 1174,
+        "tokens_out": 12
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null
+    },
+    {
+      "document_id": "0031",
+      "pipeline": "qwen25vl_3b_zero_shot",
+      "usage": {
+        "duration_seconds": 64.74373957600073,
+        "tokens_in": 1118,
+        "tokens_out": 295
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null
+    },
+    {
+      "document_id": "0000",
+      "pipeline": "tesseract_fra_deu",
+      "usage": {
+        "duration_seconds": 3.607378864999191,
+        "tokens_in": null,
+        "tokens_out": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null
+    },
+    {
+      "document_id": "0003",
+      "pipeline": "tesseract_fra_deu",
+      "usage": {
+        "duration_seconds": 3.3078527090001444,
+        "tokens_in": null,
+        "tokens_out": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null
+    },
+    {
+      "document_id": "0006",
+      "pipeline": "tesseract_fra_deu",
+      "usage": {
+        "duration_seconds": 2.1618976459994883,
+        "tokens_in": null,
+        "tokens_out": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null
+    },
+    {
+      "document_id": "0009",
+      "pipeline": "tesseract_fra_deu",
+      "usage": {
+        "duration_seconds": 6.3773757300004945,
+        "tokens_in": null,
+        "tokens_out": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null
+    },
+    {
+      "document_id": "0011",
+      "pipeline": "tesseract_fra_deu",
+      "usage": {
+        "duration_seconds": 0.8896679470017261,
+        "tokens_in": null,
+        "tokens_out": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null
+    },
+    {
+      "document_id": "0012",
+      "pipeline": "tesseract_fra_deu",
+      "usage": {
+        "duration_seconds": 2.5912861050001084,
+        "tokens_in": null,
+        "tokens_out": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null
+    },
+    {
+      "document_id": "0015",
+      "pipeline": "tesseract_fra_deu",
+      "usage": {
+        "duration_seconds": 2.890086618999703,
+        "tokens_in": null,
+        "tokens_out": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null
+    },
+    {
+      "document_id": "0022",
+      "pipeline": "tesseract_fra_deu",
+      "usage": {
+        "duration_seconds": 6.121422844000335,
+        "tokens_in": null,
+        "tokens_out": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null
+    },
+    {
+      "document_id": "0023",
+      "pipeline": "tesseract_fra_deu",
+      "usage": {
+        "duration_seconds": 114.57903129400074,
+        "tokens_in": null,
+        "tokens_out": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null
+    },
+    {
+      "document_id": "0031",
+      "pipeline": "tesseract_fra_deu",
+      "usage": {
+        "duration_seconds": 4.626353720001134,
+        "tokens_in": null,
+        "tokens_out": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null
+    },
+    {
+      "document_id": "0000",
+      "pipeline": "tesseract_fraktur_fra",
+      "usage": {
+        "duration_seconds": 2.8233914889988228,
+        "tokens_in": null,
+        "tokens_out": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null
+    },
+    {
+      "document_id": "0003",
+      "pipeline": "tesseract_fraktur_fra",
+      "usage": {
+        "duration_seconds": 2.4822532540001703,
+        "tokens_in": null,
+        "tokens_out": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null
+    },
+    {
+      "document_id": "0006",
+      "pipeline": "tesseract_fraktur_fra",
+      "usage": {
+        "duration_seconds": 1.894922585999666,
+        "tokens_in": null,
+        "tokens_out": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null
+    },
+    {
+      "document_id": "0009",
+      "pipeline": "tesseract_fraktur_fra",
+      "usage": {
+        "duration_seconds": 4.491680103001272,
+        "tokens_in": null,
+        "tokens_out": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null
+    },
+    {
+      "document_id": "0011",
+      "pipeline": "tesseract_fraktur_fra",
+      "usage": {
+        "duration_seconds": 0.7014195880001353,
+        "tokens_in": null,
+        "tokens_out": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null
+    },
+    {
+      "document_id": "0012",
+      "pipeline": "tesseract_fraktur_fra",
+      "usage": {
+        "duration_seconds": 2.289615961999516,
+        "tokens_in": null,
+        "tokens_out": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null
+    },
+    {
+      "document_id": "0015",
+      "pipeline": "tesseract_fraktur_fra",
+      "usage": {
+        "duration_seconds": 2.2979154379991087,
+        "tokens_in": null,
+        "tokens_out": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null
+    },
+    {
+      "document_id": "0022",
+      "pipeline": "tesseract_fraktur_fra",
+      "usage": {
+        "duration_seconds": 4.83836013400105,
+        "tokens_in": null,
+        "tokens_out": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null
+    },
+    {
+      "document_id": "0023",
+      "pipeline": "tesseract_fraktur_fra",
+      "usage": {
+        "duration_seconds": 0.6704255420008849,
+        "tokens_in": null,
+        "tokens_out": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null
+    },
+    {
+      "document_id": "0031",
+      "pipeline": "tesseract_fraktur_fra",
+      "usage": {
+        "duration_seconds": 3.0401555209991784,
+        "tokens_in": null,
+        "tokens_out": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null
+    },
+    {
+      "document_id": "0000",
+      "pipeline": "tesseract_fraktur_fra_qwen_corr",
+      "usage": {
+        "duration_seconds": 40.846048982000866,
+        "tokens_in": 820,
+        "tokens_out": 270
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null
+    },
+    {
+      "document_id": "0003",
+      "pipeline": "tesseract_fraktur_fra_qwen_corr",
+      "usage": {
+        "duration_seconds": 22.657085876000565,
+        "tokens_in": 786,
+        "tokens_out": 169
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null
+    },
+    {
+      "document_id": "0006",
+      "pipeline": "tesseract_fraktur_fra_qwen_corr",
+      "usage": {
+        "duration_seconds": 20.218111359999966,
+        "tokens_in": 730,
+        "tokens_out": 164
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null
+    },
+    {
+      "document_id": "0009",
+      "pipeline": "tesseract_fraktur_fra_qwen_corr",
+      "usage": {
+        "duration_seconds": 62.133727444001124,
+        "tokens_in": 1031,
+        "tokens_out": 481
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null
+    },
+    {
+      "document_id": "0011",
+      "pipeline": "tesseract_fraktur_fra_qwen_corr",
+      "usage": {
+        "duration_seconds": 6.4615642270000535,
+        "tokens_in": 602,
+        "tokens_out": 52
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null
+    },
+    {
+      "document_id": "0012",
+      "pipeline": "tesseract_fraktur_fra_qwen_corr",
+      "usage": {
+        "duration_seconds": 34.61982605199955,
+        "tokens_in": 844,
+        "tokens_out": 282
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null
+    },
+    {
+      "document_id": "0015",
+      "pipeline": "tesseract_fraktur_fra_qwen_corr",
+      "usage": {
+        "duration_seconds": 31.035197669998524,
+        "tokens_in": 800,
+        "tokens_out": 249
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null
+    },
+    {
+      "document_id": "0022",
+      "pipeline": "tesseract_fraktur_fra_qwen_corr",
+      "usage": {
+        "duration_seconds": 48.913367526,
+        "tokens_in": 1027,
+        "tokens_out": 377
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null
+    },
+    {
+      "document_id": "0023",
+      "pipeline": "tesseract_fraktur_fra_qwen_corr",
+      "usage": {
+        "duration_seconds": 1.6379090069985978,
+        "tokens_in": 563,
+        "tokens_out": 7
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null
+    },
+    {
+      "document_id": "0031",
+      "pipeline": "tesseract_fraktur_fra_qwen_corr",
+      "usage": {
+        "duration_seconds": 37.066060830000424,
+        "tokens_in": 909,
+        "tokens_out": 287
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null
+    }
+  ],
+  "analyses": []
+}
