@@ -166,10 +166,15 @@ def _block(
         lang,
         '<p class="muted">Classification par règles pures (casse, diacritiques, '
         "ligatures, confusions visuelles, segmentation, lacunes, insertions) — "
-        "part relative au total des erreurs de mots du pipeline.</p>\n",
+        "part relative au total des erreurs de mots du pipeline. Chaque édition "
+        "du WER reçoit une classe et une seule : les omissions sont ses "
+        "suppressions, les insertions ses insertions, hors fusions et "
+        "scissions de mots.</p>\n",
         '<p class="muted">Pure rule-based classification (case, diacritics, '
         "ligatures, visual confusions, segmentation, gaps, insertions) — "
-        "share relative to the pipeline's total word errors.</p>\n",
+        "share relative to the pipeline's total word errors. Each WER edit gets "
+        "exactly one class: omissions are its deletions, insertions its "
+        "insertions, outside word merges and splits.</p>\n",
     )
     parts: list[str] = [f"<h3>{head}</h3>\n", prose]
     for pipeline in payload.pipelines:

@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from rapidfuzz.distance import Levenshtein
 
 from cinoc.domain.artifacts import ArtifactType
+from cinoc.evaluation._alignment import opcodes
 from cinoc.evaluation.context import DocContext
 from cinoc.evaluation.errors import EvaluationError
 from cinoc.evaluation.metric import DocumentMetric, Observation, document_metric
@@ -91,10 +92,11 @@ def _align(reference: Sequence[object], hypothesis: Sequence[object]) -> _Alignm
 
     ``rapidfuzz`` rend directement le script d'édition, d'où se comptent les
     quatre catégories. Même alignement optimal, mêmes nombres, mémoire linéaire.
+    C'est l'alignement partagé (``evaluation._alignment.opcodes``) : la
+    taxonomie y lit les mêmes D et I (D-286).
     """
-    ref, hyp = list(reference), list(hypothesis)
     hits = subs = dels = ins = 0
-    for operation in Levenshtein.opcodes(ref, hyp):
+    for operation in opcodes(list(reference), list(hypothesis)):
         longueur_ref = operation.src_end - operation.src_start
         longueur_hyp = operation.dest_end - operation.dest_start
         if operation.tag == "equal":

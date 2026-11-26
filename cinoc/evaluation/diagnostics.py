@@ -5,23 +5,23 @@ chargées — aucun re-calcul, aucune relecture de fichier), puis assemble le
 payload ``diagnostics`` (``evaluation.analysis``). Heuristiques **maison**
 (PLAN_PARITE §5.8b : valeurs de test dérivées à la main).
 
-- **Confusions** : caractères substitués appariés positionnellement dans les
-  segments ``replace`` d'un alignement ``difflib`` **à deux niveaux** (mots
-  puis caractères — cf. ``char_confusions``) — top par pipeline.
-- **Pires lignes** : lignes appariées par index, notées par ``lines.line_cer``
-  (la formule de l'analyse par ligne) — top corpus, extraits verbatim
-  tronqués. Absentes d'une vue dont le profil écrase les sauts de ligne : un
-  document à plat n'a qu'une « ligne », la montrer serait trompeur.
+- **Confusions** : les substitutions de l'alignement caractère du CER
+  (``Levenshtein.editops``, ``evaluation._alignment``) — top par pipeline ;
+  leur somme est le S du CER.
+- **Pires lignes** : lignes appariées par l'alignement de lignes F15 (celui de
+  la distribution par ligne, ``lines``), notées par ``lines.line_cer`` — top
+  corpus, extraits verbatim tronqués. Absentes d'une vue dont le profil écrase
+  les sauts de ligne : un document à plat n'a qu'une « ligne », la montrer
+  serait trompeur.
 - **Documents difficiles** : CER moyen par document sur les pipelines scorés.
 """
 
 from __future__ import annotations
 
-import re
 from collections import Counter
 from collections.abc import Mapping, Sequence
-from difflib import SequenceMatcher
 
+from cinoc.evaluation._alignment import aligned_to_reference, char_substitutions
 from cinoc.evaluation.analysis import (
     Analysis,
     CharConfusion,
@@ -38,76 +38,43 @@ _TOP_CONFUSIONS = 10
 _TOP_LINES = 5
 _TOP_DOCUMENTS = 5
 _EXCERPT = 160
-#: Empan maximal, en caractères, où l'appariement caractère à
-#: caractère garde un sens (cf. ``char_confusions``).
-_EMPAN_MAX = 2000
-
-#: Découpe en mots — le blanc est séparateur, pas jeton : inclure les
-#: blancs remettrait un élément ultra-répétitif dans l'alignement.
-_MOTS = re.compile(r"\S+")
 
 
 def char_confusions(reference: str, hypothesis: str) -> Counter[tuple[str, str]]:
-    """Paires (attendu → produit) des segments substitués, appariées par position.
+    """Paires (attendu → produit) des substitutions de l'alignement caractère.
 
-    L'alignement se fait **en deux temps** : sur les mots, puis sur les
-    caractères à l'intérieur des seuls empans substitués. Aligner directement
-    les caractères d'une page entière dégénère en quadratique — une page de
-    presse a ~40 000 caractères pour moins de 100 symboles distincts, donc
-    ``SequenceMatcher`` compare chaque « e » à tous les autres (mesuré : 32 s
-    contre 0,13 s, paires de tête inchangées). Les mots, eux, sont assez variés
-    pour que les blocs communs se trouvent vite.
-
-    ``autojunk`` reste désactivé aux deux niveaux : il écarte les éléments
-    présents dans plus de 1 % d'une séquence longue, ce qui sur des caractères
-    revient à tous les écarter — et produit des paires identitaires (``e``→``e``)
-    dénuées de sens.
+    Exactement les S du CER du document (D-286) : la somme des comptes vaut
+    ``_alignment.char_counts(...)[0]``. L'alignement ``difflib`` à deux niveaux
+    (mots puis caractères des seuls empans substitués) qu'il remplace en
+    manquait — « France » lu « Franee » n'y donnait aucune paire — et écartait
+    les empans de plus de 2 000 caractères : un texte réordonné y perdait ses
+    paires, que le CER compte pourtant. ``rapidfuzz`` aligne une page entière
+    en mémoire linéaire (~0,1 s pour 50 000 caractères).
     """
-    pairs: Counter[tuple[str, str]] = Counter()
-    ref_mots = _MOTS.findall(reference)
-    hyp_mots = _MOTS.findall(hypothesis)
-    mots = SequenceMatcher(a=ref_mots, b=hyp_mots, autojunk=False)
-    for op, a0, a1, b0, b1 in mots.get_opcodes():
-        if op != "replace":
-            continue
-        attendu = " ".join(ref_mots[a0:a1])
-        produit = " ".join(hyp_mots[b0:b1])
-        # Au-delà de cet empan, les deux côtés ne se correspondent plus (texte
-        # réordonné, pas texte mal lu) : apparier leurs caractères n'aurait
-        # aucun sens, et ferait réapparaître le coût quadratique.
-        if max(len(attendu), len(produit)) > _EMPAN_MAX:
-            continue
-        for sous_op, x0, x1, y0, y1 in SequenceMatcher(
-            a=attendu, b=produit, autojunk=False
-        ).get_opcodes():
-            if sous_op != "replace":
-                continue
-            for expected, observed in zip(
-                attendu[x0:x1], produit[y0:y1], strict=False
-            ):
-                pairs[(expected, observed)] += 1
-    return pairs
+    return Counter(char_substitutions(reference, hypothesis))
 
 
 def line_cers(
     reference: str, hypothesis: str
 ) -> list[tuple[int, float, str, str]]:
-    """``(index, cer, ligne_ref, ligne_hyp)`` par paire de lignes (même index).
+    """``(index, cer, ligne_ref, ligne_hyp)`` par ligne de référence non vide.
 
-    Notée par :func:`lines.line_cer`, la formule de l'analyse par ligne — une
-    seule définition du CER de ligne au rapport (D-285). L'appariement reste
-    positionnel (l'aligner comme F15 reste à faire). Les lignes de référence
-    vides sont ignorées (CER indéfini) ; les lignes excédentaires de
-    l'hypothèse relèvent du scalaire ``hallucination``.
+    Lignes appariées par l'alignement de lignes F15 — celui de la
+    distribution par ligne (``lines.aligned_line_cers``) : une ligne insérée
+    ne décale plus toutes les suivantes, une ligne de référence sans
+    correspondance est notée face à une hypothèse vide (CER 1.0). Notée par
+    :func:`lines.line_cer` (D-285). Les lignes de référence vides sont
+    ignorées (CER indéfini) ; les lignes excédentaires de l'hypothèse
+    relèvent du scalaire ``hallucination``.
     """
-    out: list[tuple[int, float, str, str]] = []
-    hyp_lines = hypothesis.splitlines()
-    for index, ref_line in enumerate(reference.splitlines()):
-        if not ref_line:
-            continue
-        hyp_line = hyp_lines[index] if index < len(hyp_lines) else ""
-        out.append((index, line_cer(ref_line, hyp_line), ref_line, hyp_line))
-    return out
+    ref_lines = reference.splitlines()
+    mapped = aligned_to_reference(ref_lines, hypothesis.splitlines())
+    pairs = zip(ref_lines, mapped, strict=True)
+    return [
+        (index, line_cer(ref_line, hyp_line or ""), ref_line, hyp_line or "")
+        for index, (ref_line, hyp_line) in enumerate(pairs)
+        if ref_line
+    ]
 
 
 def _excerpt(text: str) -> str:

@@ -150,3 +150,11 @@ def test_renders_english_labels() -> None:
     assert "Taxonomie des erreurs" not in html
     assert "composition des erreurs" not in html
     assert "Classification par règles pures" not in html
+
+
+def test_prose_says_the_classes_partition_the_wer_edits() -> None:
+    # D-286 : les omissions sont les suppressions du WER, en FR comme en EN.
+    english = TaxonomySection().render(_result(), SectionContext(lang="en"))
+    assert english is not None and "Each WER edit gets exactly one class" in english
+    french = TaxonomySection().render(_result(), SectionContext(lang="fr"))
+    assert french is not None and "Chaque édition du WER reçoit une classe" in french

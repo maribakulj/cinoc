@@ -2,8 +2,8 @@
 
 Aucune valeur n'est empruntée à une autre implémentation : chaque matrice et
 chaque signature de regroupement est calculée au crayon sur des ref/hyp courts
-(misses mot scriptés). L'alignement réutilise la tokenisation partagée et
-``difflib`` (mêmes tags ``replace``/``delete`` que la modernisation lexicale).
+(misses mot scriptés). L'alignement est celui de la modernisation lexicale
+(``textual_fidelity.token_fates`` : alignement optimal partagé, D-286).
 """
 
 from __future__ import annotations

@@ -7,10 +7,10 @@ attendue est calculée sur papier, jamais générée en exécutant la source.
 from __future__ import annotations
 
 import time
-from collections import Counter
 
 import pytest
 
+from cinoc.evaluation._alignment import char_counts
 from cinoc.evaluation.context import DocContext
 from cinoc.evaluation.diagnostics import (
     DiagnosticsCollector,
@@ -86,13 +86,15 @@ def test_char_confusions_pairs_replaced_segment_positionally() -> None:
     assert pairs[("e", "o")] == 2
 
 
-def test_char_confusions_ignores_reordered_spans() -> None:
-    # Deux textes sans mot commun : rien ne se correspond, donc aucune paire.
-    # (Empan au-delà de ``_EMPAN_MAX`` : apparier ces caractères n'aurait pas
-    # de sens et ferait réapparaître le coût quadratique.)
+def test_char_confusions_counts_what_the_cer_counts_on_unrelated_spans() -> None:
+    # Deux textes sans mot commun : le CER y compte des substitutions, les
+    # confusions aussi (D-286). L'ancien alignement ``difflib`` écartait les
+    # empans de plus de 2 000 caractères — des erreurs comptées, mais tues.
     gauche = " ".join(f"alpha{i}" for i in range(400))
     droite = " ".join(f"zeta{i}" for i in range(400))
-    assert char_confusions(gauche, droite) == Counter()
+    pairs = char_confusions(gauche, droite)
+    assert sum(pairs.values()) == char_counts(gauche, droite)[0]
+    assert pairs[("a", "z")] == 400
 
 
 def test_char_confusions_tient_sur_une_page_entiere() -> None:

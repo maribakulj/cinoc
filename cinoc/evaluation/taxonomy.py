@@ -17,14 +17,24 @@ Classes (ordre de test = priorité) :
 - ``lacuna`` — mot de la référence absent de l'hypothèse ;
 - ``insertion`` — mot de l'hypothèse absent de la référence ;
 - ``other`` — substitution résiduelle inclassée.
+
+**Les éditions sont celles du WER** (D-286) : mots découpés par ``str.split``
+comme le WER, alignés par le même alignement optimal
+(``evaluation._alignment``). Chaque édition reçoit une classe et une seule :
+``lacuna`` = les D du WER, ``insertion`` = ses I, hors des blocs de
+fusion/scission (rangés en ``segmentation``, comptés ``max(n, m)`` — le coût
+du bloc) ; le total vaut S + D + I. Dans un bloc d'éditions aux côtés
+inégaux, les mots appariés sont ceux qui se ressemblent le plus
+(``_alignment.alignment``) : la classe d'un mot substitué en dépend, jamais
+les comptes ``lacuna``/``insertion``.
 """
 
 from __future__ import annotations
 
 import unicodedata
 from collections import Counter
-from difflib import SequenceMatcher
 
+from cinoc.evaluation._alignment import Pair, alignment
 from cinoc.evaluation.analysis import (
     Analysis,
     PipelineTaxonomy,
@@ -51,14 +61,16 @@ _LIGATURES = {
 }
 
 #: Groupes de confusions visuelles → représentant canonique. Appliqué aux
-#: **deux** côtés d'une paire déjà fautive (pas de faux positif sur un mot juste).
+#: **deux** côtés d'une paire déjà fautive (pas de faux positif sur un mot juste),
+#: une fois sur la casse d'origine (``I`` majuscule lu ``l``) et une fois en
+#: minuscules (``RN`` lu ``M``). ``O`` lu ``o`` n'y figure pas : c'est la
+#: classe ``case``, testée avant.
 _VISUAL_CANON = (
     ("rn", "m"),
     ("1", "l"),
     ("I", "l"),
     ("|", "l"),
     ("0", "o"),
-    ("O", "o"),
     ("ſ", "s"),
     ("u", "n"),
 )
@@ -83,6 +95,17 @@ def _visual_canonical(text: str) -> str:
     return text
 
 
+def _visually_equal(reference: str, hypothesis: str) -> bool:
+    """Égaux à une confusion visuelle près, sur la casse d'origine ou en minuscules.
+
+    La table appliquée après ``lower()`` seulement ne voyait jamais ``I`` :
+    ``Il`` lu ``ll`` sortait en ``other``.
+    """
+    if _visual_canonical(reference).lower() == _visual_canonical(hypothesis).lower():
+        return True
+    return _visual_canonical(reference.lower()) == _visual_canonical(hypothesis.lower())
+
+
 def classify_word_pair(reference: str, hypothesis: str) -> str:
     """Classe d'une substitution mot → mot (règles pures, ordre = priorité)."""
     if reference.lower() == hypothesis.lower():
@@ -91,38 +114,49 @@ def classify_word_pair(reference: str, hypothesis: str) -> str:
         return "diacritic"
     if _expand_ligatures(reference) == _expand_ligatures(hypothesis):
         return "ligature"
-    if _visual_canonical(reference.lower()) == _visual_canonical(hypothesis.lower()):
+    if _visually_equal(reference, hypothesis):
         return "visual"
     return "other"
 
 
+def _edit_blocks(
+    ref_words: list[str], hyp_words: list[str], pairs: list[Pair]
+) -> list[list[Pair]]:
+    """Blocs d'éditions contiguës (entre deux mots égaux) de l'alignement."""
+    blocks: list[list[Pair]] = []
+    current: list[Pair] = []
+    for i, j in pairs:
+        if i is not None and j is not None and ref_words[i] == hyp_words[j]:
+            if current:
+                blocks.append(current)
+                current = []
+            continue
+        current.append((i, j))
+    if current:
+        blocks.append(current)
+    return blocks
+
+
 def classify_texts(reference: str, hypothesis: str) -> Counter[str]:
-    """Comptage des classes d'erreurs entre deux textes (mots alignés difflib)."""
+    """Comptage des classes d'erreurs entre deux textes (éditions du WER)."""
     counts: Counter[str] = Counter()
     ref_words = reference.split()
     hyp_words = hypothesis.split()
-    matcher = SequenceMatcher(a=ref_words, b=hyp_words, autojunk=False)
-    for op, a0, a1, b0, b1 in matcher.get_opcodes():
-        if op == "equal":
-            continue
-        ref_seg, hyp_seg = ref_words[a0:a1], hyp_words[b0:b1]
-        if op == "delete":
-            counts["lacuna"] += len(ref_seg)
-            continue
-        if op == "insert":
-            counts["insertion"] += len(hyp_seg)
-            continue
-        # replace : fusion/fragmentation d'abord (au niveau du segment).
+    pairs = alignment(ref_words, hyp_words)
+    for block in _edit_blocks(ref_words, hyp_words, pairs):
+        ref_seg = [ref_words[i] for i, _ in block if i is not None]
+        hyp_seg = [hyp_words[j] for _, j in block if j is not None]
+        # Fusion/fragmentation d'abord (au niveau du bloc).
         if "".join(ref_seg) == "".join(hyp_seg):
             counts["segmentation"] += max(len(ref_seg), len(hyp_seg))
             continue
-        for ref_word, hyp_word in zip(ref_seg, hyp_seg, strict=False):
-            counts[classify_word_pair(ref_word, hyp_word)] += 1
-        # Mots non appariés du segment (longueurs inégales).
-        if len(ref_seg) > len(hyp_seg):
-            counts["lacuna"] += len(ref_seg) - len(hyp_seg)
-        elif len(hyp_seg) > len(ref_seg):
-            counts["insertion"] += len(hyp_seg) - len(ref_seg)
+        for i, j in block:
+            if j is None:
+                counts["lacuna"] += 1
+            elif i is None:
+                counts["insertion"] += 1
+            else:
+                counts[classify_word_pair(ref_words[i], hyp_words[j])] += 1
     return counts
 
 
