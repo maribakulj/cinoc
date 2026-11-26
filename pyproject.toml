@@ -108,8 +108,8 @@ include = ["cinoc*"]
     "templates/*.html", "static/css/*.css", "static/js/*.js", "static/fonts/*",
 ]
 # Le rapport autonome (couche 7) incorpore ses polices (data-URI) et son script
-# de comparaison (inliné) : woff2 + compare.js doivent voyager dans le wheel.
-"cinoc.reports" = ["_assets/*.woff2", "_assets/*.js"]
+# de comparaison et son CSS (inlinés) : woff2, scripts et CSS voyagent dans le wheel.
+"cinoc.reports" = ["_assets/*.woff2", "_assets/*.js", "_assets/*.css"]
 # Glossaire pédagogique (donnée FR/EN) — doit voyager dans le wheel.
 "cinoc.reports.glossary" = ["*.yaml"]
 # Table de tarifs (donnée datée) du calcul économique (couche 3).

@@ -46,17 +46,6 @@ def _boite(region: Region) -> tuple[int, int, int, int] | None:
     return (boite.x, boite.y, boite.width, boite.height)
 
 
-def _feuilles(regions: tuple[Region, ...]) -> list[Region]:
-    """Régions atomiques : un bloc composé porte ses lignes dans ses enfants."""
-    sorties: list[Region] = []
-    for region in regions:
-        if region.regions:
-            sorties.extend(_feuilles(region.regions))
-        else:
-            sorties.append(region)
-    return sorties
-
-
 def ordonner_topdown(regions: list[Region]) -> list[str]:
     """De haut en bas, puis de gauche à droite. La ligne de base.
 

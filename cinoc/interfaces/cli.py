@@ -437,10 +437,10 @@ def _run_hybrid(
     return 0
 
 
-def _compare_command(path_a: str, path_b: str, output: str) -> int:
-    run_a = load_run_result(path_a)
-    run_b = load_run_result(path_b)
-    Path(output).write_text(render_comparison(run_a, run_b), encoding="utf-8")
+def _compare_command(path_a: str, path_b: str, output: str, lang: str) -> int:
+    runs = load_run_result(a := Path(path_a)), load_run_result(b := Path(path_b))
+    html = render_comparison(*runs, lang=lang, source_a=a.name, source_b=b.name)
+    Path(output).write_text(html, encoding="utf-8")
     print(f"Comparaison écrite : {output}")
     return 0
 
@@ -583,7 +583,7 @@ def main(argv: list[str] | None = None) -> int:
             }
             return sujets[args.topic](args)
         if args.command == "compare":
-            return _compare_command(args.run_a, args.run_b, args.output)
+            return _compare_command(args.run_a, args.run_b, args.output, args.lang)
         if args.command == "serve":
             return _serve_command(args.host, args.port, args.reports_dir)
     except (CinocError, OSError) as exc:

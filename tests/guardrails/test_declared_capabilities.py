@@ -125,17 +125,12 @@ def test_a_declared_mode_is_actually_planifiable() -> None:
         assert spec.pipelines, f"{fournisseur} : zero_shot déclaré mais non planifiable"
 
 
-def test_no_hand_written_provider_list_remains() -> None:
-    """Aucun module ne ré-énumère les fournisseurs dans un littéral.
+def _litteraux_nommant(noms: frozenset[str]) -> dict[str, list[str]]:
+    """Fichier → littéraux qui nomment **au moins deux** de ``noms``.
 
-    Une liste peut réapparaître ailleurs sous un autre nom, et le contrôle
-    ci-dessus ne la verrait pas. Celui-ci cherche la **forme** du défaut : un
-    ensemble, un tuple, une liste — **ou les clés d'un dictionnaire** —
-    contenant au moins deux noms de fournisseurs.
-
-    Le dictionnaire a été ajouté après coup : il était l'angle mort évident de
-    ce contrôle, puisqu'une table ``{"mistral": …, "ollama": …}`` est une liste
-    de fournisseurs sous un autre habit et passait sans un mot.
+    La **forme** du défaut : un ensemble, un tuple, une liste — **ou les clés
+    d'un dictionnaire** (ajoutées après coup : une table ``{"mistral": …,
+    "ollama": …}`` est une liste sous un autre habit et passait sans un mot).
     """
     coupables: dict[str, list[str]] = {}
     for chemin in sorted(CINOC.rglob("*.py")):
@@ -149,39 +144,138 @@ def test_no_hand_written_provider_list_remains() -> None:
                 elements = list(noeud.elts)
             else:
                 continue
-            noms = {
+            trouves = noms & {
                 e.value
                 for e in elements
                 if isinstance(e, ast.Constant) and isinstance(e.value, str)
             }
-            trouves = noms & set(FOURNISSEURS)
             if len(trouves) >= 2:
                 rel = chemin.relative_to(CINOC).as_posix()
                 coupables.setdefault(rel, []).append(
                     f"L{noeud.lineno} {sorted(trouves)}"
                 )
-    # Trois **tables sources** — pas des copies. Nommées ici pour que toute
-    # autre occurrence ressorte, et vérifiées par le test suivant : une source
-    # autorisée dont les clés dérivent serait le pire des deux mondes.
-    #
-    #   app/engines.py                        fournisseur → classe d'adapter
-    #   app/models.py                         fournisseur → modèles suggérés (curé)
-    #   adapters/layout/saknussemm_correct.py producteur saknussemm → client
-    #
-    # Le dernier n'est **pas** dérivable de `providers_for_mode` : saknussemm
-    # consomme un `StructuredCompletionClient`, écrit à la main par fournisseur.
-    # Un fournisseur de cinoc absent de sa table est un client qui n'existe pas
-    # encore, pas un oubli.
-    autorise = {
+    return coupables
+
+
+def _moteurs_ocr() -> frozenset[str]:
+    from cinoc.app.modules.registry import socle_ocr_engines
+
+    moteurs = frozenset(socle_ocr_engines())
+    # Garde-fou du garde-fou : une dérivation vide rendrait le contrôle muet.
+    assert {"tesseract", "kraken", "mistral_ocr"} <= moteurs
+    return moteurs
+
+
+#: Famille → (noms, **tables sources** autorisées). Une table source n'est pas
+#: une copie : elle est nommée ici pour que toute autre occurrence ressorte, et
+#: ses clés sont confrontées aux briques réelles par un test dédié.
+#:
+#: Fournisseurs LLM/VLM —
+#:   app/engines.py                        fournisseur → classe d'adapter
+#:   app/models.py                         fournisseur → modèles suggérés (curé)
+#:   adapters/layout/saknussemm_correct.py producteur saknussemm → client
+#: Le dernier n'est **pas** dérivable de ``providers_for_mode`` : saknussemm
+#: consomme un ``StructuredCompletionClient``, écrit à la main par fournisseur.
+#:
+#: Moteurs OCR (D-301) — le catalogue était tenu à la main en quatre endroits ;
+#: il n'en reste qu'un, le socle du registre, dans l'ordre de préférence :
+#:   app/modules/registry.py  le socle (``_SOCLE``) — la source
+#:   app/engines.py           moteur → sonde de disponibilité (binaire, SDK,
+#:                            clé : propre à chacun), confrontée au socle
+#:   app/demo.py              **données** : les textes figés du corpus de
+#:                            démonstration, nommés d'après deux moteurs
+#:                            (rejoués par ``precomputed``, aucun n'est lancé)
+_SOURCES: dict[str, set[str]] = {
+    "fournisseurs": {
         "app/engines.py",
         "app/models.py",
         "adapters/layout/saknussemm_correct.py",
+    },
+    "moteurs OCR": {"app/modules/registry.py", "app/engines.py", "app/demo.py"},
+}
+
+
+@pytest.mark.parametrize("famille", sorted(_SOURCES))
+def test_no_hand_written_catalogue_remains(famille: str) -> None:
+    """Aucun module ne ré-énumère une famille de briques dans un littéral.
+
+    Une liste peut réapparaître ailleurs sous un autre nom, et les contrôles de
+    comportement ne la verraient pas : celui-ci cherche la **forme** du défaut.
+    Un seul contrôle pour les deux familles — fournisseurs (D-233) et moteurs
+    OCR (D-301) — là où chacune avait son patrouilleur.
+    """
+    noms = frozenset(FOURNISSEURS) if famille == "fournisseurs" else _moteurs_ocr()
+    fautifs = {
+        k: v for k, v in _litteraux_nommant(noms).items() if k not in _SOURCES[famille]
     }
-    fautifs = {k: v for k, v in coupables.items() if k not in autorise}
     assert not fautifs, (
-        f"listes de fournisseurs recopiées : {fautifs}. Lis les capacités via "
-        "`app.engines.providers_for_mode` — une liste parallèle dérive."
+        f"{famille} recopiés : {fautifs}. Lis-les sur le registre "
+        "(`socle_ocr_engines`, `providers_for_mode`) — une liste parallèle dérive."
     )
+
+
+def test_the_ocr_roles_follow_the_registry_at_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Retirer un moteur du socle le retire des recettes **et** du catalogue
+    des moteurs : la lecture est vivante, aucune copie ne le garde."""
+    from cinoc.app import engines
+    from cinoc.app.modules import registry
+
+    assert "kraken" in roles()["ocr"].briques
+    monkeypatch.setattr(
+        registry,
+        "_SOCLE",
+        tuple(entree for entree in registry._SOCLE if entree[0] != "kraken"),
+    )
+    assert "kraken" not in roles()["ocr"].briques
+    assert "kraken" not in roles()["region_recognizer"].briques
+    assert "kraken" not in {s.kind for s in engines.engine_statuses()}
+
+
+def test_every_ocr_engine_has_its_probe_and_no_more() -> None:
+    """La table des sondes est une source autorisée **parce qu'elle est
+    confrontée** : un moteur sans sonde serait absent de ``cinoc list
+    engines`` ; une sonde sans moteur, un moteur fantôme."""
+    from cinoc.app.engines import OCR_PROBES
+
+    assert set(OCR_PROBES) == set(_moteurs_ocr())
+
+
+def test_a_declared_default_is_not_copied_outside_its_adapter() -> None:
+    """Les défauts ``lang="fra"`` (×8) et ``fr_core_news_sm`` (×4) vivaient
+    dans les planificateurs, le parseur CLI et l'i18n web (audit D-264) ;
+    depuis la déclaration des réglages (D-295), ils sont lus sur l'adaptateur.
+    Ce contrôle empêche qu'ils reviennent : aucun littéral égal au défaut
+    déclaré d'une langue ou d'un modèle hors de ``adapters/``."""
+    from cinoc.app.modules.registry import ModuleRegistry, register_default_modules
+
+    registre = ModuleRegistry()
+    register_default_modules(registre)
+    defauts = {
+        p.default
+        for kind in registre.kinds()
+        for p in registre.declared_params(kind) or ()
+        if p.name in {"lang", "model"} and isinstance(p.default, str) and p.default
+    }
+    assert {"fra", "fr_core_news_sm"} <= defauts
+    coupables: list[str] = []
+    for chemin in sorted(CINOC.rglob("*")):
+        if chemin.suffix not in {".py", ".js", ".html"} or "adapters" in chemin.parts:
+            continue
+        if chemin.suffix == ".py":
+            arbre = ast.parse(chemin.read_text(encoding="utf-8"))
+            for noeud in ast.walk(arbre):
+                if isinstance(noeud, ast.Constant) and noeud.value in defauts:
+                    coupables.append(f"{chemin.relative_to(CINOC)}:L{noeud.lineno}")
+        else:
+            texte = chemin.read_text(encoding="utf-8")
+            coupables += [
+                f"{chemin.relative_to(CINOC)} {d!r}"
+                for d in defauts
+                if f"'{d}'" in texte or f'"{d}"' in texte
+            ]
+    assert not coupables, f"défauts recopiés hors de l'adaptateur : {coupables}"
 
 
 def test_every_segmenter_pairs_with_every_block_reader() -> None:

@@ -21,7 +21,8 @@ EMBEDDED_SCRIPTS: tuple[str, ...] = ("compare.js", "report.js")
 
 @cache
 def asset_text(name: str) -> str:
-    """Texte d'un script du paquet (``_assets/<name>``), lu **une fois**."""
+    """Texte d'un fichier du paquet (``_assets/<name>`` : script, CSS), lu
+    **une fois**."""
     return (
         resources.files("cinoc.reports")
         .joinpath(f"_assets/{name}")

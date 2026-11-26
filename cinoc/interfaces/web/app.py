@@ -19,6 +19,7 @@ import os
 import tempfile
 from pathlib import Path
 
+import jinja2
 from fastapi import FastAPI
 from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
@@ -198,7 +199,16 @@ def create_app(
     # Assets servis depuis notre origine (``font-src``/``style-src 'self'``) —
     # aucune dépendance CDN en prod (cf. CSP, ``security/headers.py``).
     app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
-    templates = Jinja2Templates(directory=_TEMPLATES_DIR)
+    # ``StrictUndefined`` : une clé i18n mal orthographiée, une variable que la
+    # route n'a pas passée **lèvent** au lieu de rendre ``''`` en silence
+    # (audit D-264, défaut 19 ; D-301).
+    templates = Jinja2Templates(
+        env=jinja2.Environment(
+            loader=jinja2.FileSystemLoader(_TEMPLATES_DIR),
+            autoescape=jinja2.select_autoescape(),
+            undefined=jinja2.StrictUndefined,
+        )
+    )
 
     # Lanceur : un registre + un store + un runner par application (état du
     # processus serveur, pas un singleton de module → factory respectée).

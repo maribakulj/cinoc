@@ -185,7 +185,7 @@ diplomatic_table → strip_diacritics → whitespace`. Aucun profil builtin ne c
 | `pagexml/types.py` | `pagexml/types.py` | **Enrichi** symétriquement ; régions non-texte + imbrication ; géométrie numérique ; baseline ; confidence ; **lignes et mots** (`PageWord` depuis D-273 : les ignorer perdait 161 et 258 mots sur deux pages OCR-D ; pas de glyphe, sans consommateur). |
 | `pagexml/parser.py` | `pagexml/parser.py` | lxml ; `TextEquiv` par `index` le plus bas (corrige le bug « premier `Unicode` descendant ») ; toutes les régions retenues. |
 | *(absent)* | `pagexml/writer.py` | **NOUVEAU** : `write_pagexml` symétrique. |
-| `text/normalization.py` | `text/normalization.py` | Profil **pydantic figé** ; 7 leviers (L11) ; ordre corrigé (§6) ; 12 profils (L12) ; `from_yaml`/`from_dict`/`model_copy` ; suppression des profils & tables anglais. |
+| `text/normalization.py` | `text/normalization.py` | Profil **pydantic figé** ; 7 leviers (L11) ; ordre corrigé (§6) ; 12 profils (L12) ; `from_yaml_text`/`model_copy` (`from_yaml`/`from_dict` retirés, D-301) ; suppression des profils & tables anglais. |
 | *(absent)* | `text/plain.py` | **NOUVEAU** : `read_plaintext(bytes, encoding) → str` (décodage + BOM + fins de ligne). |
 | `formats/__init__.py` | `formats/__init__.py` | API publique **resserrée** (L15) ; docstring **vraie** (pas de « validator », lxml mentionné car réellement utilisé). |
 
@@ -214,8 +214,9 @@ Local, réversible, additif → **tranché en codant**, contre des **fixtures r�
 - **Normalisation hors chemin entités** (F1) : le `NormalizationProfile` ne s'applique
   **jamais** au niveau `ENTITIES` (offsets caractère) ni aux métriques MUFI/typographie (texte
   brut). Contrat à respecter côté couche 3.
-- **`from_yaml`** : affordance **CLI/locale** uniquement ; le web n'accepte **jamais** un chemin
-  YAML arbitraire (lecture de fichier) — builtin ou profil inline validé.
+- **`from_yaml_text`** (seule entrée depuis D-301 ; `from_yaml`, qui lisait un chemin, est
+  retiré) : le web n'accepte **jamais** un chemin YAML arbitraire (lecture de fichier) —
+  builtin ou profil inline validé ; la CLI lit le fichier elle-même.
 - **Encodage `.txt`** : défaut UTF-8 + gestion BOM + fins de ligne ; politique de secours à
   fixer au codage.
 
@@ -254,3 +255,4 @@ Local, réversible, additif → **tranché en codant**, contre des **fixtures r�
 - [x] **Conformité XSD des PAGE écrits** (même oracle, PAGE 2019 — A9 / D-271 → D-273) : `pagecontent.xsd` 2019-07-15 de PRImA vendorisé (empreinte = copie de l'audit D-264, provenance au `README.md`), **11/11** sorties valides — `write_pagexml` et chemin `PageAssembler` sur les 2 PAGE et les 7 ALTO en pixels du dépôt ; les 38 ALTO `mm10` **refusés** (`PageWriteError`) plutôt qu'écrits faux (rouge prouvé : 49/49 invalides). `Metadata` à date fixe ; `imageWidth`/`imageHeight` exigés (sinon refus), `imageFilename` vide s'il est inconnu ; identifiants dérivés, `NCName` vérifiés, références d'ordre de lecture suivies ; type de région hors énumération en `custom="structure {type:…;}"` (Transkribus/eScriptorium, relu) ; ImageRegion/SeparatorRegion/GraphicRegion écrites comme telles ; sous-régions avant les lignes ; géométrie inconnue → `0,0 0,0` marqué `coords {absent:true;}` (relu `None`). `<Word>` PAGE lus et écrits (texte, polygone, confiance). — *preuves : `tests/formats/pagexml/test_page_xsd.py`, `tests/formats/pagexml/test_page_writer.py`, `tests/formats/pagexml/test_layout_to_page.py`, `tests/adapters/layout/test_page_assembler.py::test_hybrid_output_is_valid_page_2019`, `tests/pipeline/test_fanout.py::test_fanout_line_ids_survive_both_exports`*
 - [~] **Différé-par-design** : lecteur `CANONICAL_DOCUMENT`, projecteur `layout→texte` (couche 3). — *épaississements T5 ultérieurs.* (L'assembleur `layout→PAGE` existe : `layout_to_page` + `PageAssembler` en couche 5, conforme au XSD depuis D-273.)
 - [x] **YAML d'une entrée non fiable sans alias** (S27, D-299) : `safe_load_yaml` (`formats/_yaml.py`, l'entonnoir comme `safe_parse_xml`) refuse tout alias à la composition — « billion laughs » de < 1 Ko = minutes de validation ; servi à la spec déposée et au profil de normalisation saisi (`from_yaml_text`). — *preuve : `tests/formats/test_safe_yaml.py`*
+- [x] **Une seule entrée YAML pour un profil de normalisation** (S28b, D-301) : `from_yaml_text` ; le sucre `nfc: bool` → `unicode_form`, l'alias `diplomatic` → `diplomatic_table`, `from_dict` et `from_yaml` (lecture d'un chemin) n'avaient aucun consommateur — retirés ; une clé d'avant est **refusée** comme toute clé inconnue, jamais traduite (rouge prouvé : `nfc: false` accepté).

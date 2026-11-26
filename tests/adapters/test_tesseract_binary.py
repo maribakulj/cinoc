@@ -16,6 +16,7 @@ from pathlib import Path
 
 import pytest
 
+from cinoc.adapters import _process
 from cinoc.adapters.ocr import _tesseract_cli as cli
 from cinoc.adapters.ocr.tesseract import TesseractAdapter, tsv_confidences
 from cinoc.domain.artifacts import Artifact, ArtifactType
@@ -189,7 +190,7 @@ def test_a_binary_deaf_to_terminate_is_killed(
     fake: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("FAKE_TESS_MODE", "stubborn")
-    monkeypatch.setattr(cli, "_GRACE_SECONDS", 0.2)
+    monkeypatch.setattr(_process, "GRACE_SECONDS", 0.2)
     with pytest.raises(DeadlineExceeded):
         _execute(fake, timeout=0.5)
     assert _gone(int((fake / "pid").read_text(encoding="utf-8")))

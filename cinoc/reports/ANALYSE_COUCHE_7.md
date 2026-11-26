@@ -320,6 +320,7 @@ cinoc/reports/
 **Validation inter-couches :** `MIGRATION_PLAN.md` §3-T1 (1 section overview/CER lit `RunResult` → HTML déterministe).
 
 - [~] **Supprimé** : `narrative/` (D2) · `generator` legacy + `html/data/` + i18n/glossary d'office + Chart.js + SPA. **Différé** : 1 section/métrique à sa tranche (jamais en avance). **Interactivité what-if** = question ouverte (sélection, jamais re-mesure ; cf. §2.7).
+- [x] **S28b (D-301)** : le CSS du rapport vit dans `reports/_assets/report.css` (une ligne par fragment, commentée ; lignes concaténées et commentaires retirés au chargement) — `html.py` 702 → 147 lignes, exemption de budget libérée, rapport **identique à l'octet** (démo comparée avant/après), toujours inliné (autonome ; `style-src 'unsafe-inline'`, aucune empreinte) ; `cinoc compare` FR/EN (`--lang`), décimales localisées, chaque côté nommé par son run, le **nom** de son fichier et son heure (D22).
 
 ### i18n FR/EN du rapport (D-136) — **R7 honorée : inline, sur demande réelle**
 

@@ -25,7 +25,20 @@ adapter_kwargs:
 ```
 
 (``parameters`` — un objet — ne s'écrit pas dans une spec, dont les réglages
-sont plats ; il n'est donc pas déclaré. Le constructeur l'accepte en Python.)
+sont plats ; il n'est donc pas déclaré. Le constructeur l'accepte en Python,
+pour un processeur seul.)
+
+**Une chaîne** : ``processor: ocrd-cis-ocropy-binarize,ocrd-tesserocr-segment``
+enchaîne les processeurs groupe par groupe (``OCR-D-IMG`` → ``OCR-D-STEP-1`` →
+… → ``OCR-D-SEG``) ; le PAGE du dernier est la mise en page.
+
+**Un processus par processeur, rien de plus** (D-301). Le workspace est un METS
+**gabarit** écrit par la brique — une page, un fichier, son type MIME — au lieu
+de ``ocrd workspace init`` puis ``add`` : deux interpréteurs Python de moins
+par page (~2,5 s mesurées, OCR-D 3.13), un gabarit qu'OCR-D accepte tel quel
+(vérifié contre ``ocrd-dummy``). Chaque processeur est attendu par tranches
+courtes (``adapters._process``) : un arrêt du run le tue en vol et n'en lance
+pas un de plus ; le délai de l'étape vaut pour la chaîne entière.
 
 **Périmètre assumé : ``IMAGE → LAYOUT``.** OCR-D enchaîne aussi PAGE → PAGE ;
 réinjecter un layout dans un workspace est un autre travail, qu'aucun
@@ -47,11 +60,14 @@ import re
 import shutil
 import subprocess
 import tempfile
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import ClassVar
+from xml.sax.saxutils import quoteattr
 
 from cinoc.adapters._params import label_param, timeout_param
+from cinoc.adapters._process import wait_or_stop
 from cinoc.adapters.layout._base import layout_step_output, read_layout
 from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.errors import AdapterStepError, DeadlineExceeded
@@ -62,12 +78,38 @@ from cinoc.pipeline.types import RunContext, StepOutput
 
 logger = logging.getLogger(__name__)
 
-_VERSION = "1.0"
+#: 1.1 : METS gabarit et chaîne de processeurs (D-301) — la sortie d'un
+#: processeur seul ne change pas, mais le workspace qu'il lit, si.
+_VERSION = "1.1"
 
 #: Groupes de fichiers du workspace jetable. Fixes : ils ne sortent jamais de
 #: cette brique, donc les exposer n'offrirait qu'une occasion de se tromper.
 _GROUPE_ENTREE = "OCR-D-IMG"
 _GROUPE_SORTIE = "OCR-D-SEG"
+#: Groupe intermédiaire du maillon ``n`` d'une chaîne (``OCR-D-STEP-1``…).
+_GROUPE_ETAPE = "OCR-D-STEP-{}"
+
+#: Le workspace d'une page : le METS qu'``ocrd workspace init`` + ``add``
+#: écrivaient, sans en-tête daté (rien d'horodaté n'entre dans l'atelier).
+_METS = """<?xml version="1.0" encoding="UTF-8"?>
+<mets:mets xmlns:mets="http://www.loc.gov/METS/" \
+xmlns:xlink="http://www.w3.org/1999/xlink">
+  <mets:fileSec>
+    <mets:fileGrp USE="{groupe}">
+      <mets:file ID="IMG_0001" MIMETYPE={mime}>
+        <mets:FLocat LOCTYPE="OTHER" OTHERLOCTYPE="FILE" xlink:href={href}/>
+      </mets:file>
+    </mets:fileGrp>
+  </mets:fileSec>
+  <mets:structMap TYPE="PHYSICAL">
+    <mets:div TYPE="physSequence">
+      <mets:div TYPE="page" ID="P_0001">
+        <mets:fptr FILEID="IMG_0001"/>
+      </mets:div>
+    </mets:div>
+  </mets:structMap>
+</mets:mets>
+"""
 
 #: Un processeur OCR-D se nomme ``ocrd-<quelque chose>`` : c'est la convention
 #: du projet, et la contrainte évite qu'une spec ne nomme un exécutable
@@ -87,14 +129,15 @@ _MIMES = {
 
 _DEFAULT_TIMEOUT = 900.0
 
-#: Lanceur **injectable** : ``(programme, arguments, dossier, délai)``. Le défaut
-#: résout le programme puis le fait tourner ; les tests injectent un faux.
+#: Lanceur **injectable** : ``(programme, arguments, dossier, délai, contrôle)``.
+#: Le défaut résout le programme puis le fait tourner (et le tue à l'arrêt) ;
+#: les tests injectent un faux.
 #:
 #: Même motif que ``DetectorFn`` dans ``_base.py``, et pour la même raison : un
 #: adaptateur se teste sans son outil. Ici le gain est double — les faux
 #: exécutables auraient été des scripts ``#!/bin/sh``, donc la première suite du
 #: projet à ne pas tourner sous Windows.
-RunnerFn = Callable[[str, list[str], Path, float], None]
+RunnerFn = Callable[[str, list[str], Path, float, RunControl], None]
 
 
 def mime_de(chemin: str) -> str:
@@ -127,6 +170,19 @@ def _resoudre(source: str, bin_dir: str | None, nom: str) -> str:
     return trouve
 
 
+def processeurs(chaine: str) -> tuple[str, ...]:
+    """``"ocrd-a, ocrd-b"`` → ``("ocrd-a", "ocrd-b")``, chaque nom contraint."""
+    noms = tuple(nom.strip() for nom in chaine.split(","))
+    for nom in noms:
+        if not _NOM_PROCESSEUR.match(nom):
+            raise AdapterStepError(
+                f"ocrd : 'processor' invalide ({chaine!r}). Attendu un nom de "
+                "processeur OCR-D, par exemple 'ocrd-tesserocr-segment', ou une "
+                "chaîne séparée par des virgules."
+            )
+    return noms
+
+
 def _lancer_sous_processus(
     source: str,
     bin_dir: str | None,
@@ -134,25 +190,27 @@ def _lancer_sous_processus(
     args: list[str],
     atelier: Path,
     delai: float,
+    control: RunControl,
 ) -> None:
-    """Lanceur par défaut : résout le programme, puis le fait tourner."""
+    """Lanceur par défaut : résout le programme, le fait tourner, et le tue à
+    l'arrêt du run ou au délai (``wait_or_stop``) — ``stderr`` en fichier,
+    pas de tube à remplir."""
     argv = [_resoudre(source, bin_dir, nom), *args]
     logger.info("[ocrd] %s", " ".join(argv))
-    try:
+    journal = atelier / f".{nom}.stderr.log"
+    with journal.open("wb") as stderr:
         # ``shell=False`` : aucun argument n'est réinterprété.
-        fini = subprocess.run(  # noqa: S603
-            argv, cwd=atelier, capture_output=True, timeout=delai, check=False
+        processus = subprocess.Popen(  # noqa: S603
+            argv, cwd=atelier, stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL, stderr=stderr,
         )
-    except subprocess.TimeoutExpired as exc:
         # Le délai de l'étape, pas une panne du processeur (D3, D-281).
-        raise DeadlineExceeded(
-            f"{source} : {nom} n'a pas rendu la main en {delai:.0f}s."
-        ) from exc
-    if fini.returncode != 0:
-        detail = fini.stderr.decode("utf-8", "replace").strip()[-400:]
-        raise AdapterStepError(
-            f"{source} : {nom} a terminé en {fini.returncode} — {detail}"
+        code = wait_or_stop(
+            processus, timeout=delai, control=control, what=source, subject=nom
         )
+    if code != 0:
+        detail = journal.read_bytes().decode("utf-8", "replace").strip()[-400:]
+        raise AdapterStepError(f"{source} : {nom} a terminé en {code} — {detail}")
 
 
 class OcrdProcessor:
@@ -161,8 +219,10 @@ class OcrdProcessor:
     #: Réglages acceptés (``pipeline.params``) : tout autre est refusé, nommé.
     PARAMS: ClassVar[tuple[Param, ...]] = (
         label_param(),
-        Param("processor", "str", "Processeur OCR-D (ocrd-…)",
-              "OCR-D processor (ocrd-…)", required=True),
+        Param("processor", "str",
+              "Processeur OCR-D (ocrd-…), ou chaîne séparée par des virgules",
+              "OCR-D processor (ocrd-…), or a comma-separated chain",
+              required=True),
         Param("bin_dir", "str", "Dossier des exécutables", "Executables folder"),
         timeout_param(900.0),
     )
@@ -183,10 +243,11 @@ class OcrdProcessor:
         timeout: float = _DEFAULT_TIMEOUT,
         runner: RunnerFn | None = None,
     ) -> None:
-        if not _NOM_PROCESSEUR.match(processor):
+        self._chaine = processeurs(processor)
+        if parameters and len(self._chaine) > 1:
             raise AdapterStepError(
-                f"ocrd : 'processor' invalide ({processor!r}). Attendu un nom de "
-                "processeur OCR-D, par exemple 'ocrd-tesserocr-segment'."
+                "ocrd : 'parameters' vise un processeur seul ; une chaîne "
+                f"({processor!r}) n'en dit pas le maillon."
             )
         self._label = label
         self._processor = processor
@@ -226,39 +287,60 @@ class OcrdProcessor:
         if not chemin.exists():
             raise AdapterStepError(f"{self.name} : image introuvable ({image.uri}).")
         with tempfile.TemporaryDirectory(prefix="cinoc-ocrd-") as atelier:
-            xml = self._traiter(chemin, Path(atelier), context)
+            xml = self._traiter(chemin, Path(atelier), context, control)
         return layout_step_output(read_layout(xml, self.name), context, self.name)
 
     # ---------------------------------------------------------------- interne
 
-    def _executer(self, nom: str, args: list[str], atelier: Path, delai: float) -> None:
+    def _executer(
+        self, nom: str, args: list[str], atelier: Path, delai: float,
+        control: RunControl,
+    ) -> None:
         if self._runner is not None:
-            self._runner(nom, args, atelier, delai)
+            self._runner(nom, args, atelier, delai, control)
             return
-        _lancer_sous_processus(self.name, self._bin_dir, nom, args, atelier, delai)
-
-    def _traiter(self, image: Path, atelier: Path, context: RunContext) -> bytes:
-        delai = max(1.0, context.deadline.clamp_to_remaining(self._timeout))
-
-        self._executer("ocrd", ["workspace", "init"], atelier, delai)
-        self._executer(
-            "ocrd",
-            ["workspace", "add", "-G", _GROUPE_ENTREE, "-i", "IMG_0001",
-             "-g", "P_0001", "-m", mime_de(str(image)), str(image)],
-            atelier, delai,
+        _lancer_sous_processus(
+            self.name, self._bin_dir, nom, args, atelier, delai, control
         )
 
-        args = ["-I", _GROUPE_ENTREE, "-O", _GROUPE_SORTIE]
-        if self._parameters:
-            # Trié : deux runs de même spec doivent écrire le même fichier —
-            # son empreinte entre dans le manifeste de reproductibilité.
-            reglages = atelier / "parametres.json"
-            reglages.write_text(
-                json.dumps(self._parameters, sort_keys=True), encoding="utf-8"
+    def _traiter(
+        self, image: Path, atelier: Path, context: RunContext, control: RunControl
+    ) -> bytes:
+        fin = time.monotonic() + max(
+            1.0, context.deadline.clamp_to_remaining(self._timeout)
+        )
+        (atelier / "mets.xml").write_text(
+            _METS.format(
+                groupe=_GROUPE_ENTREE,
+                mime=quoteattr(mime_de(str(image))),
+                href=quoteattr(str(image)),
+            ),
+            encoding="utf-8",
+        )
+        entree = _GROUPE_ENTREE
+        for rang, nom in enumerate(self._chaine, start=1):
+            control.raise_if_cancelled()
+            sortie = (
+                _GROUPE_SORTIE if rang == len(self._chaine)
+                else _GROUPE_ETAPE.format(rang)
             )
-            args += ["-p", str(reglages)]
-        self._executer(self._processor, args, atelier, delai)
-
+            args = ["-I", entree, "-O", sortie]
+            if self._parameters:
+                # Trié : deux runs de même spec doivent écrire le même fichier —
+                # son empreinte entre dans le manifeste de reproductibilité.
+                reglages = atelier / "parametres.json"
+                reglages.write_text(
+                    json.dumps(self._parameters, sort_keys=True), encoding="utf-8"
+                )
+                args += ["-p", str(reglages)]
+            # Le délai de l'étape vaut pour la chaîne entière.
+            reste = fin - time.monotonic()
+            if reste <= 0:
+                raise DeadlineExceeded(
+                    f"{self.name} : délai de l'étape épuisé avant {nom}."
+                )
+            self._executer(nom, args, atelier, reste, control)
+            entree = sortie
         return self._recolter(atelier / _GROUPE_SORTIE)
 
     def _recolter(self, groupe: Path) -> bytes:
@@ -271,7 +353,7 @@ class OcrdProcessor:
         trouves = sorted(p for p in groupe.rglob("*.xml") if p.is_file())
         if not trouves:
             raise AdapterStepError(
-                f"{self.name} : {self._processor} n'a écrit aucun XML dans "
+                f"{self.name} : {self._chaine[-1]} n'a écrit aucun XML dans "
                 f"{_GROUPE_SORTIE}. Est-ce bien un processeur qui produit du PAGE ?"
             )
         if len(trouves) > 1:
@@ -283,4 +365,4 @@ class OcrdProcessor:
         return trouves[0].read_bytes()
 
 
-__all__ = ["OcrdProcessor", "RunnerFn", "mime_de"]
+__all__ = ["OcrdProcessor", "RunnerFn", "mime_de", "processeurs"]

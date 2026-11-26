@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from cinoc.reports.html import _CSS, localized, view_label
+from cinoc.reports.html import _report_css, localized, view_label
 
 
 def test_card_layout_uses_grid_not_columns_masonry() -> None:
@@ -13,23 +13,47 @@ def test_card_layout_uses_grid_not_columns_masonry() -> None:
     explicite (``display:grid`` + ``align-items:start``) pose des rangées
     intrinsèques sans chevauchement. Ce test verrouille le choix structurel.
     """
+    css = _report_css()
     # Les conteneurs de cartes sont des grilles, pas des flux multi-colonnes.
     # La grille porte sur la vue maître (.tab-master), pas l'onglet (maître+détail).
-    assert ".tab-master{display:grid;" in _CSS
-    assert ".dd-flow{display:grid;" in _CSS
-    assert "align-items:start;" in _CSS
+    assert ".tab-master{display:grid;" in css
+    assert ".dd-flow{display:grid;" in css
+    assert "align-items:start;" in css
     grid_cols = "grid-template-columns:repeat(auto-fill,minmax(min(100%,23rem),1fr));"
-    assert grid_cols in _CSS
+    assert grid_cols in css
     # Les cartes larges s'étendent sur toute la grille (≠ column-span:all).
     wide_rule = ".tab-master>.view-hero,.tab-master>.r-block.r-wide{grid-column:1/-1;}"
-    assert wide_rule in _CSS
-    assert ".dd-card.dd-wide{grid-column:1/-1;}" in _CSS
+    assert wide_rule in css
+    assert ".dd-card.dd-wide{grid-column:1/-1;}" in css
     # Plus aucun masonry ``columns``/``column-span`` sur les conteneurs de cartes
     # (le masonry ``columns`` reste légitime pour les listes-journal de texte
     # court — ``.wflow`` — mais jamais pour les cartes).
-    assert ".tab-panel{columns:" not in _CSS
-    assert ".dd-flow{columns:" not in _CSS
-    assert "column-span:all" not in _CSS
+    assert ".tab-panel{columns:" not in css
+    assert ".dd-flow{columns:" not in css
+    assert "column-span:all" not in css
+
+
+def test_the_report_css_is_a_package_file_inlined_without_its_comments() -> None:
+    """Le CSS vit dans ``_assets/report.css`` (il occupait ~580 des 700 lignes
+    de ``html.py``, D-301) ; le rapport l'inline toujours — autonome — sans
+    ses commentaires ni ses sauts de ligne : les octets du littéral d'avant."""
+    from importlib import resources
+
+    from cinoc.reports.html import render_document
+    from cinoc.reports.section import Html
+
+    fichier = (
+        resources.files("cinoc.reports").joinpath("_assets/report.css").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert "/*" in fichier and "\n" in fichier
+    css = _report_css()
+    assert "/*" not in css and "\n" not in css
+    assert css.startswith(":root{--paper:#EBE8E0;")
+    document = render_document("t", Html("<p>x</p>"))
+    assert document.count(css) == 1
+    assert "report.css" not in document  # inliné, jamais référencé
 
 
 def test_localized_picks_language() -> None:
@@ -66,5 +90,5 @@ def test_a_wide_table_scrolls_in_its_own_box_on_a_phone() -> None:
     ``table.data`` défile dans sa propre boîte — la page, jamais."""
     assert (
         "@media (max-width:720px){table.data{display:block;overflow-x:auto;"
-        "max-width:100%;}}" in _CSS
+        "max-width:100%;}}" in _report_css()
     )

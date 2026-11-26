@@ -297,6 +297,7 @@ cinoc/app/
 **Validation par tranche :** `MIGRATION_PLAN.md` §3 — orchestrateur minimal + registre 1 module + `RunSpec` minimal (T1) · sécurité chemins testée d'abord + repro (T2) · entry-points + plugin (T6).
 
 - [~] **Supprimé** : tout `_benchmark_*` (double format) · `results.py`/`legacy.py` (shim) · ½ `partial_store` mort · `python_helpers` (preset). **Différé** : reprise partielle (1 seul mécanisme, à sa tranche).
+- [x] **S28b (D-301)** : catalogue OCR **lu sur le socle** (`socle_ocr_engines`) par les recettes et `engine_statuses` (`OCR_PROBES` : sondes confrontées au socle) — la quatrième copie (`recipes._OCR`) retirée ; un seul garde-fou de forme pour fournisseurs et moteurs OCR ; rejeux à JSON (`precomputed_layout`, `precomputed_region`) retirés de l'offre web (`WEB_UNREACHABLE_REPLAYS`, confronté à la règle du dépôt ZIP).
 
 ---
 

@@ -93,6 +93,23 @@ def _module_present(name: str) -> bool:
         return False
 
 
+#: Moteur OCR → sa sonde (binaire, SDK, clé : propre à chacun). **Pas** un
+#: catalogue : l'ordre et la liste des moteurs se lisent sur le socle
+#: (``socle_ocr_engines``, D-301), et les clés de cette table lui sont
+#: confrontées (``tests/guardrails/test_declared_capabilities.py``).
+OCR_PROBES: Mapping[
+    str, Callable[[BinaryProbe, ModuleProbe, EnvProbe], EngineStatus]
+] = {
+    "tesseract": lambda binary, _module, _env: _tesseract_status(binary),
+    "kraken": lambda _binary, module, _env: _kraken_status(module),
+    "pero": lambda _binary, module, _env: _pero_status(module),
+    "calamari": lambda _binary, module, _env: _calamari_status(module),
+    "mistral_ocr": lambda _binary, module, env: _mistral_ocr_status(module, env),
+    "google_vision": lambda _binary, _module, env: _google_vision_status(env),
+    "azure_di": lambda _binary, _module, env: _azure_di_status(env),
+}
+
+
 def engine_statuses(
     *,
     has_binary: BinaryProbe = shutil.which,
@@ -106,6 +123,8 @@ def engine_statuses(
     marche »). La protection d'un Space exposé relève de sa **visibilité** (privé)
     et de la présence/absence de la clé, pas d'un masquage côté appli.
     """
+    from cinoc.app.modules.registry import socle_ocr_engines  # noqa: PLC0415
+
     return (
         EngineStatus(
             kind="precomputed",
@@ -113,13 +132,10 @@ def engine_statuses(
             available=True,
             detail="intégré (aucune dépendance)",
         ),
-        _tesseract_status(has_binary),
-        _kraken_status(has_module),
-        _pero_status(has_module),
-        _calamari_status(has_module),
-        _mistral_ocr_status(has_module, get_env),
-        _google_vision_status(get_env),
-        _azure_di_status(get_env),
+        *(
+            OCR_PROBES[kind](has_binary, has_module, get_env)
+            for kind in socle_ocr_engines()
+        ),
         _openai_status(has_module, get_env),
         _anthropic_status(has_module, get_env),
         _mistral_status(has_module, get_env),
@@ -506,6 +522,7 @@ def providers_for_mode(mode: str) -> frozenset[str]:
 
 
 __all__ = [
+    "OCR_PROBES",
     "normalization_profiles",
     "curated_prompts",
     "EngineStatus",

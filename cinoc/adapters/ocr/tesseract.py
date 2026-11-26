@@ -35,7 +35,9 @@ import json
 import logging
 import re
 from collections.abc import Mapping
+from pathlib import PurePath
 from typing import ClassVar
+from xml.sax.saxutils import escape
 
 from cinoc.adapters._params import label_param, timeout_param
 from cinoc.adapters._workspace import workspace_artifact_path
@@ -54,6 +56,11 @@ logger = logging.getLogger(__name__)
 #: Version d'adaptateur. Inchangée par le passage à un seul appel du binaire :
 #: texte, confidences et ALTO sont identiques à l'octet (D-300).
 _VERSION = "1.0"
+#: Version **avec ALTO** (``alto=True``) : l'ALTO ne porte plus que le **nom**
+#: de l'image dans ``fileName`` (D-301). Le texte et les confidences ne
+#: changent pas : une instance sans ALTO garde ``1.0``, donc ses archives — la
+#: clé d'unité ne bouge que si la sortie a bougé (D-295).
+_ALTO_VERSION = "1.1"
 DEFAULT_TIMEOUT = 120.0
 
 #: Plafond de réglage. Une valeur au-delà ne protège plus de rien :
@@ -123,6 +130,25 @@ def parse_psm_by_class(spec: str) -> dict[str, int]:
             )
         table[classe] = psm
     return table
+
+
+#: ``<fileName>…</fileName>`` de ``sourceImageInformation``, tel que Tesseract
+#: l'écrit : le chemin qu'il a lu, **sans échappement** XML.
+_FILENAME_RE = re.compile(rb"<fileName>.*?</fileName>", re.DOTALL)
+
+
+def _portable_alto(alto: bytes, image_path: str) -> bytes:
+    """L'ALTO de Tesseract avec le seul **nom** de l'image dans ``fileName``.
+
+    Tesseract y recopie le chemin absolu qu'on lui passe (``/home/…``), et sans
+    l'échapper — une image nommée ``a&b.png`` rend un ALTO mal formé. Même règle
+    que D5 (D-282) : aucun chemin local dans une sortie publiée. Le nom seul
+    (l'adaptateur ne connaît pas la racine du corpus), échappé ; le reste du
+    fichier est rendu à l'octet. Pas de ``fileName`` → inchangé."""
+    name = escape(PurePath(image_path.replace("\\", "/")).name).encode("utf-8")
+    return _FILENAME_RE.sub(
+        lambda _: b"<fileName>" + name + b"</fileName>", alto, count=1
+    )
 
 
 class TesseractAdapter:
@@ -219,7 +245,7 @@ class TesseractAdapter:
 
     @property
     def version(self) -> str:
-        return _VERSION
+        return _ALTO_VERSION if self._alto else _VERSION
 
     def system_binaries(self) -> dict[str, str]:
         """Binaire **et** données de langue pour le ``RunManifest`` et la clé
@@ -340,6 +366,7 @@ class TesseractAdapter:
                 self._label,
                 "alto.xml",
             )
+            alto_bytes = _portable_alto(alto_bytes, image.uri)
             alto_path.write_bytes(alto_bytes)
             artifacts[ArtifactType.ALTO_XML] = Artifact(
                 id=f"{context.document_id}:{self.name}:alto_xml",

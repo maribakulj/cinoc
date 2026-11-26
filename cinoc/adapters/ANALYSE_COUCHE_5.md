@@ -299,6 +299,7 @@ cinoc/adapters/
 **Validation par tranche :** `MIGRATION_PLAN.md` §3 — starter pack via `Module` (T1-T3) · **1 seul `JobStore` avec SSE/`job_events` réabsorbés** (T4, cf. §0/D-γ) · bugs latents `Corpus(source=)`/`selected_indices+1` corrigés + test `live` (T7).
 
 - [~] **Différé** : kraken/calamari/pero/cloud OCR, anthropic/mistral, **VLM (0 conso → pas avant `zero_shot`)**, importeurs (1/tranche, sortie unique `Corpus`), stores. **Supprimer** `_fallback_log` + données démo en dur (→`data/`).
+- [x] **S28b (D-301)** : l'ALTO de Tesseract ne porte que le **nom** de l'image (`fileName`, échappé — Tesseract recopiait le chemin absolu sans échappement, `a&b.png` rendait un XML mal formé), version `1.1` avec ALTO seulement ; `ocrd_processor` 1.1 : METS **gabarit** écrit par la brique (plus de `ocrd workspace init`/`add` : 3,63 → 1,24 s/page avec `ocrd-dummy`), **chaîne** `ocrd-a,ocrd-b` groupe par groupe, arrêt et délai tuent le processeur en vol — `adapters/_process.py` (`wait_or_stop`), partagé avec Tesseract ; `reading_order._feuilles` (mort) retiré.
 
 ---
 

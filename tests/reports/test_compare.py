@@ -53,4 +53,32 @@ def test_render_comparison_is_autonomous_html() -> None:
     html = render_comparison(_result("A", 0.30), _result("B", 0.25))
     assert html.startswith("<!DOCTYPE html>")
     assert "comparaison" in html.lower()
-    assert "-0.0500" in html
+    assert '<html lang="fr">' in html
+
+
+def test_decimals_follow_the_report_language() -> None:
+    """D22 du pilote : un rapport français écrivait « 0.3000 » (point) là où
+    tout le reste du produit écrit « 0,3000 »."""
+    fr = render_comparison(_result("A", 0.30), _result("B", 0.25))
+    assert "0,3000" in fr and "-0,0500" in fr
+    assert "0.3000" not in fr
+    en = render_comparison(_result("A", 0.30), _result("B", 0.25), lang="en")
+    assert "0.3000" in en and "-0.0500" in en
+    assert '<html lang="en">' in en and "Metric" in en and "Métrique" not in en
+
+
+def test_two_runs_with_the_same_id_are_told_apart() -> None:
+    """D22 : ``A = run · B = run`` ne disait pas lequel était lequel. Chaque
+    côté nomme sa source (le **nom** du fichier : aucun chemin local, D5) et
+    l'heure de son run."""
+    a = _result("run", 0.30)
+    b = _result("run", 0.25).model_copy(
+        update={
+            "manifest": a.manifest.model_copy(
+                update={"started_at": datetime(2026, 2, 3, 4, 5, tzinfo=UTC)}
+            )
+        }
+    )
+    html = render_comparison(a, b, source_a="avant.json", source_b="apres.json")
+    assert "avant.json" in html and "apres.json" in html
+    assert "2026-01-01 00:00 UTC" in html and "2026-02-03 04:05 UTC" in html

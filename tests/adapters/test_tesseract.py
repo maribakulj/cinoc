@@ -431,3 +431,54 @@ def test_la_deadline_reste_l_autorite() -> None:
     assert deadline.clamp_to_remaining(900.0) <= 5.0
     # Infinie : le réglage de l'étape s'applique tel quel.
     assert Deadline(None).clamp_to_remaining(900.0) == 900.0
+
+
+_ALTO_WITH_PATH = (
+    b'<?xml version="1.0" encoding="UTF-8"?>\n<alto>\n\t<Description>\n'
+    b"\t\t<sourceImageInformation>\n"
+    b"\t\t\t<fileName>/home/alice/corpus/a&b <c>.png</fileName>\n"
+    b"\t\t</sourceImageInformation>\n\t</Description>\n<Layout/></alto>\n"
+)
+
+
+def test_l_alto_ne_publie_pas_le_chemin_absolu_de_l_image(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Tesseract recopie dans ``fileName`` le chemin qu'il a lu — absolu, et
+    **non échappé** (``&`` rend l'ALTO mal formé). Même règle que D5 (D-282) :
+    aucun chemin local dans une sortie publiée ; le nom seul, échappé."""
+    from cinoc.formats._xml import safe_parse_xml
+
+    _mock_ocr(monkeypatch, "mot", alto=_ALTO_WITH_PATH)
+    adapter = TesseractAdapter(label="fra", lang="fra", alto=True)
+    image = tmp_path / "a&b <c>.png"
+    out = adapter.execute(
+        {ArtifactType.IMAGE: _image(image)}, {}, _ctx(tmp_path), RunControl()
+    )
+    alto = out.artifacts[ArtifactType.ALTO_XML]
+    assert alto.uri is not None
+    written = Path(alto.uri).read_bytes()
+    assert b"/home/alice" not in written and str(tmp_path).encode() not in written
+    assert b"<fileName>a&amp;b &lt;c&gt;.png</fileName>" in written
+    root = safe_parse_xml(written)
+    assert root.findtext(".//fileName") == "a&b <c>.png"
+    # Le reste du fichier est intact, à l'octet.
+    origine = b"/home/alice/corpus/a&b <c>.png"
+    assert written.replace(b"a&amp;b &lt;c&gt;.png", origine) == _ALTO_WITH_PATH
+    # La sortie ALTO change : la version d'adaptateur le dit (clé d'unité) ;
+    # sans ALTO, texte et confidences sont ceux d'avant — version inchangée.
+    assert adapter.version == "1.1"
+    assert TesseractAdapter(label="fra", lang="fra").version == "1.0"
+
+
+def test_un_alto_sans_filename_reste_intact(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _mock_ocr(monkeypatch, "mot", alto=b"<alto>geom</alto>")
+    adapter = TesseractAdapter(label="fra", lang="fra", alto=True)
+    out = adapter.execute(
+        {ArtifactType.IMAGE: _image(tmp_path / "doc1.png")}, {}, _ctx(tmp_path),
+        RunControl(),
+    )
+    uri = out.artifacts[ArtifactType.ALTO_XML].uri
+    assert uri is not None and Path(uri).read_bytes() == b"<alto>geom</alto>"

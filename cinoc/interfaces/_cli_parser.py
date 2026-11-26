@@ -434,6 +434,10 @@ def build_parser() -> argparse.ArgumentParser:
     compare_cmd.add_argument(
         "-o", "--output", default="comparaison.html", help="Fichier HTML de sortie."
     )
+    compare_cmd.add_argument(
+        "--lang", default="fr", choices=("fr", "en"),
+        help="Langue du rapport (libellés et séparateur décimal).",
+    )
     hybrid_cmd = subparsers.add_parser(
         "hybrid",
         help="Transcription hybride : segmente → OCR par bloc → ALTO/page "

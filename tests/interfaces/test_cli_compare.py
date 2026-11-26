@@ -46,4 +46,27 @@ def test_compare_command_end_to_end(tmp_path: Path) -> None:
     assert code == 0
     html = output.read_text(encoding="utf-8")
     assert html.startswith("<!DOCTYPE html>")
-    assert "-0.0500" in html  # amélioration de 0.30 -> 0.25
+    assert "-0,0500" in html  # amélioration de 0.30 -> 0.25 (décimale FR)
+
+
+def test_compare_names_each_file_and_speaks_english_on_request(
+    tmp_path: Path,
+) -> None:
+    """Deux runs au même ``run_id`` (une spec relancée) : le rapport nomme le
+    fichier de chaque côté — son nom, jamais le chemin de la machine (D5)."""
+    (tmp_path / "x").mkdir()
+    path_a = tmp_path / "x" / "lundi.json"
+    path_b = tmp_path / "mardi.json"
+    dump_run_result(_result("run", 0.30), path_a)
+    dump_run_result(_result("run", 0.25), path_b)
+    output = tmp_path / "diff.html"
+
+    code = main(
+        ["compare", str(path_a), str(path_b), "-o", str(output), "--lang", "en"]
+    )
+
+    assert code == 0
+    html = output.read_text(encoding="utf-8")
+    assert "lundi.json" in html and "mardi.json" in html
+    assert str(tmp_path) not in html
+    assert "-0.0500" in html and '<html lang="en">' in html
