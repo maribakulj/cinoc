@@ -428,7 +428,9 @@ def test_a_recipe_and_another_shape_share_one_run(
     )
     monkeypatch.setattr(
         "cinoc.interfaces.web.app.segmenter_statuses",
-        lambda: engines.segmenter_statuses(has_module=lambda _: True),
+        lambda: engines.segmenter_statuses(
+            has_module=lambda _: True, has_binary=lambda _: "/bin/x"
+        ),
     )
     client = _client(tmp_path)
     resp = _queue(
