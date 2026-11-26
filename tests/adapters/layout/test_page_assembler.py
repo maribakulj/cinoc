@@ -25,10 +25,11 @@ from cinoc.domain.layout import (
 )
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext
+from tests.formats._xsd import page_errors
 
 
-def _layout_ecrit(tmp_path: Path) -> Path:
-    layout = CanonicalLayout(
+def _layout_ecrit(tmp_path: Path, layout: CanonicalLayout | None = None) -> Path:
+    layout = layout or CanonicalLayout(
         pages=(
             LayoutPage(
                 width=600,
@@ -50,14 +51,14 @@ def _layout_ecrit(tmp_path: Path) -> Path:
     return chemin
 
 
-def _executer(tmp_path: Path) -> Path:
+def _executer(tmp_path: Path, layout: CanonicalLayout | None = None) -> Path:
     sortie = PageAssembler().execute(
         {
             ArtifactType.LAYOUT: Artifact(
                 id="a",
                 document_id="p1",
                 type=ArtifactType.LAYOUT,
-                uri=str(_layout_ecrit(tmp_path)),
+                uri=str(_layout_ecrit(tmp_path, layout)),
             )
         },
         {},
@@ -135,3 +136,66 @@ def test_an_unreadable_layout_names_the_file(tmp_path: Path) -> None:
             ),
             RunControl(),
         )
+
+
+def _hybride() -> CanonicalLayout:
+    """La forme que livre le fan-out hybride : régions typées et géolocalisées
+    par le segmenteur, une ligne reconnue **sans géométrie** par région, une
+    région rattrapée marquée, une figure sans texte."""
+    boite = Geometry(bbox=BBox(x=10, y=20, width=300, height=40))
+    return CanonicalLayout(
+        pages=(
+            LayoutPage(
+                width=1240,
+                height=1754,
+                regions=(
+                    Region(
+                        id="r1",
+                        region_type="title",
+                        geometry=boite,
+                        lines=(Line(id="r1.l1", text="Chapitre premier"),),
+                    ),
+                    Region(id="r2", region_type="text+gapfill", geometry=boite),
+                    Region(id="r3", region_type="figure", geometry=boite),
+                    Region(
+                        id="r4", geometry=boite, lines=(Line(id="r4.l1", text="corps"),)
+                    ),
+                ),
+                reading_order=("r1", "r2", "r3", "r4"),
+            ),
+        )
+    )
+
+
+def test_hybrid_output_is_valid_page_2019(tmp_path: Path) -> None:
+    """Le XSD officiel PAGE 2019 est l'oracle (A9) — sur le chemin réel."""
+    from cinoc.formats.pagexml.layout_map import page_to_layout
+    from cinoc.formats.pagexml.parser import parse_pagexml
+
+    data = _executer(tmp_path, _hybride()).read_bytes()
+    assert page_errors(data) == []
+    relu = page_to_layout(parse_pagexml(data)).pages[0]
+    assert [r.region_type for r in relu.regions] == [
+        "title", "text+gapfill", "figure", "text"
+    ]
+    assert [ligne.id for r in relu.regions for ligne in r.lines] == ["r1.l1", "r4.l1"]
+    assert all(ligne.geometry is None for r in relu.regions for ligne in r.lines)
+
+
+@pytest.mark.parametrize(
+    ("changement", "motif"),
+    [({"coordinate_unit": "mm10"}, "pixel"), ({"pages": ()}, "une page")],
+)
+def test_an_unwritable_layout_fails_the_step(
+    tmp_path: Path, changement: dict[str, object], motif: str
+) -> None:
+    """Un PAGE faux serait pire qu'aucun : l'étape échoue en disant pourquoi."""
+    layout = _hybride().model_copy(update=changement)
+    with pytest.raises(AdapterStepError, match=motif):
+        _executer(tmp_path, layout)
+
+
+def test_unknown_page_size_fails_the_step(tmp_path: Path) -> None:
+    page = _hybride().pages[0].model_copy(update={"width": None})
+    with pytest.raises(AdapterStepError, match="dimensions"):
+        _executer(tmp_path, CanonicalLayout(pages=(page,)))

@@ -20,6 +20,7 @@ d'origine, et la césure (``SUBS_TYPE``/``SUBS_CONTENT`` + la marque portée par
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from pathlib import Path
 
 from cinoc.adapters._workspace import workspace_artifact_path
@@ -142,11 +143,12 @@ class AltoLayoutSource:
         # Une ligne sans ``id`` n'a pas d'identité stable, et un post-correcteur
         # qui reçoit un tel layout ne peut pas rendre ses décisions ligne à
         # ligne. On le dit ici plutôt que de laisser l'étape suivante échouer
-        # sur une cause qui n'est pas la sienne.
+        # sur une cause qui n'est pas la sienne. Toute la profondeur : les
+        # lignes d'un article de presse sont sous un ``ComposedBlock``.
         sans_id = sum(
             1
             for page in layout.pages
-            for region in page.regions
+            for region in _all_regions(page.regions)
             for line in region.lines
             if not line.id
         )
@@ -180,6 +182,12 @@ class AltoLayoutSource:
                 )
             }
         )
+
+
+def _all_regions(regions: tuple[Region, ...]) -> Iterator[Region]:
+    for region in regions:
+        yield region
+        yield from _all_regions(region.regions)
 
 
 def _apply_ocr(

@@ -113,6 +113,19 @@ def test_a_line_without_id_is_refused(tmp_path: Path) -> None:
         _run(tmp_path, alto=anonyme)
 
 
+def test_a_line_without_id_inside_a_composed_block_is_refused(tmp_path: Path) -> None:
+    """Le contrôle descendait d'un niveau seulement : la presse range ses
+    articles en ``ComposedBlock``, et leurs lignes y échappaient (D-264)."""
+    imbrique = (
+        f'<alto {_NS}><Layout><Page ID="P1" WIDTH="600" HEIGHT="400"><PrintSpace>'
+        '<ComposedBlock ID="C1"><TextBlock ID="B1">'
+        '<TextLine><String CONTENT="sans identifiant"/></TextLine>'
+        "</TextBlock></ComposedBlock></PrintSpace></Page></Layout></alto>"
+    ).encode()
+    with pytest.raises(AdapterStepError, match="1 ligne"):
+        _run(tmp_path, alto=imbrique)
+
+
 def test_registered_under_its_own_kind() -> None:
     """Le module est résolvable par le registre, comme n'importe quelle brique."""
     from cinoc.app.modules.registry import ModuleRegistry, register_default_modules

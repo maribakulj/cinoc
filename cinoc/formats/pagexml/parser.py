@@ -1,13 +1,19 @@
 """Parser PAGE XML tolérant (millésimes PRImA variés), via ``safe_parse_xml``.
 
 Extrait : régions de tout type (TextRegion + génériques non-texte), imbriquées ;
-géométrie en polygones (``Coords``) + ``Baseline`` ; texte de ligne via le
-``TextEquiv`` d'``index`` le plus bas ; arbre d'ordre de lecture.
+géométrie en polygones (``Coords``) + ``Baseline`` ; lignes et **mots**, texte
+via le ``TextEquiv`` d'``index`` le plus bas ; arbre d'ordre de lecture.
+
+L'attribut ``custom`` (``clé {prop:valeur;}``, convention Transkribus) est lu
+pour deux choses, celles qu'y écrit ``write_pagexml`` : le type de région hors
+de l'énumération PRImA (``structure {type:…;}``) et la géométrie inconnue
+(``coords {absent:true;}``, voir le writer). Le reste de ``custom`` est ignoré.
 """
 
 from __future__ import annotations
 
 import logging
+import re
 
 from lxml import etree
 
@@ -21,12 +27,16 @@ from cinoc.formats.pagexml.types import (
     PageRegion,
     PageTextLine,
     PageTextRegion,
+    PageWord,
     ReadingOrderGroup,
     ReadingOrderNode,
     ReadingOrderRef,
 )
 
 logger = logging.getLogger(__name__)
+
+_CUSTOM_ENTRY = re.compile(r"([\w-]+)\s*\{([^}]*)\}")
+_ESCAPED = re.compile(r"\\u([0-9a-fA-F]{4})")
 
 
 class PageParseError(FormatError):
@@ -45,6 +55,31 @@ def _int_attr(el: etree._Element, name: str) -> int | None:
         return int(float(raw))
     except ValueError:
         return None
+
+
+def _custom(el: etree._Element) -> dict[str, dict[str, str]]:
+    """``custom="clé {prop:valeur; …} …"`` → ``{clé: {prop: valeur}}``."""
+    out: dict[str, dict[str, str]] = {}
+    for key, body in _CUSTOM_ENTRY.findall(el.get("custom") or ""):
+        props = out.setdefault(key, {})
+        for item in body.split(";"):
+            name, sep, value = item.partition(":")
+            if sep:
+                props[name.strip()] = _ESCAPED.sub(
+                    lambda m: chr(int(m.group(1), 16)), value.strip()
+                )
+    return out
+
+
+def _region_type(el: etree._Element) -> str | None:
+    return el.get("type") or _custom(el).get("structure", {}).get("type") or None
+
+
+def _coords(el: etree._Element) -> tuple[Point, ...] | None:
+    """Polygone de l'élément, ``None`` s'il n'en a pas ou s'il le dit inconnu."""
+    if _custom(el).get("coords", {}).get("absent") == "true":
+        return None
+    return _points_child(el, "Coords")
 
 
 def _points_child(el: etree._Element, child_name: str) -> tuple[Point, ...] | None:
@@ -79,15 +114,10 @@ def _textequiv_text_conf(te: etree._Element) -> tuple[str, float | None]:
     return unicode_text, conf
 
 
-def _line_text_and_conf(line: etree._Element) -> tuple[str, float | None]:
-    """Texte + confidence de la ligne.
-
-    On retient le ``TextEquiv`` de niveau ligne d'``index`` le plus bas. À défaut
-    (lignes uniquement segmentées en mots, ex. certains exports Transkribus), on
-    reconstruit le texte depuis les ``<Word>``.
-    """
+def _best_textequiv(el: etree._Element) -> tuple[str, float | None] | None:
+    """Texte + confiance du ``TextEquiv`` enfant d'``index`` le plus bas."""
     best: tuple[int, str, float | None] | None = None
-    for te in line:
+    for te in el:
         if _lname(te) != "TextEquiv":
             continue
         index = _int_attr(te, "index")
@@ -95,28 +125,24 @@ def _line_text_and_conf(line: etree._Element) -> tuple[str, float | None]:
         text, conf = _textequiv_text_conf(te)
         if best is None or order < best[0]:
             best = (order, text, conf)
-    if best is not None:
-        return best[1], best[2]
+    return None if best is None else (best[1], best[2])
 
-    words: list[str] = []
-    for word in line:
-        if _lname(word) != "Word":
-            continue
-        for te in word:
-            if _lname(te) == "TextEquiv":
-                words.append(_textequiv_text_conf(te)[0])
-                break
-    if words:
-        return " ".join(words), None
-    return "", None
+
+def _parse_word(el: etree._Element) -> PageWord:
+    text, conf = _best_textequiv(el) or ("", None)
+    return PageWord(id=el.get("id"), coords=_coords(el), text=text, confidence=conf)
 
 
 def _parse_text_line(el: etree._Element) -> PageTextLine:
-    text, conf = _line_text_and_conf(el)
+    words = tuple(_parse_word(c) for c in el if _lname(c) == "Word")
+    # Le ``TextEquiv`` de ligne fait foi. À défaut (lignes seulement segmentées
+    # en mots, certains exports Transkribus), le texte se recompose des mots.
+    text, conf = _best_textequiv(el) or (" ".join(w.text for w in words), None)
     return PageTextLine(
         id=el.get("id"),
-        coords=_points_child(el, "Coords"),
+        coords=_coords(el),
         baseline=_points_child(el, "Baseline"),
+        words=words,
         text=text,
         confidence=conf,
     )
@@ -126,8 +152,8 @@ def _parse_text_region(el: etree._Element) -> PageTextRegion:
     lines = tuple(_parse_text_line(c) for c in el if _lname(c) == "TextLine")
     return PageTextRegion(
         id=el.get("id"),
-        region_type=el.get("type"),
-        coords=_points_child(el, "Coords"),
+        region_type=_region_type(el),
+        coords=_coords(el),
         text_lines=lines,
         regions=_parse_regions(el),
     )
@@ -137,8 +163,8 @@ def _parse_generic_region(el: etree._Element) -> PageGenericRegion:
     return PageGenericRegion(
         region_name=_lname(el),
         id=el.get("id"),
-        region_type=el.get("type"),
-        coords=_points_child(el, "Coords"),
+        region_type=_region_type(el),
+        coords=_coords(el),
         regions=_parse_regions(el),
     )
 
@@ -189,7 +215,8 @@ def _parse_reading_order(page: etree._Element) -> ReadingOrderGroup | None:
 
 def _parse_page(el: etree._Element) -> PagePage:
     return PagePage(
-        image_filename=el.get("imageFilename"),
+        # Vide = inconnu : c'est ce qu'écrit le writer faute de nom.
+        image_filename=el.get("imageFilename") or None,
         image_width=_int_attr(el, "imageWidth"),
         image_height=_int_attr(el, "imageHeight"),
         reading_order=_parse_reading_order(el),

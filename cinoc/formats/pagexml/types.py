@@ -2,9 +2,12 @@
 
 Symétrique d'ALTO mais avec les conventions PAGE : géométrie en **polygones**
 (``Coords``) + ``Baseline``, texte via ``TextEquiv > Unicode``. Régions de tout
-type (``TextRegion`` + régions génériques non-texte), **imbriquées**. Niveau
-**ligne** (pas de mot/glyphe). Ordre de lecture en **arbre** (``ReadingOrder``)
-avec ``flatten()`` pour les métriques séquentielles.
+type (``TextRegion`` + régions génériques non-texte), **imbriquées**. Niveaux
+**ligne et mot** (pas de glyphe : aucun consommateur). Ordre de lecture en
+**arbre** (``ReadingOrder``) avec ``flatten()`` pour les métriques séquentielles.
+
+``coords = None`` dit « géométrie inconnue ». PAGE l'exige partout ; l'écrivain
+le dit alors explicitement plutôt que d'inventer une forme (voir ``writer``).
 """
 
 from __future__ import annotations
@@ -59,6 +62,20 @@ ReadingOrderNode = Annotated[
 # --- régions -----------------------------------------------------------------
 
 
+class PageWord(BaseModel):
+    """Mot PAGE (``<Word>``) : texte, polygone et confiance du ``TextEquiv`` retenu.
+
+    Lu parce qu'il porte ce que la ligne ne dit pas : la position et la
+    confiance de chaque mot. Les ignorer perdait 161 et 258 mots sur deux pages
+    de vérité terrain OCR-D (audit D-264)."""
+
+    model_config = _FROZEN
+    id: str | None = None
+    coords: tuple[Point, ...] | None = None
+    text: str = ""
+    confidence: float | None = None
+
+
 class PageTextLine(BaseModel):
     """Ligne PAGE (``<TextLine>``)."""
 
@@ -66,6 +83,7 @@ class PageTextLine(BaseModel):
     id: str | None = None
     coords: tuple[Point, ...] | None = None
     baseline: tuple[Point, ...] | None = None
+    words: tuple[PageWord, ...] = ()
     text: str = ""
     confidence: float | None = None  # conf du TextEquiv retenu
 
@@ -76,7 +94,10 @@ class PageTextRegion(BaseModel):
     model_config = _FROZEN
     kind: Literal["text"] = "text"
     id: str | None = None
-    region_type: str | None = None  # attribut type
+    #: Attribut ``type`` ; à défaut, le ``structure {type:…;}`` de ``custom``
+    #: (convention Transkribus/eScriptorium, seule place d'un type hors de
+    #: l'énumération PRImA).
+    region_type: str | None = None
     coords: tuple[Point, ...] | None = None
     text_lines: tuple[PageTextLine, ...] = ()
     regions: tuple[PageRegion, ...] = ()
@@ -131,6 +152,7 @@ __all__ = [
     "ReadingOrderRef",
     "ReadingOrderGroup",
     "ReadingOrderNode",
+    "PageWord",
     "PageTextLine",
     "PageTextRegion",
     "PageGenericRegion",

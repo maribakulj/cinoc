@@ -4,13 +4,16 @@ Pendant de ``alto_to_layout`` pour PAGE XML (PRImA). Différences de convention
 projetées vers le même vocabulaire neutre :
 
 - géométrie en **polygones** (``Coords``) → ``Geometry.polygon`` (pas de bbox PAGE) ;
-- niveau **ligne** sans mots (PAGE n'a pas de ``<String>``) → ``Line.text`` direct,
-  ``Line.words = ()`` ;
+- lignes **et mots** (``<Word>`` → ``Word`` : texte, polygone, confiance) ;
 - **ordre de lecture en arbre** (``ReadingOrder``) → liste plate via ``flatten()`` ;
 - régions non-texte (``ImageRegion``…) → ``Region`` sans lignes, ``region_type``
-  reprenant le label PRImA.
+  reprenant le type PAGE, à défaut le nom d'élément PRImA.
 
 Les ``id`` de région absents sont synthétisés (``region_<n>``) comme côté ALTO.
+
+Dans l'autre sens (``layout_to_page``), PAGE est **en pixels** : un layout dans
+une autre unité (``mm10`` d'un ALTO BNL) est refusé — le convertir demanderait
+une résolution qu'ALTO ne porte pas, et l'écrire tel quel serait faux.
 """
 
 from __future__ import annotations
@@ -21,6 +24,7 @@ from cinoc.domain.layout import (
     LayoutPage,
     Line,
     Region,
+    Word,
 )
 from cinoc.formats._geometry import Point
 from cinoc.formats.pagexml.types import (
@@ -30,9 +34,18 @@ from cinoc.formats.pagexml.types import (
     PageRegion,
     PageTextLine,
     PageTextRegion,
+    PageWord,
     ReadingOrderGroup,
     ReadingOrderRef,
 )
+from cinoc.formats.pagexml.writer import REGION_ELEMENTS, PageWriteError
+
+#: Type que la lecture prête à une ``TextRegion`` sans type ; non réécrit.
+_TEXT = "text"
+
+#: Labels non textuels que lit ``alto_to_layout`` (``Illustration``,
+#: ``GraphicalElement``) : ils ont leur élément PAGE.
+_ALTO_NON_TEXT = {"illustration": "ImageRegion", "graphical": "GraphicRegion"}
 
 
 class _Counter:
@@ -53,12 +66,19 @@ def _geometry(coords: tuple[Point, ...] | None) -> Geometry | None:
     return Geometry(polygon=coords)
 
 
+def _word(word: PageWord) -> Word:
+    return Word(
+        text=word.text, geometry=_geometry(word.coords), confidence=word.confidence
+    )
+
+
 def _line(line: PageTextLine) -> Line:
     return Line(
         id=line.id,
         text=line.text,
         geometry=_geometry(line.coords),
         baseline=tuple(line.baseline or ()),
+        words=tuple(_word(word) for word in line.words),
         confidence=line.confidence,
     )
 
@@ -68,7 +88,7 @@ def _region(region: PageRegion, counter: _Counter) -> Region:
     if isinstance(region, PageTextRegion):
         return Region(
             id=rid,
-            region_type=region.region_type or "text",
+            region_type=region.region_type or _TEXT,
             geometry=_geometry(region.coords),
             lines=tuple(_line(line) for line in region.text_lines),
             regions=tuple(_region(child, counter) for child in region.regions),
@@ -132,23 +152,65 @@ def _points_from_bbox(geometry: Geometry | None) -> tuple[Point, ...] | None:
     )
 
 
+def _page_word(word: Word) -> PageWord:
+    return PageWord(
+        coords=_points_from_bbox(word.geometry),
+        text=word.text,
+        confidence=word.confidence,
+    )
+
+
 def _page_line(line: Line) -> PageTextLine:
     return PageTextLine(
         id=line.id,
         coords=_points_from_bbox(line.geometry),
         baseline=tuple(line.baseline) if line.baseline else None,
+        words=tuple(_page_word(word) for word in line.words),
         text=line.text,
         confidence=line.confidence,
     )
 
 
-def _page_region(region: Region) -> PageTextRegion:
-    return PageTextRegion(
+def _element(region: Region) -> str:
+    """L'élément PAGE d'une région neutre.
+
+    Une région qui porte des lignes est une ``TextRegion`` : aucun autre
+    élément ne peut les contenir. Sinon, l'élément se lit sur le label quand il
+    en désigne un sans ambiguïté — nom d'élément PRImA (ce que prête
+    ``page_to_layout`` à une région non textuelle sans type) ou label non
+    textuel d'ALTO. Les labels des détecteurs (``figure``, ``table``…) ne sont
+    pas traduits : leur vocabulaire change d'un modèle à l'autre, et le deviner
+    ferait dire au PAGE ce que le segmenteur n'a pas dit. Ils restent dans
+    ``structure {type:…;}``.
+    """
+    if region.lines:
+        return "TextRegion"
+    label = region.region_type or ""
+    if label in REGION_ELEMENTS:
+        return label
+    return _ALTO_NON_TEXT.get(label, "TextRegion")
+
+
+def _page_region(region: Region) -> PageRegion:
+    element = _element(region)
+    coords = _points_from_bbox(region.geometry)
+    children = tuple(_page_region(sous) for sous in region.regions)
+    if element == "TextRegion":
+        return PageTextRegion(
+            id=region.id,
+            # Le type que la lecture prête par défaut n'est pas réécrit : ce
+            # serait faire dire au PAGE ce que la source ne disait pas.
+            region_type=None if region.region_type == _TEXT else region.region_type,
+            coords=coords,
+            text_lines=tuple(_page_line(line) for line in region.lines),
+            regions=children,
+        )
+    return PageGenericRegion(
+        region_name=element,
         id=region.id,
-        region_type=region.region_type,
-        coords=_points_from_bbox(region.geometry),
-        text_lines=tuple(_page_line(line) for line in region.lines),
-        regions=tuple(_page_region(sous) for sous in region.regions),
+        region_type=None if region.region_type == element else region.region_type,
+        coords=coords,
+        regions=children,
     )
 
 
@@ -183,5 +245,12 @@ def layout_to_page(layout: CanonicalLayout) -> PageDocument:
     déclaré** — contrairement à l'assemblage ALTO, qui les réordonne parce que
     ce format n'a pas d'autre façon d'exprimer la lecture ; ici l'ordre est
     écrit à part, donc le déplacer serait le dire deux fois.
+
+    Lève ``PageWriteError`` si le layout n'est pas en pixels.
     """
+    if layout.coordinate_unit != "pixel":
+        raise PageWriteError(
+            f"PAGE est en pixels ; ce layout est en {layout.coordinate_unit!r}, "
+            "et le convertir demanderait une résolution que la source ne donne pas."
+        )
     return PageDocument(pages=tuple(_page_page(page) for page in layout.pages))
