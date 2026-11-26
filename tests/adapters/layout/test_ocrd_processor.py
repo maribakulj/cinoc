@@ -207,7 +207,9 @@ def test_le_workspace_est_un_mets_gabarit_ecrit_par_la_brique(tmp_path: Path) ->
 
 
 def test_le_mets_echappe_le_chemin_de_l_image(tmp_path: Path) -> None:
-    image = tmp_path / "a&b <c>.png"
+    # `&` et `'` : à échapper dans un attribut XML, et légaux dans un nom de
+    # fichier Windows (`<`, `>` et `"` y sont refusés — #181).
+    image = tmp_path / "a&b 'c'.png"
     image.write_bytes(b"\x89PNG\r\n\x1a\n")
     faux = _FauxOcrd(_ecrit_un_page)
     brique = OcrdProcessor(label="t", processor="ocrd-faux", runner=faux)
