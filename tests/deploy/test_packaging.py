@@ -35,11 +35,13 @@ def test_dockerfile_serves_readonly_vitrine() -> None:
 
 def test_requirements_embark_no_heavy_engine() -> None:
     # `requirements.txt` est partagé par la vitrine ET l'image moteur (Étape 1).
-    # `pytesseract` (wrapper PUR du binaire, inerte sans lui) y est désormais
-    # **attendu** : c'est le socle OCR gratuit du Space. Mais aucun moteur **lourd**
+    # Tesseract n'y demande **aucun** paquet (Cinoc lance le binaire, D-300) ;
+    # Pillow, qui arrivait par pytesseract, y est nommé. Aucun moteur **lourd**
     # (SDK GPU / API cloud à dépendances volumineuses) ne doit y entrer.
     reqs = (DEPLOY / "requirements.txt").read_text(encoding="utf-8").lower()
-    assert "pytesseract" in reqs, "pytesseract = socle OCR gratuit (Étape 1)"
+    lignes = [ligne.split("#")[0].strip() for ligne in reqs.splitlines()]
+    assert not any(ligne.startswith("pytesseract") for ligne in lignes)
+    assert any(ligne.startswith("pillow") for ligne in lignes), "Pillow nommé"
     for engine in ("openai", "anthropic", "torch", "transformers", "paddlex"):
         assert engine not in reqs, f"{engine!r} (moteur lourd) hors requirements"
 

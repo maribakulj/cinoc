@@ -44,10 +44,11 @@ from __future__ import annotations
 import logging
 import os
 import random
+import socket
 import threading
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
-from typing import TypeVar
+from typing import Any, TypeVar
 from urllib.parse import urlsplit
 
 from cinoc.domain.deadline import Deadline
@@ -130,6 +131,48 @@ def register_close(control: RunControl, client: object) -> None:
     exit_ = getattr(client, "__exit__", None)
     if callable(exit_):
         control.register_cancel_handle(lambda: exit_(None, None, None))
+
+
+#: Signature d'une trace ``httpcore`` (extension de requête ``trace``).
+HttpTrace = Callable[[str, Mapping[str, Any]], None]
+
+
+def cut_on_cancel(control: RunControl) -> HttpTrace:
+    """Annulation qui **coupe** une lecture bloquante : la trace ``httpcore`` à
+    passer à la requête (``extensions={"trace": …}``) garde le socket de
+    l'appel, et l'arrêt du run le ferme dans les deux sens (``shutdown``).
+
+    ``httpx.Client.close()`` depuis un autre fil ne réveille **pas** un
+    ``recv`` en attente (mesuré en S27, D-299 : ~115 s entre « Arrêter » et
+    « Arrêté » sur Ollama CPU) ; ``shutdown`` le réveille aussitôt, et le
+    serveur voit la déconnexion. Best-effort comme tout handle : un socket déjà
+    fermé n'a rien à couper, et le sondage de ``RunControl`` reste la garantie.
+    """
+    sockets: list[socket.socket] = []
+    lock = threading.Lock()
+
+    def cut() -> None:
+        with lock:
+            targets = tuple(sockets)
+        for sock in targets:
+            try:
+                sock.shutdown(socket.SHUT_RDWR)
+            except OSError as exc:  # déjà fermé : l'appel est fini
+                logger.debug("[resilience] socket déjà fermé : %s", exc)
+
+    def trace(event: str, info: Mapping[str, Any]) -> None:
+        if event != "connection.connect_tcp.complete":
+            return
+        extra = getattr(info.get("return_value"), "get_extra_info", None)
+        sock = extra("socket") if callable(extra) else None
+        if isinstance(sock, socket.socket):
+            with lock:
+                sockets.append(sock)
+            if control.is_cancelled():  # arrêt survenu pendant la connexion
+                cut()
+
+    control.register_cancel_handle(cut)
+    return trace
 
 
 @dataclass
@@ -389,6 +432,7 @@ __all__ = [
     "BillingMeter",
     "attempt_billed",
     "call_resilient",
+    "cut_on_cancel",
     "endpoint_slot_key",
     "http_is_retryable",
     "http_retry_after",

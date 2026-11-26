@@ -24,7 +24,6 @@ import pytest
 
 from cinoc.adapters.ocr.tesseract import TesseractAdapter
 from cinoc.domain.artifacts import Artifact, ArtifactType, compute_content_hash
-from cinoc.domain.confidence import ConfidenceToken
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext
 
@@ -50,12 +49,10 @@ def _ctx(workspace: Path) -> RunContext:
 
 
 def _mock_ocr(monkeypatch: pytest.MonkeyPatch, text: str) -> None:
+    tsv = "level\tconf\ttext\n5\t93\tmot\n"
     monkeypatch.setattr(
-        "cinoc.adapters.ocr.tesseract._invoke_tesseract", lambda **_: text
-    )
-    monkeypatch.setattr(
-        "cinoc.adapters.ocr.tesseract._invoke_tesseract_confidences",
-        lambda **_: [ConfidenceToken(text="mot", confidence=0.93)],
+        "cinoc.adapters.ocr.tesseract.run_tesseract",
+        lambda **_: {"txt": text.encode("utf-8"), "tsv": tsv.encode("utf-8")},
     )
 
 

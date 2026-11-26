@@ -1,41 +1,48 @@
-"""``TesseractAdapter`` — moteur OCR réel (Tesseract 5 via ``pytesseract``).
+"""``TesseractAdapter`` — moteur OCR réel (binaire Tesseract 5).
 
 Implémente le ``Module`` Protocol (couche 4) **directement**. L'OCR a lieu dans
-le binaire C ``tesseract`` lancé en sous-processus (le thread relâche le GIL).
-``pytesseract`` est un **extra optionnel** (``cinoc[tesseract]``), importé
-**paresseusement** dans ``_invoke_tesseract`` : importer ce module ne requiert ni
-la lib ni le binaire — seule l'exécution les exige.
+le binaire C ``tesseract``, lancé par Cinoc **une fois par page** avec toutes
+ses sorties (``_tesseract_cli`` : texte, TSV des confidences, ALTO si demandé)
+— ``pytesseract`` le relançait une fois par sortie. Aucune dépendance Python :
+importer ce module ne requiert pas le binaire, seule l'exécution l'exige.
 
-Sécurité : ``lang`` est validé (anti-injection ligne de commande) ; ``timeout``
-est borné par la ``Deadline`` (un sous-processus figé ne doit pas geler le run).
-Les **confidences** par mot (TSV natif, 0-100 → [0,1]) sont écrites en
-sidecar JSON (``ConfidenceToken``) et publiées comme artefact ``CONFIDENCES``
-— best-effort : un échec d'extraction dégrade en sidecar vide, jamais en
+Sécurité : ``lang`` est validé (anti-injection ligne de commande), et la ligne
+de commande est une liste (aucun shell) ; le délai de l'étape (``timeout``) est
+borné par la ``Deadline``, et un arrêt du run tue le binaire. Les
+**confidences** par mot (TSV natif, 0-100 → [0,1]) sont écrites en sidecar
+JSON (``ConfidenceToken``) et publiées comme artefact ``CONFIDENCES`` —
+best-effort : un TSV absent ou illisible dégrade en sidecar vide, jamais en
 panne de l'OCR.
 
 **ALTO natif** (``alto=True``) : Tesseract émet en plus un artefact
-``ALTO_XML`` (géométrie + texte par mot, ``image_to_alto_xml``) — la forme
-ré-importable dans un outil de relecture (eScriptorium, Transkribus). Contrairement
-aux confidences, l'ALTO est ici le **livrable demandé** : un échec d'émission lève
-(``AdapterStepError``), il ne dégrade pas en silence.
+``ALTO_XML`` (géométrie + texte par mot) — la forme ré-importable dans un outil
+de relecture (eScriptorium, Transkribus). Contrairement aux confidences, l'ALTO
+est ici le **livrable demandé** : une sortie absente lève
+(``AdapterStepError``), elle ne dégrade pas en silence.
+
+**Résolution** (``dpi``). Tesseract déduit la résolution des métadonnées du
+fichier quand elle n'est pas donnée. Une numérisation patrimoniale déclare
+volontiers 96 DPI alors qu'elle en fait 300 : tesseract en conclut une page de
+plus d'un mètre de large et son analyse de mise en page rend « Empty page!! »,
+zéro mot, sans erreur — mesuré sur une page de presse de la BnF, 5121 × 7198 px :
+aucun mot à la volée, **6 987 mots** avec ``--dpi 300``. Le défaut reste
+``None`` : on ne force rien à qui ne demande rien.
 """
 
 from __future__ import annotations
 
 import json
 import logging
-import os
 import re
-import subprocess
-import threading
-from collections.abc import Callable, Mapping, MutableMapping
+from collections.abc import Mapping
 from typing import ClassVar
 
 from cinoc.adapters._params import label_param, timeout_param
 from cinoc.adapters._workspace import workspace_artifact_path
+from cinoc.adapters.ocr._tesseract_cli import run_tesseract, tesseract_provenance
 from cinoc.domain.artifacts import Artifact, ArtifactType, compute_content_hash
 from cinoc.domain.confidence import ConfidenceToken
-from cinoc.domain.errors import AdapterStepError, DeadlineExceeded
+from cinoc.domain.errors import AdapterStepError
 from cinoc.pipeline.fanout import REGION_TYPE_PARAM
 from cinoc.pipeline.params import Param
 from cinoc.pipeline.protocols import ParamValue
@@ -44,6 +51,8 @@ from cinoc.pipeline.types import RunContext, StepOutput
 
 logger = logging.getLogger(__name__)
 
+#: Version d'adaptateur. Inchangée par le passage à un seul appel du binaire :
+#: texte, confidences et ALTO sont identiques à l'octet (D-300).
 _VERSION = "1.0"
 DEFAULT_TIMEOUT = 120.0
 
@@ -57,184 +66,33 @@ _TIMEOUT_MAX = 3600.0
 #: tout caractère interprétable comme flag/séparateur (anti-injection).
 _LANG_RE = re.compile(r"^[a-zA-Z]{3,}(?:\+[a-zA-Z]{3,})*$")
 
-#: Fils OpenMP d'un processus ``tesseract``. Sans borne, chacun en ouvre autant
-#: que de cœurs : à 4 workers sur 4 cœurs, 16 fils en attente active, et le
-#: pilote BNL perdait 19 pages sur 20 au délai de 120 s pour des pages de 1,4 à
-#: 3,4 s (D-281, D1). Le parallélisme de Cinoc est celui des workers.
-_OMP_ENV = "OMP_THREAD_LIMIT"
-_OMP_LOCK = threading.Lock()
 
-#: Lanceur de sous-processus, injectable → version sondable en test sans binaire.
-BinaryRunner = Callable[..., "subprocess.CompletedProcess[str]"]
+def tsv_confidences(tsv: str) -> list[ConfidenceToken]:
+    """TSV natif de Tesseract → confidences par mot (0-100 → [0, 1]). **Pur.**
 
-
-def tesseract_binary_version(*, run: BinaryRunner = subprocess.run) -> str | None:
-    """Version du binaire ``tesseract`` (1ʳᵉ ligne de ``tesseract --version``).
-
-    **Best-effort, jamais bloquant** : binaire absent, timeout, ou sortie illisible
-    → ``None`` (jamais une panne). Sert la **reproductibilité** (``RunManifest`` §12) :
-    deux runs ne sont comparables qu'à version de binaire égale — la version
-    d'*adapter* (``_VERSION``) ne dit rien du Tesseract réellement installé.
-    ``run`` est injecté → la sonde est déterministe en test, sans le binaire.
-
-    Tesseract émet sa bannière tantôt sur ``stdout`` tantôt sur ``stderr`` selon le
-    build → on lit les deux et garde la 1ʳᵉ ligne non vide (ex. ``tesseract 5.3.0``).
+    Lecture identique à celle de ``pytesseract.image_to_data``, qu'elle
+    remplace : colonnes nommées par l'en-tête, texte en dernière colonne,
+    confiance **tronquée à l'entier** (``int(float(…))``) — garder les décimales
+    changerait les sidecars des runs existants. Une ligne de structure (page,
+    bloc, ligne : ``conf`` = -1, texte vide) n'est pas un mot. Une confiance
+    illisible lève ``ValueError`` : l'appelant dégrade en sidecar vide.
     """
-    try:
-        completed = run(
-            ["tesseract", "--version"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-            check=False,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return None
-    lines = ((completed.stdout or "") + "\n" + (completed.stderr or "")).splitlines()
-    for line in lines:
-        if line.strip():
-            return line.strip()
-    return None
-
-
-def bound_openmp(environ: MutableMapping[str, str] | None = None) -> None:
-    """Pose ``OMP_THREAD_LIMIT=1`` pour le binaire, **sauf valeur explicite**.
-
-    ``pytesseract`` lance le binaire avec ``env=os.environ`` et n'offre aucune
-    autre prise : c'est donc l'environnement du processus qui porte la borne.
-    Une valeur déjà posée (``ENV`` de l'image du Space, réglage de l'utilisateur
-    qui lance ``--workers 1`` sur une page géante) est **gardée** : elle est un
-    choix, le défaut n'en est pas un. Appelée juste avant chaque lancement,
-    jamais à l'import ; le verrou évite deux écritures concurrentes de
-    l'environnement depuis les threads du pool.
-    """
-    env = os.environ if environ is None else environ
-    with _OMP_LOCK:
-        env.setdefault(_OMP_ENV, "1")
-
-
-def _config(*, oem: int, psm: int, dpi: int | None) -> str:
-    """Options de ligne de commande — ``--dpi`` seulement s'il est demandé.
-
-    **Pourquoi l'exposer.** Tesseract déduit la résolution de l'image quand elle
-    n'est pas donnée, et il s'appuie d'abord sur les métadonnées du fichier. Une
-    numérisation patrimoniale déclare volontiers 96 DPI alors qu'elle en fait 300 :
-    tesseract en conclut une page de plus d'un mètre de large et son analyse de
-    mise en page abandonne — « Empty page!! », zéro bloc, zéro mot, sans erreur.
-
-    Observé sur une page de presse de la BnF, 5121 × 7198 px déclarée à 96 DPI :
-    aucun mot à la volée, **6 987 mots** avec ``--dpi 300``. Le défaut reste
-    ``None`` — on ne force rien à qui ne demande rien.
-    """
-    options = f"--oem {oem} --psm {psm}"
-    return f"{options} --dpi {dpi}" if dpi is not None else options
-
-
-def _tesseract_failure(
-    what: str, image_path: str, exc: BaseException
-) -> AdapterStepError:
-    """L'erreur de pytesseract, typée par ce qu'elle dit.
-
-    pytesseract signale un délai dépassé par un ``RuntimeError`` **nu**
-    (« Tesseract process timeout ») — ses autres erreurs sont des
-    ``TesseractError`` (une sous-classe) ou ``TesseractNotFoundError``. Le délai
-    est celui de l'étape (``timeout``, borné par la deadline) : sous contention,
-    une page de 2 s en dépasse 120 (pilote D-281, D3). C'est
-    ``DeadlineExceeded`` — motif « arrêtée (délai) » —, pas un moteur en panne.
-    """
-    if type(exc) is RuntimeError:
-        return DeadlineExceeded(f"{what} : délai dépassé sur {image_path!r} ({exc}).")
-    return AdapterStepError(
-        f"{what} a échoué sur {image_path!r} : {type(exc).__name__}: {exc}"
-    )
-
-
-def _invoke_tesseract(  # pragma: no cover -- binaire requis (cf. marqueur 'live')
-    *, image_path: str, lang: str, psm: int, oem: int, timeout: float,
-    dpi: int | None = None,
-) -> str:
-    """Lance tesseract et renvoie le texte. **Isolé → mockable** (CI sans binaire)."""
-    try:
-        import pytesseract  # type: ignore[import-not-found, import-untyped]
-    except ImportError as exc:
-        raise AdapterStepError(
-            "tesseract : pytesseract non installé "
-            "(pip install 'cinoc[tesseract]' + binaire tesseract)."
-        ) from exc
-    config = _config(oem=oem, psm=psm, dpi=dpi)
-    bound_openmp()
-    try:
-        text = pytesseract.image_to_string(
-            image_path, lang=lang, config=config, timeout=timeout
-        )
-    except (
-        pytesseract.TesseractNotFoundError,
-        pytesseract.TesseractError,
-        RuntimeError,
-    ) as exc:
-        raise _tesseract_failure("tesseract", image_path, exc) from exc
-    return str(text).strip()
-
-
-def invoke_tesseract_alto(  # pragma: no cover -- binaire requis ('live')
-    *, image_path: str, lang: str, psm: int, oem: int, timeout: float,
-    dpi: int | None = None,
-) -> bytes:
-    """ALTO XML natif via ``image_to_alto_xml`` (géométrie + texte par mot).
-
-    Renvoie les octets XML bruts (déjà conformes ALTO) — destinés à la
-    ré-importation dans un outil de relecture. Une panne du binaire lève
-    ``AdapterStepError`` : l'ALTO est le livrable demandé, pas un extra dégradable.
-    """
-    try:
-        import pytesseract  # type: ignore[import-not-found, import-untyped]
-    except ImportError as exc:
-        raise AdapterStepError(
-            "tesseract : pytesseract non installé "
-            "(pip install 'cinoc[tesseract]' + binaire tesseract)."
-        ) from exc
-    bound_openmp()
-    try:
-        xml = pytesseract.image_to_alto_xml(
-            image_path,
-            lang=lang,
-            config=_config(oem=oem, psm=psm, dpi=dpi),
-            timeout=timeout,
-        )
-    except (
-        pytesseract.TesseractNotFoundError,
-        pytesseract.TesseractError,
-        RuntimeError,
-    ) as exc:
-        raise _tesseract_failure("tesseract ALTO", image_path, exc) from exc
-    return bytes(xml)
-
-
-def _invoke_tesseract_confidences(  # pragma: no cover -- binaire requis ('live')
-    *, image_path: str, lang: str, psm: int, oem: int, timeout: float,
-    dpi: int | None = None,
-) -> list[ConfidenceToken]:
-    """Confidences par mot via ``image_to_data`` (TSV natif, conf 0-100)."""
-    import pytesseract  # type: ignore[import-not-found]
-
-    bound_openmp()
-    data = pytesseract.image_to_data(
-        image_path,
-        lang=lang,
-        config=_config(oem=oem, psm=psm, dpi=dpi),
-        timeout=timeout,
-        output_type=pytesseract.Output.DICT,
-    )
+    rows = [row.split("\t") for row in tsv.strip().split("\n")]
+    if len(rows) < 2:
+        return []
+    header = rows.pop(0)
+    if len(rows[-1]) < len(header):  # dernier mot vide : cellule finale absente
+        rows[-1].append("")
+    conf_at = header.index("conf")
     tokens: list[ConfidenceToken] = []
-    for word, conf in zip(data["text"], data["conf"], strict=False):
-        if not isinstance(word, str) or not word.strip():
+    for row in rows:
+        word = row[-1].strip() if len(row) >= len(header) else ""
+        if not word:
             continue
-        value = float(conf)
+        value = float(int(float(row[conf_at])))
         if value < 0:  # -1 : entrée non textuelle du TSV
             continue
-        tokens.append(
-            ConfidenceToken(text=word.strip(), confidence=min(value / 100.0, 1.0))
-        )
+        tokens.append(ConfidenceToken(text=word, confidence=min(value / 100.0, 1.0)))
     return tokens
 
 
@@ -364,15 +222,19 @@ class TesseractAdapter:
         return _VERSION
 
     def system_binaries(self) -> dict[str, str]:
-        """Version du **binaire externe** pour le ``RunManifest`` (reproductibilité).
+        """Binaire **et** données de langue pour le ``RunManifest`` et la clé
+        d'unité (reproductibilité ; D19 du pilote) : la version de
+        ``tesseract``, son dossier ``tessdata`` et l'empreinte de chaque
+        ``*.traineddata`` lu — un autre ``fra.traineddata`` est une autre unité.
 
         Hook de **provenance optionnel** (hors ``Module`` Protocol, qui reste le
         contrat d'exécution unique) : l'orchestrateur l'appelle par *duck-typing*
         sur les modules qui l'exposent et fusionne le résultat dans
         ``system_binaries_lock``. Best-effort : binaire absent → ``{}``.
         """
-        version = tesseract_binary_version()
-        return {"tesseract": version} if version is not None else {}
+        return tesseract_provenance(
+            self._lang, {self._psm, *self._psm_by_class.values()}
+        )
 
     @property
     def input_types(self) -> frozenset[ArtifactType]:
@@ -403,37 +265,38 @@ class TesseractAdapter:
                 f"{self.name} : workspace requis (RunContext.workspace_uri)."
             )
         timeout = max(0.001, context.deadline.clamp_to_remaining(self._timeout))
-        psm = self._psm_for(params)
-        text = _invoke_tesseract(
+        # **Un** appel du binaire pour toutes les sorties (D-300).
+        produced = run_tesseract(
             image_path=image.uri,
             lang=self._lang,
-            psm=psm,
+            psm=self._psm_for(params),
             oem=self._oem,
             dpi=self._dpi,
+            renderers=("txt", "tsv", "alto") if self._alto else ("txt", "tsv"),
+            workspace=context.workspace_uri,
             timeout=timeout,
+            control=control,
         )
+        raw = produced.get("txt")
+        if raw is None:
+            raise AdapterStepError(
+                f"tesseract : aucun texte produit pour {image.uri!r}."
+            )
+        try:
+            text = raw.decode("utf-8").strip()
+        except UnicodeDecodeError as exc:
+            raise AdapterStepError(
+                f"tesseract : texte illisible (UTF-8) pour {image.uri!r} : {exc}"
+            ) from exc
         output_path = workspace_artifact_path(
             context.workspace_uri, context.document_id, self._label, "txt"
         )
         output_path.write_text(text, encoding="utf-8")
-        # Confidences best-effort : un échec d'extraction ne doit pas faire
+        # Confidences best-effort : un TSV absent ou illisible ne doit pas faire
         # échouer un OCR réussi — sidecar vide + avertissement.
         try:
-            tokens = _invoke_tesseract_confidences(
-                image_path=image.uri,
-                lang=self._lang,
-                psm=psm,
-                oem=self._oem,
-                dpi=self._dpi,
-                timeout=timeout,
-            )
-        except (
-            AdapterStepError,
-            ImportError,
-            RuntimeError,
-            ValueError,
-            OSError,
-        ) as exc:
+            tokens = tsv_confidences(produced["tsv"].decode("utf-8"))
+        except (KeyError, ValueError) as exc:
             logger.warning(
                 "[tesseract] confidences dégradées (sidecar vide) : %s", exc
             )
@@ -465,15 +328,12 @@ class TesseractAdapter:
             ),
         }
         if self._alto:
-            # ALTO demandé → livrable : un échec lève (≠ confidences best-effort).
-            alto_bytes = invoke_tesseract_alto(
-                image_path=image.uri,
-                lang=self._lang,
-                psm=psm,
-                oem=self._oem,
-                dpi=self._dpi,
-                timeout=timeout,
-            )
+            # ALTO demandé → livrable : une sortie absente lève (≠ confidences).
+            alto_bytes = produced.get("alto")
+            if alto_bytes is None:
+                raise AdapterStepError(
+                    f"tesseract ALTO : aucune sortie ALTO pour {image.uri!r}."
+                )
             alto_path = workspace_artifact_path(
                 context.workspace_uri,
                 context.document_id,
@@ -491,10 +351,4 @@ class TesseractAdapter:
         return StepOutput(artifacts=artifacts)
 
 
-__all__ = [
-    "TesseractAdapter",
-    "bound_openmp",
-    "invoke_tesseract_alto",
-    "parse_psm_by_class",
-    "tesseract_binary_version",
-]
+__all__ = ["TesseractAdapter", "parse_psm_by_class", "tsv_confidences"]

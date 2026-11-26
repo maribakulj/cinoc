@@ -183,6 +183,11 @@ def check_spec_models(spec: RunSpec, *, live: bool) -> tuple[str, ...]:
     injoignable, pas de clé sur la machine qui relit) → une **note**, pas un
     refus : ``--check`` ne sait pas, il le dit ; refuser serait affirmer
     l'absence d'un modèle qu'on n'a pas pu voir. Rend les notes.
+
+    Les **données de langue** de Tesseract sont ses modèles : elles sont
+    vérifiées ici aussi, ``live`` ou non — la sonde est locale
+    (:func:`check_spec_languages`). Le même contrôle sert donc ``--check``,
+    ``cinoc run`` et le dépôt web.
     """
     notes: list[str] = []
     seen: set[str] = set()
@@ -209,7 +214,59 @@ def check_spec_models(spec: RunSpec, *, live: bool) -> tuple[str, ...]:
                     f"{name} : modèle {model!r} absent chez {provider}. "
                     + describe_listing(listing)
                 )
-    return tuple(notes)
+    return (*notes, *check_spec_languages(spec))
+
+
+#: Briques qui lisent des données de langue Tesseract (réglage ``lang``).
+_TESSERACT_KINDS = frozenset({"tesseract", "tesseract_layout"})
+
+
+def check_spec_languages(spec: RunSpec) -> tuple[str, ...]:
+    """Chaque langue Tesseract demandée est **installée** (D13 du pilote) :
+    ``lang: grc+frm`` était déclaré « Spec valide » puis échouait page à page.
+
+    ``tesseract --list-langs`` est lu **une fois** pour la spec. Une langue
+    absente → ``ModelChoiceError`` qui la nomme avec les disponibles. Binaire
+    introuvable → une **note** (comme une liste de modèles illisible) : la
+    disponibilité du moteur est jugée ailleurs, et ``--check`` ne refuse pas
+    ce qu'il n'a pas pu voir. Rend les notes.
+    """
+    from cinoc.adapters.ocr._tesseract_cli import (  # noqa: PLC0415
+        installed_languages,
+        missing_languages,
+    )
+    from cinoc.app.modules.registry import socle_params  # noqa: PLC0415
+
+    wanted: dict[str, str] = {}
+    for pipeline in spec.pipelines:
+        for step in pipeline.steps:
+            kind = step.adapter_name.split(":", 1)[0]
+            if kind not in _TESSERACT_KINDS or step.adapter_name in wanted:
+                continue
+            lang = spec.adapter_kwargs.get(step.adapter_name, {}).get("lang")
+            if not isinstance(lang, str):
+                defaults = {p.name: p.default for p in socle_params(kind) or ()}
+                lang = str(defaults.get("lang"))
+            wanted[step.adapter_name] = lang
+    if not wanted:
+        return ()
+    tessdata = installed_languages()
+    if tessdata is None:
+        return tuple(
+            f"{name} : langue(s) {lang!r} non vérifiée(s) — binaire tesseract "
+            "introuvable."
+            for name, lang in sorted(wanted.items())
+        )
+    for name, lang in sorted(wanted.items()):
+        missing = missing_languages(lang, tessdata)
+        if missing:
+            offered = ", ".join(tessdata.languages) or "aucune"
+            raise ModelChoiceError(
+                f"{name} : langue(s) Tesseract non installée(s) : "
+                f"{', '.join(repr(m) for m in missing)} (lang: {lang!r}). "
+                f"Installées : {offered}."
+            )
+    return ()
 
 
 __all__ = [
@@ -218,6 +275,7 @@ __all__ = [
     "ModelListing",
     "ModelListingError",
     "available_models",
+    "check_spec_languages",
     "check_spec_models",
     "describe_listing",
     "missing_model_message",

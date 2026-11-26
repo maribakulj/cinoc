@@ -8,7 +8,7 @@ RUN useradd --create-home --uid 1000 cinoc
 WORKDIR /home/cinoc/app
 
 # 1) Dépendances d'abord (cache de couche). Seul l'extra [serve] est requis :
-#    la vitrine ne lance aucun moteur → ni pytesseract, ni SDK LLM.
+#    la vitrine ne lance aucun moteur → ni binaire tesseract, ni SDK LLM.
 COPY deploy/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 

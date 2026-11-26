@@ -323,14 +323,12 @@ def test_manifest_captures_tesseract_binary_version(
     # Déterminisme (§12) : la version du binaire tesseract atterrit dans le
     # manifeste via le hook de provenance `system_binaries()` (duck-typing).
     monkeypatch.setattr(
-        "cinoc.adapters.ocr.tesseract._invoke_tesseract", lambda **_: "abcd"
+        "cinoc.adapters.ocr.tesseract.run_tesseract",
+        lambda **_: {"txt": b"abcd", "tsv": b""},
     )
     monkeypatch.setattr(
-        "cinoc.adapters.ocr.tesseract._invoke_tesseract_confidences", lambda **_: []
-    )
-    monkeypatch.setattr(
-        "cinoc.adapters.ocr.tesseract.tesseract_binary_version",
-        lambda: "tesseract 5.3.0",
+        "cinoc.adapters.ocr.tesseract.tesseract_provenance",
+        lambda *_a, **_k: {"tesseract": "tesseract 5.3.0"},
     )
     (tmp_path / "doc1.gt.txt").write_text("abcd", encoding="utf-8")
     document = DocumentRef(

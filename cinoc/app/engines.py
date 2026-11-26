@@ -113,7 +113,7 @@ def engine_statuses(
             available=True,
             detail="intégré (aucune dépendance)",
         ),
-        _tesseract_status(has_binary, has_module),
+        _tesseract_status(has_binary),
         _kraken_status(has_module),
         _pero_status(has_module),
         _calamari_status(has_module),
@@ -127,13 +127,12 @@ def engine_statuses(
     )
 
 
-def _tesseract_status(has_binary: BinaryProbe, has_module: ModuleProbe) -> EngineStatus:
+def _tesseract_status(has_binary: BinaryProbe) -> EngineStatus:
+    # Cinoc lance le binaire lui-même (D-300) : rien d'autre à installer.
     if has_binary("tesseract") is None:
         detail, ok = "binaire « tesseract » introuvable", False
-    elif not has_module("pytesseract"):
-        detail, ok = "pytesseract non installé (extra [tesseract])", False
     else:
-        detail, ok = "prêt (binaire + pytesseract)", True
+        detail, ok = "prêt (binaire tesseract)", True
     return EngineStatus(
         kind="tesseract", label="Tesseract", available=ok, detail=detail
     )
@@ -377,7 +376,9 @@ def third_party_statuses(
     )
 
 def segmenter_statuses(
-    *, has_module: ModuleProbe = _module_present
+    *,
+    has_module: ModuleProbe = _module_present,
+    has_binary: BinaryProbe = shutil.which,
 ) -> tuple[EngineStatus, ...]:
     """Disponibilité des **segmenteurs** de mise en page du socle.
 
@@ -409,11 +410,11 @@ def segmenter_statuses(
         paddle_detail, paddle_ok = "prêt (PaddleX installé)", True
     else:
         paddle_detail, paddle_ok = "PaddleX non installé (extra [segment])", False
-    if has_module("pytesseract"):
+    if has_binary("tesseract") is not None:
         tess_detail = "prêt — générique, sans classe sémantique"
         tess_ok = True
     else:
-        tess_detail, tess_ok = "pytesseract non installé (extra [tesseract])", False
+        tess_detail, tess_ok = "binaire « tesseract » introuvable", False
     if has_module("doclayout_yolo"):
         # Le **domaine** est dans le détail, pas dans un commentaire : c'est
         # l'information qui manquait quand un détecteur de rapports financiers a

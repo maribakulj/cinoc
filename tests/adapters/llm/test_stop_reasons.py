@@ -36,6 +36,7 @@ from cinoc.domain.documents import DocumentRef, GroundTruthRef
 from cinoc.evaluation.result import RunResult
 from cinoc.reports.csv_export import run_result_csv
 from cinoc.reports.renderer import default_report_renderer
+from tests.adapters._native_fakes import OllamaStream
 
 _CASSETTES = Path(__file__).resolve().parents[2] / "fixtures" / "cassettes" / "llm"
 
@@ -164,6 +165,11 @@ def _mock_provider(
 
             def post(self, url: str, json: dict[str, Any]) -> _Reponse:  # noqa: A002
                 return _Reponse()
+
+            def stream(
+                self, method: str, url: str, json: dict[str, Any], **_: Any  # noqa: A002
+            ) -> OllamaStream:
+                return OllamaStream(self.post(url, json))
 
             # Sonde du digest (``system_binaries`` → ``/api/tags``) : aucun
             # modèle listé, la sonde rend ``{}``.

@@ -48,6 +48,16 @@ publier, et son moment, appartiennent au mainteneur.
 
 ### Corrigé
 
+- **Tesseract lit chaque page une seule fois, et « Arrêter » coupe l'appel en
+  cours.** Le texte, les confidences et l'ALTO sortaient de deux ou trois
+  passes d'OCR par page ; Cinoc lance désormais le binaire lui-même, une fois,
+  pour toutes les sorties — identiques à l'octet, 2 à 3 fois plus vite.
+  `pytesseract` et l'extra `[tesseract]` disparaissent : seul le binaire est
+  requis. Les données de langue lues (`*.traineddata`, par leur empreinte)
+  entrent au manifeste et dans la clé d'archive, et une langue non installée
+  est refusée à `--check`. Un arrêt tue le binaire en cours, et une génération
+  Ollama, désormais diffusée, s'interrompt en moins d'une seconde au lieu de
+  deux minutes.
 - **Un chemin Windows dans une commande `cli_layout` est refusé, plus mangé.**
   Le découpage est POSIX sur les trois systèmes — une spec est une donnée
   reproductible, elle doit se lire partout de la même façon — et l'antislash y

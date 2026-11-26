@@ -5,14 +5,14 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
 
-from cinoc.adapters.ocr.tesseract import TesseractAdapter, tesseract_binary_version
+from cinoc.adapters.ocr import _tesseract_cli as cli
+from cinoc.adapters.ocr._tesseract_cli import tesseract_binary_version
+from cinoc.adapters.ocr.tesseract import TesseractAdapter
 from cinoc.domain.artifacts import Artifact, ArtifactType
-from cinoc.domain.confidence import ConfidenceToken
 from cinoc.domain.errors import AdapterStepError, RunCancelledError
 from cinoc.pipeline.protocols import Module
 from cinoc.pipeline.run_control import RunControl
@@ -37,14 +37,35 @@ def _ctx(workspace: Path | None) -> RunContext:
     )
 
 
-def _mock_ocr(monkeypatch: pytest.MonkeyPatch, text: str) -> None:
-    monkeypatch.setattr(
-        "cinoc.adapters.ocr.tesseract._invoke_tesseract", lambda **_: text
-    )
-    monkeypatch.setattr(
-        "cinoc.adapters.ocr.tesseract._invoke_tesseract_confidences",
-        lambda **_: [ConfidenceToken(text="mot", confidence=0.93)],
-    )
+#: TSV natif minimal : une ligne de structure (conf -1), un mot.
+_TSV_MOT = (
+    "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num"
+    "\tleft\ttop\twidth\theight\tconf\ttext\n"
+    "1\t1\t0\t0\t0\t0\t0\t0\t10\t10\t-1\t\n"
+    "5\t1\t1\t1\t1\t1\t0\t0\t5\t5\t93\tmot\n"
+)
+
+
+def _mock_ocr(
+    monkeypatch: pytest.MonkeyPatch,
+    text: str,
+    *,
+    tsv: str | None = _TSV_MOT,
+    alto: bytes | None = None,
+) -> None:
+    """Remplace l'appel du binaire : rend les sorties **produites**."""
+
+    def fake(**kwargs: object) -> dict[str, bytes]:
+        produced = {"txt": text.encode("utf-8")}
+        if tsv is not None:
+            produced["tsv"] = tsv.encode("utf-8")
+        renderers = kwargs["renderers"]
+        assert isinstance(renderers, tuple)
+        if alto is not None and "alto" in renderers:
+            produced["alto"] = alto
+        return produced
+
+    monkeypatch.setattr("cinoc.adapters.ocr.tesseract.run_tesseract", fake)
 
 
 def test_satisfies_module_protocol() -> None:
@@ -127,7 +148,6 @@ def test_cancellation_raises(tmp_path: Path) -> None:
 def test_live_real_tesseract(tmp_path: Path) -> None:
     if shutil.which("tesseract") is None:
         pytest.skip("binaire tesseract absent")
-    pytest.importorskip("pytesseract")
     pil_image = pytest.importorskip("PIL.Image")
     from PIL import ImageDraw
 
@@ -171,11 +191,7 @@ def test_alto_disabled_by_default(
 
 def test_alto_emits_artifact(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     # ``alto=True`` : un artefact ALTO_XML est déclaré et produit (octets fidèles).
-    _mock_ocr(monkeypatch, "mot")
-    monkeypatch.setattr(
-        "cinoc.adapters.ocr.tesseract.invoke_tesseract_alto",
-        lambda **_: b"<alto>geom</alto>",
-    )
+    _mock_ocr(monkeypatch, "mot", alto=b"<alto>geom</alto>")
     adapter = TesseractAdapter(label="fra", lang="fra", alto=True)
     assert ArtifactType.ALTO_XML in adapter.output_types
     out = adapter.execute(
@@ -189,15 +205,8 @@ def test_alto_emits_artifact(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
 
 
 def test_alto_failure_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    # ALTO = livrable demandé : un échec lève (≠ confidences best-effort).
-    _mock_ocr(monkeypatch, "mot")
-
-    def boom(**_: object) -> bytes:
-        raise AdapterStepError("alto cassé")
-
-    monkeypatch.setattr(
-        "cinoc.adapters.ocr.tesseract.invoke_tesseract_alto", boom
-    )
+    # ALTO = livrable demandé : une sortie absente lève (≠ confidences).
+    _mock_ocr(monkeypatch, "mot", alto=None)
     adapter = TesseractAdapter(label="fra", lang="fra", alto=True)
     with pytest.raises(AdapterStepError):
         adapter.execute(
@@ -205,70 +214,78 @@ def test_alto_failure_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
         )
 
 
+@pytest.mark.parametrize("tsv", [None, "level\tconf\ttext\n5\tx\tmot\n"])
 def test_confidences_failure_degrades_to_empty_sidecar(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tsv: str | None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # Best-effort : l'extraction qui casse ne fait pas échouer l'OCR.
-    monkeypatch.setattr(
-        "cinoc.adapters.ocr.tesseract._invoke_tesseract", lambda **_: "mot"
-    )
-
-    def boom(**_: object) -> list[ConfidenceToken]:
-        raise RuntimeError("tsv illisible")
-
-    monkeypatch.setattr(
-        "cinoc.adapters.ocr.tesseract._invoke_tesseract_confidences", boom
-    )
+    # Best-effort : un TSV absent ou illisible ne fait pas échouer l'OCR.
+    _mock_ocr(monkeypatch, "mot", tsv=tsv)
     out = TesseractAdapter(label="fra", lang="fra").execute(
         {ArtifactType.IMAGE: _image(tmp_path)}, {}, _ctx(tmp_path), RunControl()
     )
     sidecar = out.artifacts[ArtifactType.CONFIDENCES]
     assert sidecar.uri is not None
     assert json.loads(Path(sidecar.uri).read_text(encoding="utf-8")) == []
+    text = out.artifacts[ArtifactType.RAW_TEXT].uri
+    assert text is not None and Path(text).read_text(encoding="utf-8") == "mot"
 
 
 # --- Version du binaire → RunManifest (reproductibilité, §12) ------------------
 
 
-def _completed(stdout: str = "", stderr: str = "") -> subprocess.CompletedProcess[str]:
+def _completed(
+    stdout: bytes = b"", stderr: bytes = b""
+) -> subprocess.CompletedProcess[bytes]:
     return subprocess.CompletedProcess(
         args=["tesseract", "--version"], returncode=0, stdout=stdout, stderr=stderr
     )
 
 
+@pytest.fixture
+def _resolved(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Un binaire « trouvé » : la sonde injectée répond à sa place."""
+    monkeypatch.setattr(cli, "tesseract_binary", lambda: "tesseract")
+
+
+@pytest.mark.usefixtures("_resolved")
 def test_binary_version_reads_first_nonempty_line() -> None:
     # Bannière sur stdout : on garde la 1ʳᵉ ligne non vide (« tesseract 5.3.0 »).
-    banner = "tesseract 5.3.0\n leptonica-1.82.0\n"
+    banner = b"tesseract 5.3.0\n leptonica-1.82.0\n"
     assert tesseract_binary_version(run=lambda *a, **k: _completed(stdout=banner)) == (
         "tesseract 5.3.0"
     )
 
 
+@pytest.mark.usefixtures("_resolved")
 def test_binary_version_reads_from_stderr() -> None:
     # Certains builds émettent la bannière sur stderr : on la lit quand même.
-    banner = _completed(stderr="tesseract 5.4.1\n")
+    banner = _completed(stderr=b"tesseract 5.4.1\n")
     assert tesseract_binary_version(run=lambda *a, **k: banner) == "tesseract 5.4.1"
 
 
+@pytest.mark.usefixtures("_resolved")
 def test_binary_version_none_when_absent() -> None:
     # Binaire absent ou timeout → None (best-effort, jamais une panne).
-    def absent(*_a: object, **_k: object) -> subprocess.CompletedProcess[str]:
+    def absent(*_a: object, **_k: object) -> subprocess.CompletedProcess[bytes]:
         raise FileNotFoundError("tesseract")
 
     assert tesseract_binary_version(run=absent) is None
 
-    def slow(*_a: object, **_k: object) -> subprocess.CompletedProcess[str]:
+    def slow(*_a: object, **_k: object) -> subprocess.CompletedProcess[bytes]:
         raise subprocess.TimeoutExpired(cmd="tesseract", timeout=10)
 
     assert tesseract_binary_version(run=slow) is None
 
 
+def test_binary_version_none_when_not_on_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(cli, "tesseract_binary", lambda: None)
+    assert tesseract_binary_version(run=lambda *a, **k: _completed(b"x")) is None
+
+
 def test_system_binaries_hook_reports_version(monkeypatch: pytest.MonkeyPatch) -> None:
     # Le hook de provenance expose la version baquée → alimente system_binaries_lock.
-    monkeypatch.setattr(
-        "cinoc.adapters.ocr.tesseract.tesseract_binary_version",
-        lambda: "tesseract 5.3.0",
-    )
+    monkeypatch.setattr(cli, "tesseract_binary_version", lambda **_: "tesseract 5.3.0")
+    monkeypatch.setattr(cli, "installed_languages", lambda **_: None)
     assert TesseractAdapter(label="fra").system_binaries() == {
         "tesseract": "tesseract 5.3.0"
     }
@@ -277,9 +294,7 @@ def test_system_binaries_hook_reports_version(monkeypatch: pytest.MonkeyPatch) -
 def test_system_binaries_hook_empty_when_binary_absent(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(
-        "cinoc.adapters.ocr.tesseract.tesseract_binary_version", lambda: None
-    )
+    monkeypatch.setattr(cli, "tesseract_binary_version", lambda **_: None)
     assert TesseractAdapter(label="fra").system_binaries() == {}
 
 
@@ -352,10 +367,20 @@ def test_le_dpi_arrive_sur_la_ligne_de_commande() -> None:
     Mesuré sur une page de la BnF, 5121 × 7198 px : zéro mot à la volée,
     6 987 mots avec ``--dpi 300``.
     """
-    from cinoc.adapters.ocr.tesseract import _config
 
-    assert _config(oem=3, psm=6, dpi=None) == "--oem 3 --psm 6"
-    assert _config(oem=3, psm=6, dpi=300) == "--oem 3 --psm 6 --dpi 300"
+    def options(dpi: int | None) -> list[str]:
+        return cli.tesseract_command(
+            "tesseract", "/p.png", "/o", lang="fra", psm=6, oem=3, dpi=dpi,
+            renderers=("txt",),
+        )[3:]
+
+    assert options(None) == [
+        "-l", "fra", "--oem", "3", "--psm", "6", "-c", "tessedit_create_txt=1",
+    ]
+    assert options(300) == [
+        "-l", "fra", "--oem", "3", "--psm", "6", "--dpi", "300",
+        "-c", "tessedit_create_txt=1",
+    ]
 
 
 def test_un_dpi_absurde_est_refuse() -> None:
@@ -406,103 +431,3 @@ def test_la_deadline_reste_l_autorite() -> None:
     assert deadline.clamp_to_remaining(900.0) <= 5.0
     # Infinie : le réglage de l'étape s'applique tel quel.
     assert Deadline(None).clamp_to_remaining(900.0) == 900.0
-
-
-# --- OpenMP : un fil par binaire (D-282) -------------------------------------
-#
-# Chaque processus ``tesseract`` ouvrait autant de fils OpenMP que de cœurs : à
-# 4 workers sur 4 cœurs, 16 fils en attente active, et 19 pages sur 20 perdues
-# au délai de 120 s (pilote D-281, D1). ``pytesseract`` lance le binaire avec
-# ``env=os.environ`` : c'est donc l'environnement **du processus** que voit le
-# binaire. Le faux binaire ci-dessous écrit ce qu'il y lit à la place du texte.
-
-_FAKE_TESSERACT = """#!/bin/sh
-printf '%s' "${OMP_THREAD_LIMIT:-absent}" > "$2.txt"
-"""
-
-
-def _fake_binary(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    pytesseract = pytest.importorskip("pytesseract")
-    script = tmp_path / "tesseract"
-    script.write_text(_FAKE_TESSERACT, encoding="utf-8")
-    script.chmod(0o755)
-    monkeypatch.setattr(pytesseract.pytesseract, "tesseract_cmd", str(script))
-    image = tmp_path / "page.png"
-    image.write_bytes(b"")
-    return image
-
-
-def _omp_seen_by_binary(image: Path) -> str:
-    from cinoc.adapters.ocr.tesseract import _invoke_tesseract
-
-    return _invoke_tesseract(
-        image_path=str(image), lang="fra", psm=6, oem=3, timeout=10
-    )
-
-
-@pytest.mark.skipif(sys.platform == "win32", reason="faux binaire en sh")
-def test_binary_runs_with_one_openmp_thread(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    image = _fake_binary(tmp_path, monkeypatch)
-    # set puis del : la variable absente au départ l'est encore après le test,
-    # même si le code l'a posée entre-temps.
-    monkeypatch.setenv("OMP_THREAD_LIMIT", "x")
-    monkeypatch.delenv("OMP_THREAD_LIMIT")
-    assert _omp_seen_by_binary(image) == "1"
-
-
-@pytest.mark.skipif(sys.platform == "win32", reason="faux binaire en sh")
-def test_explicit_openmp_limit_is_kept(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    image = _fake_binary(tmp_path, monkeypatch)
-    monkeypatch.setenv("OMP_THREAD_LIMIT", "3")
-    assert _omp_seen_by_binary(image) == "3"
-
-
-def test_bound_openmp_sets_default_and_keeps_explicit_value() -> None:
-    from cinoc.adapters.ocr.tesseract import bound_openmp
-
-    vide: dict[str, str] = {}
-    bound_openmp(vide)
-    assert vide == {"OMP_THREAD_LIMIT": "1"}
-    pose = {"OMP_THREAD_LIMIT": "4"}
-    bound_openmp(pose)
-    assert pose == {"OMP_THREAD_LIMIT": "4"}
-
-
-# --- D3 (pilote D-281) : un délai dépassé n'est pas une panne du moteur ---
-
-
-@pytest.mark.parametrize("invoke", ["_invoke_tesseract", "invoke_tesseract_alto"])
-def test_a_process_timeout_is_a_deadline_not_an_engine_fault(
-    invoke: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Sous contention, 19 pages sur 20 dépassaient les 120 s et étaient
-    classées motif ``engine`` (« moteur ») : pytesseract lève un
-    ``RuntimeError('Tesseract process timeout')`` nu. C'est un délai dépassé —
-    motif ``cancelled`` (« arrêtée (délai) ») —, pas un moteur en panne ; une
-    vraie erreur du binaire (``TesseractError``) reste ``engine``."""
-    pytesseract = pytest.importorskip("pytesseract")
-    from cinoc.adapters.ocr import tesseract as module
-    from cinoc.domain.errors import DeadlineExceeded
-    from cinoc.pipeline.executor import failure_reason
-
-    def timeout(*_: object, **__: object) -> str:
-        raise RuntimeError("Tesseract process timeout")
-
-    def broken(*_: object, **__: object) -> str:
-        raise pytesseract.TesseractError(1, "image illisible")
-
-    name = "image_to_string" if invoke == "_invoke_tesseract" else "image_to_alto_xml"
-    call = getattr(module, invoke)
-    kwargs = {"image_path": "p.png", "lang": "fra", "psm": 6, "oem": 3, "timeout": 1.0}
-    monkeypatch.setattr(pytesseract, name, timeout)
-    with pytest.raises(DeadlineExceeded) as raised:
-        call(**kwargs)
-    assert failure_reason(raised.value) == "cancelled"
-    monkeypatch.setattr(pytesseract, name, broken)
-    with pytest.raises(AdapterStepError) as other:
-        call(**kwargs)
-    assert failure_reason(other.value) == "engine"

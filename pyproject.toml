@@ -33,7 +33,6 @@ dev = [
     "types-PyYAML", "jiwer", "fastapi", "jinja2",
     "python-multipart", "Pillow",
 ]
-tesseract = ["pytesseract"]
 kraken = ["kraken"]
 pero = ["pero-ocr"]  # OCR/HTR local (imprimé ancien + manuscrit) — non déployé au Space
 calamari = ["calamari-ocr"]  # OCR local par ligne — non déployé au Space

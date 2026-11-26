@@ -297,10 +297,9 @@ def test_public_mode_refuses_a_remote_segmenter(tmp_path: Path) -> None:
 
 
 def _force_tesseract_available(monkeypatch: pytest.MonkeyPatch) -> None:
-    # Stub direct du provider : tesseract « disponible » sans dépendre des sondes
-    # réelles (binaire ET module pytesseract) — la CI n'installe pas l'extra
-    # [tesseract], donc forcer le seul binaire ne suffisait pas (run 409 au gate
-    # moteur avant d'atteindre le gate NER). Isole bien le gate NER.
+    # Stub direct du provider : tesseract « disponible » sans dépendre de la
+    # sonde réelle du binaire — absent en CI (run 409 au gate moteur avant
+    # d'atteindre le gate NER). Isole bien le gate NER.
     monkeypatch.setattr(
         "cinoc.interfaces.web.app.engine_statuses",
         lambda **kw: (
@@ -404,7 +403,7 @@ def test_ocr_llm_chain_reaches_availability_not_preblocked(
         "cinoc.interfaces.web.app.engine_statuses",
         lambda **kw: engine_statuses(
             has_binary=lambda _name: "/usr/bin/tesseract",
-            has_module=lambda name: name == "pytesseract",
+            has_module=lambda _name: False,
             **kw,
         ),
     )
@@ -429,7 +428,9 @@ def test_a_recipe_and_another_shape_share_one_run(
     )
     monkeypatch.setattr(
         "cinoc.interfaces.web.app.segmenter_statuses",
-        lambda: engines.segmenter_statuses(has_module=lambda _: True),
+        lambda: engines.segmenter_statuses(
+            has_module=lambda _: True, has_binary=lambda _: "/bin/x"
+        ),
     )
     client = _client(tmp_path)
     resp = _queue(

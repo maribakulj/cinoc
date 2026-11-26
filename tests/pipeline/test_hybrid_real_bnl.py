@@ -31,7 +31,6 @@ def _skip_unless_ready() -> tuple[str, str]:
     if shutil.which("tesseract") is None:
         pytest.skip("binaire tesseract absent")
     pytest.importorskip("PIL.Image")
-    pytest.importorskip("pytesseract")
     image = os.environ.get("CINOC_BNL_IMAGE")
     alto = os.environ.get("CINOC_BNL_ALTO")
     if not image or not Path(image).is_file() or not alto or not Path(alto).is_file():

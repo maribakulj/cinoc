@@ -26,6 +26,7 @@ from cinoc.domain.errors import AdapterStepError
 from cinoc.pipeline.protocols import Module
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext
+from tests.adapters._native_fakes import OllamaStream
 
 _MODES = ("text_only", "text_and_image", "zero_shot")
 
@@ -95,6 +96,11 @@ def test_the_image_travels_in_the_images_array(
             envoye["payload"] = json
             return _Reponse()
 
+        def stream(
+            self, method: str, url: str, json: dict[str, Any], **_: Any  # noqa: A002
+        ) -> OllamaStream:
+            return OllamaStream(self.post(url, json))
+
     import httpx
 
     monkeypatch.setattr(httpx, "Client", _Client)
@@ -151,6 +157,11 @@ def test_text_only_sends_no_images_key(
         def post(self, url: str, json: dict[str, Any]) -> _Reponse:  # noqa: A002
             envoye["payload"] = json
             return _Reponse()
+
+        def stream(
+            self, method: str, url: str, json: dict[str, Any], **_: Any  # noqa: A002
+        ) -> OllamaStream:
+            return OllamaStream(self.post(url, json))
 
     import httpx
 

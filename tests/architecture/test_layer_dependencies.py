@@ -112,7 +112,7 @@ ADAPTERS_ALLOWED_PKG = (
 #: pont). Le banc corrigeait du texte plat ; cette brique corrige un ``LAYOUT``
 #: en gardant l'identite de ligne, donc l'appariement avant/apres est connu.
 ADAPTERS_ALLOWED_EXT = ALLOWED_EXT | {
-    "pytesseract", "openai", "anthropic", "mistralai", "httpx", "httpcore",
+    "openai", "anthropic", "mistralai", "httpx", "httpcore",
     "datasets", "huggingface_hub", "PIL", "yaml", "paddlex", "kraken",
     # Moteurs OCR/HTR locaux in-tree (extras `[pero]`/`[calamari]`, D-078).
     "pero_ocr", "calamari_ocr", "cv2", "numpy",

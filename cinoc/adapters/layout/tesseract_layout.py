@@ -16,7 +16,7 @@ Elle sert aussi de **second avis** au rattrapage (``gap_fill``) : NDNP croise la
 lecture par régions avec une passe page entière, et c'est cette passe-là. Le
 faire avec une mise en page pré-calculée aurait mimé la forme sans la substance.
 
-Implémentation : une passe ``image_to_alto_xml`` sur la page, relue par le
+Implémentation : une passe du binaire en sortie ALTO sur la page, relue par le
 parseur ALTO du dépôt puis projetée en ``CanonicalLayout``. Aucun code de
 détection ici — la détection **est** celle de Tesseract, et c'est le but.
 Contrairement aux autres segmenteurs, les régions sortent **déjà remplies** :
@@ -30,7 +30,7 @@ from typing import ClassVar
 
 from cinoc.adapters._params import instance_label_param, instance_name, timeout_param
 from cinoc.adapters.layout._base import layout_step_output
-from cinoc.adapters.ocr.tesseract import invoke_tesseract_alto
+from cinoc.adapters.ocr._tesseract_cli import run_tesseract, tesseract_provenance
 from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.errors import AdapterStepError, FormatError
 from cinoc.domain.layout import CanonicalLayout
@@ -128,6 +128,11 @@ class TesseractLayoutSegmenter:
     def version(self) -> str:
         return _VERSION
 
+    def system_binaries(self) -> dict[str, str]:
+        """Binaire et données de langue lues (D19) — le hook de l'OCR Tesseract :
+        la segmentation dépend du ``*.traineddata`` autant que la lecture."""
+        return tesseract_provenance(self._lang, {self._psm})
+
     @property
     def input_types(self) -> frozenset[ArtifactType]:
         return frozenset({ArtifactType.IMAGE})
@@ -154,14 +159,22 @@ class TesseractLayoutSegmenter:
                 f"{self.name} : workspace requis (RunContext.workspace_uri)."
             )
         timeout = max(0.001, context.deadline.clamp_to_remaining(self._timeout))
-        alto = invoke_tesseract_alto(
+        alto = run_tesseract(
             image_path=image.uri,
             lang=self._lang,
             psm=self._psm,
             oem=self._oem,
             dpi=self._dpi,
+            renderers=("alto",),
+            workspace=context.workspace_uri,
             timeout=timeout,
-        )
+            control=control,
+            what="tesseract ALTO",
+        ).get("alto")
+        if alto is None:
+            raise AdapterStepError(
+                f"{self.name} : aucune sortie ALTO pour {image.uri!r}."
+            )
         return layout_step_output(self._to_layout(alto), context, self.name)
 
     def _to_layout(self, alto: bytes) -> CanonicalLayout:

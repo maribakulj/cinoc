@@ -7,6 +7,7 @@ from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
+import yaml
 
 from cinoc.adapters.corpus import _http
 from cinoc.adapters.corpus.htr_united import fetch_catalogue
@@ -54,3 +55,24 @@ def test_fetch_real_catalogue(server: int, monkeypatch: pytest.MonkeyPatch) -> N
     assert not cat.is_demo and cat.source == "remote"
     assert [e.id for e in cat.entries] == ["loopback"]
     assert cat.entries[0].languages == ("fr",)
+
+
+def test_an_index_with_aliases_falls_back_to_the_demo(
+    server: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """L'index est une source tierce lue par la page d'accueil : il passe par
+    le chargeur **sans alias** (D-300). L'index réel n'en a aucun ; un index
+    qui en porte est refusé (repli démo), comme un « billion laughs »."""
+    from cinoc.adapters.corpus.htr_united import parse_catalogue
+
+    alias = (
+        "- &corpus {title: A, url: https://github.com/HTR-United/a}\n"
+        "- *corpus\n"
+    )
+    with pytest.raises(yaml.YAMLError, match="alias"):
+        parse_catalogue(alias)
+    monkeypatch.setattr(_http, "assert_public_url", lambda url: None)
+    monkeypatch.setattr(
+        "cinoc.adapters.corpus.htr_united.fetch_text", lambda *_a, **_k: alias
+    )
+    assert fetch_catalogue(catalogue_url="http://127.0.0.1:1/x.yml").is_demo

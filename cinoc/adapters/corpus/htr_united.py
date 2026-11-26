@@ -19,6 +19,7 @@ from dataclasses import dataclass
 import yaml
 
 from cinoc.adapters.corpus._http import DEFAULT_TIMEOUT, CorpusHttpError, fetch_text
+from cinoc.formats import safe_load_yaml
 
 logger = logging.getLogger(__name__)
 
@@ -98,8 +99,14 @@ def _entry_from_dict(item: dict[str, object]) -> HTRUnitedEntry | None:
 
 
 def parse_catalogue(raw_yaml: str) -> tuple[HTRUnitedEntry, ...]:
-    """Parse l'index YAML HTR-United → entrées. Pur (tolérant au schéma)."""
-    data = yaml.safe_load(raw_yaml)
+    """Parse l'index YAML HTR-United → entrées. Pur (tolérant au schéma).
+
+    Par le chargeur **sans alias** (``formats.safe_load_yaml``) : l'index est
+    une source tierce lue par la page d'accueil, et l'index réel n'a ni ancre
+    ni alias (vérifié le 2026-11-26 : 26 483 événements YAML, aucun). Un index
+    à alias lève ``yaml.YAMLError`` → repli démo, comme un index illisible.
+    """
+    data = safe_load_yaml(raw_yaml)
     if isinstance(data, dict):
         for key in ("data", "projects", "catalog", "catalogue"):
             if isinstance(data.get(key), list):
