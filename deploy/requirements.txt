@@ -21,7 +21,9 @@ httpcore>=1,<2
 # **privé** qui ouvre la surface (``CINOC_PUBLIC_MODE=false`` + secret
 # ``MISTRAL_API_KEY``). SDK léger (aucune dépendance lourde / GPU). En mode public
 # (le défaut), les moteurs cloud restent **masqués** : ce paquet est inutilisé.
-mistralai>=1.5,<2
+# Épinglé par majeure, comme l'extra [mistral] du pyproject (3.x : `Mistral`
+# vit dans `mistralai.client`, et Mistral OCR y demande les blocs).
+mistralai>=3,<4
 # Socle OCR gratuit (Tesseract) : wrapper Python pur du binaire ``tesseract``.
 # **Effectif uniquement dans l'image moteur** (deploy/Dockerfile.engine, qui bake
 # le binaire + les langues). Dans la vitrine lecture seule (sans binaire), il reste

@@ -37,9 +37,14 @@ tesseract = ["pytesseract"]
 kraken = ["kraken"]
 pero = ["pero-ocr"]  # OCR/HTR local (imprimé ancien + manuscrit) — non déployé au Space
 calamari = ["calamari-ocr"]  # OCR local par ligne — non déployé au Space
-openai = ["openai"]
-anthropic = ["anthropic"]
-mistral = ["mistralai>=1.5,<2"]  # 2.x = SDK incompatible (pas de `from mistralai import Mistral`)
+# SDK des moteurs distants : épinglés par **majeure**. Une majeure change l'API
+# du client (mistralai 2.x a déplacé `Mistral` vers `mistralai.client`, et seule
+# la 3.x demande et décode les blocs de Mistral OCR) : la relever, c'est migrer
+# l'adaptateur et rejouer `tests/adapters/test_native_json_real_sdk.py` contre
+# la roue PyPI. Le même épinglage vaut dans `deploy/requirements.txt`.
+openai = ["openai>=3,<4"]
+anthropic = ["anthropic>=2,<3"]
+mistral = ["mistralai>=3,<4"]
 # Post-correction structuree (LAYOUT -> LAYOUT) : corrige dans la mise en
 # page au lieu d'aplatir avant de corriger.
 # Version exacte : celle verifiee avec le pont de correction (suite complete

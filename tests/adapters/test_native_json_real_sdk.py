@@ -127,8 +127,10 @@ def test_anthropic(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.mark.parametrize("ocr", [False, True], ids=["chat", "ocr"])
 def test_mistralai(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, ocr: bool) -> None:
-    mistralai = pytest.importorskip("mistralai")
-    import httpx
+    # mistralai 3.x : le client vit dans ``mistralai.client`` et transporte par
+    # ``httpx2`` (``client=`` en exige un).
+    mistralai = pytest.importorskip("mistralai.client")
+    httpx2 = pytest.importorskip("httpx2")
 
     from cinoc.adapters.llm.mistral import MistralAdapter, _completion_from_chat
     from cinoc.adapters.ocr.mistral_ocr import MistralOCRAdapter, _text_from_response
@@ -142,7 +144,7 @@ def test_mistralai(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, ocr: bool) -
         "Mistral",
         functools.partial(
             mistralai.Mistral,
-            client=httpx.Client(transport=_handler(httpx, body, seen)),
+            client=httpx2.Client(transport=_handler(httpx2, body, seen)),
         ),
     )
     module: Module = (
@@ -155,3 +157,47 @@ def test_mistralai(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, ocr: bool) -
     )
     artifacts = _run(tmp_path, monkeypatch, "MISTRAL_API_KEY", module)
     _check(tmp_path, artifacts, body, seen, read)
+
+
+def test_mistral_ocr_blocks_reach_the_layout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Sous le vrai SDK 3.x : la requête **porte** ``include_blocks`` et la
+    granularité ``block``, et la réponse OCR 4 de la cassette garde ses blocs et
+    leurs confiances au décodage — la 1.x les retirait (D-291) —, donc le
+    sidecar les garde et le ``LAYOUT`` est publié."""
+    mistralai = pytest.importorskip("mistralai.client")
+    httpx2 = pytest.importorskip("httpx2")
+
+    from cinoc.adapters.ocr._mistral_layout import layout_from_response
+    from cinoc.adapters.ocr.mistral_ocr import MistralOCRAdapter
+    from cinoc.domain.layout import CanonicalLayout
+
+    body = wire("ocr", "mistral_ocr_4", "blocs")
+    requests: list[Any] = []
+
+    def handle(request: Any) -> Any:
+        requests.append(json.loads(request.content))
+        return httpx2.Response(200, json=body)
+
+    monkeypatch.setattr(
+        mistralai,
+        "Mistral",
+        functools.partial(
+            mistralai.Mistral,
+            client=httpx2.Client(transport=httpx2.MockTransport(handle)),
+        ),
+    )
+    module = MistralOCRAdapter(label="m")
+    artifacts = _run(tmp_path, monkeypatch, "MISTRAL_API_KEY", module)
+    (sent,) = requests
+    assert sent["include_blocks"] is True
+    assert sent["confidence_scores_granularity"] == "block"
+    sidecar = Path(artifacts[ArtifactType.NATIVE_JSON].uri or "")
+    native = json.loads(sidecar.read_bytes())
+    assert native == body  # blocs et confiances gardés au décodage
+    layout = CanonicalLayout.model_validate_json(
+        Path(artifacts[ArtifactType.LAYOUT].uri or "").read_bytes()
+    )
+    assert layout == layout_from_response(body)
+    assert [r.confidence for r in layout.pages[0].regions][0] is not None

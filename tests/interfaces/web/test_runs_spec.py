@@ -514,3 +514,63 @@ def test_public_mode_accepts_no_endpoint_at_all(
 
     assert reponse.status_code == 403, reponse.json()
     assert "mode public" in reponse.json()["detail"]
+
+
+def _sdk_openai_present(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Le SDK ``openai`` « installé » pour la sonde (``find_spec``), sans clé."""
+    import importlib.machinery
+    import sys
+    import types
+
+    faux = types.ModuleType("openai")
+    faux.__spec__ = importlib.machinery.ModuleSpec("openai", None)
+    monkeypatch.setitem(sys.modules, "openai", faux)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+
+def test_a_self_hosted_openai_instance_needs_no_openai_key(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Disponibilité **par instance** (reste de S21) : un serveur auto-hébergé
+    sans ``api_key_env`` ne reçoit aucune clé — l'absence d'``OPENAI_API_KEY``
+    ne le rend pas indisponible. Avant : 409, le moteur jugé à la place de
+    l'instance."""
+    _sdk_openai_present(monkeypatch)
+    monkeypatch.setenv("CINOC_MODEL_HOSTS", "gpu.lan")
+    client = _client(tmp_path)
+    corpus_id = _corpus(client)
+
+    reponse = client.post(
+        "/api/runs/spec",
+        headers=_CSRF,
+        json={
+            "corpus_id": corpus_id,
+            "spec": _spec_openai(
+                {
+                    "base_url": "http://gpu.lan:8000/v1",
+                    "model": "m",
+                    "self_hosted": True,
+                }
+            ),
+        },
+    )
+
+    assert reponse.status_code == 201, reponse.json()
+
+
+def test_the_openai_endpoint_still_needs_its_key(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """À l'endpoint d'OpenAI, la clé reste exigée — et le refus dit laquelle."""
+    _sdk_openai_present(monkeypatch)
+    client = _client(tmp_path)
+    corpus_id = _corpus(client)
+
+    reponse = client.post(
+        "/api/runs/spec",
+        headers=_CSRF,
+        json={"corpus_id": corpus_id, "spec": _spec_openai({"model": "m"})},
+    )
+
+    assert reponse.status_code == 409, reponse.json()
+    assert "OPENAI_API_KEY" in reponse.json()["detail"]

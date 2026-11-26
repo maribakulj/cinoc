@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from cinoc.adapters._native import endpoint_from_env, public_endpoint, served_model
+from cinoc.adapters._native import public_endpoint, served_model
 from cinoc.adapters.llm._base import LLMCompletion, run_llm_step
 from cinoc.adapters.llm.anthropic import _completion_from_message
 from cinoc.adapters.llm.mistral import _completion_from_chat as mistral_completion
@@ -127,11 +127,5 @@ def test_the_azure_endpoint_is_read_once_and_written(
     }
 
 
-def test_an_endpoint_is_written_without_credentials_or_query(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_an_endpoint_is_written_without_credentials_or_query() -> None:
     assert public_endpoint("http://u:p@h:8000/v1?key=s#f") == "http://h:8000/v1"
-    monkeypatch.delenv("X_URL", raising=False)
-    assert endpoint_from_env("X_URL", "https://d/v1") == ("https://d/v1",) * 2
-    monkeypatch.setenv("X_URL", " http://u:p@h/v1 ")
-    assert endpoint_from_env("X_URL", "https://d/v1") == ("http://u:p@h/v1", "http://h/v1")

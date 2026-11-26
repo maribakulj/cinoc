@@ -12,6 +12,13 @@ dimensions, en-têtes et pieds, blocs) gardée en sidecar ``NATIVE_JSON`` (un
 appel par page) ; et, quand la réponse porte des **blocs**, leur projection en
 ``LAYOUT`` (``_mistral_layout.layout_from_response``), depuis ce même corps.
 
+La requête **demande** les blocs (``include_blocks=True``) et leurs confiances
+(``confidence_scores_granularity="block"``) : sans eux, la projection n'avait
+rien à lire. Un modèle antérieur à OCR 4 répond ``blocks: []`` — pas de
+``LAYOUT``, le texte reste noté. SDK épinglé par majeure (``mistralai>=3,<4``) :
+la 1.x n'avait pas ces paramètres et retirait ``blocks`` et
+``confidence_scores`` de la réponse qu'elle décodait.
+
 Délai fini (``timeout``, défaut 120 s, retries compris), passé à chaque appel
 (``timeout_ms``) ; le SDK est construit **sans** sa politique de retry
 (``retry_config=None``) et l'appel passe par ``call_resilient`` (429, 5xx,
@@ -31,6 +38,7 @@ from cinoc.adapters._resilience import (
     DEFAULT_OCR_TIMEOUT,
     BillingMeter,
     call_resilient,
+    register_close,
     request_timeout,
     step_deadline,
     validate_timeout,
@@ -48,7 +56,13 @@ from cinoc.pipeline.types import RunContext, StepOutput
 #: 1.1 : la réponse native est publiée en sidecar (``NATIVE_JSON``) ; le texte
 #: ne change pas. 1.2 : le texte est le markdown **sans sa syntaxe** (il
 #: change), et un ``LAYOUT`` est publié quand la réponse porte des blocs.
-_VERSION = "1.2"
+#: 1.3 : la requête demande les blocs et leurs confiances (``include_blocks``,
+#: ``confidence_scores_granularity="block"``) — le sidecar et le ``LAYOUT``
+#: changent : une archive 1.2 est ré-exécutée, pas relue sans ses blocs.
+_VERSION = "1.3"
+#: Granularité des confiances demandées : celle de la projection
+#: (``Region.confidence`` = ``block_type_confidence_score``).
+_CONFIDENCE_GRANULARITY = "block"
 _DEFAULT_MODEL = "mistral-ocr-latest"
 _MEDIA = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
           ".webp": "image/webp", ".tif": "image/tiff", ".tiff": "image/tiff"}
@@ -87,7 +101,7 @@ def _invoke_mistral_ocr(
     if not api_key:
         raise AdapterStepError("mistral_ocr : MISTRAL_API_KEY manquante.")
     try:
-        from mistralai import Mistral  # type: ignore[import-not-found]
+        from mistralai.client import Mistral  # type: ignore[import-not-found]
     except ImportError as exc:
         raise AdapterStepError(
             "mistral_ocr : SDK non installé (pip install 'cinoc[mistral]')."
@@ -98,6 +112,8 @@ def _invoke_mistral_ocr(
     try:
         # ``retry_config=None`` : une seule politique de retry, celle de Cinoc.
         client = Mistral(api_key=api_key, retry_config=None)
+        if control is not None:
+            register_close(control, client)
 
         def process() -> Any:
             timeout = request_timeout(deadline)
@@ -107,6 +123,8 @@ def _invoke_mistral_ocr(
                     "type": "image_url",
                     "image_url": f"data:{media};base64,{image_b64}",
                 },
+                include_blocks=True,
+                confidence_scores_granularity=_CONFIDENCE_GRANULARITY,
                 timeout_ms=int(timeout * 1000) if timeout is not None else None,
             )
 

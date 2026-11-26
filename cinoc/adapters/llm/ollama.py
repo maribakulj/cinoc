@@ -26,15 +26,22 @@ Délai fini (``timeout``, défaut 600 s) : l'appel tournait **sans aucun délai*
 ``DeadlineExceeded`` (motif « arrêtée (délai) »), pas une panne du moteur. Pas
 de retry : un serveur local qui répond une erreur ne la répare pas en 30 s, et
 il n'y a pas de quota à ménager.
+
+Créneau réseau **du serveur** (``endpoint_slot_key`` : ``hôte:port``) : l'appel
+passe par ``call_resilient`` sans retry, sous le créneau du ``host`` — le même
+qu'une instance ``openai`` pointée sur ce serveur (``…:11434/v1``). Deux
+adaptateurs qui frappent le même processus Ollama se partagent donc son quota
+au lieu de le doubler.
 """
 
 from __future__ import annotations
 
-from typing import ClassVar, NoReturn
+from typing import Any, ClassVar, NoReturn
 
 from cinoc.adapters._native import public_endpoint, served_model
 from cinoc.adapters._resilience import (
     DEFAULT_LLM_TIMEOUT,
+    call_resilient,
     request_timeout,
     step_deadline,
     validate_timeout,
@@ -175,19 +182,37 @@ def _invoke_ollama(
     client = httpx.Client(timeout=request_timeout(deadline))
     # Annulation câblée : fermer le client interrompt la requête en vol.
     control.register_cancel_handle(client.close)
-    try:
+
+    def _post() -> Any:
         # **/api/chat** (et non /api/generate) : applique le gabarit de chat du
-        # modèle. Indispensable pour les modèles *instruct* (ex. churro), qui
-        # échouent sur /api/generate (complétion brute). C'est l'endpoint
-        # qu'utilise ``ollama run``.
+        # modèle. Indispensable pour les modèles *instruct*, qui échouent sur
+        # /api/generate (complétion brute). C'est l'endpoint qu'utilise
+        # ``ollama run``.
         response = client.post(f"{host}/api/chat", json=payload)
         response.raise_for_status()
-        data = response.json()
+        return response.json()
+
+    try:
+        # Sous le créneau du serveur, **sans retry** (voir le module).
+        data = call_resilient(
+            "ollama",
+            _post,
+            deadline=deadline,
+            endpoint=host,
+            control=control,
+            is_retryable=_never_retry,
+        )
     except httpx.HTTPError as exc:
         _fail_or_cancel(control, model, exc, deadline)
     finally:
         client.close()
     return _completion_from_chat(data, model)
+
+
+def _never_retry(exc: BaseException) -> bool:
+    """Un serveur local qui répond une erreur ne la répare pas en 30 s."""
+    del exc
+    return False
 
 
 def list_installed_models(
