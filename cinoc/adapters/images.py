@@ -18,6 +18,7 @@ from __future__ import annotations
 import base64
 import io
 import logging
+from functools import cache
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -38,11 +39,7 @@ def thumbnail_bytes(source: str | Path, *, max_px: int = 280) -> bytes | None:
     try:
         from PIL import Image, UnidentifiedImageError
     except ImportError as exc:
-        logger.warning(
-            "[images] Pillow indisponible (%s) — vignettes omises, aperçu "
-            "synthétique. Installer l'extra ``[images]``.",
-            exc,
-        )
+        _warn_no_pillow(str(exc))
         return None
     try:
         with Image.open(path) as opened:
@@ -54,6 +51,18 @@ def thumbnail_bytes(source: str | Path, *, max_px: int = 280) -> bytes | None:
         logger.warning("[images] image illisible %s : %s — vignette omise.", path, exc)
         return None
     return buffer.getvalue()
+
+
+@cache
+def _warn_no_pillow(reason: str) -> None:
+    """Une fois par processus et par motif : l'absence de Pillow tient à
+    l'installation, pas à l'image — la redire à chaque vignette noyait la
+    sortie (une ligne par vignette, D-306)."""
+    logger.warning(
+        "[images] Pillow indisponible (%s) — vignettes omises, aperçu "
+        "synthétique. Installer l'extra ``[images]``.",
+        reason,
+    )
 
 
 def thumbnail_data_uri(source: str | Path, *, max_px: int = 280) -> str | None:

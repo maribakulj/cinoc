@@ -48,6 +48,8 @@ publier, et son moment, appartiennent au mainteneur.
 
 ### Corrigé
 
+- **Sans l'extra `[images]`, l'absence de Pillow se dit une fois.** L'avertissement se répétait à chaque vignette (quatre lignes pour deux pages).
+
 - **Un rapport de la CLI servi par `cinoc serve` retrouve ses images.** Un
   `RunResult` écrit ses images relatives au dossier de sa spec, et la vitrine
   les cherchait dans le dossier des corpus déposés : le rapport retombait sur
