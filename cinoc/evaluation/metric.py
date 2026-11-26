@@ -14,7 +14,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from cinoc.domain.artifacts import ArtifactType
-from cinoc.domain.evaluation import MetricSpec
+from cinoc.domain.evaluation import MetricCategory, MetricSpec, MetricUnit
 from cinoc.evaluation.context import CrossEngineContext, DocContext
 
 
@@ -68,11 +68,17 @@ def document_metric(
     *,
     name: str,
     input_types: tuple[ArtifactType, ArtifactType],
+    category: MetricCategory,
+    unit: MetricUnit,
     description: str = "",
     higher_is_better: bool = False,
     tags: frozenset[str] = frozenset(),
 ) -> Callable[[DocMetricFn], DocumentMetric]:
-    """Construit une ``DocumentMetric`` depuis une fonction (pur, sans effet)."""
+    """Construit une ``DocumentMetric`` depuis une fonction (pur, sans effet).
+
+    ``category`` et ``unit`` sont **requises** (D-289) : la déclaration unique
+    de ce que vaut la métrique et de ce que compte son poids.
+    """
 
     def decorate(fn: DocMetricFn) -> DocumentMetric:
         return DocumentMetric(
@@ -82,6 +88,8 @@ def document_metric(
                 description=description,
                 higher_is_better=higher_is_better,
                 tags=tags,
+                category=category,
+                unit=unit,
             ),
             fn=fn,
         )

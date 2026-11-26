@@ -418,17 +418,8 @@ _CSS = (
     ".comp-label{color:var(--g-700);}"
     ".comp-share{color:var(--ink);font-variant-numeric:tabular-nums;}"
     ".comp-count{color:var(--g-400);font-variant-numeric:tabular-nums;}"
-    # Radar multi-métrique (SVG serveur) : grille concentrique + un polygone teinté
-    # par moteur (superposés). Carré, centré dans sa carte ; légende moteurs sous.
-    ".radar-wrap{max-width:300px;margin:8px auto 4px;}"
-    ".radar-svg{width:100%;height:auto;display:block;}"
-    ".radar-grid{fill:none;stroke:var(--g-100);stroke-width:1;}"
-    ".radar-spoke{stroke:var(--g-100);stroke-width:1;}"
-    ".radar-axis{font-family:var(--mono);font-size:9px;fill:var(--g-400);}"
-    ".radar-area{fill-opacity:0.13;stroke-width:2;stroke-linejoin:round;}"
-    # Sommet : cible de survol (<title> = valeur brute + normalisée), cerné de fond.
-    ".radar-vertex{fill-opacity:0.95;stroke:var(--surface);stroke-width:1;}"
-    ".radar-legend{text-align:center;}"
+    # Marque d'une métrique adaptée (≈) ou exploratoire (∗) en en-tête (D-289).
+    ".cat-mark{font-size:9px;margin-left:2px;color:var(--g-400);}"
     # Camembert (anneau SVG serveur) : parts teintées + trou central couleur fond
     # (découpe). Légende = pastille + libellé + compte. Centré dans sa carte.
     ".donut-svg{width:140px;height:140px;display:block;margin:6px auto 4px;}"

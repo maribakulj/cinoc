@@ -85,3 +85,23 @@ def test_chrome_link_targets_dialog() -> None:
     fr = glossary_chrome_link("fr")
     assert 'href="#glossary-dialog"' in fr and "Glossaire" in fr
     assert "Glossary" in glossary_chrome_link("en")
+
+
+def test_card_shows_declared_category_and_unit_and_oracle() -> None:
+    """D-289 : la fiche affiche la catégorie et l'unité **du registre** (pas une
+    copie dans le YAML) et l'oracle du calcul."""
+    fr = glossary_dialog({"cer", "unanchored_trigrams"}, "fr")
+    assert "Catégorie</dt><dd class=\"gl-v\">établie" in fr
+    assert "Catégorie</dt><dd class=\"gl-v\">exploratoire" in fr
+    assert "Unité</dt><dd class=\"gl-v\">caractère" in fr
+    assert "Unité</dt><dd class=\"gl-v\">trigramme" in fr
+    assert "Oracle</dt>" in fr and "jiwer 4.0.0" in fr
+    en = glossary_dialog({"wer"}, "en")
+    assert "Category</dt><dd class=\"gl-v\">established" in en
+    assert "Unit</dt><dd class=\"gl-v\">word" in en
+
+
+def test_a_term_outside_the_registry_has_no_declared_category() -> None:
+    # ``significance_p`` est un test, pas une métrique notée : pas de catégorie.
+    html = glossary_dialog({"significance_p"}, "fr")
+    assert "Catégorie" not in html and "Oracle</dt>" in html

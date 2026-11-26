@@ -156,14 +156,14 @@ def _text_view_metrics(spec: object) -> tuple[str, ...]:
     return text.metric_names
 
 
-def test_air_active_by_default_hcpr_opt_in(tmp_path: Path) -> None:
-    # ``air`` est actif d'office (Q4) ; ``hcpr`` n'apparaît PAS sans liste
-    # configurée — anti-colonne-jumelle de mufi_err sur corpus médiéval.
+def test_archaic_metrics_are_opt_in(tmp_path: Path) -> None:
+    # ``air`` est exploratoire (D-289) : hors des colonnes par défaut, comme
+    # ``hcpr`` sans liste configurée (anti-colonne-jumelle de mufi_err).
     spec = plan_benchmark_run(
         (Competitor(engine="tesseract"),), _corpus(tmp_path), "r"
     )(tmp_path)
     metrics = _text_view_metrics(spec)
-    assert "air" in metrics
+    assert "air" not in metrics
     assert "hcpr" not in metrics
     # Toujours tracé au manifeste (la liste qu'``air`` a utilisée).
     assert spec.metadata["archaic_list"] == "archaic_core"
@@ -438,10 +438,10 @@ def _plan_metrics(tmp_path: Path, profile: str | None) -> tuple[str, ...]:
 def test_metric_profile_default_is_standard_and_byte_identical(tmp_path: Path) -> None:
     # Sans profil → ``standard`` ; et ``standard`` explicite donne le MÊME tuple.
     # ``cmer`` (MER caractère borné) exposé d'office au socle, groupé « caractère ».
+    # Aucune exploratoire (D-289), ni ``fca`` (1 − CER sous la vue à plat).
     assert _plan_metrics(tmp_path, None) == (
-        "cer", "cmer", "char_accuracy", "word_accuracy", "fca", "wer", "mer",
-        "bow_precision", "bow_recall", "bow_f1",
-        "searchability", "unanchored_trigrams", "air",
+        "cer", "cmer", "char_accuracy", "word_accuracy", "wer", "mer",
+        "bow_precision", "bow_recall", "bow_f1", "searchability",
     )
     assert _plan_metrics(tmp_path, "standard") == _plan_metrics(tmp_path, None)
 
@@ -467,8 +467,10 @@ def test_unknown_metric_profile_refused(tmp_path: Path) -> None:
 
 
 def test_metric_profile_composes_with_hcpr(tmp_path: Path) -> None:
-    # Le profil donne la base ; ``hcpr`` (liste archaïque configurée) s'y AJOUTE —
-    # les deux axes sont orthogonaux (le profil n'efface pas hcpr).
+    # Le profil donne la base ; ``air`` et ``hcpr`` (liste archaïque configurée)
+    # s'y AJOUTENT — les deux axes sont orthogonaux (le profil ne les efface
+    # pas). ``air``, exploratoire, n'est plus au profil ``standard`` (D-289) :
+    # c'est la liste configurée qui le demande.
     spec = plan_benchmark_run(
         (Competitor(engine="tesseract"),),
         _corpus(tmp_path),
@@ -477,7 +479,7 @@ def test_metric_profile_composes_with_hcpr(tmp_path: Path) -> None:
         archaic_list="archaic_core",
     )(tmp_path)
     metrics = _text_view_metrics(spec)
-    assert metrics == ("cer", "wer", "mer", "hcpr")
+    assert metrics == ("cer", "wer", "mer", "air", "hcpr")
 
 
 def test_metric_profile_catalog_lists_standard_first(tmp_path: Path) -> None:

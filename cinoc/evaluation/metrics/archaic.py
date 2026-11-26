@@ -17,6 +17,7 @@ sur la liste par défaut (``archaic_core``) ; l'app **relie** ``air`` et enregis
 from __future__ import annotations
 
 from cinoc.domain.artifacts import ArtifactType
+from cinoc.domain.evaluation import MetricCategory, MetricUnit
 from cinoc.evaluation.archaic import (
     DEFAULT_ARCHAIC_LIST,
     air_observation,
@@ -42,6 +43,8 @@ def make_air_metric(chars: frozenset[str]) -> DocumentMetric:
     @document_metric(
         name="air",
         input_types=(ArtifactType.RAW_TEXT, ArtifactType.RAW_TEXT),
+        category=MetricCategory.EXPLORATORY,
+        unit=MetricUnit.CHARACTER,
         description=(
             "Apport net d'archaïsmes : part des caractères archaïques de la "
             "sortie qui sont insérés (absents à leur place dans la GT) — "
@@ -63,6 +66,8 @@ def make_hcpr_metric(chars: frozenset[str]) -> DocumentMetric:
     @document_metric(
         name="hcpr",
         input_types=(ArtifactType.RAW_TEXT, ArtifactType.RAW_TEXT),
+        category=MetricCategory.EXPLORATORY,
+        unit=MetricUnit.CHARACTER,
         description=(
             "Taux de préservation des caractères archaïques de la GT (liste "
             "configurée) dans la sortie."

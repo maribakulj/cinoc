@@ -71,6 +71,9 @@ def test_gt_with_lines_adds_the_lines_view(tmp_path: Path) -> None:
         ("texte (lignes)", "keep_line_breaks"),
     ]
     assert views[1].metric_names == ("cer",)
+    # D-289 : la FCA n'est plus d'aucune vue par défaut — 1 − CER à plat, et
+    # sous « texte (lignes) » soit 1 − CER encore, soit ~0 pour qui fusionne.
+    assert all("fca" not in v.metric_names for v in views)
 
 
 def test_single_line_gt_keeps_one_view(tmp_path: Path) -> None:

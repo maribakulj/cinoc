@@ -5,9 +5,10 @@ vue d'évaluation explicite. On ne compare jamais directement un OCR brut
 et une sortie ALTO reconstruite : on compare leur projection dans une vue
 commune, et le rapport explicite ce que la vue ignore.
 
-- ``MetricSpec`` — déclare une métrique (nom + signature de types).
-  **Purement déclaratif** : pas de callable. L'association nom → fonction
-  se fait dans le registre runtime (couche evaluation), pas ici.
+- ``MetricSpec`` — déclare une métrique (nom + signature de types +
+  catégorie + unité). **Purement déclaratif** : pas de callable.
+  L'association nom → fonction se fait dans le registre runtime (couche
+  evaluation), pas ici.
 - ``EvaluationView`` — déclare une vue (candidats + projection + métriques
   + dimensions ignorées).
 - ``EvaluationSpec`` — container de N vues.
@@ -15,6 +16,7 @@ commune, et le rapport explicite ce que la vue ignore.
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import Any, Literal
 
 from pydantic import (
@@ -40,6 +42,39 @@ from cinoc.domain.projection import ProjectionSpec
 DEFAULT_NORMALIZATION_PROFILE = "flat_text"
 
 
+class MetricCategory(StrEnum):
+    """Validité qu'une métrique peut revendiquer (D-289).
+
+    - ``ESTABLISHED`` — conforme à une référence **nommée** (outil ou
+      publication), dont un oracle vérifie le calcul quand il est exécutable ;
+    - ``ADAPTED`` — variante justifiée d'une référence nommée (repli,
+      tolérance, appariement propre) : la variante est dite à la fiche ;
+    - ``EXPLORATORY`` — construction de Cinoc sans référence nommée.
+
+    Seules les établies entrent au classement et aux tests de significativité ;
+    une exploratoire n'est pas fausse, elle n'a pas encore la validité qu'un
+    classement lui prêterait.
+    """
+
+    ESTABLISHED = "established"
+    ADAPTED = "adapted"
+    EXPLORATORY = "exploratory"
+
+
+class MetricUnit(StrEnum):
+    """Ce que dénombre le **poids** d'une métrique — le dénominateur de son
+    agrégat micro (D-016) : un CER compte des caractères de référence, un WER
+    des mots. C'est l'unité que la fiche du glossaire doit nommer."""
+
+    CHARACTER = "character"
+    WORD = "word"
+    CHARACTER_TRIGRAM = "character_trigram"
+    LINE = "line"
+    REGION = "region"
+    ENTITY = "entity"
+    NUMERIC_SEQUENCE = "numeric_sequence"
+
+
 class MetricSpec(BaseModel):
     """Description déclarative d'une métrique enregistrable.
 
@@ -56,6 +91,11 @@ class MetricSpec(BaseModel):
         pour les métriques d'erreur (CER, WER).
     tags:
         Étiquettes libres pour grouper (``"text"``, ``"structure"``…).
+    category:
+        :class:`MetricCategory` — **requise** : une métrique sans catégorie
+        n'est pas enregistrable (D-289).
+    unit:
+        :class:`MetricUnit` — **requise** : ce que compte le poids.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -65,6 +105,8 @@ class MetricSpec(BaseModel):
     description: str = ""
     higher_is_better: bool = False
     tags: frozenset[str] = Field(default_factory=frozenset)
+    category: MetricCategory
+    unit: MetricUnit
 
     @field_serializer("tags", when_used="json")
     def _tags_sorted(self, value: frozenset[str]) -> list[str]:
@@ -234,5 +276,7 @@ __all__ = [
     "EvaluationSpec",
     "EvaluationView",
     "FailurePolicy",
+    "MetricCategory",
     "MetricSpec",
+    "MetricUnit",
 ]

@@ -122,7 +122,8 @@ def evaluate_run(
     documents: list[RunDocumentResult] = []
     cross_engine: list[MetricScore] = []
     analyses: list[Analysis] = []
-    #: Séries de chaque (vue × métrique) : la famille de Holm est le run entier.
+    #: Séries de chaque (vue × métrique **établie**) : la famille de Holm est
+    #: le run entier, réduit aux métriques établies (D-289).
     tests: list[InferenceEntry] = []
     actives = _analyses_actives(evaluation)
     failed = frozenset(
@@ -198,7 +199,7 @@ def evaluate_run(
                 )
             )
         cross_engine.extend(_cross_engine_scores(view, series, registry))
-        tests.extend(_inference_entries(view, series))
+        tests.extend(_inference_entries(view, series, registry))
         analyses.extend(
             collectors.build(
                 view.name,
@@ -273,8 +274,12 @@ def evaluate_run(
     )
 
 
-def _inference_entries(view: EvaluationView, series: _Series) -> list[InferenceEntry]:
-    """(vue, métrique, séries alignées, poids) de chaque métrique de la vue.
+def _inference_entries(
+    view: EvaluationView, series: _Series, registry: MetricRegistry
+) -> list[InferenceEntry]:
+    """(vue, métrique, séries alignées, poids) de chaque métrique **établie**
+    de la vue — les seules qu'un test départage (D-289) : une adaptée ou une
+    exploratoire reste au diagnostic et ne grossit pas la famille de Holm.
 
     Les **mêmes séries** que la passe inter-moteurs : même index = même
     document, ``None`` = non applicable — un seul calcul des scores, deux
@@ -295,7 +300,7 @@ def _inference_entries(view: EvaluationView, series: _Series) -> list[InferenceE
                 for pipeline, scores in series[metric_name].items()
             },
         )
-        for metric_name in view.metric_names
+        for metric_name in registry.established(view.metric_names)
     ]
 
 
@@ -415,7 +420,8 @@ def _cross_engine_scores(
     if not metrics:
         return []
     scores: list[MetricScore] = []
-    for base_metric in view.metric_names:
+    # Le scalaire ``significance_p`` est la p du même test : établies seules.
+    for base_metric in registry.established(view.metric_names):
         per_pipeline = {
             pipeline: tuple(score.value for score in scores_list)
             for pipeline, scores_list in series[base_metric].items()

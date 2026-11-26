@@ -47,7 +47,10 @@ def _result() -> RunResult:
             ),
         ),
         usage=(
-            DocumentUsage(document_id="d1", pipeline="tess", usage=ResourceUsage()),
+            DocumentUsage(
+                document_id="d1", pipeline="tess",
+                usage=ResourceUsage(duration_seconds=1.5),
+            ),
             DocumentUsage(
                 document_id="d2", pipeline="tess", usage=ResourceUsage(),
                 outcome="failed", reason="engine", message="boom",
@@ -58,13 +61,16 @@ def _result() -> RunResult:
 
 def test_csv_exact_content() -> None:
     # ``expected`` (agrégat) et ``outcome`` (document) : un vide de ``d2`` se
-    # lit « échec du moteur », celui du WER de ``d1`` « non applicable ».
+    # lit « échec du moteur », celui du WER de ``d1`` « non applicable ». Puis
+    # la durée de chaque unité (D-289, pilote D11) — vide pour l'échec.
     assert run_result_csv(_result()) == (
         "scope,view,pipeline,document_id,metric,value,support,expected,outcome\n"
         "aggregate,text,tess,,cer,0.25,1,2,\n"
         "document,text,tess,d1,cer,0.25,4,,ok\n"
         "document,text,tess,d1,wer,,,,ok\n"
         "document,text,tess,d2,cer,,,,failed:engine\n"
+        "usage,,tess,d1,duration_seconds,1.5,,,ok\n"
+        "usage,,tess,d2,duration_seconds,,,,failed:engine\n"
     )
 
 

@@ -1,19 +1,41 @@
 from __future__ import annotations
 
+import pytest
+from pydantic import ValidationError
+
 from cinoc.domain import (
     ArtifactType,
     EvaluationView,
+    MetricCategory,
     MetricSpec,
+    MetricUnit,
     ProjectionSpec,
 )
+
+#: Catégorie et unité requises (D-289) : le minimum d'une fiche valide.
+_DECLARED = {"category": MetricCategory.ESTABLISHED, "unit": MetricUnit.CHARACTER}
 
 
 def test_metric_spec_is_declarative():
     assert "func" not in MetricSpec.model_fields
     m = MetricSpec(
-        name="cer", input_types=(ArtifactType.RAW_TEXT, ArtifactType.RAW_TEXT),
+        name="cer",
+        input_types=(ArtifactType.RAW_TEXT, ArtifactType.RAW_TEXT),
+        **_DECLARED,
     )
     assert m.higher_is_better is False
+
+
+@pytest.mark.parametrize("missing", ["category", "unit"])
+def test_metric_spec_requires_category_and_unit(missing: str) -> None:
+    """D-289 : une métrique sans catégorie ni unité n'est pas enregistrable."""
+    fields = {k: v for k, v in _DECLARED.items() if k != missing}
+    with pytest.raises(ValidationError, match=missing):
+        MetricSpec(
+            name="m",
+            input_types=(ArtifactType.RAW_TEXT, ArtifactType.RAW_TEXT),
+            **fields,
+        )
 
 
 def test_view_accepts():
@@ -42,11 +64,18 @@ def test_projection_for_resolution():
 #: chaînes en dépend, et c'est ce qui rendait le ``RunResult`` instable (D-282).
 _DUMP_SETS = """
 from cinoc.domain import ArtifactType as T, EvaluationView, MetricSpec
+from cinoc.domain import MetricCategory as C, MetricUnit as U
 v = EvaluationView(
     name="v",
     candidate_types=frozenset({T.RAW_TEXT, T.CORRECTED_TEXT, T.ALTO_XML}),
 )
-m = MetricSpec(name="m", input_types=(T.RAW_TEXT, T.RAW_TEXT), tags=frozenset("cab"))
+m = MetricSpec(
+    name="m",
+    input_types=(T.RAW_TEXT, T.RAW_TEXT),
+    tags=frozenset("cab"),
+    category=C.ADAPTED,
+    unit=U.WORD,
+)
 print(v.model_dump_json(), m.model_dump_json())
 """
 
@@ -82,6 +111,7 @@ def test_set_fields_round_trip_from_sorted_json():
         name="m",
         input_types=(ArtifactType.RAW_TEXT, ArtifactType.RAW_TEXT),
         tags=frozenset({"b", "a"}),
+        **_DECLARED,
     ).model_dump(mode="json")["tags"]
     assert tags == ["a", "b"]
 

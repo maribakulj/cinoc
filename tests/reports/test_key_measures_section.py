@@ -286,3 +286,68 @@ def test_the_convention_is_written_next_to_the_figure() -> None:
     raw = view.model_copy(update={"normalization_profile": None})
     html = KeyMeasuresSection().render(_with_views(raw), SectionContext())
     assert html is not None and "aucune normalisation (comparaison brute)" in html
+
+
+def test_only_established_metrics_enter_the_headline() -> None:
+    """D-289 : ``char_accuracy`` (adaptée, 1 − CER borné) n'est pas classée ;
+    le classement ne porte que les établies (cer, wer ; mer masqué)."""
+    html = KeyMeasuresSection().render(_result(), SectionContext())
+    assert html is not None
+    head = html.split("<tbody>")[0]
+    assert "CER ↓" in head and "WER ↓" in head
+    assert "Exact" not in head and "CHAR_ACCURACY" not in head
+    assert "établies" in html and "au diagnostic" in html
+
+
+def _with_usage(*, archive: str | None) -> RunResult:
+    from cinoc.domain.usage import ResourceUsage
+    from cinoc.evaluation.result import DocumentUsage
+
+    base = _result()
+    usage = (
+        DocumentUsage(document_id="d1", pipeline="pero",
+                      usage=ResourceUsage(duration_seconds=60.0)),
+        DocumentUsage(document_id="d2", pipeline="pero",
+                      usage=ResourceUsage(duration_seconds=67.0)),
+        DocumentUsage(document_id="d1", pipeline="tesseract",
+                      usage=ResourceUsage(duration_seconds=2.5)),
+        # Une unité en échec n'a rien mesuré : elle ne fait pas une page rapide.
+        DocumentUsage(document_id="d2", pipeline="tesseract",
+                      usage=ResourceUsage(), outcome="failed", reason="engine"),
+    )
+    manifest = base.manifest.model_copy(update={"artifacts_dir": archive})
+    return base.model_copy(update={"usage": usage, "manifest": manifest})
+
+
+def test_duration_per_page_is_a_default_column() -> None:
+    """Pilote D11 (D-281) : un VLM 25 fois plus lent ne se lisait qu'au mode
+    détaillé. La durée par page est au tableau par défaut, triable."""
+    html = KeyMeasuresSection().render(_with_usage(archive=None), SectionContext())
+    assert html is not None
+    assert "s/page ↓" in html and "durée par page" in html
+    assert 'data-sort="63.500000">63,5<' in html  # (60 + 67) / 2
+    assert 'data-sort="2.500000">2,5<' in html  # l'échec n'est pas compté
+    assert "archive de reprise" not in html
+    english = KeyMeasuresSection().render(
+        _with_usage(archive=None), SectionContext(lang="en")
+    )
+    assert english is not None and ">63.5<" in english
+
+
+def test_a_resumed_run_says_its_durations_may_be_inherited() -> None:
+    """D10 : une unité reprise garde la durée de sa première exécution — le
+    ``RunResult`` ne dit pas lesquelles ; le rapport le dit plutôt que de les
+    présenter comme mesurées par ce run."""
+    html = KeyMeasuresSection().render(
+        _with_usage(archive="archive"), SectionContext()
+    )
+    assert html is not None and "archive de reprise" in html
+    english = KeyMeasuresSection().render(
+        _with_usage(archive="archive"), SectionContext(lang="en")
+    )
+    assert english is not None and "resume archive" in english
+
+
+def test_no_duration_column_without_measured_durations() -> None:
+    html = KeyMeasuresSection().render(_result(), SectionContext())
+    assert html is not None and "s/page" not in html and "durée" not in html

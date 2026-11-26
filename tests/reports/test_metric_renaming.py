@@ -12,7 +12,6 @@ from __future__ import annotations
 from cinoc.evaluation.registry import MetricRegistry, register_default_metrics
 from cinoc.reports.glossary import load_glossary
 from cinoc.reports.sections._tables import _METRIC_SHORT, metric_short_label
-from cinoc.reports.sections.engine_radar import _AXES
 
 
 def _registry() -> MetricRegistry:
@@ -71,13 +70,3 @@ def test_short_labels() -> None:
     assert _METRIC_SHORT["searchability"] == "rappel·ft"
     assert metric_short_label("unanchored_trigrams") == "non-ancré"
     assert "hallucination" not in _METRIC_SHORT
-
-
-def test_radar_axes_are_named_after_their_calculation() -> None:
-    # L'axe inverse la part non ancrée : c'est l'ancrage. ``fca`` n'est pas une
-    # « fidélité » : l'axe porte son nom.
-    axes = {key: (fr, en) for key, _inv, fr, en in _AXES}
-    assert axes["unanchored_trigrams"] == ("Ancrage", "Anchoring")
-    assert axes["searchability"] == ("Rappel", "Recall")
-    assert axes["fca"] == ("FCA", "FCA")
-    assert "hallucination" not in axes

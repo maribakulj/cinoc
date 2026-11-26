@@ -9,17 +9,23 @@
 #   definition  : 2-3 sentences of formal definition
 #   measures    : what the metric concretely measures
 #   limits      : known limits and common pitfalls
+#   oracle      : the named reference, and what the computation is checked against
+#
+# Category and unit are NOT here: they are declared in the registry
+# (MetricSpec), and the card reads them there. The definition names the
+# unit the computation's weight counts (locked by a test).
 
 cer:
   title: "CER — character error rate"
   definition: >-
     Edit distance (substitutions + insertions + deletions) between the
-    output and the reference, counted in Unicode code points, relative to
-    the reference length. Both texts are first prepared by the view's
-    profile (default flat_text: NFC, invisible characters removed, every
-    whitespace run reduced to one space). 0 = perfect transcription; above 1
-    if the output gets longer. The per-line CER applies the same formula to
-    each line, capped at 1.
+    output and the reference, counted in characters (Unicode code
+    points), relative to the number of reference characters. Both texts
+    are first prepared by the view's profile (default flat_text: NFC,
+    invisible characters removed, every whitespace run reduced to one
+    space). 0 = perfect transcription; above 1 if the output gets
+    longer. The per-line CER applies the same formula to each line,
+    capped at 1.
   measures: >-
     Character-by-character fidelity between the engine output and the ground
     truth, under the view's convention.
@@ -28,13 +34,19 @@ cer:
     common one. Depends on the profile: under keep_line_breaks ("text
     (lines)" view), a line break rendered as a space counts as one
     substitution; flat, it does not.
+  oracle: >-
+    Reference: the CER of ISRI (ocreval), jiwer and dinglehopper.
+    Checked against: jiwer 4.0.0 (cer), recomputed in CI, and
+    dinglehopper 0.11.0 on ten convention cases (normalization gaps
+    stated case by case).
 
 cer_diplo:
   title: "Diplomatic CER"
   definition: >-
-    CER computed after the view's profile and then a minimal folding applied
-    to both sides: NFC Unicode form, invisible characters removed, long s ſ
-    folded to s. Other historical variants (u/v, ligatures) remain distinct.
+    Character error rate (CER) computed after the view's profile and
+    then a minimal folding applied to both sides: NFC Unicode form,
+    invisible characters removed, long s ſ folded to s. Other historical
+    variants (u/v, ligatures) remain distinct.
   measures: >-
     Fidelity to the witness's spelling, without penalising the ſ/s choice
     alone or a Unicode encoding difference invisible to the eye.
@@ -44,6 +56,10 @@ cer_diplo:
     the two isolates the ſ effect; under a raw comparison it mixes in those
     two effects. Comparable only across engines evaluated on the same ground
     truth.
+  oracle: >-
+    Reference: the CER, after folding ſ → s (diplomatic transcription).
+    Variant: the folding is Cinoc's. Checked against: values worked out
+    by hand in the tests.
 
 wer:
   title: "WER — word error rate"
@@ -57,6 +73,9 @@ wer:
   limits: >-
     Very sensitive to word segmentation and attached punctuation; a high WER
     can hide a low CER.
+  oracle: >-
+    Reference: jiwer's WER (word-level edit distance, words split on
+    whitespace). Checked against: jiwer 4.0.0 (wer), recomputed in CI.
 
 mer:
   title: "MER — match error rate"
@@ -69,6 +88,9 @@ mer:
   limits: >-
     Close to WER on clean text; diverges mainly with long insertions. For
     its character variant, see cMER.
+  oracle: >-
+    Reference: the MER of Morris, Maier and Green (2004), as jiwer
+    computes it. Checked against: jiwer 4.0.0 (mer), recomputed in CI.
 
 cmer:
   title: "cMER — character match error rate (HIPE)"
@@ -85,6 +107,10 @@ cmer:
     Depends on the normalization profile: the "hipe" profile folds case,
     punctuation and some heritage forms (œ/oe, æ/ae) — compare the
     hipe/heritage views to isolate that effect.
+  oracle: >-
+    Reference: the ranking metric of the HIPE-OCRepair scorer. Checked
+    against: the official scorer (values pinned at 1e-9) and
+    jiwer.process_characters.
 
 numseq_strict:
   title: "Numerical sequences — strict preservation"
@@ -98,6 +124,9 @@ numseq_strict:
   limits: >-
     Conservative pattern detection: spelled-out forms ("mil cinq cens") are
     not covered; precision is favoured over recall.
+  oracle: >-
+    Reference: none — a Cinoc construction. Checked against: values
+    worked out by hand in the tests.
 
 numseq_value:
   title: "Numerical sequences — value preservation"
@@ -111,6 +140,9 @@ numseq_value:
   limits: >-
     Always greater than or equal to strict preservation; a large gap between
     the two flags an engine that modernises or abbreviates forms.
+  oracle: >-
+    Reference: none — a Cinoc construction. Checked against: values
+    worked out by hand in the tests.
 
 del_rate:
   title: "Deletion rate"
@@ -122,6 +154,10 @@ del_rate:
   limits: >-
     A single error component: read together with the insertion rate to
     diagnose an imbalance.
+  oracle: >-
+    Reference: the share of word deletions, as sclite (NIST) reports it.
+    Variant: how a tied alignment splits S/D/I is Cinoc's. Checked
+    against: values worked out by hand in the tests.
 
 ins_rate:
   title: "Insertion rate"
@@ -135,6 +171,10 @@ ins_rate:
   limits: >-
     A single error component; a high rate in isolation points to noise or
     hallucination rather than a misreading.
+  oracle: >-
+    Reference: the share of word insertions, as sclite (NIST) reports
+    it. Variant: how a tied alignment splits S/D/I is Cinoc's. Checked
+    against: values worked out by hand in the tests.
 
 diacritic_err:
   title: "Diacritic error"
@@ -149,6 +189,9 @@ diacritic_err:
     Not applicable to scripts without diacritics. Sensitive to Unicode form:
     without a normalization profile, a precomposed é against the same
     decomposed é counts as an error.
+  oracle: >-
+    Reference: none — a Cinoc construction. Checked against: values
+    worked out by hand in the tests.
 
 mufi_err:
   title: "MUFI error (medieval characters)"
@@ -160,6 +203,10 @@ mufi_err:
     scripts.
   limits: >-
     Not applicable if the ground truth contains no MUFI character.
+  oracle: >-
+    Reference: none — a Cinoc construction (MUFI standardises
+    characters, not a metric). Checked against: values worked out by
+    hand in the tests.
 
 hcpr:
   title: "Historical character preservation (HCPR)"
@@ -172,6 +219,9 @@ hcpr:
   limits: >-
     Shown only when an archaic list is explicitly configured (otherwise
     redundant with mufi_err); not applicable if the GT carries none.
+  oracle: >-
+    Reference: none — a Cinoc construction. Checked against: values
+    worked out by hand in the tests.
 
 air:
   title: "Archaism insertion rate (AIR)"
@@ -184,6 +234,9 @@ air:
   limits: >-
     Not applicable if the output contains no character from the list; an upper
     bound (a legitimate archaism outside the GT can raise it).
+  oracle: >-
+    Reference: none — a Cinoc construction. Checked against: values
+    worked out by hand in the tests.
 
 ner_f1:
   title: "Named-entity F1 (span)"
@@ -200,6 +253,11 @@ ner_f1:
     threshold is Cinoc's own convention, more tolerant than exact-span
     matching and stricter than mere overlap: "Montfort" read "Montfert" in
     the same place counts as correct — that is what ner_f1_exact measures.
+  oracle: >-
+    Reference: the entity F1 of NER evaluation campaigns, which match
+    spans exactly (strict) or by any overlap (fuzzy). Variant: matching
+    at IoU ≥ 0.5 is Cinoc's own. Checked
+    against: values worked out by hand in the tests.
 
 ner_f1_exact:
   title: "Named-entity F1 (exact name)"
@@ -213,6 +271,10 @@ ner_f1_exact:
   limits: >-
     No tolerance: a different case or accent is enough to miss the name.
     Same matching and limits as ner_f1 (joint OCR + NER measure).
+  oracle: >-
+    Reference: the entity F1 of NER evaluation campaigns. Variant:
+    ner_f1's matching (IoU ≥ 0.5), then an exact written form. Checked against: values worked
+    out by hand in the tests.
 
 unanchored_trigrams:
   title: "Unanchored text (trigrams)"
@@ -228,6 +290,10 @@ unanchored_trigrams:
     twice) scores 0.021 for a CER of 1.01, and reordered text almost 0. A
     legitimate insertion (text present on the page but outside the ground
     truth) raises it; it establishes no model intent.
+  oracle: >-
+    Reference: none — a Cinoc construction. Checked against: values
+    worked out by hand in the tests. The duplicated page (0.021) is
+    pinned there as a limit.
 
 searchability:
   title: "Full-text recall (length-dependent tolerance)"
@@ -241,6 +307,11 @@ searchability:
   limits: >-
     A usage heuristic: it does not replace a recall evaluation on real
     queries. A transposition costs 2 edits (Lucene counts it as 1).
+  oracle: >-
+    Reference: Lucene/Elasticsearch fuzzy search (fuzziness AUTO).
+    Variant: Levenshtein distance (Lucene counts a transposition as 1).
+    Not executed in the tests; checked against: values worked out by
+    hand in the tests.
 
 region_cer:
   title: "Per-region CER"
@@ -257,6 +328,11 @@ region_cer:
     Depends on upstream segmentation quality; not applicable without a
     structural layer. Exceeds 1 when the output invents more text than the
     reference holds.
+  oracle: >-
+    Reference: the CER, per matched region. Variant: matching by
+    identifier, else by geometry, phantom regions counted as insertions
+    — Cinoc's own. Checked against: values worked out by hand in the
+    tests.
 
 fca:
   title: "FCA — flexible accuracy (limited: merged lines → 0)"
@@ -275,18 +351,31 @@ fca:
     quality of the text (raw CER 0.105 on an example where it is 0). Under
     the default profile (flat_text), the view has already joined the lines:
     only one is left, and FCA equals 1 − CER, without its order tolerance.
+    No default view scores it: a spec that keeps lines asks for it.
+  oracle: >-
+    Reference: the Flexible Character Accuracy of Clausner et al.
+    Variant: lines matched whole (Hungarian algorithm), never split. The
+    reference package is not executed; checked against: values worked
+    out by hand in the tests.
 
 region_detection:
   title: "Region detection"
   definition: >-
-    Overlap measure between the regions found by segmentation and the regions
-    of the layout ground truth.
+    Region F1: a detected region and a layout ground-truth region are
+    matched (greedily, each at most once) when the IoU of their bounding
+    boxes, in page-relative coordinates, reaches 0.5; precision =
+    matched / detected regions, recall = matched / reference regions.
   measures: >-
     The accuracy of segmentation (did we find the right blocks, in the right
     place) independently of text.
   limits: >-
     Not applicable without layout ground truth; sensitive to the chosen
     overlap threshold.
+  oracle: >-
+    Reference: detection F1 at IoU ≥ 0.5 (PASCAL VOC convention).
+    Variant: greedy matching of bounding boxes in relative coordinates.
+    Checked against: values worked out by hand in the tests. Plus a real
+    ABBYY excerpt (BnL).
 
 significance_p:
   title: "p-value (statistical test)"
@@ -302,6 +391,10 @@ significance_p:
     Measures neither the magnitude nor the practical importance of the gap;
     sensitive to corpus size. A Friedman test says at least one pipeline
     differs: which ones, only the Nemenyi post-hoc says.
+  oracle: >-
+    Reference: scipy's Wilcoxon signed-rank and Friedman tests. Checked
+    against: 5,005 randomly drawn tests, recomputed without Cinoc's code
+    (test, p, Holm correction, post-hoc).
 
 ece:
   title: "ECE — expected calibration error"
@@ -316,6 +409,9 @@ ece:
     confidences say nothing of the text an LLM corrected after it); not
     applicable to a step without confidence scores. Depends on the binning:
     ten bins [b/10, (b+1)/10), the last one closed at 1.0.
+  oracle: >-
+    Reference: the ten-bin ECE of Guo et al. (2017). Checked against:
+    values worked out by hand in the tests.
 
 mce:
   title: "MCE — maximum calibration error"
@@ -327,3 +423,146 @@ mce:
     gives the average.
   limits: >-
     Sensitive to sparsely populated bins; read together with ECE.
+  oracle: >-
+    Reference: the ten-bin MCE of Guo et al. (2017). Checked against:
+    values worked out by hand in the tests.
+
+char_accuracy:
+  title: "Character accuracy"
+  definition: >-
+    1 − CER, bounded to [0, 1]: the share of reference characters the
+    output renders, under the view's profile.
+  measures: >-
+    The same character-by-character fidelity as CER, read 'higher is
+    better'.
+  limits: >-
+    Redundant with CER, which it copies up to the bound: an output long
+    enough to push CER above 1 scores 0, without saying by how much.
+  oracle: >-
+    Reference: ISRI character accuracy, (n − errors) / n. Variant:
+    bounded at 0 by Cinoc. Checked against: the CER, itself checked
+    against jiwer.
+
+word_accuracy:
+  title: "Word accuracy"
+  definition: >-
+    1 − WER, bounded to [0, 1]: computed from the word-level edit
+    distance, relative to the number of reference words.
+  measures: >-
+    WER's word-by-word fidelity, read 'higher is better'.
+  limits: >-
+    Redundant with WER, up to the bound. It is not ISRI word accuracy,
+    which counts correctly recognised words.
+  oracle: >-
+    Reference: word accuracy (ISRI, ICDAR). Variant: bounded 1 − WER,
+    Cinoc's own. Checked against: the WER, itself checked against jiwer.
+
+bow_precision:
+  title: "Bag of words — precision"
+  definition: >-
+    Share of output words that are correct, regardless of order: Σ
+    min(reference count, output count) over distinct words, divided by
+    the number of output words.
+  measures: >-
+    What a full-text search would find exact in the output: a verbose
+    output loses precision.
+  limits: >-
+    Words split on whitespace, attached punctuation included; blind to
+    order (shuffled text scores 1).
+  oracle: >-
+    Reference: bag-of-words precision (information retrieval). Variant:
+    whitespace splitting, Cinoc's own. Checked against: values worked
+    out by hand in the tests.
+
+bow_recall:
+  title: "Bag of words — recall"
+  definition: >-
+    Share of reference words found in the output, regardless of order: Σ
+    min(reference count, output count) over distinct words, divided by
+    the number of reference words.
+  measures: >-
+    What an exact full-text search would retrieve of the document.
+  limits: >-
+    Words split on whitespace; blind to order. One wrong letter loses
+    the word (see searchability for a tolerant search).
+  oracle: >-
+    Reference: bag-of-words recall (information retrieval). Variant:
+    whitespace splitting, Cinoc's own. Checked against: values worked
+    out by hand in the tests.
+
+bow_f1:
+  title: "Bag of words — F1"
+  definition: >-
+    Harmonic mean of bag-of-words precision and recall; weight = number
+    of reference words.
+  measures: >-
+    The balance between correct words produced and expected words
+    retrieved, regardless of order.
+  limits: >-
+    Blind to order: a moved word costs nothing here, where WER counts it
+    twice.
+  oracle: >-
+    Reference: bag-of-words F1 (information retrieval). Variant:
+    whitespace splitting, Cinoc's own. Checked against: values worked
+    out by hand in the tests.
+
+line_identity_cer:
+  title: "Per-line CER (matched by identifier)"
+  definition: >-
+    Edit distance of lines matched by their identifier, relative to the
+    number of reference characters of those lines; a reference line
+    missing from the output counts as entirely wrong.
+  measures: >-
+    Line-by-line transcription quality when the pairing is known,
+    without a line alignment's guesswork.
+  limits: >-
+    Not applicable if one side carries no line identifier; a line
+    without an identifier is ignored. Read with the coverage.
+  oracle: >-
+    Reference: the CER, on lines matched by identity. Checked against:
+    values worked out by hand in the tests.
+
+line_identity_coverage:
+  title: "Line coverage (by identifier)"
+  definition: >-
+    Share of reference lines the output carries under the same
+    identifier.
+  measures: >-
+    Lines lost, merged or renamed — invisible in a CER, which cannot
+    tell a vanished line from a misread one.
+  limits: >-
+    A plain count: a line present but wrong counts as found.
+  oracle: >-
+    Reference: none — a Cinoc construction. Checked against: values
+    worked out by hand in the tests.
+
+reading_order_tau:
+  title: "Reading-order disagreement"
+  definition: >-
+    Normalised Kendall distance between reading orders: share of the
+    pairs of blocks (regions) present on both sides that the output
+    places in the reverse order of the reference; weight = number of
+    common regions.
+  measures: >-
+    Ordering alone, which the CER confuses with reading.
+  limits: >-
+    Only looks at common regions: read with the order coverage, or two
+    well-ordered regions out of thirty look excellent.
+  oracle: >-
+    Reference: Kendall distance (1938). Variant: restricted to matched
+    regions, Cinoc's own. Checked against: values worked out by hand in
+    the tests.
+
+reading_order_coverage:
+  title: "Reading-order coverage"
+  definition: >-
+    Share of the regions of the reference reading order that the output
+    has ordered.
+  measures: >-
+    The mandatory companion of the order disagreement: how many regions
+    it could judge.
+  limits: >-
+    A plain count, which says nothing of the order's correctness.
+  oracle: >-
+    Reference: none — a Cinoc construction. Checked against: values
+    worked out by hand in the tests.

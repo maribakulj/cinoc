@@ -16,6 +16,7 @@ au même endroit y compte juste.
 from __future__ import annotations
 
 from cinoc.domain.artifacts import ArtifactType
+from cinoc.domain.evaluation import MetricCategory, MetricUnit
 from cinoc.evaluation.context import DocContext
 from cinoc.evaluation.errors import EvaluationError
 from cinoc.evaluation.metric import DocumentMetric, Observation, document_metric
@@ -35,6 +36,8 @@ def _entity_pair(ctx: DocContext) -> tuple[EntitySet, EntitySet]:
 @document_metric(
     name="ner_f1",
     input_types=(ArtifactType.ENTITIES, ArtifactType.ENTITIES),
+    category=MetricCategory.ADAPTED,
+    unit=MetricUnit.ENTITY,
     description=(
         "F1 global sur entités nommées appariées par empan (IoU ≥ 0,5, labels "
         "casefold, spans reprojetés en coordonnées GT) ; forme écrite non lue."
@@ -54,6 +57,8 @@ def ner_f1(ctx: DocContext) -> Observation | None:
 @document_metric(
     name="ner_f1_exact",
     input_types=(ArtifactType.ENTITIES, ArtifactType.ENTITIES),
+    category=MetricCategory.ADAPTED,
+    unit=MetricUnit.ENTITY,
     description=(
         "F1 global sur entités nommées dont la forme écrite est exacte : "
         "appariement de ner_f1, puis forme identique à celle de la GT."

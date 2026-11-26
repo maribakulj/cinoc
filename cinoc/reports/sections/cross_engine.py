@@ -406,9 +406,13 @@ class CrossEngineSection:
                 lang,
                 '<p class="muted">Test apparié sur les cas complets (n) : '
                 "Wilcoxon signé-rangs à 2 pipelines, Friedman à 3 et plus. "
-                f"{correction}</p>\n",
+                "Seules les métriques <strong>établies</strong> sont testées ; "
+                "les adaptées et les exploratoires restent au diagnostic, sans "
+                f"test. {correction}</p>\n",
                 '<p class="muted">Paired test over complete cases (n): '
                 "Wilcoxon signed-rank for 2 pipelines, Friedman for 3 or more. "
+                "Only <strong>established</strong> metrics are tested; adapted "
+                "and exploratory ones stay diagnostic, untested. "
                 f"{correction}</p>\n",
             )
             th_view = localized(lang, "Vue", "View")

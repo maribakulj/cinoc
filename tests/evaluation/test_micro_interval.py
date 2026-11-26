@@ -127,7 +127,9 @@ def test_the_displayed_point_is_inside_its_interval(tmp_path: Path) -> None:
                 interval,
             )
             checked += 1
-    assert checked == 6
+    # cer et wer × 2 pipelines : ``char_accuracy``, adaptée, n'a pas de test
+    # ni d'intervalle (D-289).
+    assert checked == 4
     # Et c'est le bootstrap de ce ratio-là : documents de ``long`` en CER.
     scores = [
         next(s for s in d.scores if s.metric == "cer")

@@ -13,6 +13,7 @@ from __future__ import annotations
 from cinoc.evaluation.result import RunResult
 from cinoc.reports.engine_badges import engine_cell, engine_order
 from cinoc.reports.html import escape, localized, view_label
+from cinoc.reports.metric_categories import category_legend, category_mark
 from cinoc.reports.section import Html, SectionContext
 from cinoc.reports.sections._tables import (
     bar_cell,
@@ -150,7 +151,7 @@ def _table_for_view(
     metrics = [all_metrics[i] for i in keep]
     header = "".join(
         f'<th class="num-cell" title="{escape(m)}">'
-        f"{escape(metric_short_label(m))}</th>"
+        f"{escape(metric_short_label(m))}{category_mark(m, lang)}</th>"
         for m in metrics
     )
     maxes = [col_max(rows, i) for i in keep]
@@ -174,7 +175,7 @@ def _table_for_view(
         f'<table class="data">\n<thead>{group_header_row(metrics, lang, lead=1)}'
         f"<tr><th>Pipeline</th>{header}</tr></thead>\n"
         f"<tbody>{''.join(body_rows)}</tbody>\n</table></div>\n"
-        f"{bar_legend(lang)}"
+        f"{bar_legend(lang)}{category_legend(metrics, lang)}"
     )
 
 

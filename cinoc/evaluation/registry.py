@@ -6,7 +6,11 @@ Unique et **instanciable** : il ne s'auto-peuple pas à l'import —
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
+from functools import cache
+
 from cinoc.domain.artifacts import ArtifactType
+from cinoc.domain.evaluation import MetricCategory, MetricSpec
 from cinoc.evaluation.metric import CrossEngineMetric, DocumentMetric
 
 
@@ -45,6 +49,20 @@ class MetricRegistry:
     def names(self) -> tuple[str, ...]:
         return tuple(sorted(self._document))
 
+    def established(self, names: Iterable[str]) -> tuple[str, ...]:
+        """Ceux de ``names`` dont la métrique est **établie**, dans leur ordre.
+
+        Seules celles-là entrent dans les tests de significativité et donc
+        dans la famille de Holm (D-289) : une métrique adaptée ou exploratoire
+        reste au diagnostic. Un nom inconnu du registre n'est pas établi.
+        """
+        return tuple(
+            name
+            for name in names
+            if (metric := self._document.get(name)) is not None
+            and metric.spec.category is MetricCategory.ESTABLISHED
+        )
+
 
 def register_default_metrics(registry: MetricRegistry) -> None:
     """Collecte explicite du socle de métriques (aucun effet de bord à l'import)."""
@@ -79,4 +97,30 @@ def register_default_metrics(registry: MetricRegistry) -> None:
         registry.register_cross_engine_metric(cross)
 
 
-__all__ = ["MetricRegistry", "register_default_metrics"]
+@cache
+def metric_specs() -> Mapping[str, MetricSpec]:
+    """Fiche (``MetricSpec``) de **chaque** métrique du socle, par nom.
+
+    La lecture des déclarations pour qui n'exécute rien — le rapport, qui
+    affiche catégorie et unité à côté du chiffre. ``hcpr``, que l'app ne
+    relie que sur une liste archaïque configurée, y figure sur la liste par
+    défaut : la liste change les caractères comptés, ni la catégorie ni
+    l'unité. Les métriques ne sont pas un point d'extension (§3) : ce
+    catalogue est complet.
+    """
+    from cinoc.evaluation.archaic import DEFAULT_ARCHAIC_LIST, resolve_archaic_list
+    from cinoc.evaluation.metrics.archaic import make_hcpr_metric
+
+    registry = MetricRegistry()
+    register_default_metrics(registry)
+    registry.register_document_metric(
+        make_hcpr_metric(resolve_archaic_list(DEFAULT_ARCHAIC_LIST).chars)
+    )
+    return {
+        name: metric.spec
+        for name in registry.names()
+        if (metric := registry.document_metric(name)) is not None
+    }
+
+
+__all__ = ["MetricRegistry", "metric_specs", "register_default_metrics"]

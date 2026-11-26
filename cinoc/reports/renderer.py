@@ -23,7 +23,6 @@ _SECTION_LABELS = {
     "overview": "Vue d'ensemble",
     "corpus_composition": "Composition",
     "by_engine": "Par moteur",
-    "engine_radar": "Profil radar",
     "engine_profiles": "Profils moteur",
     "document_details": "Détail document",
     "documents": "Par document",
@@ -55,7 +54,6 @@ _SECTION_LABELS_EN = {
     "overview": "Overview",
     "corpus_composition": "Composition",
     "by_engine": "By engine",
-    "engine_radar": "Radar profile",
     "engine_profiles": "Engine profiles",
     "document_details": "Document detail",
     "documents": "By document",
@@ -104,7 +102,7 @@ _GROUPS: tuple[tuple[str, str, str, str, tuple[str, ...]], ...] = (
     ("rapport", "key", "Mesures clés", "Key measures",
      ("key_measures", "overview", "corpus_composition", "composition")),
     ("rapport", "compare", "Comparaison", "Engine comparison",
-     ("by_engine", "engine_radar", "dispersion")),
+     ("by_engine", "dispersion")),
     ("rapport", "crosses", "Significativité & recouvrement", "Significance & overlap",
      ("cross_engine", "engine_duel", "word_errors")),
     ("rapport", "errors", "Familles d'erreurs & analyses fines",
@@ -350,7 +348,6 @@ def default_report_renderer() -> ReportRenderer:
     from cinoc.reports.sections.economics import EconomicsSection
     from cinoc.reports.sections.engine_duel import EngineDuelSection
     from cinoc.reports.sections.engine_profile import EngineProfileSection
-    from cinoc.reports.sections.engine_radar import EngineRadarSection
     from cinoc.reports.sections.key_measures import KeyMeasuresSection
     from cinoc.reports.sections.lines import LinesSection
     from cinoc.reports.sections.methodology import MethodologySection
@@ -370,7 +367,6 @@ def default_report_renderer() -> ReportRenderer:
             CorpusCompositionSection(),
             CompositionSection(),
             EngineSection(),
-            EngineRadarSection(),
             EngineProfileSection(),
             DispersionSection(),
             DocumentsSection(),

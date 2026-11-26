@@ -10,7 +10,6 @@ from cinoc.reports.svg import (
     donut_chart,
     dumbbell_rows,
     num,
-    radar_chart,
     word_engine_heatmap,
     word_overlap_venn,
 )
@@ -27,7 +26,6 @@ def test_donut_chart_empty_full_and_segments() -> None:
     assert multi == donut_chart([(3.0, "a"), (1.0, "b"), (1.0, "c")])  # octet-stable
 
 
-
 def test_dumbbell_rows_empty_and_links() -> None:
     assert dumbbell_rows([], scale_max=1.0) == ""
     rows = [("d1", [(0.1, "a"), (0.3, "b")]), ("d2", [(0.2, "a"), (0.2, "b")])]
@@ -38,59 +36,12 @@ def test_dumbbell_rows_empty_and_links() -> None:
     assert svg == dumbbell_rows(rows, scale_max=0.4)  # octet-stable
 
 
-
-
 def test_box_plot_parts_and_deterministic() -> None:
     svg = box_plot(0.0, 0.1, 0.2, 0.3, 0.5, 0.22, 0.5, accent="var(--fern)")
     for cls in ("box-whisker", "box-cap", "box-box", "box-med", "box-mean"):
         assert cls in svg
     assert svg.startswith("<svg") and 'aria-hidden="true"' in svg
     assert svg == box_plot(0.0, 0.1, 0.2, 0.3, 0.5, 0.22, 0.5, accent="var(--fern)")
-
-
-
-
-def test_radar_chart_too_few_axes_is_empty() -> None:
-    assert radar_chart(["A", "B"], [("e", [0.5, 0.5])], accents=["var(--fern)"]) == ""
-    assert radar_chart(["A", "B", "C"], [], accents=[]) == ""
-
-
-def test_radar_chart_one_polygon_per_series_and_deterministic() -> None:
-    axes = ["Car.", "Mot", "F1", "Rech."]
-    series = [("a", [0.9, 0.6, 0.7, 0.8]), ("b", [0.5, 0.5, 0.4, 0.3])]
-    accents = ["var(--fern)", "var(--slate)"]
-    svg = radar_chart(axes, series, accents=accents)
-    # une aire par série + grille (4 anneaux) + libellé d'axe présent.
-    assert svg.count('class="radar-area"') == 2
-    assert svg.count('class="radar-grid"') == 4
-    assert "Rech." in svg
-    assert svg.startswith("<svg") and 'aria-hidden="true"' in svg
-    assert svg == radar_chart(axes, series, accents=accents)  # octet-stable
-
-
-def test_radar_chart_vertex_tooltips_and_accessible_label() -> None:
-    axes = ["Car.", "Mot", "F1"]
-    series = [("tesseract", [0.9, 0.6, 0.7])]
-    tips = [["Car. : 90.0 % (norm. 0.90)", "Mot : 60.0 %", "F1 : 70.0 %"]]
-    svg = radar_chart(
-        axes,
-        series,
-        accents=["var(--fern)"],
-        point_titles=tips,
-        aria_label="Radar des moteurs",
-    )
-    # Un disque de sommet par axe (cible de survol) + infobulle valeur brute.
-    assert svg.count('class="radar-vertex"') == 3
-    assert "<title>Car. : 90.0 % (norm. 0.90)</title>" in svg
-    # Le polygone porte le nom du moteur (survol de l'aire).
-    assert "<title>tesseract</title>" in svg
-    # Accessible (≠ aria-hidden) quand un libellé est fourni.
-    assert 'role="img"' in svg and 'aria-label="Radar des moteurs"' in svg
-    assert 'aria-hidden="true"' not in svg
-    assert svg == radar_chart(  # déterministe
-        axes, series, accents=["var(--fern)"], point_titles=tips,
-        aria_label="Radar des moteurs",
-    )
 
 
 def test_word_overlap_venn_two_engines_regions_and_counts() -> None:

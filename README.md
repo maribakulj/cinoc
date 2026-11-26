@@ -61,7 +61,13 @@ Engines are **interchangeable bricks** behind a single `Module` protocol. Heavy 
 
 ### Metrics (built for the AI era)
 
-Far beyond CER/WER — every family ships with its own report section and tests against externally‑computed values:
+Far beyond CER/WER — every family ships with its own report section, and every metric declares its **category** and its **unit**:
+
+- **established** — conforms to a named reference and is checked against an oracle (CER, WER, MER against jiwer; cMER against the HIPE‑OCRepair scorer). Only these are **ranked** and enter the **significance tests**;
+- **adapted** — a justified variant of a named reference (diplomatic CER, bag of words, full‑text recall, FCA…);
+- **exploratory** — no named reference yet (unanchored trigrams, archaism rates, numerical sequences…). Not wrong — just not valid enough to rank on. Adapted and exploratory metrics stay **diagnostic**, marked as such in the report.
+
+The families:
 
 - **Character / word** — CER, diplomatic CER, WER, MER, median/min/max, Gini concentration.
 - **Philology** — diacritics, MUFI (Medieval Unicode) overlap, abbreviations, early‑modern forms, modern‑archive conventions, Roman numerals, archaism rates (AIR/HCPR).

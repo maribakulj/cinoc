@@ -1,22 +1,31 @@
 """Section by-engine : **comparaison** des moteurs sur la vue primaire +
 **dispersion** du taux d'erreur par-document. Couche 7.
 
-Distinct de l'overview (tables descriptives, une par vue) : ici **une** table de
-toutes les familles de métriques, **ordonnée** par CER croissant (un tri, pas un
-verdict — aucun rang ordinal n'est attribué), plus l'**étendue** (min · médiane ·
-max) du CER sur les documents, c.-à-d. la **fiabilité** que l'agrégat masque (et
-que ni l'overview ni le par-document ne donnent). On expose les chiffres ;
-l'utilisateur interprète (aucun gagnant déclaré — cf. ``key_measures`` §6/§12).
+Distinct de l'overview (tables descriptives, une par vue) : ici la table des
+métriques **établies** — les seules classées (D-289) —, **ordonnée** par CER
+croissant (un tri, pas un verdict — aucun rang ordinal n'est attribué), plus
+l'**étendue** (min · médiane · max) du CER sur les documents, c.-à-d. la
+**fiabilité** que l'agrégat masque (et que ni l'overview ni le par-document ne
+donnent). Puis une table **diagnostic** des métriques adaptées et exploratoires,
+marquées comme telles, sans tri ni test. On expose les chiffres ; l'utilisateur
+interprète (aucun gagnant déclaré — cf. ``key_measures`` §6/§12).
 """
 
 from __future__ import annotations
 
 from statistics import median
 
+from cinoc.domain.evaluation import MetricCategory
 from cinoc.evaluation.result import PipelineResult, RunDocumentResult, RunResult
 from cinoc.reports._numbers import localize_decimal
 from cinoc.reports.engine_badges import engine_cell, engine_order
 from cinoc.reports.html import escape, localized, view_label
+from cinoc.reports.metric_categories import (
+    category_label,
+    category_legend,
+    category_of,
+    is_established,
+)
 from cinoc.reports.section import Html, SectionContext
 from cinoc.reports.sections._tables import (
     bar_cell,
@@ -43,7 +52,8 @@ def _per_doc_values(
 
 
 class EngineSection:
-    """Comparaison des moteurs (vue primaire) + dispersion par-document du CER."""
+    """Comparaison des moteurs (vue primaire, métriques établies) + dispersion
+    par-document du CER + table diagnostic des adaptées et exploratoires."""
 
     name = "by_engine"
     requires: tuple[str, ...] = ()
@@ -68,16 +78,49 @@ class EngineSection:
         # ordre canonique = première apparition dans le run (partagé entre sections).
         order = engine_order(p.pipeline for p in result.pipelines)
         keep = nonempty_metric_indices([p.aggregate for p in rows])  # masque tout-« — »
-        maxes = [col_max([p.aggregate for p in rows], i) for i in keep]
-        profil_title = localized(ctx.lang, "Profil", "Profile")
+        ranked = [i for i in keep if is_established(metrics[i])]
+        # Adaptées puis exploratoires (ordre de la vue dans chaque catégorie).
+        diagnostic = sorted(
+            (i for i in keep if not is_established(metrics[i])),
+            key=lambda i: (
+                category_of(metrics[i]) is MetricCategory.EXPLORATORY,
+                keep.index(i),
+            ),
+        )
+        multi = len(ordered_unique(p.view for p in result.pipelines)) > 1
+        vlbl = escape(view_label(view, ctx.lang))
+        out = ""
+        if ranked:
+            out += self._ranking(
+                result, view, ordered, metrics, ranked, sort_metric, order, ctx.lang,
+                f" (vue : {vlbl})" if multi else "",
+                f" (view: {vlbl})" if multi else "",
+            )
+        if diagnostic:
+            out += self._diagnostic(ordered, metrics, diagnostic, order, ctx.lang)
+        return Html(out) if out else None
+
+    @staticmethod
+    def _ranking(
+        result: RunResult,
+        view: str,
+        ordered: list[PipelineResult],
+        metrics: tuple[str, ...],
+        keep: list[int],
+        sort_metric: str,
+        order: dict[str, int],
+        lang: str,
+        suffix_fr: str,
+        suffix_en: str,
+    ) -> str:
+        maxes = [col_max([p.aggregate for p in ordered], i) for i in keep]
+        profil_title = localized(lang, "Profil", "Profile")
         body: list[str] = []
         # Lignes ordonnées par CER croissant (un **tri** lisible, pas un rang
         # ordinal attribué : aucune colonne « # », aucun gagnant désigné).
         for pipeline in ordered:
             cells = "".join(
-                bar_cell(
-                    pipeline.aggregate[i], maxes[j], lang=ctx.lang, sortable=True
-                )
+                bar_cell(pipeline.aggregate[i], maxes[j], lang=lang, sortable=True)
                 for j, i in enumerate(keep)
             )
             vals = _per_doc_values(
@@ -86,7 +129,7 @@ class EngineSection:
             disp = (
                 localize_decimal(
                     f"{min(vals):.3f} · {median(vals):.3f} · {max(vals):.3f}",
-                    ctx.lang,
+                    lang,
                 )
                 if vals
                 else "—"
@@ -101,40 +144,101 @@ class EngineSection:
                 f'<td class="disp">{disp}</td></tr>'
             )
         display_metrics = [metrics[i] for i in keep]
-        header = "".join(
-            metric_th(m, ctx.lang, sortable=True) for m in display_metrics
-        )
-        # Suffixe de vue seulement si plusieurs vues à distinguer (sinon bruit).
-        multi = len(ordered_unique(p.view for p in result.pipelines)) > 1
-        vlbl = escape(view_label(view, ctx.lang))
+        header = "".join(metric_th(m, lang, sortable=True) for m in display_metrics)
         heading = localized(
-            ctx.lang,
-            f"Comparaison des moteurs{f' (vue : {vlbl})' if multi else ''}",
-            f"Engine comparison{f' (view: {vlbl})' if multi else ''}",
+            lang,
+            f"Comparaison des moteurs{suffix_fr}",
+            f"Engine comparison{suffix_en}",
         )
         prose = localized(
-            ctx.lang,
-            f'<p class="muted">Ordonné par {escape(sort_metric)} ↑ (un tri, pas un '
+            lang,
+            f'<p class="muted">Métriques <strong>établies</strong> — conformes à '
+            f"une référence nommée, les seules classées et testées. Ordonné par "
+            f"{escape(sort_metric)} ↑ (un tri, pas un "
             f"rang attribué) · dispersion = {escape(sort_metric)} min · médiane · "
             "max par document. Cliquer un en-tête de métrique pour réordonner ; "
             "survoler pour la définition. Aucun gagnant n'est déclaré.</p>\n",
-            f'<p class="muted">Ordered by {escape(sort_metric)} ↑ (a sort, not an '
+            f'<p class="muted"><strong>Established</strong> metrics — conforming '
+            f"to a named reference, the only ones ranked and tested. Ordered by "
+            f"{escape(sort_metric)} ↑ (a sort, not an "
             f"assigned rank) · dispersion = {escape(sort_metric)} min · median · "
             "max per document. Click a metric header to reorder; hover for the "
             "definition. No winner is declared.</p>\n",
         )
-        th_engine = localized(ctx.lang, "Moteur", "Engine")
-        th_dispersion = localized(ctx.lang, "dispersion", "dispersion")
-        return Html(
+        th_engine = localized(lang, "Moteur", "Engine")
+        th_dispersion = localized(lang, "dispersion", "dispersion")
+        return (
             f"<h2>{heading}</h2>\n"
             + prose
             + '<div class="table-scroll"><table class="data sortable">\n'
             "<thead>"
-            + group_header_row(display_metrics, ctx.lang, lead=1, trail=1)
+            + group_header_row(display_metrics, lang, lead=1, trail=1)
             + f"<tr><th>{th_engine}</th>{header}"
             f'<th class="num-cell">{th_dispersion}</th></tr></thead>\n'
             f"<tbody>{''.join(body)}</tbody>\n</table></div>\n"
-            + bar_legend(ctx.lang)
+            + bar_legend(lang)
+        )
+
+    @staticmethod
+    def _diagnostic(
+        ordered: list[PipelineResult],
+        metrics: tuple[str, ...],
+        keep: list[int],
+        order: dict[str, int],
+        lang: str,
+    ) -> str:
+        """Adaptées et exploratoires : mêmes moteurs, même ordre, **sans tri**
+        ni test — au diagnostic, affichées comme telles (D-289)."""
+        maxes = [col_max([p.aggregate for p in ordered], i) for i in keep]
+        body = "".join(
+            f'<tr><td class="eng-cell">'
+            f"{engine_cell(p.pipeline, order.get(p.pipeline, 0))}</td>"
+            + "".join(
+                bar_cell(p.aggregate[i], maxes[j], lang=lang)
+                for j, i in enumerate(keep)
+            )
+            + "</tr>"
+            for p in ordered
+        )
+        display = [metrics[i] for i in keep]
+        # Super-en-tête par catégorie (colonnes déjà regroupées).
+        spans: list[tuple[str, int]] = []
+        for metric in display:
+            category = category_of(metric)
+            label = category_label(category, lang) if category is not None else ""
+            if spans and spans[-1][0] == label:
+                spans[-1] = (label, spans[-1][1] + 1)
+            else:
+                spans.append((label, 1))
+        group_row = '<tr class="grp-row"><th></th>' + "".join(
+            f'<th class="grp-head" colspan="{n}">{escape(label)}</th>'
+            for label, n in spans
+        ) + "</tr>"
+        header = "".join(metric_th(m, lang) for m in display)
+        heading = localized(lang, "Diagnostic", "Diagnostic")
+        prose = localized(
+            lang,
+            '<p class="muted">Métriques <strong>adaptées</strong> et '
+            "<strong>exploratoires</strong> : elles éclairent un aspect que les "
+            "établies ne disent pas, sans la validité qu'un classement leur "
+            "prêterait — ni tri, ni test de significativité. Une exploratoire "
+            "n'est pas fausse ; sa fiche au glossaire dit ce qu'elle mesure et "
+            "ses limites.</p>\n",
+            '<p class="muted"><strong>Adapted</strong> and '
+            "<strong>exploratory</strong> metrics: they shed light on what the "
+            "established ones do not say, without the validity a ranking would "
+            "lend them — no sorting, no significance test. An exploratory metric "
+            "is not wrong; its glossary card says what it measures and its "
+            "limits.</p>\n",
+        )
+        th_engine = localized(lang, "Moteur", "Engine")
+        return (
+            f"<h3>{heading}</h3>\n"
+            + prose
+            + '<div class="table-scroll"><table class="data">\n'
+            f"<thead>{group_row}<tr><th>{th_engine}</th>{header}</tr></thead>\n"
+            f"<tbody>{body}</tbody>\n</table></div>\n"
+            + category_legend(display, lang)
         )
 
 

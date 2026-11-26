@@ -14,6 +14,7 @@ même formule que le scorer) + golden vs scorer épinglé (job CI 3.12).
 from __future__ import annotations
 
 from cinoc.domain.artifacts import ArtifactType
+from cinoc.domain.evaluation import MetricCategory, MetricUnit
 from cinoc.evaluation._alignment import char_mer
 from cinoc.evaluation.context import DocContext
 from cinoc.evaluation.errors import EvaluationError
@@ -23,6 +24,8 @@ from cinoc.evaluation.metric import DocumentMetric, Observation, document_metric
 @document_metric(
     name="cmer",
     input_types=(ArtifactType.RAW_TEXT, ArtifactType.RAW_TEXT),
+    category=MetricCategory.ESTABLISHED,
+    unit=MetricUnit.CHARACTER,
     description=(
         "Match Error Rate caractère : (S+D+I)/(H+S+D+I), borné [0,1] — "
         "la métrique de classement du scorer HIPE-OCRepair."
