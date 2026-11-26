@@ -448,6 +448,8 @@ make ci           # full gate, with coverage threshold
 
 CI runs on Linux/macOS/Windows × Python 3.11/3.12/3.13 and enforces the coverage threshold.
 
+**No test reaches the public network** unless it is marked `network` or `live`: `tests/conftest.py` refuses any connection outside the loopback (and Unix sockets), any lookup of a public name, and hides proxy variables — a test that tries fails, even if the code under test swallows the error.
+
 **External oracles.** Tests marked `oracle` run the reference tools themselves — dinglehopper (CER/WER golden on `bnl_mini`, every gap named) and the `roman` package (numeral validation) — and are skipped elsewhere. A dedicated CI job, `oracle`, runs them; locally:
 
 ```bash

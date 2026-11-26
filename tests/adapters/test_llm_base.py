@@ -77,6 +77,18 @@ def test_load_image_b64_jpeg_media_type(tmp_path: Path) -> None:
     assert media_type == "image/jpeg"
 
 
+def test_load_image_b64_jp2_is_announced_as_jp2(tmp_path: Path) -> None:
+    """Rouge avant D-303 : un JPEG 2000 partait annoncé ``image/png``."""
+    media_type, _ = load_image_b64(_image_inputs(tmp_path / "x.JP2", b"j"), "X")
+    assert media_type == "image/jp2"
+
+
+def test_load_image_b64_unknown_suffix_is_refused(tmp_path: Path) -> None:
+    """Hors de la table des imports, refus nommé — plus de défaut ``image/png``."""
+    with pytest.raises(AdapterStepError, match=r"X : extension d'image non gérée"):
+        load_image_b64(_image_inputs(tmp_path / "x.gif", b"g"), "X")
+
+
 def test_load_image_b64_missing_raises() -> None:
     with pytest.raises(AdapterStepError):
         load_image_b64({}, "X")

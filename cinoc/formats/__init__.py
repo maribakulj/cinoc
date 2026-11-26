@@ -11,10 +11,13 @@ Surface publique :
 - YAML d'une entrée non fiable (``safe_load_yaml``) — sans alias ;
 - format ALTO (``parse_alto`` / ``write_alto`` + types) ;
 - format PAGE (``parse_pagexml`` / ``write_pagexml`` + types) ;
+- ALTO ou PAGE → ``CanonicalLayout``, reconnu au contenu
+  (``layout_xml.parse_layout_xml``, ``layout_xml_kind``) ;
 - normalisation de comparaison (``NormalizationProfile`` & profils) ;
 - lecture de texte brut (``read_plaintext``) ;
-- formats d'image d'une page (``images.IMAGE_SUFFIXES``, ``looks_like_image``) —
-  la table unique de ce qu'un import accepte.
+- formats d'image d'une page (``images.IMAGE_SUFFIXES``, ``looks_like_image``,
+  ``image_media_type``) — la table unique de ce qu'un import accepte et du type
+  qu'un moteur annonce.
 """
 
 from __future__ import annotations

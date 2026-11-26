@@ -19,7 +19,7 @@ from cinoc.app import corpus_import
 from cinoc.app.alto_corpus import corpus_from_alto
 from cinoc.app.corpus_upload import CorpusUploadError, extract_corpus_zip
 from cinoc.app.transcription import corpus_from_images
-from cinoc.formats.images import IMAGE_SUFFIXES, looks_like_image
+from cinoc.formats.images import IMAGE_SUFFIXES, image_media_type, looks_like_image
 
 PIL = pytest.importorskip("PIL")
 from PIL import Image  # noqa: E402
@@ -101,9 +101,8 @@ def test_a_png_is_preferred_to_a_jpeg_of_the_same_name(tmp_path: Path) -> None:
 
 def test_no_other_image_suffix_table() -> None:
     """Verrou : aucune autre collection littérale d'extensions d'image dans
-    ``cinoc/`` (ensemble, tuple, liste). Les tables extension → type MIME d'un
-    moteur répondent à une autre question (ce qu'il sait envoyer) : des
-    ``dict``, hors du verrou."""
+    ``cinoc/`` (ensemble, tuple, liste) ; les ``dict`` extension → type MIME
+    ont le leur, plus bas."""
     copies = []
     for path in CINOC.rglob("*.py"):
         if "__pycache__" in path.parts or path == CINOC / "formats" / "images.py":
@@ -115,5 +114,40 @@ def test_no_other_image_suffix_table() -> None:
                     if isinstance(e, ast.Constant) and isinstance(e.value, str)
                 }
                 if {".png", ".jpg"} <= values or {".png", ".tif"} <= values:
+                    copies.append(f"{path.relative_to(CINOC)}:{node.lineno}")
+    assert not copies, copies
+
+
+#: Le type MIME que Pillow déclare pour chaque format qu'il écrit.
+_PILLOW_MIME = {"PNG": "image/png", "JPEG": "image/jpeg", "TIFF": "image/tiff",
+                "JPEG2000": "image/jp2", "WEBP": "image/webp"}
+
+
+@pytest.mark.parametrize("suffix", IMAGE_SUFFIXES)
+def test_every_accepted_suffix_has_its_media_type(suffix: str) -> None:
+    """Un type MIME par extension acceptée — celui que Pillow donne au format
+    qu'il lit ; les moteurs l'annoncent en envoyant la page (D-303)."""
+    with Image.open(io.BytesIO(_image(suffix))) as image:
+        assert image_media_type(suffix) == Image.MIME[image.format or ""]
+    assert image_media_type(suffix.upper()) == image_media_type(suffix)
+    assert image_media_type(suffix) == _PILLOW_MIME[_PILLOW[suffix]]
+
+
+def test_no_engine_keeps_its_own_media_type_table() -> None:
+    """Verrou : les quatre tables extension → MIME des moteurs (VLM, Mistral
+    OCR, OCR-D, image de segmentation servie) en recopiaient une partie, sans
+    ``.jp2`` — un JPEG 2000 partait annoncé ``image/png``. Aucun ``dict``
+    littéral ne mappe plus une extension d'image vers un type."""
+    copies = []
+    for path in CINOC.rglob("*.py"):
+        if "__pycache__" in path.parts or path == CINOC / "formats" / "images.py":
+            continue
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.Dict):
+                keys = {
+                    k.value for k in node.keys
+                    if isinstance(k, ast.Constant) and isinstance(k.value, str)
+                }
+                if keys & set(IMAGE_SUFFIXES):
                     copies.append(f"{path.relative_to(CINOC)}:{node.lineno}")
     assert not copies, copies

@@ -9,7 +9,7 @@ clients de ce dépôt n'implémentaient que ``complete_structured``, donc la vis
 de la bibliothèque était inatteignable depuis le banc.
 
 **Deux faits mesurés contre l'API, pas lus dans une doc**, hérités du client
-archivé en ``campaigns/tooling/providers_multimodal.py`` :
+de la campagne d'août 2026 (``campaigns/2026-08-14-bnl-mistral-m2``) :
 
 * **une neuvième image est refusée** — HTTP 400 ``"Total number of images exceeds
   the maximum allowed of 8."`` (code 3051). D'où :data:`MAX_IMAGES_PER_CALL` = 8,
@@ -41,6 +41,7 @@ from cinoc.adapters.correction.mistral_structured import (
     usage_from,
 )
 from cinoc.domain.usage import ResourceUsage
+from cinoc.pipeline.run_control import RunControl
 
 #: Mesuré, pas documenté : une neuvième image est refusée en 400/3051.
 MAX_IMAGES_PER_CALL = 8
@@ -51,8 +52,12 @@ class MistralMultimodalClient:
 
     MAX_IMAGES_PER_CALL = MAX_IMAGES_PER_CALL
 
-    def __init__(self, *, timeout: float = 300.0) -> None:
+    def __init__(
+        self, *, timeout: float = 300.0, control: RunControl | None = None
+    ) -> None:
         self._timeout = timeout
+        #: Un arrêt coupe l'appel en vol (``post_chat``, D-303).
+        self._control = control if control is not None else RunControl()
         #: Corps reçus, dans l'ordre d'appel — comme ``MistralStructuredClient``.
         self.responses: list[dict[str, Any]] = []
 
@@ -118,6 +123,7 @@ class MistralMultimodalClient:
             fallback_body={**body, "response_format": {"type": "json_object"}},
             model=model,
             timeout=self._timeout,
+            control=self._control,
         )
         self.responses.append(data)
         return parse_chat_json(data, model), usage_from(data)

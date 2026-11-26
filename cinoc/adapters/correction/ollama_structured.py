@@ -37,6 +37,7 @@ import json
 from typing import Any
 
 from cinoc.adapters._resilience import cut_on_cancel_async
+from cinoc.adapters.correction.mistral_structured import abort_if_stopped
 from cinoc.adapters.llm.ollama import ChatStream, _completion_from_chat
 from cinoc.domain.deadline import Deadline
 from cinoc.domain.errors import AdapterStepError
@@ -68,12 +69,7 @@ class OllamaStructuredClient:
 
     def _abort_if_stopped(self, model: str) -> None:
         """L'arrêt du run → ``CorrectionAborted`` (propagée par ``saknussemm``)."""
-        if self._control.is_cancelled():
-            from saknussemm.errors import (  # type: ignore[import-not-found]  # noqa: PLC0415
-                CorrectionAborted,
-            )
-
-            raise CorrectionAborted(f"ollama ({model}) : run arrêté pendant l'appel.")
+        abort_if_stopped(self._control, "ollama", model)
 
     async def complete_structured(
         self,

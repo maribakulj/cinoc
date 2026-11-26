@@ -1,10 +1,21 @@
 # `campaigns/` — les runs mesurés, avec leurs relevés
 
-Archives de campagnes menées sur `saknussemm` avant que cette plateforme
-reprenne le rôle de banc. Elles arrivent avec le corpus qu'elles mesuraient,
-le 2026-08-16.
+Les deux premières sont des archives de campagnes menées sur `saknussemm`
+avant que cette plateforme reprenne le rôle de banc ; elles arrivent avec le
+corpus qu'elles mesuraient, le 2026-08-16. La troisième est le pilote de
+Cinoc lui-même (S10).
 
 Elles sont ici pour **ce qu'elles ont trouvé**, pas pour leurs chiffres.
+
+**Leurs instruments n'y sont plus.** `campaigns/tooling/` (les
+`scripts/*.py` que citent les deux README d'archive : `vision_benchmark.py`,
+`ocr_corpus.py`, `run_vision.py`…) a été retiré le 2026-11-26 (D-303) : il
+n'avait aucun consommateur et ne tournait plus — ses imports
+(`saknussemm.integrations.vision`, `scripts.qe_data`, `scripts.providers_multimodal`)
+n'existent ni dans `saknussemm` 0.9 ni dans ce dépôt. L'historique git le
+garde (dernier commit qui le contient : `6d6ab0e`). Ce qui le remplace : le
+banc lui-même — `cinoc run`, le rejeu `precomputed`, et `alto_source` avec
+`--ocr-sidecar` (le format de `2026-07-25-bnl-mistral/ocr_spa_sidecar.json`).
 
 ## `2026-07-25-bnl-mistral/`
 
@@ -38,9 +49,15 @@ référence), et l'apostrophe typographique est **détruite par l'OCR puis
 réparée par le modèle** — 50 lignes améliorées, 0 dégradée. La perte
 récupérable, s'il en reste, est en amont dans l'OCR.
 
+## `2026-11-26-pilote-local/`
+
+Le pilote de S10 (D-281) : 10 pages de `37-GT-BNL`, Tesseract et un VLM local,
+aucun appel facturé. Pas une publication : ses 24 constats ont été rattachés
+aux sessions de la feuille de route.
+
 ## Ce qu'elles impliquent ici
 
-Une campagne rejouée sur ce banc devra fournir ce qu'aucune des deux n'avait :
-des **runs répétés** avec leur dispersion. Ce dépôt n'a aujourd'hui aucun
-mécanisme pour ça — toute la dispersion qu'il affiche est inter-documents,
-jamais inter-runs.
+Une campagne rejouée sur ce banc devra fournir ce qu'aucune des deux archives
+n'avait : des **runs répétés** avec leur dispersion — `cinoc run --repeat N`
+(`app/variance`) écrit une fourchette par métrique ; c'est le protocole de la
+campagne publiée (P5h).

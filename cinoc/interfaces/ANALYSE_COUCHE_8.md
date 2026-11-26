@@ -320,6 +320,7 @@ cinoc/interfaces/
 
 - [~] **Supprimé** : `synthesis`+narratif · `diagnose/economics/edition` · doublon `web/jobs.py` (→ `adapters/storage`, **SSE conservé**) · façade ré-export `security.py` · SPA lourde (→ panneau mince) · docs périmées (« 11 routers », `start`, `measurements`). **Convention (D-003/L7)** : le *flux de run* passe par `app`, pas `evaluation`/`reports` en direct.
 - [x] **S28b (D-301)** : gabarits rendus sous **`StrictUndefined`** (une clé i18n mal orthographiée lève au lieu de rendre `''`) ; garde-fou `test_i18n_strict` : chaque page rend dans les deux langues, FR et EN ont les mêmes clés, toute clé lue existe, aucune n'est orpheline (`library_open` retirée) ; `cinoc compare --lang`.
+- [x] **S29b (D-303)** : l'image de segmentation servie annonce le type de `formats/images.py` (`.webp`, `.jp2` compris ; binaire opaque hors table) ; **aucun test de page ne joint le réseau public** — `/library` interrogeait HTR-United et Hugging Face en direct dans `test_i18n_strict`, servis désormais hors ligne (relevé par `tests/conftest.py`). — *preuves : `tests/interfaces/web/test_i18n_strict.py`, `tests/guardrails/test_no_public_network.py`*
 
 ---
 

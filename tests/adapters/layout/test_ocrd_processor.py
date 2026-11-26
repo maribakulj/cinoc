@@ -140,7 +140,7 @@ def test_un_nom_qui_n_est_pas_un_processeur_ocrd_est_refuse(nom: str) -> None:
 def test_une_extension_d_image_inconnue_est_refusee() -> None:
     """OCR-D exige le type MIME : le deviner ferait lire l'image de travers."""
     with pytest.raises(AdapterStepError, match="extension"):
-        mime_de("page.webp")
+        mime_de("page.gif")
 
 
 def test_un_processeur_absent_du_bin_dir_le_dit(tmp_path: Path) -> None:
@@ -322,6 +322,9 @@ def test_la_brique_satisfait_le_protocole_module() -> None:
 def test_mime_connus() -> None:
     assert mime_de("a.PNG") == "image/png"
     assert mime_de("a.tiff") == "image/tiff"
+    # La table des imports (``formats/images.py``), pas une copie (D-303).
+    assert mime_de("a.jp2") == "image/jp2"
+    assert mime_de("a.webp") == "image/webp"
 
 
 # --------------------------------------------------------------------------- #

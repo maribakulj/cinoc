@@ -20,10 +20,7 @@ from cinoc.adapters._workspace import workspace_artifact_path
 from cinoc.domain.artifacts import Artifact, ArtifactType, compute_content_hash
 from cinoc.domain.errors import AdapterStepError, FormatError
 from cinoc.domain.layout import BBox, CanonicalLayout, Geometry, LayoutPage, Region
-from cinoc.formats.alto.layout_map import alto_to_layout
-from cinoc.formats.alto.parser import parse_alto
-from cinoc.formats.pagexml import parse_pagexml
-from cinoc.formats.pagexml.layout_map import page_to_layout
+from cinoc.formats.layout_xml import layout_xml_kind, parse_layout_xml
 from cinoc.pipeline.types import RunContext, StepOutput
 
 
@@ -152,18 +149,12 @@ def to_canonical_layout(
 def read_layout(xml: bytes, source: str) -> CanonicalLayout:
     """PAGE-XML ou ALTO → ``CanonicalLayout``, **reconnu au contenu**.
 
-    Le format est déduit de la racine, pas de l'extension : les deux sortent en
-    ``.xml``, et se fier au nom ferait dépendre la lecture d'une convention que
-    l'outil n'a pas promise.
+    Le format est déduit de la racine, pas de l'extension
+    (``formats/layout_xml.py``).
     """
-    tete = xml[:4096].lower()
-    est_page = b"pcgts" in tete or b"pagecontent" in tete
-    quoi = "PAGE" if est_page else "ALTO"
+    quoi = layout_xml_kind(xml)
     try:
-        if est_page:
-            layout = page_to_layout(parse_pagexml(xml))
-        else:
-            layout = alto_to_layout(parse_alto(xml))
+        layout = parse_layout_xml(xml)
     except (ValueError, FormatError) as exc:
         raise AdapterStepError(
             f"{source} : le XML produit n'est pas un {quoi} lisible — {exc}"

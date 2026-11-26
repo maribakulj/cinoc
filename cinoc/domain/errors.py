@@ -65,8 +65,8 @@ class DeadlineExceeded(AdapterStepError):
 
     - sa boucle interne détecte ``context.deadline.is_expired()`` avant
       d'avoir fini ;
-    - son SDK lève un ``TimeoutError`` parce qu'on lui a passé
-      ``context.deadline.as_sdk_timeout()`` qui s'est déclenché
+    - son SDK lève un ``TimeoutError`` parce qu'on lui a passé le délai
+      restant (``request_timeout(context.deadline)``) qui s'est déclenché
       (l'adapter wrap et re-lève en ``DeadlineExceeded``) ;
     - le **délai propre de l'étape** (réglage ``timeout`` : Tesseract, outil
       externe, moteur distant) est dépassé — c'est la deadline de l'étape,

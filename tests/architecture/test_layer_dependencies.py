@@ -1,14 +1,20 @@
-"""La couche domain n'importe que stdlib + pydantic + pydantic_core."""
+"""Règle d'import des couches : chacune n'importe que des couches plus internes
+qu'elle, et sa liste blanche de bibliothèques externes.
+
+Une table (``LAYERS``), un test paramétré : une ligne par couche dit ce qu'elle
+peut importer, et pourquoi (P5g 8, D-303 — neuf copies du même corps avant).
+"""
 
 from __future__ import annotations
 
 import ast
 import sys
 from pathlib import Path
+from typing import NamedTuple
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[2] / "cinoc"
-DOMAIN = ROOT / "domain"
-FORMATS = ROOT / "formats"
 ALLOWED_EXT = {"pydantic", "pydantic_core", "typing_extensions", "annotated_types"}
 #: La couche formats peut aussi parler XML (lxml) et lire des profils (yaml).
 FORMATS_ALLOWED_EXT = ALLOWED_EXT | {"lxml", "yaml"}
@@ -28,76 +34,9 @@ def _imported_modules(path: Path):
                 yield node.module
 
 
-def test_domain_imports_are_pure():
-    offenders: dict[str, list[str]] = {}
-    for path in DOMAIN.glob("*.py"):
-        bad: list[str] = []
-        for mod in _imported_modules(path):
-            top = mod.split(".")[0]
-            if mod == "cinoc" or mod.startswith("cinoc.domain"):
-                continue
-            if mod == "__future__" or top in ALLOWED_EXT or top in STDLIB:
-                continue
-            bad.append(mod)
-        if bad:
-            offenders[path.name] = bad
-    assert not offenders, f"imports interdits dans domain : {offenders}"
-
-
-def test_formats_imports_are_allowed():
-    """formats n'importe que stdlib + pydantic + lxml/yaml + domain/formats.
-    Jamais une lib de métrique (jiwer/rapidfuzz) ni un moteur OCR."""
-    offenders: dict[str, list[str]] = {}
-    for path in FORMATS.rglob("*.py"):
-        bad: list[str] = []
-        for mod in _imported_modules(path):
-            top = mod.split(".")[0]
-            if (
-                mod == "cinoc"
-                or mod.startswith("cinoc.domain")
-                or mod.startswith("cinoc.formats")
-            ):
-                continue
-            if mod == "__future__" or top in FORMATS_ALLOWED_EXT or top in STDLIB:
-                continue
-            bad.append(mod)
-        if bad:
-            offenders[str(path.relative_to(ROOT))] = bad
-    assert not offenders, f"imports interdits dans formats : {offenders}"
-
-
-def test_pipeline_imports_are_allowed():
-    """pipeline (couche 4) n'importe que stdlib + pydantic + domain (+ pipeline).
-    Aucune lib de moteur ni de métrique : l'exécution est agnostique."""
-    offenders: dict[str, list[str]] = {}
-    for path in (ROOT / "pipeline").rglob("*.py"):
-        bad: list[str] = []
-        for mod in _imported_modules(path):
-            top = mod.split(".")[0]
-            if (
-                mod == "cinoc"
-                or mod.startswith("cinoc.domain")
-                or mod.startswith("cinoc.pipeline")
-            ):
-                continue
-            if mod == "__future__" or top in ALLOWED_EXT or top in STDLIB:
-                continue
-            bad.append(mod)
-        if bad:
-            offenders[str(path.relative_to(ROOT))] = bad
-    assert not offenders, f"imports interdits dans pipeline : {offenders}"
-
-
 #: La couche adapters traduit des libs externes (moteurs OCR/LLM) vers le
-#: ``Module`` Protocol ; elle peut donc parler domain + pipeline + formats, et
-#: ses extras moteur seront ajoutés ici au fil des tranches.
-ADAPTERS_ALLOWED_PKG = (
-    "cinoc.domain",
-    "cinoc.pipeline",
-    "cinoc.formats",
-    "cinoc.adapters",
-)
-#: Libs de moteur autorisées en adapters (ajoutées à la tranche qui les introduit).
+#: ``Module`` Protocol ; elle peut donc parler domain + pipeline + formats.
+#: Libs de moteur autorisées (ajoutées à la tranche qui les introduit) :
 #: ``PIL`` : découpage des blocs (``layout/crop``) du pipeline hybride seg→OCR.
 #: ``yaml`` : catalogue HTR-United (``htr-united.yml``).
 #: ``httpcore`` : moteur de transport de ``httpx`` (toujours co-installé), requis
@@ -134,127 +73,10 @@ ADAPTERS_ALLOWED_EXT = ALLOWED_EXT | {
     "torch", "transformers",
 }
 
-
-def test_adapters_imports_are_allowed():
-    offenders: dict[str, list[str]] = {}
-    for path in (ROOT / "adapters").rglob("*.py"):
-        bad: list[str] = []
-        for mod in _imported_modules(path):
-            top = mod.split(".")[0]
-            if mod == "cinoc" or any(
-                mod.startswith(pkg) for pkg in ADAPTERS_ALLOWED_PKG
-            ):
-                continue
-            if mod == "__future__" or top in ADAPTERS_ALLOWED_EXT or top in STDLIB:
-                continue
-            bad.append(mod)
-        if bad:
-            offenders[str(path.relative_to(ROOT))] = bad
-    assert not offenders, f"imports interdits dans adapters : {offenders}"
-
-
 #: evaluation parle domain + formats + scipy (Wilcoxon/Friedman) + rapidfuzz
 #: (alignement caractère de diacritic_err) + numpy (FCA hongrois, percentiles
-#: lines) ; jiwer/shapely s'ajouteront à la tranche qui les introduit. ``PIL``
-#: retiré : la qualité d'image (seul consommateur) a été supprimée.
+#: lines). ``PIL`` retiré : la qualité d'image (seul consommateur) a été supprimée.
 EVAL_ALLOWED_EXT = ALLOWED_EXT | {"scipy", "rapidfuzz", "numpy"}
-
-
-def test_evaluation_imports_are_allowed():
-    offenders: dict[str, list[str]] = {}
-    for path in (ROOT / "evaluation").rglob("*.py"):
-        bad: list[str] = []
-        for mod in _imported_modules(path):
-            top = mod.split(".")[0]
-            if (
-                mod == "cinoc"
-                or mod.startswith("cinoc.domain")
-                or mod.startswith("cinoc.formats")
-                or mod.startswith("cinoc.evaluation")
-            ):
-                continue
-            if mod == "__future__" or top in EVAL_ALLOWED_EXT or top in STDLIB:
-                continue
-            bad.append(mod)
-        if bad:
-            offenders[str(path.relative_to(ROOT))] = bad
-    assert not offenders, f"imports interdits dans evaluation : {offenders}"
-
-
-#: app câble toutes les couches internes (domain..adapters) ; il orchestre, ne
-#: calcule pas. Pas de lib métier directe (métriques/moteurs) — il délègue.
-APP_ALLOWED_PKG = (
-    "cinoc.domain",
-    "cinoc.formats",
-    "cinoc.evaluation",
-    "cinoc.pipeline",
-    "cinoc.adapters",
-    "cinoc.app",
-    # Paquet de **données** (prompts curés), loader pur (stdlib + domain) — leaf.
-    "cinoc.prompts",
-)
-#: app charge des specs YAML (loader) → ``yaml`` autorisé.
-APP_ALLOWED_EXT = ALLOWED_EXT | {"yaml"}
-
-
-def test_prompts_imports_are_pure():
-    """``prompts`` est un paquet de **données** : loader pur (stdlib + domain).
-    Jamais une couche externe (un prompt ne calcule rien, ne fait pas d'I/O métier)."""
-    offenders: dict[str, list[str]] = {}
-    for path in (ROOT / "prompts").rglob("*.py"):
-        bad: list[str] = []
-        for mod in _imported_modules(path):
-            top = mod.split(".")[0]
-            if mod == "cinoc" or mod.startswith("cinoc.domain"):
-                continue
-            if mod == "__future__" or top in ALLOWED_EXT or top in STDLIB:
-                continue
-            bad.append(mod)
-        if bad:
-            offenders[str(path.relative_to(ROOT))] = bad
-    assert not offenders, f"imports interdits dans prompts : {offenders}"
-
-
-def test_app_imports_are_allowed():
-    offenders: dict[str, list[str]] = {}
-    for path in (ROOT / "app").rglob("*.py"):
-        bad: list[str] = []
-        for mod in _imported_modules(path):
-            top = mod.split(".")[0]
-            if mod == "cinoc" or any(
-                mod.startswith(pkg) for pkg in APP_ALLOWED_PKG
-            ):
-                continue
-            if mod == "__future__" or top in APP_ALLOWED_EXT or top in STDLIB:
-                continue
-            bad.append(mod)
-        if bad:
-            offenders[str(path.relative_to(ROOT))] = bad
-    assert not offenders, f"imports interdits dans app : {offenders}"
-
-
-#: reports lit aussi une donnée YAML (glossaire pédagogique FR/EN).
-REPORTS_ALLOWED_EXT = ALLOWED_EXT | {"yaml"}
-
-
-def test_reports_imports_are_allowed():
-    """reports lit le RunResult : domain + evaluation seulement (jamais app/
-    pipeline/adapters). Pas de data-layer, pas de moteur."""
-    allowed = ("cinoc.domain", "cinoc.evaluation", "cinoc.reports")
-    offenders: dict[str, list[str]] = {}
-    for path in (ROOT / "reports").rglob("*.py"):
-        bad: list[str] = []
-        for mod in _imported_modules(path):
-            top = mod.split(".")[0]
-            if mod == "cinoc" or any(mod.startswith(pkg) for pkg in allowed):
-                continue
-            if mod == "__future__" or top in REPORTS_ALLOWED_EXT or top in STDLIB:
-                continue
-            bad.append(mod)
-        if bad:
-            offenders[str(path.relative_to(ROOT))] = bad
-    assert not offenders, f"imports interdits dans reports : {offenders}"
-
 
 #: interfaces (couche 8) câble le transport web : FastAPI + son socle ASGI
 #: (starlette) + le serveur uvicorn. Ajoutés à la tranche T4 (`serve`).
@@ -263,31 +85,72 @@ def test_reports_imports_are_allowed():
 INTERFACES_ALLOWED_EXT = ALLOWED_EXT | {"fastapi", "jinja2", "starlette", "uvicorn"}
 
 
-def test_interfaces_imports_are_allowed():
-    """interfaces = feuille : peut câbler toutes les couches internes."""
-    allowed = (
-        "cinoc.domain",
-        "cinoc.formats",
-        "cinoc.evaluation",
-        "cinoc.pipeline",
-        "cinoc.adapters",
-        "cinoc.app",
-        "cinoc.reports",
-        "cinoc.interfaces",
-    )
+class Layer(NamedTuple):
+    """Une couche : les paquets ``cinoc`` qu'elle peut importer (elle comprise)
+    et les bibliothèques externes de sa liste blanche."""
+
+    packages: tuple[str, ...]
+    external: frozenset[str] | set[str]
+
+
+_INNER = ("domain", "formats", "evaluation", "pipeline", "adapters")
+
+LAYERS: dict[str, Layer] = {
+    # Types purs : stdlib + pydantic.
+    "domain": Layer(("domain",), ALLOWED_EXT),
+    # Parle XML (lxml) et lit des profils (yaml). Jamais une lib de métrique
+    # (jiwer/rapidfuzz) ni un moteur OCR.
+    "formats": Layer(("domain", "formats"), ALLOWED_EXT | {"lxml", "yaml"}),
+    "evaluation": Layer(("domain", "formats", "evaluation"), EVAL_ALLOWED_EXT),
+    # Aucune lib de moteur ni de métrique : l'exécution est agnostique.
+    "pipeline": Layer(("domain", "pipeline"), ALLOWED_EXT),
+    "adapters": Layer(
+        ("domain", "pipeline", "formats", "adapters"), ADAPTERS_ALLOWED_EXT
+    ),
+    # Paquet de **données** (prompts curés) : loader pur (stdlib + domain). Un
+    # prompt ne calcule rien, ne fait pas d'I/O métier.
+    "prompts": Layer(("domain",), ALLOWED_EXT),
+    # app câble les couches internes ; il orchestre, ne calcule pas. Pas de lib
+    # métier directe (métriques/moteurs) — il délègue. ``yaml`` : specs.
+    "app": Layer((*_INNER, "app", "prompts"), ALLOWED_EXT | {"yaml"}),
+    # reports lit le RunResult : domain + evaluation seulement (jamais app/
+    # pipeline/adapters). Pas de data-layer, pas de moteur. ``yaml`` : glossaire.
+    "reports": Layer(("domain", "evaluation", "reports"), ALLOWED_EXT | {"yaml"}),
+    # Feuille : peut câbler toutes les couches internes.
+    "interfaces": Layer(
+        (*_INNER, "app", "reports", "interfaces"), INTERFACES_ALLOWED_EXT
+    ),
+}
+
+
+def test_every_python_package_has_its_rule() -> None:
+    """Un paquet de ``cinoc/`` qui porte du code a sa ligne dans ``LAYERS`` :
+    une couche nouvelle n'échappe pas au contrôle en silence."""
+    with_code = {
+        p.parent.relative_to(ROOT).parts[0]
+        for p in ROOT.rglob("*.py")
+        if p.parent != ROOT and "__pycache__" not in p.parts
+    }
+    assert with_code <= set(LAYERS), sorted(with_code - set(LAYERS))
+
+
+@pytest.mark.parametrize("layer", sorted(LAYERS))
+def test_layer_imports_are_allowed(layer: str) -> None:
+    rule = LAYERS[layer]
+    allowed = tuple(f"cinoc.{pkg}" for pkg in rule.packages)
     offenders: dict[str, list[str]] = {}
-    for path in (ROOT / "interfaces").rglob("*.py"):
+    for path in (ROOT / layer).rglob("*.py"):
         bad: list[str] = []
         for mod in _imported_modules(path):
             top = mod.split(".")[0]
             if mod == "cinoc" or any(mod.startswith(pkg) for pkg in allowed):
                 continue
-            if mod == "__future__" or top in INTERFACES_ALLOWED_EXT or top in STDLIB:
+            if mod == "__future__" or top in rule.external or top in STDLIB:
                 continue
             bad.append(mod)
         if bad:
             offenders[str(path.relative_to(ROOT))] = bad
-    assert not offenders, f"imports interdits dans interfaces : {offenders}"
+    assert not offenders, f"imports interdits dans {layer} : {offenders}"
 
 
 #: Sous-dossiers d'``adapters`` auxquels une bibliothèque tierce est **interdite**,

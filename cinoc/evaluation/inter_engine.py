@@ -23,9 +23,10 @@ de token dans la couche). Pur stdlib (``math`` + ``Counter``).
 
 from __future__ import annotations
 
-import math
 from collections import Counter
 from collections.abc import Mapping, Sequence
+
+from scipy.spatial.distance import jensenshannon  # type: ignore[import-untyped]
 
 from cinoc.evaluation.analysis import (
     Analysis,
@@ -68,24 +69,14 @@ def jensen_shannon_divergence(
     logarithme **base 2** (la borne haute vaut alors exactement 1, atteinte
     pour des distributions disjointes). Les clés manquantes d'un côté sont
     lissées à ``ε = 1e-12`` puis renormalisées ; le clamp final absorbe les
-    arrondis flottants.
+    arrondis flottants. Calcul délégué à scipy (P5g 6, D-303) :
+    ``jensenshannon`` rend la **distance**, racine de la divergence.
     """
     keys = sorted(set(p) | set(q))
     if not keys:
         return 0.0
-    p_vec = _smoothed(p, keys)
-    q_vec = _smoothed(q, keys)
-    m_vec = [(pi + qi) / 2.0 for pi, qi in zip(p_vec, q_vec, strict=True)]
-
-    def _kl(a: list[float], b: list[float]) -> float:
-        return sum(
-            ai * math.log2(ai / bi)
-            for ai, bi in zip(a, b, strict=True)
-            if ai > 0
-        )
-
-    js = 0.5 * _kl(p_vec, m_vec) + 0.5 * _kl(q_vec, m_vec)
-    return max(0.0, min(1.0, js))
+    distance = jensenshannon(_smoothed(p, keys), _smoothed(q, keys), base=2)
+    return max(0.0, min(1.0, float(distance) ** 2))
 
 
 def _taxonomy_divergence(

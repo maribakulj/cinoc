@@ -373,6 +373,7 @@ métriques structurelles PAGE-natives ; découpes des fichiers >400 LOC ; coutur
 - [x] **WER/MER** (impl maison déterministe + **parité jiwer**, 15 cas) au socle texte. — *preuve : `test_metrics_text` (valeurs main) + `test_metrics_parity` (vs jiwer)*
 - [x] **Profils de normalisation** (`normalization_profile`/`char_exclude`) honorés par le runner (couche 2 `formats/text`), symétriques GT/hyp ; **1 chargement par signature**. — *preuve : `test_runner` (caseless→0 ; profil inconnu→erreur) ; démo : vue `francais_medieval`*
 - [x] **`cross_engine` + stats** : passe inter-moteurs (`CrossEngineContext`) → `RunResult.cross_engine` (clés `vue:métrique:test`) ; significativité **Wilcoxon/Friedman** (`scipy`). — *preuve : `test_metrics_stats` + `test_runner` (`text:cer:significance_p`)*
+- [x] **Jensen-Shannon délégué à scipy** (S29b, D-303, P5g 6) : `inter_engine.jensen_shannon_divergence` = `scipy.spatial.distance.jensenshannon(…, base=2)²` (écart ≤ 4,5·10⁻¹⁶ sur 2 000 tirages) ; la classe `diacritic` de la taxonomie lit `formats.text.normalization.strip_diacritics` ; `pricing.json` perd `local_kinds` (aucun lecteur). — *preuve : `tests/evaluation` verte*
 - [~] **Surface encore différée** : `compare` + sections engines/cross (T2.f) ; structure (T5) ; longitudinal/philologie/taxo/économie (T7).
 
 ---

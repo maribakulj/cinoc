@@ -23,7 +23,7 @@ seulement nommer un rôle qui n'existe pas, ce qui se voit au chargement.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
@@ -53,8 +53,6 @@ class Role:
     briques: tuple[str, ...] = ()
     #: Reconnaissance par région : l'exécuteur démultiplie l'étape par bloc.
     fanout: bool = False
-    #: Entrées supplémentaires toujours disponibles (l'image initiale).
-    aussi: tuple[ArtifactType, ...] = field(default_factory=tuple)
     #: Mode LLM/VLM que le rôle pose sur sa brique (réglage ``role``) : c'est
     #: lui qui fait qu'un même adapter lise l'image, ou le texte, ou les deux.
     mode: str | None = None

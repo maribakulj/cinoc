@@ -39,11 +39,8 @@ from cinoc.domain.documents import DocumentRef, GroundTruthRef
 from cinoc.domain.errors import CinocError, CorpusSpecError, FormatError
 from cinoc.domain.layout import CanonicalLayout
 from cinoc.evaluation.projectors import layout_to_text
-from cinoc.formats.alto import parse_alto
-from cinoc.formats.alto.layout_map import alto_to_layout
 from cinoc.formats.images import IMAGE_SUFFIXES, looks_like_image
-from cinoc.formats.pagexml import parse_pagexml
-from cinoc.formats.pagexml.layout_map import page_to_layout
+from cinoc.formats.layout_xml import layout_xml_kind, parse_layout_xml
 
 #: Quotas (généreux mais bornés) — un Space gratuit n'est pas un entrepôt.
 MAX_ZIP_BYTES = 25 * 1024 * 1024
@@ -236,18 +233,11 @@ def _read_layout(path: Path) -> CanonicalLayout:
     Parse en échec → rejet propre (``CorpusUploadError`` → 422), jamais un 500.
     """
     data = path.read_bytes()
-    head = data[:4096].lower()
-    is_page = b"pcgts" in head or b"pagecontent" in head
     try:
-        return (
-            page_to_layout(parse_pagexml(data))
-            if is_page
-            else alto_to_layout(parse_alto(data))
-        )
+        return parse_layout_xml(data)
     except (ValueError, FormatError) as exc:
-        kind = "PAGE" if is_page else "ALTO"
         raise CorpusUploadError(
-            f"vérité-terrain {kind} illisible : {path.name!r} ({exc})."
+            f"vérité-terrain {layout_xml_kind(data)} illisible : {path.name!r} ({exc})."
         ) from exc
 
 

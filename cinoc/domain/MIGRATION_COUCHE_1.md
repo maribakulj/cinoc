@@ -208,6 +208,7 @@ backlog inexistant. **Aucune logique ne change.**
 - [x] Import sans effet de bord. — *preuve : `tests/architecture/test_no_side_effect_imports.py` vert*
 - [~] **Réserve partiellement levée (T1)** : `MetricSpec`/`EvaluationView`/`EvaluationSpec` ont un consommateur (registre + runner couche 3) → **confirmés, gardés**. `ProjectionSpec` reste **sans consommateur** → différé à T2 (projections). — *cf. journal D-009.*
 - [~] **Différé-par-design** : backlog domain (`RunSpec`/`ProjectionReport`/`ConfidenceToken`), `CanonicalLayout`. — *anti-spéculatif : créés à la tranche de leur 1ᵉʳ consommateur (§9).*
+- [x] **Retraits sans consommateur** (S29b, D-303) : `ArtifactType.CANONICAL_DOCUMENT`, `READING_ORDER` (l'ordre de lecture vit dans `LayoutPage.reading_order`) et `ALIGNMENT` — réservés, jamais produits ni lus ; `Deadline.as_sdk_timeout` (les adaptateurs passent `request_timeout(deadline)`) ; `ProjectionSpec.is_identity`. — *preuve : `grep` sans autre occurrence que la définition ; suite verte*
 
 ---
 

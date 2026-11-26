@@ -35,8 +35,9 @@
 
 - **Une tranche par session**, fine et de pleine profondeur ; s'arrêter à la
   fin de la tranche.
-- **`make ci` complet avant tout push** — jamais « vert » sur un sous-ensemble
-  (`CLAUDE.md §11`).
+- **`make check-fast` avant tout push** (ruff + mypy + **toute** la suite, sans
+  coverage) — jamais « vert » sur un sous-ensemble ; le seuil de coverage est
+  celui de la CI (`CLAUDE.md §11`).
 - **Docs et code dans le même commit** (rituel de réconciliation,
   `MIGRATION_PLAN.md`) : roll-up + DoD des couches touchées + journal si une
   décision est prise ou un écart arbitré.

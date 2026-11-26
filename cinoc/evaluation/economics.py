@@ -179,8 +179,8 @@ def _cloud_model_keys(
     Un *kind cloud* (facturé au jeton) = un fournisseur listé dans
     ``token_kinds`` de la table — la source datée fait foi (pas de liste
     codée en dur qui dériverait quand la table gagne un fournisseur). Les kinds
-    **à la page** vivent dans ``cloud_page_kinds`` (cf. ``_page_rates``) ; le
-    reste (``local_kinds``) : temps machine seul.
+    **à la page** vivent dans ``cloud_page_kinds`` (cf. ``_page_rates``) ; tout
+    autre kind : temps machine seul.
 
     Modèle : le(s) **servi(s)** quand le manifeste les connaît — plusieurs si un
     alias a changé de cible en cours de run, et le coût devient alors non

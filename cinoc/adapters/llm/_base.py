@@ -30,6 +30,7 @@ from cinoc.domain.artifacts import Artifact, ArtifactType, compute_content_hash
 from cinoc.domain.errors import AdapterStepError
 from cinoc.domain.pipeline import PipelineMode
 from cinoc.domain.usage import ResourceUsage
+from cinoc.formats.images import IMAGE_SUFFIXES, image_media_type
 from cinoc.formats.text import read_plaintext
 from cinoc.pipeline.params import Param
 from cinoc.pipeline.run_control import RunControl
@@ -51,16 +52,18 @@ DEFAULT_TRANSCRIPTION_PROMPT = (
     "aucun commentaire : réponds par le seul texte transcrit."
 )
 
-#: Extension de fichier → media type (sous-ensemble image courant).
-_MEDIA_TYPES = {
-    ".png": "image/png",
-    ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg",
-    ".webp": "image/webp",
-    ".gif": "image/gif",
-    ".tif": "image/tiff",
-    ".tiff": "image/tiff",
-}
+def page_media_type(path: Path, adapter_name: str) -> str:
+    """Type MIME annoncé en envoyant la page : celui de la table des imports
+    (``formats/images.py``). Hors table, refus nommé — l'ancien défaut
+    ``image/png`` annonçait un JPEG 2000 pour ce qu'il n'est pas (D-303)."""
+    media_type = image_media_type(path.suffix)
+    if media_type is None:
+        raise AdapterStepError(
+            f"{adapter_name} : extension d'image non gérée ({path.suffix!r}) ; "
+            f"acceptées : {', '.join(IMAGE_SUFFIXES)}."
+        )
+    return media_type
+
 
 #: Raison d'arrêt **normalisée** d'une réponse, lue dans la réponse native de
 #: chaque fournisseur (``finish_reason``, ``stop_reason``, ``done_reason``).
@@ -413,7 +416,7 @@ def load_image_b64(
             f"{adapter_name} : input IMAGE manquant ou sans URI."
         )
     path = Path(artifact.uri)
-    media_type = _MEDIA_TYPES.get(path.suffix.lower(), "image/png")
+    media_type = page_media_type(path, adapter_name)
     return media_type, b64encode(path.read_bytes()).decode("ascii")
 
 

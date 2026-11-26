@@ -43,6 +43,7 @@ from cinoc.adapters._resilience import (
     step_deadline,
     validate_timeout,
 )
+from cinoc.adapters.llm._base import page_media_type
 from cinoc.adapters.llm._listing import require_model
 from cinoc.adapters.llm.mistral import mistral_sdk
 from cinoc.adapters.ocr._base import run_remote_image_to_text
@@ -66,8 +67,6 @@ _VERSION = "1.3"
 #: Granularité des confiances demandées : celle de la projection
 #: (``Region.confidence`` = ``block_type_confidence_score``).
 _CONFIDENCE_GRANULARITY: Final = "block"
-_MEDIA = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
-          ".webp": "image/webp", ".tif": "image/tiff", ".tiff": "image/tiff"}
 
 
 def _text_from_response(native: object) -> str:
@@ -103,7 +102,7 @@ def _invoke_mistral_ocr(
     if not api_key:
         raise AdapterStepError("mistral_ocr : MISTRAL_API_KEY manquante.")
     path = Path(image_path)
-    media = _MEDIA.get(path.suffix.lower(), "image/png")
+    media = page_media_type(path, "mistral_ocr")
     image_b64 = b64encode(path.read_bytes()).decode("ascii")
     ctrl = control if control is not None else RunControl()
     client, http = mistral_sdk("mistral_ocr", api_key, ctrl)

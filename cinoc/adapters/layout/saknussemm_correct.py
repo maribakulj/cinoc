@@ -238,7 +238,8 @@ class SaknussemmCorrector:
         """``(producteur, client)`` — le client garde les réponses reçues
         (``responses``) ; ``None`` pour ``rules``, qui n'appelle rien. Un client
         neuf par exécution : deux unités concurrentes ne mêlent pas leurs
-        réponses. ``control`` : un arrêt coupe l'appel Ollama en vol."""
+        réponses. ``control`` : un arrêt coupe l'appel en vol (Ollama, Mistral texte
+        et vision)."""
         if self._producer == "rules":
             from saknussemm.producers.rules import (  # type: ignore[import-not-found]  # noqa: PLC0415
                 RulesProducer,
@@ -248,7 +249,7 @@ class SaknussemmCorrector:
             return RulesProducer(default_french_ocr_rules()), None
 
         if self._producer == VISION_PRODUCER:
-            return self._build_vision_producer()
+            return self._build_vision_producer(control)
 
         from saknussemm.producers.llm_edit import (  # type: ignore[import-not-found]  # noqa: PLC0415, E501
             LLMEditProducer,
@@ -259,7 +260,7 @@ class SaknussemmCorrector:
                 MistralStructuredClient,
             )
 
-            mistral = MistralStructuredClient()
+            mistral = MistralStructuredClient(control=control)
             return (
                 LLMEditProducer(mistral, api_key=self._api_key(), model=self._model),
                 mistral,
@@ -272,7 +273,7 @@ class SaknussemmCorrector:
         ollama = OllamaStructuredClient(host=self._host, control=control)
         return LLMEditProducer(ollama, api_key="", model=self._model), ollama
 
-    def _build_vision_producer(self) -> tuple[Any, Any]:
+    def _build_vision_producer(self, control: RunControl) -> tuple[Any, Any]:
         """``VisionEditProducer`` + le plafond d'images **déclaré** au moteur.
 
         Sans ``max_images``, le routeur composerait un lot de plus de huit
@@ -296,7 +297,7 @@ class SaknussemmCorrector:
             MistralMultimodalClient,
         )
 
-        vision = MistralMultimodalClient()
+        vision = MistralMultimodalClient(control=control)
         return VisionEditProducer(
             vision,
             api_key=cle,
