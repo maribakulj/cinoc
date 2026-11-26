@@ -14,8 +14,6 @@ def test_caseless_excludes_letter_case_insensitively() -> None:
     assert prof.normalize("Abc") == "bc"
 
 
-def test_from_yaml_rejects_non_mapping(tmp_path) -> None:  # type: ignore[no-untyped-def]
-    path = tmp_path / "bad.yaml"
-    path.write_text("- not\n- a\n- mapping\n", encoding="utf-8")
+def test_from_yaml_text_rejects_non_mapping() -> None:
     with pytest.raises(ValueError):
-        NormalizationProfile.from_yaml(path)
+        NormalizationProfile.from_yaml_text("- not\n- a\n- mapping\n")

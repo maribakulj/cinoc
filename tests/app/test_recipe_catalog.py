@@ -206,6 +206,60 @@ def test_a_brick_reserved_to_the_cli_is_never_offered() -> None:
     assert not offertes & CLI_ONLY_KINDS
 
 
+def _offertes() -> set[str]:
+    return {
+        str(b["kind"])
+        for c in recipe_catalog("fr")
+        for e in c["steps"]  # type: ignore[attr-defined]
+        for b in e["bricks"]
+    }
+
+
+def test_a_replay_whose_file_cannot_be_uploaded_is_never_offered() -> None:
+    """``precomputed_layout`` et ``precomputed_region`` rejouent un JSON posé à
+    côté des images ; le dépôt ZIP n'accepte pas de JSON. Offerts sur le web,
+    ils menaient à un refus certain (422 depuis D-299) : retirés de l'offre
+    (D-301) — la CLI les garde (démo, CI, « segmenter une fois »)."""
+    offertes = _offertes()
+    assert "precomputed_layout" not in offertes
+    assert "precomputed_region" not in offertes
+    # Le rejeu de **texte** reste : son ``.txt`` arrive par le dépôt.
+    assert "precomputed" in offertes and "alto_source" in offertes
+
+
+def test_the_hidden_replays_are_exactly_those_the_upload_cannot_feed() -> None:
+    """La liste des rejeux retirés est confrontée à la règle du dépôt : chaque
+    brique qui relit des fichiers (``unit_inputs``) est offerte si et seulement
+    si le ZIP accepte ces fichiers — accepter le JSON demain les rendrait."""
+    from pathlib import Path
+
+    from cinoc.app import corpus_upload
+    from cinoc.app.recipe_catalog import WEB_UNREACHABLE_REPLAYS
+
+    acceptees = (
+        corpus_upload._IMAGE_EXT | corpus_upload._GT_EXT | corpus_upload._GT_XML_EXT
+    )
+    registre = ModuleRegistry()
+    register_default_modules(registre)
+    document = DocumentRef(id="p1", image_uri="/c/p1.png", ground_truths=())
+    rejeux: dict[str, bool] = {}
+    for kind in registre.kinds():
+        for nom, reglages in ((kind, {}), (f"{kind}:x", {"label": "x"}),
+                              (f"{kind}:x", {"source_label": "x"})):
+            try:
+                module = registre.build(nom, reglages)  # type: ignore[arg-type]
+            except Exception:  # noqa: BLE001, S112 — on cherche une signature
+                continue
+            probe = getattr(module, "unit_inputs", None)
+            if probe is not None:
+                rejeux[kind] = all(
+                    Path(c).suffix.lower() in acceptees for c in probe(document)
+                )
+            break
+    assert {"precomputed", "precomputed_layout", "precomputed_region"} <= set(rejeux)
+    assert {k for k, ok in rejeux.items() if not ok} == WEB_UNREACHABLE_REPLAYS
+
+
 def test_public_mode_greys_out_what_it_would_refuse() -> None:
     """Le catalogue ne propose pas ce que le lanceur refuserait en 403."""
     catalogue = recipe_catalog("en", public_mode=True)

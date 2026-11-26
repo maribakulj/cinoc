@@ -10,7 +10,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from cinoc.evaluation.result import RunResult
-from cinoc.reports.html import escape, render_document
+from cinoc.reports._numbers import fmt
+from cinoc.reports.html import escape, localized, render_document
 from cinoc.reports.section import Html
 
 _Key = tuple[str, str, str]
@@ -62,42 +63,64 @@ def _index(result: RunResult) -> dict[_Key, float | None]:
     }
 
 
-def _format(value: float | None) -> str:
-    return "—" if value is None else f"{value:.4f}"
+def _format(value: float | None, lang: str, spec: str = ".4f") -> str:
+    """Décimale localisée (D22 du pilote : « 0,3000 » en français)."""
+    return "—" if value is None else fmt(value, lang, spec)
 
 
-def _format_delta(value: float | None) -> str:
-    return "—" if value is None else f"{value:+.4f}"
+def _side(result: RunResult, source: str | None) -> str:
+    """Ce qui distingue un côté : son ``run_id``, puis le **nom** du fichier
+    (jamais un chemin local, D5) et l'heure de début — deux runs d'une même
+    spec relancée portent le même ``run_id`` (D22)."""
+    started = result.manifest.started_at.strftime("%Y-%m-%d %H:%M UTC")
+    detail = ", ".join(x for x in (source, started) if x)
+    return f"{escape(result.manifest.run_id)} ({escape(detail)})"
 
 
 def render_comparison(
     run_a: RunResult,
     run_b: RunResult,
     *,
-    title: str = "Cinoc — comparaison de runs",
+    lang: str = "fr",
+    source_a: str | None = None,
+    source_b: str | None = None,
 ) -> str:
-    """Rend un rapport HTML autonome des deltas entre deux runs."""
+    """Rend un rapport HTML autonome des deltas entre deux runs (FR ou EN).
+
+    ``source_a`` / ``source_b`` : le nom du fichier lu de chaque côté."""
     rows = "".join(
         f"<tr><td>{escape(delta.pipeline)}</td><td>{escape(delta.view)}</td>"
         f"<td>{escape(delta.metric)}</td>"
-        f'<td class="num">{_format(delta.value_a)}</td>'
-        f'<td class="num">{_format(delta.value_b)}</td>'
-        f'<td class="num">{_format_delta(delta.delta)}</td></tr>'
+        f'<td class="num">{_format(delta.value_a, lang)}</td>'
+        f'<td class="num">{_format(delta.value_b, lang)}</td>'
+        f'<td class="num">{_format(delta.delta, lang, "+.4f")}</td></tr>'
         for delta in compare_runs(run_a, run_b)
     )
     # NB : le sens « mieux » dépend de la métrique. Les métriques livrées
     # (CER/WER/MER) sont **toutes** des taux d'erreur → on l'annonce explicitement
     # plutôt qu'en supposant l'universalité. Porter `higher_is_better` jusque dans
     # `RunResult` est différé tant qu'aucune métrique « plus haut = mieux » n'existe.
+    note = localized(
+        lang,
+        "taux d'erreur CER/WER/MER : Δ &lt; 0 = amélioration",
+        "CER/WER/MER error rates: Δ &lt; 0 = improvement",
+    )
+    head = localized(
+        lang,
+        "<th>Pipeline</th><th>Vue</th><th>Métrique</th>",
+        "<th>Pipeline</th><th>View</th><th>Metric</th>",
+    )
     body = Html(
-        f'<p class="muted">A = {escape(run_a.manifest.run_id)} · '
-        f"B = {escape(run_b.manifest.run_id)} · Δ = B − A "
-        "(taux d'erreur CER/WER/MER : Δ &lt; 0 = amélioration).</p>\n"
-        "<table>\n<thead><tr><th>Pipeline</th><th>Vue</th><th>Métrique</th>"
+        f'<p class="muted">A = {_side(run_a, source_a)} · '
+        f"B = {_side(run_b, source_b)} · Δ = B − A ({note}).</p>\n"
+        f"<table>\n<thead><tr>{head}"
         "<th>A</th><th>B</th><th>Δ</th></tr></thead>\n"
         f"<tbody>{rows}</tbody>\n</table>\n"
     )
-    return render_document(title, body)
+    title = localized(
+        lang, "Cinoc — comparaison de runs", "Cinoc — run comparison"
+    )
+    return render_document(title, body, lang=lang)
 
 
 __all__ = ["MetricDelta", "compare_runs", "render_comparison"]

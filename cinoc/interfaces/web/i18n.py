@@ -225,7 +225,6 @@ _STRINGS: dict[str, dict[str, str]] = {
         "en un seul endroit.",
         "library_search_button": "Rechercher",
         "library_demo_badge": "catalogue de démonstration (hors-ligne)",
-        "library_open": "ouvrir",
         "library_corpora_title": "Mes corpus",
         "library_local_title": "Corpus locaux",
         "library_corpora_desc": "Téléversés, importés depuis HTR-United / "
@@ -473,7 +472,6 @@ _STRINGS: dict[str, dict[str, str]] = {
         "in one place.",
         "library_search_button": "Search",
         "library_demo_badge": "demo catalogue (offline)",
-        "library_open": "open",
         "library_corpora_title": "My corpora",
         "library_local_title": "Local corpora",
         "library_corpora_desc": "Uploaded, imported from HTR-United / HuggingFace, "

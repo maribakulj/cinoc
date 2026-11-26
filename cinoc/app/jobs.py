@@ -83,13 +83,13 @@ class JobRunner:
         #: par défaut (``NoopPublisher``) → aucun effet réseau sans secret.
         self._publisher = publisher if publisher is not None else NoopPublisher()
         #: Historique longitudinal : enregistre les agrégats de chaque run
-        #: terminé. ``None`` → pas de suivi (rétro-compatible).
+        #: terminé. ``None`` → pas de suivi (collaborateur facultatif).
         self._history = history_store
         #: Segmentation : persiste les ``LAYOUT`` produits (aperçu du lanceur).
-        #: ``None`` → pas de persistance de mise en page (rétro-compatible).
+        #: ``None`` → pas de persistance de mise en page (facultatif).
         self._segmentation = segmentation_store
         #: Export ALTO : persiste les ``ALTO_XML`` produits (téléchargeables par
-        #: run). ``None`` → pas d'export ALTO (rétro-compatible).
+        #: run). ``None`` → pas d'export ALTO (facultatif).
         self._alto = alto_store
         #: Archive par job (cache de reprise du run). ``None`` → les sorties
         #: meurent avec le workspace, sidecars compris.

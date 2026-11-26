@@ -255,7 +255,9 @@ def test_reports_imports_are_allowed():
 
 #: interfaces (couche 8) câble le transport web : FastAPI + son socle ASGI
 #: (starlette) + le serveur uvicorn. Ajoutés à la tranche T4 (`serve`).
-INTERFACES_ALLOWED_EXT = ALLOWED_EXT | {"fastapi", "starlette", "uvicorn"}
+#: ``jinja2`` (déjà dans l'extra ``serve``, moteur des gabarits de starlette) :
+#: importé pour rendre sous ``StrictUndefined`` (D-301).
+INTERFACES_ALLOWED_EXT = ALLOWED_EXT | {"fastapi", "jinja2", "starlette", "uvicorn"}
 
 
 def test_interfaces_imports_are_allowed():

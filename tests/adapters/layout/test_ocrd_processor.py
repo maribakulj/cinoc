@@ -60,22 +60,30 @@ class _FauxOcrd:
 
     def __init__(self, produit: Callable[[Path], None] | None = None) -> None:
         self.appels: list[tuple[str, list[str]]] = []
+        self.mets_vus: list[str] = []
         self.parametres_vus: str | None = None
+        self.arreter_apres_le_premier = False
         self._produit = produit
 
     def __call__(
-        self, nom: str, args: list[str], atelier: Path, delai: float
+        self,
+        nom: str,
+        args: list[str],
+        atelier: Path,
+        delai: float,
+        control: RunControl,
     ) -> None:
         assert delai > 0, "un délai nul ferait échouer tout vrai processeur"
         self.appels.append((nom, list(args)))
-        if nom == "ocrd":
-            return
+        self.mets_vus.append((atelier / "mets.xml").read_text(encoding="utf-8"))
+        if self.arreter_apres_le_premier:
+            control.trigger_cancel()
         if "-p" in args:
             reglages = Path(args[args.index("-p") + 1])
             self.parametres_vus = reglages.read_text(encoding="utf-8")
-        groupe = atelier / _GROUPE_SORTIE
+        groupe = atelier / args[args.index("-O") + 1]
         groupe.mkdir(parents=True, exist_ok=True)
-        if self._produit is not None:
+        if self._produit is not None and groupe.name == _GROUPE_SORTIE:
             self._produit(groupe)
 
     @property
@@ -91,11 +99,12 @@ def _executer(
     tmp_path: Path,
     faux: _FauxOcrd,
     parameters: dict[str, ParamValue] | None = None,
+    processor: str = "ocrd-faux",
 ) -> StepOutput:
     image = tmp_path / "p.png"
     image.write_bytes(b"\x89PNG\r\n\x1a\n")
     brique = OcrdProcessor(
-        label="t", processor="ocrd-faux", runner=faux, parameters=parameters
+        label="t", processor=processor, runner=faux, parameters=parameters
     )
     artefact = Artifact(
         id="i", document_id="d", type=ArtifactType.IMAGE,
@@ -179,51 +188,84 @@ def test_le_page_xml_du_groupe_de_sortie_devient_un_layout(tmp_path: Path) -> No
     assert sortie.artifacts[ArtifactType.LAYOUT].uri is not None
 
 
-def test_le_workspace_est_prepare_avant_le_processeur(tmp_path: Path) -> None:
-    """Le contrat d'OCR-D en trois temps — c'est la raison d'être de la brique.
+def test_le_workspace_est_un_mets_gabarit_ecrit_par_la_brique(tmp_path: Path) -> None:
+    """**Un** processus par page et par processeur (audit D-264, défaut 17).
 
-    ``init`` puis ``add`` puis le processeur : un processeur lancé sur un
-    workspace vide ne dirait pas qu'il manque une étape, il rendrait zéro page.
+    ``ocrd workspace init`` puis ``add`` coûtaient deux interpréteurs Python de
+    plus par page (~2,5 s mesurées, OCR-D 3.13) pour écrire un METS que la
+    brique sait écrire : elle le pose, puis lance le seul processeur.
     """
     faux = _FauxOcrd(_ecrit_un_page)
 
     _executer(tmp_path, faux)
 
-    assert faux.noms_appeles == ["ocrd", "ocrd", "ocrd-faux"]
-    assert faux.appels[0][1] == ["workspace", "init"]
-    ajout = faux.appels[1][1]
-    assert ajout[:2] == ["workspace", "add"]
-    assert "image/png" in ajout
+    assert faux.noms_appeles == ["ocrd-faux"]
+    mets = faux.mets_vus[0]
+    assert 'USE="OCR-D-IMG"' in mets and 'MIMETYPE="image/png"' in mets
+    assert 'TYPE="page" ID="P_0001"' in mets
+    assert f'xlink:href="{(tmp_path / "p.png").resolve()}"' in mets
 
 
-def test_l_image_entre_dans_le_workspace_par_un_chemin_absolu(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """``ocrd`` fait ``cd`` dans son workspace : un chemin relatif s'y perd.
-
-    Le test se place donc **dans** le dossier de l'image et la désigne par son
-    seul nom — c'est le cas qui a réellement cassé au premier branchement.
-    Sans ``resolve()``, OCR-D chercherait ``p.png`` dans le workspace jetable.
-    """
-    image = tmp_path / "p.png"
+def test_le_mets_echappe_le_chemin_de_l_image(tmp_path: Path) -> None:
+    image = tmp_path / "a&b <c>.png"
     image.write_bytes(b"\x89PNG\r\n\x1a\n")
-    monkeypatch.chdir(tmp_path)
     faux = _FauxOcrd(_ecrit_un_page)
     brique = OcrdProcessor(label="t", processor="ocrd-faux", runner=faux)
     artefact = Artifact(
         id="i", document_id="d", type=ArtifactType.IMAGE,
-        uri="p.png", content_hash="0" * 64,
+        uri=str(image), content_hash="0" * 64,
     )
     contexte = RunContext(
         document_id="d", code_version="1", pipeline_name="p",
         workspace_uri=str(tmp_path),
     )
-
     brique.execute({ArtifactType.IMAGE: artefact}, {}, contexte, RunControl())
+    from cinoc.formats._xml import safe_parse_xml
 
-    donne_a_ocrd = Path(faux.appels[1][1][-1])
-    assert donne_a_ocrd.is_absolute()
-    assert donne_a_ocrd == image.resolve()
+    racine = safe_parse_xml(faux.mets_vus[0].encode("utf-8"))
+    assert racine is not None
+    href = racine.find(".//{http://www.loc.gov/METS/}FLocat")
+    assert href is not None
+    assert href.get("{http://www.w3.org/1999/xlink}href") == str(image.resolve())
+
+
+def test_une_chaine_de_processeurs_s_enchaine_groupe_par_groupe(
+    tmp_path: Path,
+) -> None:
+    """``processor: ocrd-a,ocrd-b`` : binariser puis segmenter, sans script."""
+    faux = _FauxOcrd(_ecrit_un_page)
+
+    _executer(tmp_path, faux, processor="ocrd-binarise, ocrd-segmente")
+
+    assert faux.noms_appeles == ["ocrd-binarise", "ocrd-segmente"]
+    assert faux.appels[0][1] == ["-I", "OCR-D-IMG", "-O", "OCR-D-STEP-1"]
+    assert faux.appels[1][1] == ["-I", "OCR-D-STEP-1", "-O", _GROUPE_SORTIE]
+
+
+def test_un_arret_entre_deux_processeurs_n_en_lance_pas_un_de_plus(
+    tmp_path: Path,
+) -> None:
+    from cinoc.domain.errors import RunCancelledError
+
+    faux = _FauxOcrd(_ecrit_un_page)
+    faux.arreter_apres_le_premier = True
+
+    with pytest.raises(RunCancelledError):
+        _executer(tmp_path, faux, processor="ocrd-a,ocrd-b")
+    assert faux.noms_appeles == ["ocrd-a"]
+
+
+@pytest.mark.parametrize("chaine", ["ocrd-a,,ocrd-b", "ocrd-a,rm", "ocrd-a,"])
+def test_une_chaine_mal_formee_est_refusee(chaine: str) -> None:
+    with pytest.raises(AdapterStepError, match="processor"):
+        OcrdProcessor(label="t", processor=chaine)
+
+
+def test_des_parametres_python_ne_visent_qu_un_seul_processeur() -> None:
+    """``parameters`` est un objet : à quel maillon d'une chaîne irait-il ?
+    Plutôt que de deviner, la brique le refuse."""
+    with pytest.raises(AdapterStepError, match="parameters"):
+        OcrdProcessor(label="t", processor="ocrd-a,ocrd-b", parameters={"x": 1})
 
 
 def test_une_image_deriveee_du_processeur_est_ignoree(tmp_path: Path) -> None:
@@ -297,7 +339,8 @@ def test_le_lanceur_par_defaut_remonte_le_stderr_du_processeur(tmp_path: Path) -
 
     with pytest.raises(AdapterStepError, match="modele manquant"):
         _lancer_sous_processus(
-            "ocrd:t", str(python.parent), python.name, ["-c", code], tmp_path, 60.0
+            "ocrd:t", str(python.parent), python.name, ["-c", code], tmp_path,
+            60.0, RunControl(),
         )
 
 
@@ -305,7 +348,7 @@ def test_le_lanceur_par_defaut_refuse_un_programme_absent(tmp_path: Path) -> Non
     """Refusé par son nom — pas déguisé en « code de retour 127 »."""
     with pytest.raises(AdapterStepError, match="ocrd-absent.*introuvable"):
         _lancer_sous_processus(
-            "ocrd:t", str(tmp_path), "ocrd-absent", [], tmp_path, 60.0
+            "ocrd:t", str(tmp_path), "ocrd-absent", [], tmp_path, 60.0, RunControl()
         )
 
 
@@ -317,7 +360,66 @@ def test_le_lanceur_par_defaut_travaille_dans_l_atelier(tmp_path: Path) -> None:
     code = "import pathlib; pathlib.Path('temoin.txt').write_text('ici')"
 
     _lancer_sous_processus(
-        "ocrd:t", str(python.parent), python.name, ["-c", code], atelier, 60.0
+        "ocrd:t", str(python.parent), python.name, ["-c", code], atelier, 60.0,
+        RunControl(),
     )
 
     assert (atelier / "temoin.txt").read_text(encoding="utf-8") == "ici"
+
+
+def test_le_lanceur_par_defaut_tue_le_processeur_a_l_arret(tmp_path: Path) -> None:
+    """Un arrêt du run tue le processeur en vol : il ne finit plus sa page
+    (``subprocess.run`` attendait jusqu'au délai, 900 s par défaut)."""
+    import threading
+    import time
+
+    from cinoc.domain.errors import RunCancelledError
+
+    python = Path(sys.executable)
+    control = RunControl()
+    threading.Timer(0.3, control.trigger_cancel).start()
+    debut = time.monotonic()
+    with pytest.raises(RunCancelledError):
+        _lancer_sous_processus(
+            "ocrd:t", str(python.parent), python.name,
+            ["-c", "import time; time.sleep(30)"], tmp_path, 60.0, control,
+        )
+    assert time.monotonic() - debut < 5.0
+
+
+def test_le_lanceur_par_defaut_tient_son_delai(tmp_path: Path) -> None:
+    from cinoc.domain.errors import DeadlineExceeded
+
+    python = Path(sys.executable)
+    with pytest.raises(DeadlineExceeded):
+        _lancer_sous_processus(
+            "ocrd:t", str(python.parent), python.name,
+            ["-c", "import time; time.sleep(30)"], tmp_path, 0.5, RunControl(),
+        )
+
+
+@pytest.mark.live
+def test_une_chaine_reelle_ocrd_dummy(tmp_path: Path) -> None:
+    """Contre le vrai OCR-D (``ocrd-dummy``, livré avec OCR-D core) : le METS
+    gabarit est accepté, la chaîne passe de groupe en groupe et rend un PAGE
+    que la brique lit — sans région (``ocrd-dummy`` ne segmente rien), ce
+    qu'elle dit, au lieu d'un layout vide."""
+    import shutil
+
+    if shutil.which("ocrd-dummy") is None:
+        pytest.skip("OCR-D absent (ocrd-dummy introuvable)")
+    from PIL import Image
+
+    image = tmp_path / "p.png"
+    Image.new("L", (200, 100), 255).save(image)
+    brique = OcrdProcessor(label="t", processor="ocrd-dummy,ocrd-dummy")
+    artefact = Artifact(
+        id="i", document_id="d", type=ArtifactType.IMAGE,
+        uri=str(image), content_hash="0" * 64,
+    )
+    contexte = RunContext(
+        document_id="d", code_version="1", pipeline_name="p",
+        workspace_uri=str(tmp_path),
+    )
+    with pytest.raises(AdapterStepError, match="aucune région"):
+        brique.execute({ArtifactType.IMAGE: artefact}, {}, contexte, RunControl())

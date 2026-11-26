@@ -29,7 +29,6 @@ from __future__ import annotations
 import logging
 import re
 import unicodedata
-from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -343,51 +342,24 @@ class NormalizationProfile(BaseModel):
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> NormalizationProfile:
-        """Construit un profil depuis un dict (clés inconnues → erreur de validation).
-
-        Sucre rétro-compatible : ``nfc: bool`` → ``unicode_form``, et ``diplomatic``
-        comme alias de ``diplomatic_table``. ``unicode_form`` explicite l'emporte.
-        """
-        fields = dict(data)
-        nfc = fields.pop("nfc", None)
-        if "unicode_form" not in fields and nfc is not None:
-            fields["unicode_form"] = "NFC" if nfc else "none"
-        diplomatic = fields.pop("diplomatic", None)
-        if "diplomatic_table" not in fields and diplomatic is not None:
-            fields["diplomatic_table"] = diplomatic
-        fields.setdefault("name", "custom")
-        return cls(**fields)
-
-    @classmethod
-    def from_yaml_text(
-        cls, text: str, *, default_name: str = "custom"
-    ) -> NormalizationProfile:
+    def from_yaml_text(cls, text: str) -> NormalizationProfile:
         """Charge un profil depuis du **texte YAML** (pas un fichier).
 
         Pour une entrée non fiable (aperçu web d'une config saisie) :
         ``safe_load_yaml`` (aucun alias), **objet attendu** (sinon
         ``ValueError``), aucun accès disque. La validation Pydantic (clés
-        inconnues interdites) protège le reste.
+        inconnues interdites) protège le reste — les anciennes clés ``nfc`` et
+        ``diplomatic`` comprises, refusées sans traduction (D-301). C'est la
+        seule entrée : ``from_yaml`` (un chemin) et le sucre de ``from_dict``
+        n'avaient aucun consommateur.
         """
         from cinoc.formats._yaml import safe_load_yaml
 
         raw = safe_load_yaml(text) or {}
         if not isinstance(raw, dict):
             raise ValueError("profil YAML invalide (objet attendu).")
-        raw.setdefault("name", default_name)
-        return cls.from_dict(raw)
-
-    @classmethod
-    def from_yaml(cls, path: str | Path) -> NormalizationProfile:
-        """Charge un profil depuis un fichier YAML (usage CLI/local uniquement).
-
-        Ne jamais exposer un chemin fourni par une entrée non fiable (lecture
-        de fichier arbitraire).
-        """
-        return cls.from_yaml_text(
-            Path(path).read_text(encoding="utf-8"), default_name=Path(path).stem
-        )
+        raw.setdefault("name", "custom")
+        return cls(**raw)
 
 
 # ---------------------------------------------------------------------------

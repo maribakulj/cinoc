@@ -279,7 +279,7 @@ def test_un_outil_qui_ne_rend_pas_la_main_est_un_delai_pas_une_panne(
     ``cancelled`` (« arrêtée (délai) »), et non ``engine``."""
     import subprocess
 
-    from cinoc.adapters.layout import cli_source, ocrd_processor
+    from cinoc.adapters.layout import cli_source
     from cinoc.domain.errors import DeadlineExceeded
     from cinoc.pipeline.executor import failure_reason
 
@@ -304,10 +304,5 @@ def test_un_outil_qui_ne_rend_pas_la_main_est_un_delai_pas_une_panne(
             RunControl(),
         )
     assert failure_reason(raised.value) == "cancelled"
-
-    monkeypatch.setattr(ocrd_processor, "_resoudre", lambda *_: "ocrd-outil")
-    monkeypatch.setattr(ocrd_processor.subprocess, "run", pendu)
-    with pytest.raises(DeadlineExceeded):
-        ocrd_processor._lancer_sous_processus(
-            "ocrd:x", None, "ocrd-outil", [], tmp_path, 1.0
-        )
+    # Le pendant OCR-D, lui, attend un vrai processus et le tue au délai :
+    # ``test_ocrd_processor.test_le_lanceur_par_defaut_tient_son_delai``.

@@ -13,11 +13,12 @@ confidences et ALTO identiques à l'octet (vérifié sur les 10 pages du pilote)
 sous-processus, plus posé dans ``os.environ`` du parent (D-282 n'avait pas
 d'autre prise) ; une valeur déjà posée par l'utilisateur garde la main.
 
-**Délai et arrêt.** Le processus est attendu par tranches courtes : à
-l'annulation (``RunControl``) ou au dépassement du délai de l'étape, il est
-arrêté (``terminate``, puis ``kill`` s'il insiste) et **attendu** — pas de
-zombie, sous Windows comme ailleurs. Délai → ``DeadlineExceeded`` (motif
-« arrêtée (délai) ») ; arrêt → ``RunCancelledError``.
+**Délai et arrêt.** Le processus est attendu par tranches courtes
+(``adapters._process``, partagé avec OCR-D) : à l'annulation (``RunControl``)
+ou au dépassement du délai de l'étape, il est arrêté (``terminate``, puis
+``kill`` s'il insiste) et **attendu** — pas de zombie, sous Windows comme
+ailleurs. Délai → ``DeadlineExceeded`` (motif « arrêtée (délai) ») ; arrêt →
+``RunCancelledError``.
 
 **Provenance (D19).** ``tesseract --list-langs`` dit où sont les données de
 langue et lesquelles sont installées : les ``*.traineddata`` réellement lus
@@ -34,12 +35,12 @@ import re
 import shutil
 import subprocess
 import tempfile
-import time
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from cinoc.domain.errors import AdapterStepError, DeadlineExceeded, RunCancelledError
+from cinoc.adapters._process import wait_or_stop
+from cinoc.domain.errors import AdapterStepError
 from cinoc.pipeline.run_control import RunControl
 
 logger = logging.getLogger(__name__)
@@ -49,10 +50,6 @@ logger = logging.getLogger(__name__)
 #: pilote BNL perdait 19 pages sur 20 au délai de 120 s pour des pages de 1,4 à
 #: 3,4 s (D-281, D1). Le parallélisme de Cinoc est celui des workers.
 _OMP_ENV = "OMP_THREAD_LIMIT"
-#: Pas d'attente du processus : délai de réaction à un arrêt demandé.
-_POLL_SECONDS = 0.1
-#: Ce que ``terminate`` laisse au binaire avant ``kill``.
-_GRACE_SECONDS = 2.0
 #: Plafond des sondes (``--version``, ``--list-langs``).
 _PROBE_SECONDS = 10.0
 #: Fin de ``stderr`` citée dans un message d'échec.
@@ -251,52 +248,6 @@ def tesseract_command(
     return command
 
 
-def _stop(process: subprocess.Popen[bytes]) -> None:
-    """``terminate``, puis ``kill`` s'il insiste — et toujours ``wait`` (pas de
-    zombie). Sous Windows, ``terminate`` est déjà ``TerminateProcess``."""
-    process.terminate()
-    try:
-        process.wait(timeout=_GRACE_SECONDS)
-    except subprocess.TimeoutExpired:
-        process.kill()
-        process.wait()
-
-
-def _wait(
-    process: subprocess.Popen[bytes],
-    *,
-    timeout: float,
-    control: RunControl,
-    what: str,
-    image_path: str,
-) -> int:
-    """Code de sortie, en sondant l'arrêt et le délai toutes les 100 ms."""
-    end = time.monotonic() + timeout
-    try:
-        while True:
-            remaining = end - time.monotonic()
-            try:
-                return process.wait(timeout=max(0.0, min(_POLL_SECONDS, remaining)))
-            except subprocess.TimeoutExpired:
-                pass
-            if control.is_cancelled():
-                _stop(process)
-                raise RunCancelledError(
-                    f"{what} : arrêté à la demande sur {image_path!r}."
-                )
-            if time.monotonic() >= end:
-                _stop(process)
-                raise DeadlineExceeded(
-                    f"{what} : délai dépassé sur {image_path!r} "
-                    f"(au-delà de {timeout:g} s)."
-                )
-    except BaseException:
-        # Interruption du parent (Ctrl-C) : l'enfant ne survit pas au run.
-        if process.poll() is None:
-            _stop(process)
-        raise
-
-
 def run_tesseract(
     *,
     image_path: str,
@@ -319,7 +270,8 @@ def run_tesseract(
             f"{what} : binaire « tesseract » introuvable dans le PATH "
             "(installer Tesseract 5 et ses données de langue)."
         )
-    # Le chemin que pytesseract passait : l'ALTO le recopie (``fileName``).
+    # Le chemin que pytesseract passait (identité à l'octet, D-300). L'ALTO le
+    # recopie dans ``fileName`` : l'adaptateur n'en publie que le nom (D-301).
     source = os.path.realpath(os.path.normpath(os.path.normcase(image_path)))
     with tempfile.TemporaryDirectory(
         prefix=".tesseract-", dir=workspace, ignore_cleanup_errors=True
@@ -345,9 +297,9 @@ def run_tesseract(
                     f"{what} : binaire « tesseract » non exécutable "
                     f"({exc.strerror or exc})."
                 ) from exc
-            code = _wait(
+            code = wait_or_stop(
                 process, timeout=timeout, control=control, what=what,
-                image_path=image_path,
+                subject=image_path,
             )
         if code != 0:
             message = " ".join(_text(stderr_path.read_bytes()).split())

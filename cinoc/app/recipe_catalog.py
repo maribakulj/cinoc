@@ -142,6 +142,18 @@ def _brique(
     }
 
 
+#: Rejeux qu'une instance web ne peut pas nourrir : ils relisent un JSON posé
+#: à côté des images (``<doc>.layout.json``, ``<doc>.<libellé>.regions.json``),
+#: et le dépôt ZIP n'accepte que des images, des ``.txt`` et des ``.xml``.
+#: Offerts, ils menaient à un refus certain (422, D-299) : **retirés de l'offre**
+#: (D-301) plutôt qu'un JSON de plus accepté au dépôt — ils servent la démo, la
+#: CI et « segmenter une fois, comparer plusieurs lectures », trois usages de
+#: la CLI. Confronté à la règle du dépôt par ``tests/app/test_recipe_catalog.py``.
+WEB_UNREACHABLE_REPLAYS: frozenset[str] = frozenset(
+    {"precomputed_layout", "precomputed_region"}
+)
+
+
 def recipe_catalog(
     lang: str = "fr",
     *,
@@ -173,7 +185,7 @@ def recipe_catalog(
                     "bricks": [
                         _brique(k, par_kind.get(k), public_mode, langue)
                         for k in candidates
-                        if k not in CLI_ONLY_KINDS
+                        if k not in CLI_ONLY_KINDS | WEB_UNREACHABLE_REPLAYS
                     ],
                 }
             )
@@ -189,4 +201,9 @@ def recipe_catalog(
     return sorties
 
 
-__all__ = ["ROLE_LABELS", "brick_statuses", "recipe_catalog"]
+__all__ = [
+    "ROLE_LABELS",
+    "WEB_UNREACHABLE_REPLAYS",
+    "brick_statuses",
+    "recipe_catalog",
+]

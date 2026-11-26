@@ -66,14 +66,6 @@ CORR = ArtifactType.CORRECTED_TEXT
 LAYOUT, ALTO, PAGE = ArtifactType.LAYOUT, ArtifactType.ALTO_XML, ArtifactType.PAGE_XML
 ENTITIES = ArtifactType.ENTITIES
 
-#: Moteurs OCR du socle, dans l'ordre de préférence : ``tesseract`` d'abord,
-#: le seul qui tourne sur une machine nue sans poids ni clé.
-_OCR = (
-    "tesseract", "kraken", "pero", "calamari",
-    "mistral_ocr", "google_vision", "azure_di",
-)
-
-
 #: Reconnaisseurs par région qui ne lisent **aucun pixel** : le rejeu lit un
 #: texte figé par identifiant de région. Le découper exigerait Pillow et une
 #: vraie image — ce que la démo et la CI n'ont pas — pour n'en rien faire.
@@ -92,12 +84,17 @@ def roles() -> Mapping[str, Role]:
     peut décrire.
     """
     from cinoc.app.engines import providers_for_mode  # noqa: PLC0415
+    from cinoc.app.modules.registry import socle_ocr_engines  # noqa: PLC0415
+
+    # Les moteurs OCR, lus sur le socle dans son ordre (= préférence) : la
+    # liste tenue ici à la main en était la quatrième copie (D-301).
+    ocr = socle_ocr_engines()
 
     def fournisseurs(mode: str) -> tuple[str, ...]:
         return tuple(sorted(providers_for_mode(mode)))
     return {
         "preprocess": Role((IMAGE,), (IMAGE,), ("preprocess",)),
-        "ocr": Role((IMAGE,), (RAW,), (*_OCR, "precomputed")),
+        "ocr": Role((IMAGE,), (RAW,), (*ocr, "precomputed")),
         # Ordre = préférence : le premier est le défaut d'une recette qui ne
         # choisit pas. ``tesseract_layout`` ouvre la marche parce qu'il est le
         # seul à ne rien exiger — ni poids, ni SDK, ni adresse — et parce que
@@ -138,7 +135,7 @@ def roles() -> Mapping[str, Role]:
             (LAYOUT, IMAGE),
             (LAYOUT,),
             (
-                "tesseract_layout", *_OCR, "precomputed_region",
+                "tesseract_layout", *ocr, "precomputed_region",
                 *fournisseurs("zero_shot"),
             ),
             fanout=True,

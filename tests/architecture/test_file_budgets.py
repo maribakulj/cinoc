@@ -34,11 +34,6 @@ FILE_BUDGETS: dict[str, int] = {
     # (``document_lines`` + ``document_taxonomy``, vue document recentrée :
     # 1102 LOC) + ~15 %.
     "evaluation/analysis.py": 1265,
-    # CSS **inline** du rapport autonome : une chaîne `_CSS` unique (contrainte
-    # d'autonomie — aucun fichier externe) + helpers d'assemblage. Cohésion du
-    # design system > éclatement ; grandit avec les composants (axe 2). Budget
-    # re-basé au courant (611 LOC, refonte mise en page R1→R5) + ~15 %.
-    "reports/html.py": 730,
     # Helpers SVG **serveur** déterministes (un par type de graphe : dispersion,
     # Venn, barres, calibration, heatmap, radar, bulles, box plot, camembert,
     # haltère, colonnes groupées, bump). Cohésion d'un même contrat de rendu
@@ -63,6 +58,10 @@ ASSET_BUDGETS: dict[str, int] = {
     "interfaces/web/static/css/shell.css": 1477,
     # Script du rapport autonome (enrichissement progressif, CSP-hashé).
     "reports/_assets/report.js": 714,
+    # CSS du rapport autonome, sorti de ``reports/html.py`` (D-301 : il en
+    # occupait ~580 lignes, l'exemption Python est libérée) ; inliné à la
+    # génération. Une ligne par fragment, commentée : 576 lignes + ~15 %.
+    "reports/_assets/report.css": 660,
 }
 
 

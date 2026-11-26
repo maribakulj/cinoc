@@ -296,6 +296,25 @@ def check_replay_sources(spec: RunSpec, registry: ModuleRegistry) -> None:
         )
 
 
+def socle_ocr_engines() -> tuple[str, ...]:
+    """Les **moteurs OCR** du socle, dans l'ordre du socle — celui de la
+    préférence : ``tesseract`` d'abord, le seul qui tourne sur une machine nue
+    sans poids ni clé.
+
+    Source unique du catalogue OCR (D-301) : recettes et état des moteurs le
+    lisent ici, et un moteur ajouté au socle y arrive sans autre écriture. Un
+    moteur OCR = une brique de ``adapters/ocr/`` qui lit des pixels ; le rejeu
+    (``precomputed``, qui déclare les fichiers qu'il relit par ``unit_inputs``)
+    n'en est pas un.
+    """
+    return tuple(
+        kind
+        for kind, path, _ in _SOCLE
+        if path.startswith("ocr.")
+        and not hasattr(_load_class(_A + path), "unit_inputs")
+    )
+
+
 def socle_params(kind: str) -> tuple[Param, ...] | None:
     """La déclaration d'une brique du **socle**, sans registre à construire."""
     for socle_kind, path, _ in _SOCLE:
@@ -319,5 +338,6 @@ __all__ = [
     "ModuleRegistry",
     "ModuleResolutionError",
     "register_default_modules",
+    "socle_ocr_engines",
     "socle_params",
 ]

@@ -137,36 +137,35 @@ def test_as_dict_is_deterministic_and_sorted() -> None:
     assert list(d["diplomatic_table"]) == ["i", "u"]
 
 
-def test_from_dict_nfc_sugar() -> None:
-    off = NormalizationProfile.from_dict({"name": "x", "nfc": False})
-    on = NormalizationProfile.from_dict({"name": "x", "nfc": True})
-    assert off.unicode_form == "none"
-    assert on.unicode_form == "NFC"
-
-
-def test_from_dict_unicode_form_wins_over_nfc() -> None:
-    data = {"name": "x", "nfc": False, "unicode_form": "NFKC"}
-    assert NormalizationProfile.from_dict(data).unicode_form == "NFKC"
-
-
-def test_from_dict_diplomatic_alias() -> None:
-    prof = NormalizationProfile.from_dict({"name": "x", "diplomatic": {"ſ": "s"}})
-    assert prof.diplomatic_table == {"ſ": "s"}
-
-
-def test_from_dict_rejects_unknown_key() -> None:
+@pytest.mark.parametrize("ancienne_cle", ["nfc: false", "diplomatic:\n  ſ: s"])
+def test_the_legacy_keys_are_refused_not_translated(ancienne_cle: str) -> None:
+    """Le sucre ``nfc: bool`` → ``unicode_form`` et l'alias ``diplomatic`` de
+    ``diplomatic_table`` n'avaient aucun consommateur (audit D-264) : retirés
+    (D-301). Une clé d'avant est refusée comme toute clé inconnue — jamais
+    traduite en silence."""
     with pytest.raises(ValidationError):
-        NormalizationProfile.from_dict({"name": "x", "diplomatik": {"ſ": "s"}})
+        NormalizationProfile.from_yaml_text(f"name: x\n{ancienne_cle}\n")
 
 
-def test_from_yaml_roundtrip(tmp_path) -> None:  # type: ignore[no-untyped-def]
-    path = tmp_path / "p.yaml"
-    path.write_text(
-        "name: custom\ncaseless: true\ndiplomatic:\n  ſ: s\n", encoding="utf-8"
+def test_no_file_loader_nor_dict_shim_remains() -> None:
+    """``from_yaml`` (lecture d'un chemin) n'avait que des tests pour client, et
+    ``from_dict`` que ``from_yaml_text`` : une seule entrée reste, le texte."""
+    assert not hasattr(NormalizationProfile, "from_yaml")
+    assert not hasattr(NormalizationProfile, "from_dict")
+
+
+def test_from_yaml_text_rejects_unknown_key() -> None:
+    with pytest.raises(ValidationError):
+        NormalizationProfile.from_yaml_text("name: x\ndiplomatik:\n  ſ: s\n")
+
+
+def test_from_yaml_text_roundtrip() -> None:
+    prof = NormalizationProfile.from_yaml_text(
+        "name: custom\ncaseless: true\ndiplomatic_table:\n  ſ: s\n"
     )
-    prof = NormalizationProfile.from_yaml(path)
     assert prof.name == "custom" and prof.caseless
     assert prof.diplomatic_table == {"ſ": "s"}
+    assert NormalizationProfile.from_yaml_text("caseless: true\n").name == "custom"
 
 
 # --- profils & invariants ----------------------------------------------------
