@@ -243,7 +243,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Cache de reprise et dossier d'artefacts du run : les (pipeline × "
         "document) déjà produits à l'identique y sont rechargés au lieu d'être "
         "ré-exécutés, et les sorties y survivent au run — réponses natives des "
-        "moteurs distants comprises.",
+        "moteurs distants et unités en échec comprises. C'est l'archive du run.",
+    )
+    run_cmd.add_argument(
+        "--offline",
+        action="store_true",
+        help="Avec --resume-dir : re-note l'archive SANS aucun appel de moteur "
+        "(après une montée de version d'une métrique, ou chez un tiers qui a "
+        "reçu l'archive). Une unité absente de l'archive — jamais produite, ou "
+        "produite par une autre version d'un module ou d'un binaire — fait "
+        "échouer le run au lieu d'être exécutée.",
     )
     run_cmd.add_argument(
         "--analyses",

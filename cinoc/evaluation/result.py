@@ -119,7 +119,11 @@ class RunResult(BaseModel):
     #: 3 : une ligne d'``usage`` par unité **y compris en échec** (issue + motif)
     #: et ``expected`` sur les agrégats. Un JSON v2 se recharge (issue ``ok`` par
     #: défaut, ``expected`` absent) — mais ne distingue pas un échec d'une absence.
-    schema_version: int = 3
+    #: 4 : le manifeste porte ``served_models`` et ``unicode_version``, et
+    #: ``adapter_kwargs`` y devient les réglages **effectifs** ; un lecteur v3
+    #: (``extra="forbid"``) refuserait ces champs. Un JSON v3 se recharge (champs
+    #: vides) sans prétendre savoir quel modèle a été servi.
+    schema_version: int = 4
     manifest: RunManifest
     pipelines: tuple[PipelineResult, ...] = Field(default_factory=tuple)
     documents: tuple[RunDocumentResult, ...] = Field(default_factory=tuple)

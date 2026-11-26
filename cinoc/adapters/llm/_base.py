@@ -81,6 +81,9 @@ class LLMCompletion(NamedTuple):
     posent toujours : ils lisent ce corps, et le relire depuis le sidecar rend la
     même ``LLMCompletion``. ``None`` n'existe que pour un faux client de test qui
     fabrique une complétion sans réponse.
+
+    ``model`` est le modèle **servi**, lu dans ce même corps (``served_model``) ;
+    ``None`` quand la réponse ne le dit pas.
     """
 
     text: str
@@ -88,6 +91,7 @@ class LLMCompletion(NamedTuple):
     tokens_out: int | None = None
     stop_reason: StopReason = "unknown"
     native: object | None = None
+    model: str | None = None
 
 
 def wire_field(data: object, key: str) -> Any:
@@ -181,6 +185,35 @@ class InferenceSettings:
             "seed": self.seed,
             "max_tokens": self.max_tokens,
         }
+
+
+#: Ce qu'un module LLM/VLM déclare au manifeste et à l'empreinte de l'étape.
+EffectiveSettings = dict[str, str | float | int | None]
+
+
+def llm_effective_settings(
+    *,
+    model: str,
+    role: PipelineMode,
+    prompt: str,
+    settings: InferenceSettings,
+    **target: str | int,
+) -> EffectiveSettings:
+    """Réglages **effectifs** d'un module LLM/VLM, défauts compris.
+
+    Le modèle **demandé**, le mode, le prompt (celui par défaut s'il n'a pas été
+    saisi : il change la sortie autant qu'un prompt saisi), les réglages
+    d'échantillonnage, et la cible (``target`` : ``base_url``, ``host``,
+    ``num_ctx``…). C'est ce que le manifeste écrit et ce que l'empreinte de
+    l'étape hache — une seule liste, dans le module qui l'applique.
+    """
+    return {
+        "model": model,
+        "role": role,
+        "prompt": prompt,
+        **settings.as_manifest(),
+        **target,
+    }
 
 
 #: Appel d'un LLM texte : ``prompt → réponse`` (fournisseur + modèle capturés).
@@ -438,6 +471,7 @@ def run_llm_step(
         if completion.tokens_in is not None or completion.tokens_out is not None
         else None
     )
+    served = (completion.model,) if completion.model else ()
     truncation = None
     if completion.stop_reason == "length":
         plafond = f", max_tokens={max_tokens}" if max_tokens is not None else ""
@@ -445,7 +479,9 @@ def run_llm_step(
             f"{name} : réponse coupée par un plafond de jetons "
             f"(raison d'arrêt 'length'{plafond})"
         )
-    return StepOutput(artifacts=artifacts, usage=usage, truncation=truncation)
+    return StepOutput(
+        artifacts=artifacts, usage=usage, truncation=truncation, served_models=served
+    )
 
 
 __all__ = [
@@ -454,6 +490,7 @@ __all__ = [
     "DEFAULT_SEED",
     "DEFAULT_TEMPERATURE",
     "DEFAULT_TRANSCRIPTION_PROMPT",
+    "EffectiveSettings",
     "InferenceSettings",
     "LLMCompletion",
     "StopReason",
@@ -461,6 +498,7 @@ __all__ = [
     "VisionInvoke",
     "build_prompt",
     "default_prompt_for_role",
+    "llm_effective_settings",
     "llm_input_types",
     "llm_output_type",
     "llm_output_types",

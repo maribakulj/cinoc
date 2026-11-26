@@ -23,7 +23,6 @@ import threading
 from collections.abc import Callable, Mapping
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import replace
-from datetime import datetime
 from pathlib import Path, PurePosixPath
 from tempfile import TemporaryDirectory
 from urllib.parse import urlsplit
@@ -32,6 +31,13 @@ from cinoc.adapters.corpus._http import CorpusHttpError, download
 from cinoc.adapters.layout.crop import crop_region
 from cinoc.app.modules.registry import ModuleRegistry
 from cinoc.app.resume import ResumeStore, unit_key
+from cinoc.app.run_manifest import (
+    SECRET_PLACEHOLDER,
+    build_manifest,
+    module_identities,
+    secret_values,
+    served_models,
+)
 from cinoc.app.security import safe_stem
 from cinoc.domain.artifacts import Artifact, ArtifactType, StepArtifacts
 from cinoc.domain.deadline import Deadline
@@ -50,7 +56,6 @@ from cinoc.pipeline.executor import (
     PipelineExecutor,
     failure_reason,
 )
-from cinoc.pipeline.protocols import Module
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import DocumentExecution
 
@@ -59,6 +64,15 @@ logger = logging.getLogger(__name__)
 
 class OrchestrationError(CinocError):
     """Run impossible à exécuter (document sans image, etc.)."""
+
+
+class ArchiveIncompleteError(OrchestrationError):
+    """Relecture hors ligne (``offline``) : une unité nécessaire manque à l'archive.
+
+    Hors ligne, rien ne s'exécute : une unité absente — jamais produite, ou
+    produite sous une autre empreinte (module relevé, binaire changé, réglage
+    différent) — fait échouer le run au lieu d'être exécutée en silence.
+    """
 
 
 #: Sorties d'un run, indexées ``pipeline → document → étape → type → artefact``
@@ -128,6 +142,7 @@ def run(
     on_progress: ProgressCallback | None = None,
     resume_store: ResumeStore | None = None,
     max_workers: int | None = None,
+    offline: bool = False,
 ) -> RunResult:
     """Exécute ``spec`` et renvoie le ``RunResult`` (manifeste + métriques).
 
@@ -151,7 +166,18 @@ def run(
     (référence de déterminisme). Les unités sont indépendantes ; l'assemblage
     final est **ordonné par le spec**, donc le résultat ne dépend pas du nombre de
     threads.
+
+    ``offline`` (exige ``resume_store``) : **relecture** de l'archive, sans aucun
+    appel de moteur. Chaque unité est lue dans l'archive — échecs archivés
+    compris, restitués comme échecs — et une unité absente lève
+    :class:`ArchiveIncompleteError` au lieu d'être exécutée. Les binaires de
+    l'identité sont ceux de l'archive (rien ne tourne, rien n'est sondé).
+    L'évaluation, elle, est recalculée comme toujours : c'est tout l'objet.
     """
+    if offline and resume_store is None:
+        raise OrchestrationError(
+            "relecture hors ligne : une archive est requise (--resume-dir)."
+        )
     started_at = utcnow()
     needed = sorted(
         {step.adapter_name for pipeline in spec.pipelines for step in pipeline.steps}
@@ -160,7 +186,18 @@ def run(
         name: registry.build(name, spec.adapter_kwargs.get(name, {}))
         for name in needed
     }
-    executor = PipelineExecutor(code_version)
+    # Une seule identité par module, lue une fois : l'empreinte des étapes, la
+    # clé de reprise et le manifeste en dérivent tous trois.
+    identities = module_identities(
+        spec,
+        modules,
+        recorded_binaries=(
+            resume_store.recorded_binaries()
+            if offline and resume_store is not None
+            else None
+        ),
+    )
+    executor = PipelineExecutor(code_version, identities)
     metric_registry = MetricRegistry()
     register_default_metrics(metric_registry)
     _bind_archaic_metrics(metric_registry, spec)
@@ -188,12 +225,13 @@ def run(
         )
 
         # 1) Reprise (thread principal) : les unités déjà produites à l'identique
-        #    sont rechargées ; les autres sont mises en file d'exécution. Seules
-        #    les unités réussies sont mises en cache : un échec se retente.
+        #    sont rechargées ; les autres sont mises en file d'exécution. Les
+        #    échecs sont archivés mais retentés — sauf hors ligne, où ils sont
+        #    restitués et où une unité absente arrête le run.
         # Une ``DocumentExecution`` par unité, **échecs compris** : l'issue est
         # conservée, jamais remplacée par un dict vide qui se lirait « absent ».
         results: dict[tuple[str, str], DocumentExecution] = {}
-        secrets = _secret_values(spec.adapter_kwargs)
+        secrets = secret_values(spec.adapter_kwargs)
         pending: list[tuple[PipelineSpec, DocumentRef, str | None]] = []
         for pipeline in spec.pipelines:
             for document in documents:
@@ -208,20 +246,23 @@ def run(
                     continue
                 key = (
                     unit_key(
-                        code_version=code_version,
-                        pipeline=pipeline,
-                        adapter_kwargs=spec.adapter_kwargs,
-                        document=document,
+                        pipeline=pipeline, identities=identities, document=document
                     )
                     if resume_store is not None
                     else None
                 )
-                cached = resume_store.load(key) if resume_store and key else None
+                cached = (
+                    resume_store.load(key, failures=offline)
+                    if resume_store and key
+                    else None
+                )
                 if cached is not None:
                     results[(pipeline.name, document.id)] = cached
                     progress.tick()
                 else:
                     pending.append((pipeline, document, key))
+        if offline and pending:
+            _refuse_missing(pending, resume_store)
 
         # 2) Exécution **parallèle** des unités non-cachées. OCR (sous-processus)
         #    et LLM/cloud (I/O HTTP) libèrent le GIL → les threads donnent un
@@ -267,6 +308,10 @@ def run(
                             results[unit] = DocumentExecution.failed(
                                 failure_reason(exc), message
                             )
+                            if key is not None:
+                                # Archivé (l'archive dit ce qui a échoué), mais
+                                # une reprise normale le retentera.
+                                saves.append((key, results[unit]))
                             progress.tick()
                             continue
                         if execution.message is not None:
@@ -287,10 +332,14 @@ def run(
                     pool.shutdown(wait=False, cancel_futures=True)
                     raise
 
-        # 3) Reprise : persistance des unités exécutées (thread principal, post-pool).
-        if resume_store is not None:
+        # 3) Reprise : persistance des unités exécutées (thread principal, post-pool),
+        #    et des binaires sous lesquels elles l'ont été (relecture hors ligne).
+        if resume_store is not None and saves:
             for saved_key, saved in saves:
                 resume_store.save(saved_key, saved)
+            resume_store.record_binaries(
+                {name: identity.binaries for name, identity in identities.items()}
+            )
 
         # 4) Assemblage **déterministe** : ordre du spec, indépendant de l'ordre
         #    d'achèvement des threads → `RunResult` byte-identique au séquentiel.
@@ -314,13 +363,13 @@ def run(
             pipeline_outputs[pipeline.name] = per_document
 
         completed_at = utcnow()
-        manifest = _manifest(
+        manifest = build_manifest(
             spec,
-            modules,
+            identities,
             code_version,
             started_at,
             completed_at,
-            system_binaries=_collect_system_binaries(modules),
+            served=served_models(spec, pipeline_outputs),
             artifacts_dir=(
                 str(resume_store.base_dir) if resume_store is not None else None
             ),
@@ -405,6 +454,37 @@ def _materialize_remote_images(
     return tuple(localized), failed
 
 
+#: Unités nommées au plus dans le message d'une archive incomplète.
+_MISSING_SHOWN = 10
+
+
+def _refuse_missing(
+    pending: list[tuple[PipelineSpec, DocumentRef, str | None]],
+    store: ResumeStore | None,
+) -> None:
+    """Hors ligne : nomme les unités absentes de l'archive et arrête le run."""
+    names = [f"{pipeline.name} × {document.id}" for pipeline, document, _ in pending]
+    shown = ", ".join(names[:_MISSING_SHOWN])
+    if len(names) > _MISSING_SHOWN:
+        shown += f", … (+{len(names) - _MISSING_SHOWN})"
+    where = store.base_dir if store is not None else "?"
+    sans_cle = sum(1 for _, _, key in pending if key is None)
+    detail = (
+        f" Dont {sans_cle} sans image lisible : une unité sans image n'a pas "
+        "d'empreinte, elle n'est jamais archivée."
+        if sans_cle
+        else ""
+    )
+    raise ArchiveIncompleteError(
+        f"relecture hors ligne : {len(names)} unité(s) absente(s) de l'archive "
+        f"{where} — {shown}. Une unité manque si elle n'a jamais été produite, "
+        "si l'un de ses fichiers a disparu, ou si elle l'a été sous une autre "
+        "empreinte (version d'un module, binaire, réglage ou endpoint "
+        f"différents).{detail} Rien n'a été "
+        "exécuté ; relancez sans --offline pour les produire."
+    )
+
+
 def _initial_inputs(document: DocumentRef) -> dict[ArtifactType, Artifact]:
     if document.image_uri is None:
         raise OrchestrationError(
@@ -418,109 +498,6 @@ def _initial_inputs(document: DocumentRef) -> dict[ArtifactType, Artifact]:
             uri=document.image_uri,
         )
     }
-
-
-def _collect_system_binaries(modules: Mapping[str, Module]) -> dict[str, str]:
-    """Versions des **binaires externes** des modules exécutés (reproductibilité).
-
-    Un module qui enveloppe un binaire système (ex. tesseract) expose
-    ``system_binaries() -> dict[str, str]`` ; on le détecte par **duck-typing**
-    (hors ``Module`` Protocol — le contrat d'exécution reste unique) et on fusionne.
-    Le hook est best-effort côté module (binaire absent → ``{}``) → pas de garde
-    ici, pas de panne. Seuls les modules réellement construits sont sondés.
-    """
-    binaries: dict[str, str] = {}
-    for module in modules.values():
-        probe = getattr(module, "system_binaries", None)
-        if callable(probe):
-            binaries.update(probe())
-    return binaries
-
-
-def _inference_settings(module: Module) -> dict[str, object]:
-    """Réglages d'inférence **effectifs** d'un module LLM/VLM (vide sinon).
-
-    Même mécanisme que ``system_binaries()`` : un hook détecté par duck-typing,
-    hors du ``Module`` Protocol — le contrat d'exécution reste unique, et un
-    module qui n'échantillonne rien n'a rien à déclarer.
-    """
-    probe = getattr(module, "inference_settings", None)
-    return dict(probe()) if callable(probe) else {}
-
-
-def _manifest(
-    spec: RunSpec,
-    modules: Mapping[str, Module],
-    code_version: str,
-    started_at: datetime,
-    completed_at: datetime,
-    *,
-    system_binaries: dict[str, str],
-    artifacts_dir: str | None = None,
-) -> RunManifest:
-    names = sorted(modules)
-    return RunManifest(
-        run_id=spec.run_id or f"run-{started_at.strftime('%Y%m%dT%H%M%S')}",
-        corpus_name=spec.corpus.name,
-        n_documents=len(spec.corpus.documents),
-        pipeline_specs=spec.pipelines,
-        # Les kwargs saisis, **complétés des réglages effectifs** du module
-        # (``inference_settings()``, défauts compris) : un manifeste qui ne
-        # garderait que la saisie laisserait la température d'un run dépendre
-        # du défaut de la version qui l'a produit.
-        adapter_kwargs={
-            name: {
-                **_sans_secrets(spec.adapter_kwargs.get(name, {})),
-                **_inference_settings(modules[name]),
-            }
-            for name in names
-        },
-        # Reproductibilité (R-2) : la version de chaque module exécuté entre dans
-        # l'empreinte. `module_versions` = version d'*adapter* ; la version du
-        # *binaire* externe (ex. tesseract) est captée à l'exécution dans
-        # `system_binaries_lock` via le hook `system_binaries()` (duck-typing).
-        module_versions={name: modules[name].version for name in names},
-        system_binaries_lock=system_binaries,
-        view_specs=spec.evaluation.views,
-        failure_policy=spec.evaluation.failure_policy,
-        code_version=code_version,
-        started_at=started_at,
-        completed_at=completed_at,
-        metadata=spec.metadata,
-        artifacts_dir=artifacts_dir,
-    )
-
-
-#: Réglages qui portent une **valeur secrète** (jeton d'un endpoint privé…). Le
-#: module la reçoit pour s'authentifier ; le manifeste, lui, voyage — dans le
-#: JSON ``RunResult``, dans la section « composition » du rapport, chez qui on
-#: partage le rapport. Il garde donc le **fait** qu'un secret a été fourni,
-#: jamais sa valeur. Un seul point de passage : tout ce qui sort d'un run sort
-#: du manifeste.
-_SECRET_KWARGS = frozenset({"token", "api_key", "key", "secret", "password"})
-_SECRET_PLACEHOLDER = "<secret>"
-
-
-def _sans_secrets(
-    kwargs: Mapping[str, str | int | float | bool],
-) -> dict[str, str | int | float | bool]:
-    return {
-        k: _SECRET_PLACEHOLDER if k in _SECRET_KWARGS else v for k, v in kwargs.items()
-    }
-
-
-def _secret_values(
-    adapter_kwargs: Mapping[str, Mapping[str, str | int | float | bool]],
-) -> tuple[str, ...]:
-    """Valeurs secrètes du run — à caviarder dans tout message d'échec."""
-    values = {
-        str(v)
-        for kwargs in adapter_kwargs.values()
-        for k, v in kwargs.items()
-        if k in _SECRET_KWARGS and str(v)
-    }
-    # Le plus long d'abord : un secret qui en contient un autre reste masqué.
-    return tuple(sorted(values, key=lambda v: (-len(v), v)))
 
 
 #: Plafond d'un message d'échec : une explication, pas une trace complète.
@@ -537,7 +514,7 @@ def _redact(message: str, secrets: tuple[str, ...], workspace: str) -> str:
     ``RunResult`` instable (déterminisme).
     """
     for secret in secrets:
-        message = message.replace(secret, _SECRET_PLACEHOLDER)
+        message = message.replace(secret, SECRET_PLACEHOLDER)
     message = message.replace(workspace, "<workspace>")
     # Le chemin sous le workspace garde le séparateur du système : sous Windows
     # ``<workspace>\pipeline0/dump.json``. Normalisé en ``/``, le message est le
@@ -552,4 +529,10 @@ def _redact(message: str, secrets: tuple[str, ...], workspace: str) -> str:
     return message
 
 
-__all__ = ["ArtifactSink", "OrchestrationError", "PipelineOutputs", "run"]
+__all__ = [
+    "ArchiveIncompleteError",
+    "ArtifactSink",
+    "OrchestrationError",
+    "PipelineOutputs",
+    "run",
+]

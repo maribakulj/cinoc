@@ -166,6 +166,35 @@ def _correct(
     return dict(out.artifacts), bodies, module
 
 
+@pytest.mark.parametrize(
+    ("producer", "servi"), [("ollama", "qwen2.5:3b"), ("mistral", "mistral-small-2506")]
+)
+def test_the_correction_declares_the_model_its_responses_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, producer: str, servi: str
+) -> None:
+    """Demandé ``m``, servi celui que chaque réponse nomme (S9)."""
+    bodies: list[dict[str, Any]] = []
+    monkeypatch.setattr(httpx, "AsyncClient", _fake(bodies, invalid_first=False))
+    monkeypatch.setenv("MISTRAL_API_KEY", _SECRET)
+    source = tmp_path / "in.layout.json"
+    source.write_text(_layout().model_dump_json(), encoding="utf-8")
+    out = SaknussemmCorrector(label="corr", producer=producer, model="m").execute(
+        {
+            ArtifactType.LAYOUT: Artifact(
+                id="a", document_id="doc1", type=ArtifactType.LAYOUT,
+                uri=str(source), content_hash="0" * 64,
+            )
+        },
+        {},
+        RunContext(
+            document_id="doc1", code_version="1", pipeline_name="p",
+            workspace_uri=str(tmp_path / "ws"),
+        ),
+        RunControl(),
+    )
+    assert out.served_models == (servi,)
+
+
 @pytest.mark.parametrize("producer", ["ollama", "mistral"])
 def test_every_response_is_kept_in_call_order(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, producer: str

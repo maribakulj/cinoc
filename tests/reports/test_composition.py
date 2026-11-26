@@ -239,3 +239,16 @@ def test_the_section_is_declared_wide() -> None:
     from cinoc.reports.renderer import _WIDE_SECTIONS
 
     assert "composition" in _WIDE_SECTIONS
+
+
+def test_a_long_setting_is_abbreviated_and_kept_whole_in_its_tooltip() -> None:
+    """Le prompt est écrit au manifeste défaut compris (S9) : le tableau l'abrège,
+    l'infobulle le garde entier."""
+    prompt = "Transcris fidèlement le texte de cette image " * 3
+    html = _rendu(
+        [_spec("P", [_etape("v", "openai:c0", ["image"], ["raw_text"])])],
+        {"openai:c0": {"prompt": prompt, "model": "gpt-4o-mini"}},
+    )
+    assert "model=gpt-4o-mini" in html
+    assert f'title="{prompt}"' in html
+    assert "prompt=<span" in html and "image Transcris fidè…</span>" in html

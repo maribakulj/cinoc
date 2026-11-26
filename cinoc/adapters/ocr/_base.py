@@ -58,22 +58,30 @@ def run_remote_image_to_text(
     control: RunControl,
     call: Callable[[str], object],
     extract: Callable[[object], str],
+    served: Callable[[object], str | None] | None = None,
 ) -> StepOutput:
     """OCR distant : ``RAW_TEXT`` **et** ``NATIVE_JSON`` (le corps de la réponse).
 
     ``call(image_uri)`` rend le corps JSON décodé de la réponse ; ``extract`` en
     lit le texte. Le texte n'est jamais lu ailleurs que par ``extract`` — c'est
-    ce qui rend la relecture du sidecar identique à l'exécution.
+    ce qui rend la relecture du sidecar identique à l'exécution. ``served``, pour
+    un fournisseur qui le rend, lit dans ce même corps le modèle **servi**.
     """
+    corps: list[object] = []
 
     def recognize(image_uri: str) -> tuple[str, object]:
         native = call(image_uri)
+        corps.append(native)
         return extract(native), native
 
-    return _run(
+    output = _run(
         name=name, label=label, inputs=inputs, context=context, control=control,
         recognize=recognize,
     )
+    modele = served(corps[0]) if served is not None and corps else None
+    if modele is None:
+        return output
+    return StepOutput(artifacts=output.artifacts, served_models=(modele,))
 
 
 def _run(

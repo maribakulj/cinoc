@@ -2,9 +2,10 @@
 
 Mono-document, séquentiel : résout les entrées de chaque étape (DAG via
 ``inputs_from``, sinon dernière version par type), appelle ``Module.execute``,
-puis **estampille la provenance** (``code_version`` + ``parameters_hash``) et le
-``produced_by_step`` sur chaque artefact produit — le module n'a pas à connaître
-ces concerns. L'annulation coopérative est vérifiée avant chaque étape.
+puis **estampille la provenance** (``code_version``, ``parameters_hash`` = empreinte
+de l'étape, modèles servis) et le ``produced_by_step`` sur chaque artefact
+produit — le module n'a pas à connaître ces concerns. L'annulation coopérative
+est vérifiée avant chaque étape.
 
 Une étape ``fanout=True`` (reconnaissance par région) exécute son module **une
 fois par région** du ``LAYOUT`` d'entrée et réassemble un ``LAYOUT`` rempli
@@ -16,14 +17,12 @@ sans état mutable partagé, donc sûr à appeler depuis plusieurs threads.
 
 from __future__ import annotations
 
-import json
 import time
 from collections.abc import Mapping
 
 from cinoc.domain.artifacts import (
     Artifact,
     ArtifactType,
-    compute_content_hash,
     latest_by_type,
 )
 from cinoc.domain.deadline import Deadline
@@ -32,6 +31,7 @@ from cinoc.domain.pipeline import INITIAL_STEP_ID, PipelineSpec, PipelineStep
 from cinoc.domain.provenance import ProvenanceRecord
 from cinoc.domain.usage import FailureReason, ResourceUsage
 from cinoc.pipeline.fanout import RegionCropper, execute_region_fanout
+from cinoc.pipeline.fingerprint import ModuleIdentity, step_fingerprint
 from cinoc.pipeline.protocols import Module
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import DocumentExecution, RunContext, StepOutput
@@ -62,18 +62,25 @@ def failure_reason(exc: CinocError) -> FailureReason:
     return "engine"
 
 
-def _parameters_hash(params: Mapping[str, object]) -> str:
-    payload = json.dumps(params, sort_keys=True, ensure_ascii=False)
-    return compute_content_hash(payload.encode("utf-8"))
-
-
 class PipelineExecutor:
-    """Exécute les pipelines déclaratives sur des artefacts initiaux."""
+    """Exécute les pipelines déclaratives sur des artefacts initiaux.
 
-    def __init__(self, code_version: str) -> None:
+    ``identities`` : l'identité de chaque module (``adapter_name`` →
+    :class:`ModuleIdentity`), calculée **une fois** par l'appelant — la même qui
+    sert la clé de reprise et le manifeste. Un module absent de la table (appel
+    direct, tests) n'est identifié que par sa ``version`` : l'exécuteur ne voit
+    pas les kwargs saisis.
+    """
+
+    def __init__(
+        self,
+        code_version: str,
+        identities: Mapping[str, ModuleIdentity] | None = None,
+    ) -> None:
         if not code_version:
             raise CinocError("PipelineExecutor : code_version vide.")
         self._code_version = code_version
+        self._identities = dict(identities or {})
 
     def execute_document(
         self,
@@ -138,7 +145,7 @@ class PipelineExecutor:
             step_usage[step.id] = ResourceUsage(
                 duration_seconds=time.monotonic() - started
             ).merged_with(output.usage)
-            stamped = self._stamp(output.artifacts, step)
+            stamped = self._stamp(output, step, module)
             self._check_outputs(step, stamped)
             by_step[step.id] = stamped
             if output.truncation is not None:
@@ -240,23 +247,29 @@ class PipelineExecutor:
             resolved[t] = art
         return resolved
 
+    def identity_of(self, step: PipelineStep, module: Module) -> ModuleIdentity:
+        """L'identité du module de ``step`` (table de l'appelant, sinon sa version)."""
+        identity = self._identities.get(step.adapter_name)
+        return identity if identity is not None else ModuleIdentity(module.version)
+
     def _stamp(
-        self, outputs: Mapping[ArtifactType, Artifact], step: PipelineStep
+        self, output: StepOutput, step: PipelineStep, module: Module
     ) -> dict[ArtifactType, Artifact]:
         # Déterminisme : l'identité d'un artefact = content_hash + (code_version,
         # parameters_hash). Le timestamp wall-clock de ProvenanceRecord est de la
         # métadonnée, EXCLUE de l'identité (cf. ProvenanceRecord.is_compatible_with)
-        # et jamais rendue dans RunResult/HTML. Un cache futur comparerait donc via
-        # is_compatible_with, pas via model_dump_json. (Journal D-012.)
+        # et jamais rendue dans RunResult/HTML. (Journal D-012.) ``parameters_hash``
+        # est l'empreinte de l'étape — celle dont dérive la clé de reprise.
         provenance = ProvenanceRecord(
             code_version=self._code_version,
-            parameters_hash=_parameters_hash(dict(step.params)),
+            parameters_hash=step_fingerprint(step, self.identity_of(step, module)),
+            served_models=tuple(sorted(set(output.served_models))),
         )
         return {
             t: art.model_copy(
                 update={"produced_by_step": step.id, "provenance": provenance}
             )
-            for t, art in outputs.items()
+            for t, art in output.artifacts.items()
         }
 
     def _check_outputs(

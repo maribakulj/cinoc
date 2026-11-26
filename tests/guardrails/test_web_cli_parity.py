@@ -234,6 +234,13 @@ def test_declared_cli_counterparts_exist() -> None:
 PARITE_CLI: dict[str, str] = {
     # Le run de démonstration est ce que lance `POST /api/runs` sans concurrent.
     "demo": "web:POST /api/runs",
+    # `run --offline` (D-279) — re-noter une archive sans aucun appel — est une
+    # **capacité CLI seule, assumée** : une archive est un dossier sur le disque
+    # de qui re-note (P5h : un tiers télécharge la campagne publiée), avec la
+    # spec qui l'a produite. Le web garde l'archive de chacun de ses runs
+    # (`JobRunner`, `<data_dir>/archives/<job>`), mais n'en reçoit pas et n'en
+    # sert pas : la re-noter se fait sur le serveur, par la CLI. Une option, pas
+    # une sous-commande — d'où ce commentaire plutôt qu'une ligne de la table.
     "run": "web:POST /api/runs",
     "hybrid": "web:POST /api/runs",
     "corpus": "web:POST /api/corpus",

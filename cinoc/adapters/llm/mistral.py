@@ -15,16 +15,18 @@ from __future__ import annotations
 import logging
 from typing import Any, ClassVar
 
-from cinoc.adapters._native import sdk_native
+from cinoc.adapters._native import sdk_native, served_model
 from cinoc.adapters._resilience import call_resilient
 from cinoc.adapters.llm._base import (
     DEFAULT_MAX_TOKENS,
     DEFAULT_SEED,
     DEFAULT_TEMPERATURE,
+    EffectiveSettings,
     InferenceSettings,
     LLMCompletion,
     StopReason,
     default_prompt_for_role,
+    llm_effective_settings,
     llm_input_types,
     llm_output_types,
     normalize_llm_content,
@@ -76,8 +78,9 @@ def _completion_from_chat(response: object) -> LLMCompletion:
     tokens_in = usage_tokens(wire_field(usage, "prompt_tokens"))
     tokens_out = usage_tokens(wire_field(usage, "completion_tokens"))
     choices = wire_field(response, "choices")
+    model = served_model(response)
     if not isinstance(choices, list) or not choices:
-        return LLMCompletion("", tokens_in, tokens_out, native=response)
+        return LLMCompletion("", tokens_in, tokens_out, native=response, model=model)
     choice = choices[0]
     return LLMCompletion(
         normalize_llm_content(wire_field(wire_field(choice, "message"), "content")),
@@ -85,6 +88,7 @@ def _completion_from_chat(response: object) -> LLMCompletion:
         tokens_out,
         stop_reason_from(wire_field(choice, "finish_reason"), _STOP_REASONS),
         native=response,
+        model=model,
     )
 
 
@@ -211,9 +215,17 @@ class MistralAdapter:
     def version(self) -> str:
         return _VERSION
 
-    def inference_settings(self) -> dict[str, float | int | None]:
-        """Réglages **effectifs** (défauts compris), recopiés au manifeste."""
-        return self._settings.as_manifest()
+    def effective_settings(self) -> EffectiveSettings:
+        """Réglages **effectifs** (défauts compris) : manifeste et empreinte de
+        l'étape. Le SDK mistralai 1.x ne lit aucun endpoint dans
+        l'environnement : la cible est celle du SDK, épinglé par
+        ``dependencies_lock``."""
+        return llm_effective_settings(
+            model=self._model,
+            role=self._role,
+            prompt=self._prompt,
+            settings=self._settings,
+        )
 
     @property
     def input_types(self) -> frozenset[ArtifactType]:

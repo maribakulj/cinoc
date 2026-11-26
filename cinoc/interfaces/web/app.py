@@ -234,6 +234,9 @@ def create_app(
         history_store=history_store,
         segmentation_store=seg_store,
         alto_store=alto_store,
+        # Archive de chaque run (sorties, sidecars natifs, issues) dans le
+        # dossier de données inscriptible : elle survit au workspace du job.
+        archive_dir=runtime_dir / "archives",
     )
     corpus_store = CorpusStore(_resolve_uploads_dir(uploads_dir))
 

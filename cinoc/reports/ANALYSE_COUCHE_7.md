@@ -278,6 +278,8 @@ cinoc/reports/
 
 > **P5e 2 (D-277)** : bloc « Unités tronquées » / « Truncated units » dans la vue d'ensemble, à la suite des unités en échec (`failures_note` → `_failed_note` + `_truncated_note`) : unité, document, message (étape, plafond), et la règle — notées sur leur sortie réelle, `failure_policy` ne s'y applique pas. CSV : `outcome` = `truncated`. Composition : les réglages effectifs du manifeste s'y lisent, un réglage non transmis (`None`) s'écrit « — ». Preuves : `tests/adapters/llm/test_stop_reasons.py::{test_the_report_and_the_csv_show_the_truncation,test_the_composition_shows_the_effective_settings}`.
 
+> **P5f 2 (D-279)** : méthodologie — « Modèles servis / Served models » et « Base Unicode / Unicode database » rejoignent les verrous dépliables (binaires, modules, dépendances). Composition : une valeur de plus de 60 caractères (le prompt, écrit désormais défaut compris) est abrégée, entière dans son infobulle. Preuves : `tests/reports/test_methodology_section.py::test_served_models_and_unicode_database_are_shown_in_both_languages`, `tests/reports/test_composition.py::test_a_long_setting_is_abbreviated_and_kept_whole_in_its_tooltip`.
+
 > Tri-état : `[x]` fait **+ preuve** · `[ ]` à faire · `[~]` différé/réserve + raison.
 > Maj dans le **même commit** que le code. **Statut : ✅ T2** — cadre `Section` + assembleur autonome + sections **overview** & **cross_engine** + rapport de **comparaison** (deltas 2 runs) verts. **+ T7 `synthesis`** : section verdict factuel par vue (meilleur pipeline CER · Δ au suivant · significativité `cross_engine`), gatée `requires=("cer",)`, déterministe — **toutes les vues S4 au design désormais livrées**. Différé : importeurs cœur · longitudinal (T7), interactivité client-side.
 

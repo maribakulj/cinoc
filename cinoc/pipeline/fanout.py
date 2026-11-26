@@ -75,6 +75,7 @@ def run_region_fanout(
     cropper: RegionCropper | None = None,
     truncations: list[str] | None = None,
     natives: list[dict[str, object]] | None = None,
+    served: set[str] | None = None,
 ) -> tuple[CanonicalLayout, ResourceUsage]:
     """Remplit ``layout`` (régions seules) par reconnaissance région par région.
 
@@ -88,17 +89,19 @@ def run_region_fanout(
     est gardée, et la coupure remonte à l'étape au lieu d'être avalée.
     ``natives``, si fourni, reçoit ``{"region_id", "response"}`` pour chaque
     région dont le reconnaisseur a publié une réponse native (``NATIVE_JSON``),
-    dans l'ordre de lecture.
+    dans l'ordre de lecture. ``served``, si fourni, reçoit les modèles servis
+    déclarés par chaque reconnaissance (``StepOutput.served_models``).
     """
     step_params = dict(params) if params is not None else {}
     coupures = truncations if truncations is not None else []
     reponses = natives if natives is not None else []
+    servis = served if served is not None else set()
     usage = ResourceUsage()
     pages: list[LayoutPage] = []
     for page in layout.pages:
         filled_page, page_usage = _fill_page(
             page, page_image, recognizer, context, control, step_params, cropper,
-            coupures, reponses,
+            coupures, reponses, servis,
         )
         pages.append(filled_page)
         usage = usage.merged_with(page_usage)
@@ -116,13 +119,14 @@ def _fill_page(
     cropper: RegionCropper | None,
     truncations: list[str],
     natives: list[dict[str, object]],
+    served: set[str],
 ) -> tuple[LayoutPage, ResourceUsage]:
     usage = ResourceUsage()
     filled: list[Region] = []
     for region in page.regions:
         filled_region, region_usage = _fill_region(
             region, page, page_image, recognizer, context, control, params, cropper,
-            truncations, natives,
+            truncations, natives, served,
         )
         filled.append(filled_region)
         usage = usage.merged_with(region_usage)
@@ -185,6 +189,7 @@ def _fill_region(
     cropper: RegionCropper | None,
     truncations: list[str] | None = None,
     natives: list[dict[str, object]] | None = None,
+    served: set[str] | None = None,
 ) -> tuple[Region, ResourceUsage | None]:
     """Remplit une région de ses lignes — **en descendant** dans ses enfants.
 
@@ -205,7 +210,7 @@ def _fill_region(
         for enfant in region.regions:
             rempli, usage_enfant = _fill_region(
                 enfant, page, page_image, recognizer, context, control, params,
-                cropper, truncations, natives,
+                cropper, truncations, natives, served,
             )
             enfants.append(rempli)
             usage = usage.merged_with(usage_enfant)
@@ -231,6 +236,8 @@ def _fill_region(
         truncations.append(f"région {region.id!r} : {output.truncation}")
     if native is not None and natives is not None:
         natives.append({"region_id": region.id, "response": native})
+    if served is not None:
+        served.update(output.served_models)
     return region.model_copy(update={"lines": lignes}), output.usage
 
 
@@ -367,6 +374,7 @@ def execute_region_fanout(
         raise AdapterStepError(f"fanout : LAYOUT d'entrée illisible : {exc}") from exc
     coupures: list[str] = []
     reponses: list[dict[str, object]] = []
+    servis: set[str] = set()
     filled, usage = run_region_fanout(
         layout=layout,
         page_image=page_image,
@@ -377,6 +385,7 @@ def execute_region_fanout(
         cropper=cropper,
         truncations=coupures,
         natives=reponses,
+        served=servis,
     )
     payload = filled.model_dump_json().encode("utf-8")
     out_dir = (
@@ -408,7 +417,10 @@ def execute_region_fanout(
             content_hash=compute_content_hash(natif),
         )
     return StepOutput(
-        artifacts=artifacts, usage=usage, truncation="; ".join(coupures) or None
+        artifacts=artifacts,
+        usage=usage,
+        truncation="; ".join(coupures) or None,
+        served_models=tuple(sorted(servis)),
     )
 
 

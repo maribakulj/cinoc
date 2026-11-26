@@ -595,7 +595,8 @@ class _Distant:
                     id=f"n:{region}", document_id="d",
                     type=ArtifactType.NATIVE_JSON, uri=str(native),
                 ),
-            }
+            },
+            served_models=(f"modele-{region}",),
         )
 
 
@@ -644,6 +645,8 @@ def test_the_fanout_keeps_the_native_response_of_every_region(tmp_path: Any) -> 
     }
     assert json.loads(data) == attendu
     assert data == native_json_bytes(attendu)
+    # Le modèle servi de chaque région remonte à l'étape (S9).
+    assert sortie.served_models == ("modele-r1", "modele-r3")
 
 
 def test_a_fanout_without_native_responses_publishes_none(tmp_path: Any) -> None:

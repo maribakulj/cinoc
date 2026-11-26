@@ -11,6 +11,16 @@ fin. Le ``RunResult`` est écrit en JSON dans ``reports_dir`` → il apparaît
 aussitôt dans la vitrine read-only existante (preuve de bout en bout).
 
 La progression fine est diffusée via le journal du ``JobStore`` (SSE côté web).
+
+**Archive** : avec un ``archive_dir`` (le web le place dans ``app/data_dir``),
+chaque job écrit ses sorties dans ``<archive_dir>/<job_id>`` — le cache de
+reprise du run, donc son archive : sidecars natifs, issues, binaires
+(``RunManifest.artifacts_dir``). Un dossier **par job**, pas un cache partagé
+entre runs : un corpus re-déposé sous les mêmes images mais d'autres sorties
+pré-calculées se verrait resservir les anciennes (la clé hache l'image, pas les
+fichiers qu'un module ``precomputed`` lit à côté), et deux visiteurs d'une
+instance publique partageraient leurs sorties. L'archive d'un run web se
+re-note sur le serveur par ``cinoc run --resume-dir <archive> --offline``.
 """
 
 from __future__ import annotations
@@ -30,6 +40,7 @@ from cinoc.app.modules.registry import ModuleRegistry
 from cinoc.app.orchestrator import PipelineOutputs
 from cinoc.app.orchestrator import run as run_orchestrator
 from cinoc.app.results import dump_run_result
+from cinoc.app.resume import ResumeStore
 from cinoc.app.segmentation import SegmentationStore
 from cinoc.domain.artifacts import Artifact, ArtifactType, latest_by_type
 from cinoc.domain.errors import CinocError, RunCancelledError
@@ -60,6 +71,7 @@ class JobRunner:
         history_store: HistoryStore | None = None,
         segmentation_store: SegmentationStore | None = None,
         alto_store: AltoStore | None = None,
+        archive_dir: Path | None = None,
     ) -> None:
         self._store = store
         self._registry = registry
@@ -77,6 +89,9 @@ class JobRunner:
         #: Export ALTO : persiste les ``ALTO_XML`` produits (téléchargeables par
         #: run). ``None`` → pas d'export ALTO (rétro-compatible).
         self._alto = alto_store
+        #: Archive par job (cache de reprise du run). ``None`` → les sorties
+        #: meurent avec le workspace, sidecars compris.
+        self._archive_dir = archive_dir
         self._controls: dict[str, RunControl] = {}
         self._threads: dict[str, threading.Thread] = {}
         self._lock = threading.Lock()
@@ -139,6 +154,11 @@ class JobRunner:
                     control=control,
                     artifact_sink=self._persist_artifacts,
                     on_progress=_on_progress,
+                    resume_store=(
+                        ResumeStore(self._archive_dir / job_id)
+                        if self._archive_dir is not None
+                        else None
+                    ),
                 )
                 self._reports_dir.mkdir(parents=True, exist_ok=True)
                 run_id = result.manifest.run_id

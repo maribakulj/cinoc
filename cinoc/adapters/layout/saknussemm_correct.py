@@ -36,7 +36,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from cinoc.adapters._native import native_artifact
+from cinoc.adapters._native import native_artifact, served_model
 from cinoc.adapters._workspace import workspace_artifact_path
 from cinoc.adapters.layout.to_text import _page_text
 from cinoc.domain.artifacts import Artifact, ArtifactType, compute_content_hash
@@ -419,11 +419,14 @@ class SaknussemmCorrector:
         output = self._emit(corrected, _decisions(result, context.document_id), context)
         if client is None:
             return output
+        # Chaque corps reçu dit quel modèle l'a servi (Mistral, Ollama : ``model``).
+        servis = {m for r in client.responses if (m := served_model(r)) is not None}
         return StepOutput(
             artifacts={
                 **output.artifacts,
                 ArtifactType.NATIVE_JSON: self._native(client.responses, context),
-            }
+            },
+            served_models=tuple(sorted(servis)),
         )
 
     def _native(self, responses: list[Any], context: RunContext) -> Artifact:

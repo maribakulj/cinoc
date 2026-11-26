@@ -48,7 +48,7 @@ def test_serialisation_is_deterministic() -> None:
 
 def test_schema_version_and_stable_keys() -> None:
     result = _result()
-    assert result.schema_version == 3
+    assert result.schema_version == 4
     blob = result.model_dump_json().replace(" ", "")
     assert '"metric":"cer"' in blob
     assert '"support":1' in blob

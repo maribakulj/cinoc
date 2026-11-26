@@ -22,6 +22,7 @@ from cinoc.adapters.llm import anthropic as anthropic_mod
 from cinoc.adapters.llm import mistral as mistral_mod
 from cinoc.adapters.llm import openai as openai_mod
 from cinoc.adapters.llm._base import (
+    DEFAULT_CORRECTION_PROMPT,
     DEFAULT_MAX_TOKENS,
     DEFAULT_SEED,
     DEFAULT_TEMPERATURE,
@@ -64,7 +65,7 @@ def test_the_defaults_are_named_and_explicit() -> None:
 
 @pytest.mark.parametrize("cls", _ADAPTERS[:3])
 def test_three_providers_share_the_same_defaults(cls: type) -> None:
-    settings = cls(label="x", model="m").inference_settings()
+    settings = cls(label="x", model="m").effective_settings()
     assert {k: settings[k] for k in ("temperature", "top_p", "seed", "max_tokens")} == {
         "temperature": 0.0,
         "top_p": None,
@@ -77,7 +78,8 @@ def test_anthropic_shares_max_tokens_and_says_what_it_cannot_send() -> None:
     """L'API Anthropic n'accepte plus ``temperature``/``top_p`` (400 depuis la
     version d'API 2026-10-21 ; absents du SDK 2.x) et n'a jamais eu de ``seed`` :
     le manifeste l'écrit (``None`` = non transmis), il ne prétend pas un 0."""
-    assert AnthropicAdapter(label="x", model="m").inference_settings() == {
+    settings = AnthropicAdapter(label="x", model="m").effective_settings()
+    assert {k: settings[k] for k in ("temperature", "top_p", "seed", "max_tokens")} == {
         "temperature": None,
         "top_p": None,
         "seed": None,
@@ -92,7 +94,7 @@ def test_anthropic_refuses_a_setting_its_api_rejects(key: str) -> None:
 
 
 def test_ollama_pins_num_ctx_and_num_predict() -> None:
-    settings = OllamaAdapter(label="x", model="m").inference_settings()
+    settings = OllamaAdapter(label="x", model="m").effective_settings()
     assert settings["num_ctx"] == DEFAULT_NUM_CTX == 16384
     assert settings["max_tokens"] == 8192  # envoyé comme options.num_predict
 
@@ -229,7 +231,7 @@ def test_the_registry_passes_the_settings_through(kind: str) -> None:
     if kind != "anthropic":
         kwargs.update(temperature=0.3, seed=5)
     module = _registry().build(f"{kind}:x", kwargs)
-    settings = module.inference_settings()  # type: ignore[attr-defined]
+    settings = module.effective_settings()  # type: ignore[attr-defined]
     assert settings["max_tokens"] == 1234
     if kind != "anthropic":
         assert (settings["temperature"], settings["seed"]) == (0.3, 5)
@@ -293,13 +295,20 @@ def test_the_manifest_carries_the_effective_settings_defaults_included(
     monkeypatch.setattr(
         "cinoc.adapters.llm.openai._invoke_openai", lambda **_: LLMCompletion("alpha")
     )
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
     result = run(_llm_spec(tmp_path, {}), registry=_registry(), code_version="1")
     assert result.manifest.adapter_kwargs["openai:gpt"] == {
         "label": "gpt",
+        # Le modèle demandé, le mode et le prompt **par défaut** compris (S9) :
+        # ils changent la sortie autant qu'une saisie.
+        "model": "gpt-4o-mini",
+        "role": "text_only",
+        "prompt": DEFAULT_CORRECTION_PROMPT,
         "temperature": 0.0,
         "top_p": None,
         "seed": 0,
         "max_tokens": 8192,
+        "base_url": "https://api.openai.com/v1",
     }
     # Un module sans réglages d'inférence garde ses kwargs tels quels.
     assert result.manifest.adapter_kwargs["precomputed:eng"] == {"source_label": "eng"}

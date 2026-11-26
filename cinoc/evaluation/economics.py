@@ -7,8 +7,12 @@ jamais en exécutant la source). Modèle de coût simple et auditable :
 - **temps machine** : durée mesurée (E1, wall-clock exécuteur) × taux horaire
   indicatif de la table — appliqué à tout pipeline (la machine est occupée) ;
 - **jetons cloud** : jetons mesurés (E1, remontés par les adapters) × tarif
-  €/MTok de la table, par (kind/modèle). Modèle absent de la table → coût
-  ``None`` + motif dans ``basis`` (jamais un zéro silencieux) ;
+  €/MTok de la table, par (kind/modèle). Le modèle est celui que le fournisseur
+  dit avoir **servi** (``RunManifest.served_models``) quand il est connu, le
+  modèle **demandé** sinon (réponse muette, JSON antérieur) : un alias
+  (``gpt-4o-mini``) peut désigner un autre modèle, à un autre prix, d'un mois à
+  l'autre. Modèle absent de la table → coût ``None`` + motif dans ``basis``
+  (jamais un zéro silencieux — et l'alias ne remplace pas un servi inconnu) ;
 - **débit effectif** : pages/h corrigé du temps de relecture des erreurs
   résiduelles (Σ cer·poids erreurs estimées × ``time_per_error_seconds``) ;
 - **péremption** : ``valid_until`` de la table comparé à ``completed_at`` du
@@ -82,8 +86,10 @@ def _page_rate(
 
 
 def _cloud_model_keys(
-    spec: PipelineSpec, adapter_kwargs: Mapping[str, Mapping[str, object]],
+    spec: PipelineSpec,
+    adapter_kwargs: Mapping[str, Mapping[str, object]],
     pricing: Mapping[str, Any],
+    served_models: Mapping[str, Sequence[str]] | None = None,
 ) -> list[str]:
     """Clés ``kind/modèle`` des étages cloud du pipeline (déduplication triée).
 
@@ -92,12 +98,21 @@ def _cloud_model_keys(
     codée en dur qui dériverait quand la table gagne un fournisseur). Les kinds
     **à la page** vivent dans ``cloud_page_kinds`` (cf. ``_page_rate``) ; le
     reste (``local_kinds``) : temps machine seul.
+
+    Modèle : le(s) **servi(s)** quand le manifeste les connaît — plusieurs si un
+    alias a changé de cible en cours de run, et le coût devient alors non
+    ventilable —, sinon le **demandé**, sinon le défaut de la table.
     """
     defaults = pricing.get("default_models", {})
+    served = served_models or {}
     keys: set[str] = set()
     for step in spec.steps:
         kind = step.adapter_name.split(":", 1)[0]
         if kind not in defaults:
+            continue
+        servis = served.get(step.adapter_name) or ()
+        if servis:
+            keys.update(f"{kind}/{model}" for model in servis)
             continue
         kwargs = adapter_kwargs.get(step.adapter_name, {})
         model = kwargs.get("model")
@@ -179,7 +194,9 @@ def economics_analysis(
         tokens_in = sum(u.usage.tokens_in or 0 for u in entries) or None
         tokens_out = sum(u.usage.tokens_out or 0 for u in entries) or None
         n_documents = len(entries)
-        keys = _cloud_model_keys(specs[name], manifest.adapter_kwargs, table)
+        keys = _cloud_model_keys(
+            specs[name], manifest.adapter_kwargs, table, manifest.served_models
+        )
         token_cost, basis = _token_cost(keys, tokens_in, tokens_out, table)
         page_rate = _page_rate(specs[name], table)
         page_cost = (

@@ -86,7 +86,7 @@ Far beyond CER/WER — every family ships with its own report section and tests 
 
 - **Deterministic scoring** — same outputs + same spec + same code → identical metrics and verdict. Replaying frozen outputs (`precomputed`) gives identical artifacts (same hash); two reports differ only by their timestamps and measured durations.
 - **Traced, not guaranteed, inference** — a remote or stochastic engine (cloud API, LLM/VLM, even at temperature 0) is *not* deterministic: Cinoc records what was asked and measures the spread (`--repeat`), it does not promise the same transcription twice.
-- **Reproducible** — every run carries a `RunManifest` (code version, engine binaries, parameter fingerprint). Python dependency versions are not captured yet.
+- **Reproducible** — every run carries a `RunManifest`: code version, the effective settings of every module (requested model, prompt, defaults, endpoint), module versions, engine binaries, the **model the provider says it served**, the installed Python distributions (`dependencies_lock`) and the Unicode database version the normalisation depends on.
 - **Anti‑hallucination** — no LLM writes a single word of the report; every figure is an auditable function of the inputs.
 - **Secure** — hardened XML (`safe_parse_xml`: no DTD/DOCTYPE/external entity/network), all user paths validated (anti‑traversal), anti‑SSRF on remote fetches, and an **opt‑in** public *fail‑closed* mode for protecting a key on a public Space (only the free base runs).
 
@@ -166,6 +166,8 @@ cinoc run   config.yaml -o report.html           # run a benchmark described in 
 cinoc run   config.yaml --report-dir bundle/     # folder report (HTML + separate images)
 cinoc run   config.yaml --json run.json          # also export the machine-readable RunResult
 cinoc run   config.yaml --alto-dir alto/         # also keep the ALTO the run produced
+cinoc run   config.yaml --resume-dir archive/    # keep the run's archive; resume from it
+cinoc run   config.yaml --resume-dir archive/ --offline  # re-score the archive, no call
 cinoc hybrid images/ --out alto/                 # segment → per-block OCR → one ALTO per page
 cinoc hybrid images/ --segment-only --out seg/   # stop at the layout, one LAYOUT per page
 cinoc correct alto/ -o report.html               # post-correct existing ALTO, inside the layout
@@ -238,7 +240,7 @@ evaluation:
 
 A target that some pipeline of the run does not have is refused when the spec is loaded, and the report's methodology says which step a targeted view scores.
 
-**LLM and VLM settings.** The four providers (`openai`, `anthropic`, `mistral`, `ollama`) take the same settings in `adapter_kwargs`, with the same defaults: `temperature: 0`, `seed: 0`, `max_tokens: 8192`, `top_p` left to the provider; `ollama` adds `num_ctx: 16384` (its own default silently truncates the input). The manifest records the **effective** values, defaults included. Anthropic's API no longer accepts `temperature`/`top_p` and has no seed: setting one there is refused, and the manifest says `null`. A response cut by its token limit is not scored as complete: the unit is marked `truncated` — scored on its actual output, and listed as such in the report, the JSON and the CSV. A refused or failed generation makes the unit fail (`engine`).
+**LLM and VLM settings.** The four providers (`openai`, `anthropic`, `mistral`, `ollama`) take the same settings in `adapter_kwargs`, with the same defaults: `temperature: 0`, `seed: 0`, `max_tokens: 8192`, `top_p` left to the provider; `ollama` adds `num_ctx: 16384` (its own default silently truncates the input). The manifest records the **effective** values, defaults included — the requested `model`, the `role`, the `prompt` (the default one when none is set) and the endpoint (`base_url`: `OPENAI_BASE_URL` / `ANTHROPIC_BASE_URL` when set, the SDK default otherwise, written without credentials) — next to the model the provider says it **served** (`served_models`: `gpt-4o-mini` asked, `gpt-4o-mini-2024-07-18` served). Costs are priced on the served model when it is known; one missing from the price table shows as "unknown price", never as zero. Anthropic's API no longer accepts `temperature`/`top_p` and has no seed: setting one there is refused, and the manifest says `null`. A response cut by its token limit is not scored as complete: the unit is marked `truncated` — scored on its actual output, and listed as such in the report, the JSON and the CSV. A refused or failed generation makes the unit fail (`engine`).
 
 ```yaml
 adapter_kwargs:
@@ -246,6 +248,13 @@ adapter_kwargs:
 ```
 
 **Native responses are kept.** Every remote engine (`mistral_ocr`, `azure_di`, `google_vision`, the four LLM/VLM providers, and the structured correction when it calls a model) also writes the body the API returned, as a `native_json` sidecar next to its text: canonical JSON (sorted keys), no API key, header or URL. The scored text is only one reading of that body, made by the adapter's own conversion function — so another reading (a better protocol, a layout projection) can be redone from the sidecar without paying for the call again. Sidecars are never scored, and never enter the `RunResult`. They outlive the run in its artifacts directory, `--resume-dir` (recorded as `artifacts_dir` in the manifest); without one, they disappear with the temporary workspace, like every other output.
+
+**The archive, and re-scoring without re-running.** `--resume-dir` is the run's **archive**: every unit (pipeline × page) it executed — outputs of each step, native responses, outcome, failures included — stored under a fingerprint of what produced it: the module versions, their effective settings (endpoint included) and the system binaries they wrap (a new tesseract is a new unit), plus the image content. The Cinoc version is **not** part of it: a metric fixed in a later release re-scores the archive without paying for a single call again. A normal resume re-runs failed units; `--offline` re-scores the archive **without calling any engine** and fails, naming the units, if one is missing — never produced, or produced by another module version, binary or endpoint — instead of running it. Offline, the binaries recorded in the archive are used: whoever re-scores needs neither the engines nor their keys — but the same spec, the page images (their content identifies the unit; a remote image is still fetched), and any endpoint that was set through the environment. A run launched from the web keeps its archive in the data directory (`archives/<job>`), re-scorable on the server with the same command.
+
+```bash
+cinoc run config.yaml --resume-dir archive/ -o report.html            # run once, archive it
+cinoc run config.yaml --resume-dir archive/ --offline -o report.html  # re-score, no engine call
+```
 
 ### Scoring OCR that Cinoc did not produce
 

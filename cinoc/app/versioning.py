@@ -38,7 +38,9 @@ exotique qui omettrait ``RECORD`` doit rester utilisable.
 
 from __future__ import annotations
 
-from importlib.metadata import Distribution, distributions
+import re
+from importlib.metadata import Distribution, PackageNotFoundError, distributions
+from importlib.metadata import version as distribution_version
 
 from cinoc.domain._version_fallback import FALLBACK_VERSION
 
@@ -56,21 +58,68 @@ def _est_installee(distribution: Distribution) -> bool:
         return False
 
 
+def _cinoc_distribution() -> Distribution | None:
+    """La distribution ``cinoc`` qui fait autorité (installée, sinon la première)."""
+    repli: Distribution | None = None
+    for distribution in distributions(name="cinoc"):
+        if not distribution.version:
+            continue
+        if _est_installee(distribution):
+            return distribution
+        if repli is None:
+            repli = distribution
+    return repli
+
+
 def resolve_code_version() -> str:
     """Version du paquet ``cinoc`` installé, ou le fallback ``domain``.
 
     Indépendante du répertoire d'appel — voir le module pour la raison.
     """
-    repli: str | None = None
-    for distribution in distributions(name="cinoc"):
-        version = distribution.version
-        if not version:
+    distribution = _cinoc_distribution()
+    return str(distribution.version) if distribution is not None else FALLBACK_VERSION
+
+
+#: Extras qui ne servent qu'aux tests (outillage, oracles) : un run ne les
+#: exécute jamais, leurs versions ne disent rien de ce qu'il a produit.
+_EXTRAS_HORS_RUN = frozenset({"dev", "hipe-oracle"})
+#: Nom de distribution en tête d'une exigence PEP 508 (``mistralai>=1.5,<2``).
+_NOM = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)")
+_EXTRA = re.compile(r"""extra\s*==\s*["']([^"']+)["']""")
+
+
+def dependencies_lock() -> dict[str, str]:
+    """``{distribution: version}`` de ``cinoc`` et de ce qu'il peut faire tourner.
+
+    La liste vient des **métadonnées** de ``cinoc`` (``Requires-Dist``), pas d'une
+    table tenue à la main : dépendances de base (``numpy``, ``scipy``,
+    ``rapidfuzz``, ``lxml``, ``pydantic``…) et extras d'exécution — donc le SDK
+    de chaque moteur (``openai``, ``mistralai``, ``spacy``…). Seules les
+    distributions **installées** y figurent, à leur version installée. Un SDK
+    installé mais inutilisé par le run y figure aussi : la liste décrit
+    l'environnement qui a produit le run, au complet, et ne dépend pas de ce
+    qu'un processus a importé (le même run lancé du web et de la CLI a le même
+    verrou). Les extras d'outillage (:data:`_EXTRAS_HORS_RUN`) n'y entrent pas.
+    """
+    distribution = _cinoc_distribution()
+    if distribution is None:
+        return {}
+    noms: set[str] = set()
+    for exigence in distribution.requires or ():
+        tete = _NOM.match(exigence)
+        if tete is None:
             continue
-        if _est_installee(distribution):
-            return str(version)
-        if repli is None:
-            repli = str(version)
-    return repli or FALLBACK_VERSION
+        extra = _EXTRA.search(exigence)
+        if extra is not None and extra.group(1) in _EXTRAS_HORS_RUN:
+            continue
+        noms.add(tete.group(1).lower().replace("_", "-"))
+    lock = {"cinoc": str(distribution.version)}
+    for nom in sorted(noms):
+        try:
+            lock[nom] = distribution_version(nom)
+        except PackageNotFoundError:
+            continue
+    return lock
 
 
-__all__ = ["resolve_code_version"]
+__all__ = ["dependencies_lock", "resolve_code_version"]

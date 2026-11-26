@@ -53,11 +53,18 @@ class StepOutput:
     et notés, et l'unité est marquée ``truncated`` au lieu de passer pour
     complète. Seul le module le sait (il lit la réponse native) : c'est donc lui
     qui le déclare, comme ses jetons.
+
+    ``served_models`` : le ou les modèles que le fournisseur dit avoir **servis**
+    (``response.model``), lus dans sa réponse — pas l'alias demandé, qui peut
+    désigner un autre modèle d'un mois à l'autre. Vide quand la réponse ne le dit
+    pas (moteur local, API qui ne le rend pas) : rien n'est supposé. Plusieurs
+    valeurs pour un fan-out (un appel par région) ou un lot de correction.
     """
 
     artifacts: Mapping[ArtifactType, Artifact]
     usage: ResourceUsage | None = None
     truncation: str | None = None
+    served_models: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
