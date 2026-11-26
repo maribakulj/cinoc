@@ -133,7 +133,7 @@ def test_builds_azure_di_module() -> None:
     assert module.name == "azure_di:c0"
     assert module.input_types == frozenset({ArtifactType.IMAGE})
     assert module.output_types == frozenset(
-        {ArtifactType.RAW_TEXT, ArtifactType.NATIVE_JSON}
+        {ArtifactType.RAW_TEXT, ArtifactType.NATIVE_JSON, ArtifactType.CONFIDENCES}
     )
 
 
@@ -144,7 +144,7 @@ def test_builds_google_vision_module() -> None:
     assert module.name == "google_vision:c0"
     assert module.input_types == frozenset({ArtifactType.IMAGE})
     assert module.output_types == frozenset(
-        {ArtifactType.RAW_TEXT, ArtifactType.NATIVE_JSON}
+        {ArtifactType.RAW_TEXT, ArtifactType.NATIVE_JSON, ArtifactType.CONFIDENCES}
     )
 
 

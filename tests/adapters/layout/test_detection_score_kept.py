@@ -16,6 +16,7 @@ from cinoc.adapters.layout._base import (
 from cinoc.adapters.layout.doclayout_yolo import _VERSION as YOLO
 from cinoc.adapters.layout.pp_doclayout import _VERSION as PP
 from cinoc.adapters.layout.remote import _VERSION as REMOTE
+from cinoc.adapters.layout.remote import parse_hf_detections
 from cinoc.domain.errors import AdapterStepError
 
 
@@ -44,4 +45,35 @@ def test_un_score_hors_bornes_est_refuse(score: float) -> None:
 
 
 def test_versions_des_segmenteurs_relevees() -> None:
-    assert (PP, YOLO, REMOTE) == ("1.1", "1.1", "1.1")
+    # remote_segmenter 1.2 (S20) : un score absent reste absent.
+    assert (PP, YOLO, REMOTE) == ("1.1", "1.1", "1.2")
+
+
+# --- Reste de S19, fermé en S20 : un score absent n'est pas 0 -------------
+
+
+def test_un_score_absent_reste_absent() -> None:
+    """``remote_segmenter`` lisait une détection sans score comme 0,0 ; avec
+    ``min_score=0``, ce 0,0 devenait une ``Region.confidence`` inventée."""
+    payload = [
+        {"label": "text", "box": {"xmin": 0, "ymin": 0, "xmax": 10, "ymax": 10}},
+        {"label": "title", "score": "haut",
+         "box": {"xmin": 0, "ymin": 50, "xmax": 10, "ymax": 60}},
+    ]
+    detection = parse_hf_detections(payload, page_width=100, page_height=100)
+    assert [r.score for r in detection.regions] == [None, None]
+    layout = to_canonical_layout(detection, min_score=0.0)
+    assert [r.confidence for r in layout.pages[0].regions] == [None, None]
+
+
+def test_un_score_inconnu_ne_passe_pas_un_seuil_non_nul() -> None:
+    """Le filtrage reste celui d'avant (0,0 < 0,5) : on ne garde pas une
+    détection dont on ignore si elle passe le seuil."""
+    payload = [
+        {"label": "text", "box": {"xmin": 0, "ymin": 0, "xmax": 10, "ymax": 10}},
+        {"label": "title", "score": 0.9,
+         "box": {"xmin": 0, "ymin": 50, "xmax": 10, "ymax": 60}},
+    ]
+    detection = parse_hf_detections(payload, page_width=100, page_height=100)
+    layout = to_canonical_layout(detection, min_score=0.5)
+    assert [r.region_type for r in layout.pages[0].regions] == ["title"]

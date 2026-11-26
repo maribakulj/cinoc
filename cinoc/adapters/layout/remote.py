@@ -39,7 +39,9 @@ from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
 
 #: 1.1 : le score de détection est gardé (``Region.confidence``).
-_VERSION = "1.1"
+#: 1.2 : un score absent ou illisible reste absent (il était lu 0,0, d'où une
+#: confiance inventée sous ``min_score=0``).
+_VERSION = "1.2"
 _DEFAULT_MIN_SCORE = 0.5
 _DEFAULT_TIMEOUT = 60.0
 
@@ -72,12 +74,20 @@ def parse_hf_detections(
                 y=y0,
                 width=max(0, x1 - x0),
                 height=max(0, y1 - y0),
-                score=float(item.get("score", 0.0)),
+                score=_score(item.get("score")),
             )
         )
     return LayoutDetection(
         page_width=page_width, page_height=page_height, regions=tuple(regions)
     )
+
+
+def _score(value: object) -> float | None:
+    """Score d'une détection, ou ``None`` s'il est absent ou non numérique —
+    jamais 0,0 : un score qu'on n'a pas lu n'est pas une confiance nulle."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return float(value)
 
 
 def _image_dims(image_path: str) -> tuple[int, int]:

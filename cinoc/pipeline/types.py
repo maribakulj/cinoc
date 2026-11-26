@@ -83,6 +83,8 @@ class DocumentExecution:
     rapport : une unité en échec n'est pas une unité absente. ``failed`` exige
     un ``reason`` codé et n'a pas d'artefact ; ``message`` est l'explication
     lisible (sans secret — l'appelant qui connaît les secrets la caviarde).
+    ``billed`` : ce qu'une unité **en échec** a fait facturer avant d'échouer
+    (``AdapterStepError.billed``) — sa seule consommation, sans durée.
     """
 
     by_step: StepArtifacts = field(default_factory=dict)
@@ -90,6 +92,7 @@ class DocumentExecution:
     outcome: UnitOutcome = "ok"
     reason: FailureReason | None = None
     message: str | None = None
+    billed: ResourceUsage | None = None
 
     def __post_init__(self) -> None:
         if (self.outcome == "failed") != (self.reason is not None):
@@ -102,6 +105,11 @@ class DocumentExecution:
             raise CinocError(
                 "DocumentExecution : une unité en échec n'a pas d'artefact."
             )
+        if self.billed is not None and self.outcome != "failed":
+            raise CinocError(
+                "DocumentExecution : ``billed`` est la consommation d'une unité "
+                "en échec ; une unité produite la porte dans ``step_usage``."
+            )
 
     @property
     def artifacts(self) -> dict[ArtifactType, Artifact]:
@@ -110,16 +118,25 @@ class DocumentExecution:
 
     @property
     def usage(self) -> ResourceUsage:
-        """Consommation de l'unité : somme ``None``-tolérante des étapes."""
+        """Consommation de l'unité : somme ``None``-tolérante des étapes (ce
+        qu'elle a fait facturer, pour une unité en échec)."""
+        if self.billed is not None:
+            return self.billed
         total = ResourceUsage()
         for step in self.step_usage.values():
             total = total.merged_with(step)
         return total
 
     @classmethod
-    def failed(cls, reason: FailureReason, message: str) -> DocumentExecution:
-        """Unité sans sortie : motif codé + message, aucune consommation mesurée."""
-        return cls(outcome="failed", reason=reason, message=message)
+    def failed(
+        cls,
+        reason: FailureReason,
+        message: str,
+        billed: ResourceUsage | None = None,
+    ) -> DocumentExecution:
+        """Unité sans sortie : motif codé + message ; aucune durée mesurée, et
+        ``billed`` si une tentative facturable a eu lieu."""
+        return cls(outcome="failed", reason=reason, message=message, billed=billed)
 
 
 __all__ = ["DocumentExecution", "RunContext", "StepOutput"]

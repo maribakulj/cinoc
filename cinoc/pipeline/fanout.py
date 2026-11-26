@@ -231,7 +231,8 @@ def _fill_region(
         logger.warning(
             "[fanout] région %r non reconnue (ignorée) : %s", region.id, exc
         )
-        return region, None
+        # Ignorée, mais ce qu'elle a fait facturer reste compté (P5f 7).
+        return region, exc.billed
     if output.truncation is not None and truncations is not None:
         truncations.append(f"région {region.id!r} : {output.truncation}")
     if native is not None and natives is not None:

@@ -265,3 +265,49 @@ def test_le_chemin_de_l_image_est_rendu_absolu(
 def test_un_uri_qui_n_est_pas_un_chemin_local_passe_inchange() -> None:
     """On ne résout que ce qui existe — le reste regarde l'outil."""
     assert _absolu("https://exemple.test/p.png") == "https://exemple.test/p.png"
+
+
+# --------------------------------------------------------------------------- #
+# D3 (pilote D-281) : un délai dépassé n'est pas une panne de l'outil
+# --------------------------------------------------------------------------- #
+
+
+def test_un_outil_qui_ne_rend_pas_la_main_est_un_delai_pas_une_panne(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Même règle que Tesseract (S20) : le délai de l'étape dépassé → motif
+    ``cancelled`` (« arrêtée (délai) »), et non ``engine``."""
+    import subprocess
+
+    from cinoc.adapters.layout import cli_source, ocrd_processor
+    from cinoc.domain.errors import DeadlineExceeded
+    from cinoc.pipeline.executor import failure_reason
+
+    def pendu(argv: list[str], **kwargs: object) -> object:
+        raise subprocess.TimeoutExpired(argv, kwargs.get("timeout", 1.0))  # type: ignore[arg-type]
+
+    monkeypatch.setattr(cli_source.subprocess, "run", pendu)
+    image = tmp_path / "p.png"
+    image.write_bytes(b"x")
+    source = CliLayoutSource(label="eyn", command="outil {image} {out}")
+    context = RunContext(
+        document_id="d", code_version="t", pipeline_name="p",
+        workspace_uri=str(tmp_path),
+    )
+    with pytest.raises(DeadlineExceeded) as raised:
+        source.execute(
+            {ArtifactType.IMAGE: Artifact(
+                id="d:img", document_id="d", type=ArtifactType.IMAGE, uri=str(image)
+            )},
+            {},
+            context,
+            RunControl(),
+        )
+    assert failure_reason(raised.value) == "cancelled"
+
+    monkeypatch.setattr(ocrd_processor, "_resoudre", lambda *_: "ocrd-outil")
+    monkeypatch.setattr(ocrd_processor.subprocess, "run", pendu)
+    with pytest.raises(DeadlineExceeded):
+        ocrd_processor._lancer_sous_processus(
+            "ocrd:x", None, "ocrd-outil", [], tmp_path, 1.0
+        )

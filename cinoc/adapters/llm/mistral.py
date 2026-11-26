@@ -8,6 +8,11 @@ corrigé), ``zero_shot`` (Pixtral : image → texte). Clé ``MISTRAL_API_KEY`` ;
 
 Réglages (``InferenceSettings``) : ``temperature``, ``top_p``, ``max_tokens`` et
 ``seed`` — ce dernier sous le nom de l'API Mistral, ``random_seed``.
+
+Délai fini (``timeout``, défaut 600 s, retries compris), passé à **chaque**
+appel (``timeout_ms``) ; client construit avec ``retry_config=None`` — le SDK
+1.12.4 n'en a pas par défaut, on l'écrit pour qu'un défaut futur ne s'ajoute pas
+sous celle de Cinoc : la seule politique de retry est ``call_resilient``.
 """
 
 from __future__ import annotations
@@ -16,7 +21,13 @@ import logging
 from typing import Any, ClassVar
 
 from cinoc.adapters._native import sdk_native, served_model
-from cinoc.adapters._resilience import call_resilient
+from cinoc.adapters._resilience import (
+    DEFAULT_LLM_TIMEOUT,
+    call_resilient,
+    request_timeout,
+    step_deadline,
+    validate_timeout,
+)
 from cinoc.adapters.llm._base import (
     DEFAULT_MAX_TOKENS,
     DEFAULT_SEED,
@@ -39,7 +50,7 @@ from cinoc.adapters.llm._base import (
 )
 from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.deadline import Deadline
-from cinoc.domain.errors import AdapterStepError
+from cinoc.domain.errors import AdapterStepError, CinocError
 from cinoc.domain.pipeline import PipelineMode
 from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
@@ -111,7 +122,11 @@ def _request_kwargs(
 
 
 def _mistral_client(
-    model: str, content: object, deadline: Deadline, settings: InferenceSettings
+    model: str,
+    content: object,
+    deadline: Deadline,
+    settings: InferenceSettings,
+    control: RunControl | None = None,
 ) -> LLMCompletion:
     """Appel ``chat.complete`` partagé (texte ou multimodal)."""
     import os
@@ -125,23 +140,26 @@ def _mistral_client(
         raise AdapterStepError(
             "mistral : SDK non installé (pip install 'cinoc[mistral]')."
         ) from exc
-    client_kwargs: dict[str, object] = {"api_key": api_key}
-    timeout = deadline.as_sdk_timeout()
-    if timeout is not None:
-        client_kwargs["timeout_ms"] = int(timeout * 1000)
     try:
         # Le SDK mistralai 1.x type strictement ses kwargs/messages ; on lui
         # passe des dicts valides à l'exécution (cf. tests live). ``ignore`` ciblé.
-        client = Mistral(**client_kwargs)  # type: ignore[arg-type]
+        # ``retry_config=None`` : une seule politique de retry, celle de Cinoc.
+        client = Mistral(api_key=api_key, retry_config=None)
 
         def _complete() -> Any:
+            timeout = request_timeout(deadline)
             return client.chat.complete(
-                **_request_kwargs(model, content, settings)  # type: ignore[arg-type]
+                **_request_kwargs(model, content, settings),  # type: ignore[arg-type]
+                timeout_ms=int(timeout * 1000) if timeout is not None else None,
             )
 
         # Cap de concurrence (≤ N appels Mistral simultanés) + retry borné sur
-        # 429/5xx (Retry-After respecté) — par défaut, sans configuration UI.
-        response = call_resilient("mistral", _complete)
+        # 429/5xx/transport (Retry-After respecté), dans le délai de l'étape.
+        response = call_resilient(
+            "mistral", _complete, deadline=deadline, control=control
+        )
+    except CinocError:
+        raise  # délai, annulation : déjà typés
     except Exception as exc:  # le SDK lève des erreurs HTTP/SDK variées
         raise AdapterStepError(
             f"mistral a échoué ({model}) : {type(exc).__name__}: {exc}"
@@ -150,9 +168,14 @@ def _mistral_client(
 
 
 def _invoke_mistral(
-    *, model: str, prompt: str, deadline: Deadline, settings: InferenceSettings
+    *,
+    model: str,
+    prompt: str,
+    deadline: Deadline,
+    settings: InferenceSettings,
+    control: RunControl | None = None,
 ) -> LLMCompletion:
-    return _mistral_client(model, prompt, deadline, settings)
+    return _mistral_client(model, prompt, deadline, settings, control)
 
 
 def _invoke_mistral_vision(
@@ -163,12 +186,13 @@ def _invoke_mistral_vision(
     image_b64: str,
     deadline: Deadline,
     settings: InferenceSettings,
+    control: RunControl | None = None,
 ) -> LLMCompletion:
     content = [
         {"type": "text", "text": prompt},
         {"type": "image_url", "image_url": f"data:{media_type};base64,{image_b64}"},
     ]
-    return _mistral_client(model, content, deadline, settings)
+    return _mistral_client(model, content, deadline, settings, control)
 
 
 class MistralAdapter:
@@ -194,8 +218,10 @@ class MistralAdapter:
         top_p: float | None = None,
         seed: int | None = DEFAULT_SEED,
         max_tokens: int = DEFAULT_MAX_TOKENS,
+        timeout: object = DEFAULT_LLM_TIMEOUT,
     ) -> None:
         self._label = validate_llm_label(label, "MistralAdapter")
+        self._timeout = validate_timeout(timeout, "MistralAdapter")
         self._settings = InferenceSettings.build(
             temperature=temperature, top_p=top_p, seed=seed, max_tokens=max_tokens
         )
@@ -242,12 +268,15 @@ class MistralAdapter:
         context: RunContext,
         control: RunControl,
     ) -> StepOutput:
+        deadline = step_deadline(context.deadline, self._timeout)
+
         def text_invoke(prompt: str) -> LLMCompletion:
             return _invoke_mistral(
                 model=self._model,
                 prompt=prompt,
-                deadline=context.deadline,
+                deadline=deadline,
                 settings=self._settings,
+                control=control,
             )
 
         def vision_invoke(
@@ -258,8 +287,9 @@ class MistralAdapter:
                 prompt=prompt,
                 media_type=media_type,
                 image_b64=image_b64,
-                deadline=context.deadline,
+                deadline=deadline,
                 settings=self._settings,
+                control=control,
             )
 
         return run_llm_step(

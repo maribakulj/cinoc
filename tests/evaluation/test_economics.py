@@ -511,3 +511,102 @@ def test_mistral_latest_to_yymm_is_not_taken_for_a_snapshot() -> None:
     rows = {r.pipeline: r for r in analysis.payload.pipelines}  # type: ignore[union-attr]
     assert rows["ocr_llm"].cost_eur is None
     assert rows["ocr_llm"].basis == "tarif inconnu : mistral/mistral-small-2506"
+
+
+# --------------------------------------------------------------------------- #
+# Tentatives comptées (P5f 7, S20)
+# --------------------------------------------------------------------------- #
+
+
+def _page_manifest() -> RunManifest:
+    step = PipelineStep(
+        id="ocr",
+        kind="ocr",
+        adapter_name="mistral_ocr:c0",
+        input_types=(ArtifactType.IMAGE,),
+        output_types=(ArtifactType.RAW_TEXT,),
+    )
+    return _manifest().model_copy(
+        update={
+            "pipeline_specs": (
+                PipelineSpec(
+                    name="ocr_seul", initial_inputs=(ArtifactType.IMAGE,), steps=(step,)
+                ),
+                _manifest().pipeline_specs[1],
+            )
+        }
+    )
+
+
+def _rows(usage: tuple[DocumentUsage, ...], manifest: RunManifest) -> dict[str, object]:
+    pricing = {
+        **_PRICING,
+        "cloud_page_kinds": {"mistral_ocr": {"eur_per_1k_pages": 1.0}},
+    }
+    analysis = economics_analysis(
+        "text", "cer", _series(), usage, manifest, pricing=pricing
+    )
+    assert analysis is not None and isinstance(analysis.payload, EconomicsPayload)
+    return {r.pipeline: r for r in analysis.payload.pipelines}
+
+
+def test_every_billed_page_is_counted_not_one_per_document() -> None:
+    """Un document qui a coûté trois pages (fan-out sur trois régions, ou une
+    tentative facturée avant le succès) en coûte trois, pas une. Machine :
+    180 s × 0,10 €/h = 0,005 € ; pages : (3 + 1) / 1000 × 1 € = 0,004 €."""
+    usage = (
+        DocumentUsage(
+            document_id="d1", pipeline="ocr_seul",
+            usage=ResourceUsage(duration_seconds=90.0, billed_pages=3),
+        ),
+        DocumentUsage(
+            document_id="d2", pipeline="ocr_seul",
+            usage=ResourceUsage(duration_seconds=90.0, billed_pages=1),
+        ),
+        *_usage()[2:],
+    )
+    rows = _rows(usage, _page_manifest())
+    row = rows["ocr_seul"]
+    assert row.cost_eur == pytest.approx(0.005 + 0.004)  # type: ignore[attr-defined]
+    assert row.billed_pages == 4  # type: ignore[attr-defined]
+    assert row.n_documents == 2  # type: ignore[attr-defined]
+
+
+def test_a_failed_unit_s_billed_consumption_is_paid_not_processed() -> None:
+    """Une unité en échec n'est pas une page traitée (débit, durée) — mais ce
+    qu'elle a fait facturer est payé : la page soumise à Azure avant une sonde
+    perdue, les jetons d'une réponse refusée."""
+    failed_page = DocumentUsage(
+        document_id="d3", pipeline="ocr_seul",
+        usage=ResourceUsage(billed_pages=1),
+        outcome="failed", reason="engine", message="sonde perdue",
+    )
+    refused = DocumentUsage(
+        document_id="d3", pipeline="ocr_llm",
+        usage=ResourceUsage(tokens_in=1_000_000, tokens_out=0),
+        outcome="failed", reason="engine", message="refus",
+    )
+    rows = _rows((*_usage(), failed_page, refused), _page_manifest())
+    ocr = rows["ocr_seul"]
+    assert ocr.n_documents == 2  # type: ignore[attr-defined]
+    assert ocr.pages_per_hour == pytest.approx(40.0)  # type: ignore[attr-defined]
+    # 0,005 € machine + 3 pages facturées (2 traitées + 1 perdue) / 1000.
+    assert ocr.cost_eur == pytest.approx(0.005 + 0.003)  # type: ignore[attr-defined]
+    llm = rows["ocr_llm"]
+    # 540 s × 0,10 €/h = 0,015 € ; jetons : 1,5 MTok in × 0,20 + 0,1 × 0,60.
+    assert llm.tokens_in == 1_500_000  # type: ignore[attr-defined]
+    assert llm.cost_eur == pytest.approx(0.015 + 0.30 + 0.06)  # type: ignore[attr-defined]
+
+
+def test_resumed_units_are_counted() -> None:
+    usage = tuple(
+        u.model_copy(update={"resumed": u.document_id == "d1"}) for u in _usage()
+    )
+    analysis = economics_analysis(
+        "text", "cer", _series(), usage, _manifest(), pricing=_PRICING
+    )
+    assert analysis is not None and isinstance(analysis.payload, EconomicsPayload)
+    assert {r.pipeline: r.n_resumed for r in analysis.payload.pipelines} == {
+        "ocr_llm": 1,
+        "ocr_seul": 1,
+    }

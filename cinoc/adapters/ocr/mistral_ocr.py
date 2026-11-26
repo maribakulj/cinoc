@@ -11,6 +11,13 @@ la réponse par :func:`_text_from_response` ; la réponse entière (pages, image
 dimensions, en-têtes et pieds, blocs) gardée en sidecar ``NATIVE_JSON`` (un
 appel par page) ; et, quand la réponse porte des **blocs**, leur projection en
 ``LAYOUT`` (``_mistral_layout.layout_from_response``), depuis ce même corps.
+
+Délai fini (``timeout``, défaut 120 s, retries compris), passé à chaque appel
+(``timeout_ms``) ; le SDK est construit **sans** sa politique de retry
+(``retry_config=None``) et l'appel passe par ``call_resilient`` (429, 5xx,
+transport), sous le quota du fournisseur ``mistral`` (même clé, même compte que
+le chat). Facturé à la page : chaque tentative facturable est comptée (règle :
+``adapters/_resilience``).
 """
 
 from __future__ import annotations
@@ -20,11 +27,19 @@ from pathlib import Path
 from typing import Any
 
 from cinoc.adapters._native import sdk_native, served_model
+from cinoc.adapters._resilience import (
+    DEFAULT_OCR_TIMEOUT,
+    BillingMeter,
+    call_resilient,
+    request_timeout,
+    step_deadline,
+    validate_timeout,
+)
 from cinoc.adapters.ocr._base import run_remote_image_to_text
 from cinoc.adapters.ocr._mistral_layout import layout_from_response
 from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.deadline import Deadline
-from cinoc.domain.errors import AdapterStepError
+from cinoc.domain.errors import AdapterStepError, CinocError
 from cinoc.formats.text import markdown_to_text
 from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
@@ -58,7 +73,12 @@ def _text_from_response(native: object) -> str:
 
 
 def _invoke_mistral_ocr(
-    *, model: str, image_path: str, deadline: Deadline
+    *,
+    model: str,
+    image_path: str,
+    deadline: Deadline,
+    control: RunControl | None = None,
+    meter: BillingMeter | None = None,
 ) -> dict[str, Any]:
     """Appelle l'OCR et rend le **corps** de la réponse (dump du modèle du SDK)."""
     import os
@@ -75,19 +95,26 @@ def _invoke_mistral_ocr(
     path = Path(image_path)
     media = _MEDIA.get(path.suffix.lower(), "image/png")
     image_b64 = b64encode(path.read_bytes()).decode("ascii")
-    client_kwargs: dict[str, object] = {"api_key": api_key}
-    timeout = deadline.as_sdk_timeout()
-    if timeout is not None:
-        client_kwargs["timeout_ms"] = int(timeout * 1000)
     try:
-        client = Mistral(**client_kwargs)  # type: ignore[arg-type]
-        response = client.ocr.process(
-            model=model,
-            document={
-                "type": "image_url",
-                "image_url": f"data:{media};base64,{image_b64}",
-            },
+        # ``retry_config=None`` : une seule politique de retry, celle de Cinoc.
+        client = Mistral(api_key=api_key, retry_config=None)
+
+        def process() -> Any:
+            timeout = request_timeout(deadline)
+            return client.ocr.process(
+                model=model,
+                document={
+                    "type": "image_url",
+                    "image_url": f"data:{media};base64,{image_b64}",
+                },
+                timeout_ms=int(timeout * 1000) if timeout is not None else None,
+            )
+
+        response = call_resilient(
+            "mistral", process, deadline=deadline, control=control, meter=meter
         )
+    except CinocError:
+        raise  # délai, annulation : déjà typés
     except Exception as exc:  # le SDK lève des erreurs HTTP/SDK variées
         raise AdapterStepError(
             f"mistral_ocr a échoué ({model}) : {type(exc).__name__}: {exc}"
@@ -100,11 +127,18 @@ class MistralOCRAdapter:
     quand la réponse porte des blocs — publié en plus, non déclaré : une réponse
     sans blocs n'en a pas)."""
 
-    def __init__(self, *, label: str, model: str = _DEFAULT_MODEL) -> None:
+    def __init__(
+        self,
+        *,
+        label: str,
+        model: str = _DEFAULT_MODEL,
+        timeout: object = DEFAULT_OCR_TIMEOUT,
+    ) -> None:
         if not label or not all(c.isalnum() or c in "_-" for c in label):
             raise AdapterStepError(f"mistral_ocr : label invalide {label!r}.")
         self._label = label
         self._model = model
+        self._timeout = validate_timeout(timeout, "mistral_ocr")
 
     @property
     def name(self) -> str:
@@ -135,14 +169,19 @@ class MistralOCRAdapter:
         context: RunContext,
         control: RunControl,
     ) -> StepOutput:
+        deadline = step_deadline(context.deadline, self._timeout)
         return run_remote_image_to_text(
             name=self.name,
             label=self._label,
             inputs=inputs,
             context=context,
             control=control,
-            call=lambda image_uri: _invoke_mistral_ocr(
-                model=self._model, image_path=image_uri, deadline=context.deadline
+            call=lambda image_uri, meter: _invoke_mistral_ocr(
+                model=self._model,
+                image_path=image_uri,
+                deadline=deadline,
+                control=control,
+                meter=meter,
             ),
             extract=_text_from_response,
             served=served_model,

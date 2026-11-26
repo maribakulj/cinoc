@@ -24,7 +24,10 @@ UnitOutcome = Literal["ok", "truncated", "failed"]
 #: message libre. ``engine`` : le moteur (adapter) a levé ; ``infrastructure`` :
 #: l'environnement du run (image distante injoignable…) ; ``unsupported`` : le
 #: pipeline ne s'applique pas à ce document tel que déclaré (entrée ou sortie
-#: d'étape manquante) ; ``cancelled`` : l'unité a été arrêtée (deadline expirée).
+#: d'étape manquante) ; ``cancelled`` : l'unité a été arrêtée par un **délai** —
+#: celui du run ou celui de l'étape (réglage ``timeout`` d'un moteur), libellé
+#: « arrêtée (délai) ». Un délai dépassé ne dit rien du moteur : sous
+#: contention, une page de 2 s en dépasse 120 (pilote D-281, D3).
 FailureReason = Literal["engine", "infrastructure", "unsupported", "cancelled"]
 
 
@@ -46,6 +49,12 @@ class ResourceUsage(BaseModel):
     #: le fournisseur les expose ; ``None`` pour un moteur non facturé au jeton).
     tokens_in: int | None = Field(default=None, ge=0)
     tokens_out: int | None = Field(default=None, ge=0)
+    #: Pages facturées par un OCR distant facturé à la page (Mistral OCR,
+    #: Azure DI, Google Vision) : **chaque tentative facturable** — une requête
+    #: par image, donc une par région en fan-out, et une tentative coupée après
+    #: envoi en plus du succès. ``None`` = non compté (moteur non facturé à la
+    #: page, JSON antérieur) : l'économie compte alors une page par unité.
+    billed_pages: int | None = Field(default=None, ge=0)
 
     def merged_with(self, other: ResourceUsage | None) -> ResourceUsage:
         """Somme champ à champ (``None``-tolérante) — agrégation par document."""
@@ -62,6 +71,7 @@ class ResourceUsage(BaseModel):
             duration_seconds=duration,
             tokens_in=_add(self.tokens_in, other.tokens_in),
             tokens_out=_add(self.tokens_out, other.tokens_out),
+            billed_pages=_add(self.billed_pages, other.billed_pages),
         )
 
 

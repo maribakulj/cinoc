@@ -192,3 +192,60 @@ def test_an_ocr_alto_is_not_treated_as_a_reference(
 
     assert code == 0
     assert sortie.exists()
+
+
+@_needs_saknussemm
+def test_failed_units_end_with_the_same_summary_and_code_as_run(
+    dossier_alto: Path,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Reste de S10b (D-282) : ``cinoc correct`` sortait en code 0 sans bilan
+    quand des unités échouaient — même défaut que D2. Même bilan et même code
+    3 que ``cinoc run``, rapport écrit quand même."""
+    from cinoc.adapters.layout.saknussemm_correct import SaknussemmCorrector
+    from cinoc.domain.errors import AdapterStepError
+    from cinoc.interfaces._run_summary import EXIT_UNITS_FAILED
+
+    original = SaknussemmCorrector.execute
+
+    def flaky(self, inputs, params, context, control):  # noqa: ANN001, ANN202
+        if context.document_id == "page2":
+            raise AdapterStepError("correcteur injoignable")
+        return original(self, inputs, params, context, control)
+
+    monkeypatch.setattr(SaknussemmCorrector, "execute", flaky)
+    sortie = tmp_path / "rapport.html"
+    code = run_correction(
+        str(dossier_alto),
+        str(sortie),
+        producer="rules",
+        model="",
+        host="http://localhost:11434",
+        ocr_sidecar="",
+        ground_truth=True,
+        repeat=1,
+    )
+    assert code == EXIT_UNITS_FAILED == 3
+    assert sortie.exists()
+    err = capsys.readouterr().err
+    assert "Bilan : 1 unité(s) en échec / 2 (moteur : 1)" in err
+
+
+@_needs_saknussemm
+def test_a_clean_correction_says_so(
+    dossier_alto: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code = run_correction(
+        str(dossier_alto),
+        str(tmp_path / "r.html"),
+        producer="rules",
+        model="",
+        host="http://localhost:11434",
+        ocr_sidecar="",
+        ground_truth=True,
+        repeat=1,
+    )
+    assert code == 0
+    assert "Bilan : 2 unité(s), aucune en échec." in capsys.readouterr().out

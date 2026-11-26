@@ -50,7 +50,8 @@ def failure_reason(exc: CinocError) -> FailureReason:
     """Motif codé d'un échec d'unité, lu sur la **classe** de l'erreur.
 
     ``DeadlineExceeded`` avant ``AdapterStepError`` (elle en hérite) : une unité
-    arrêtée à expiration n'est pas un moteur en panne. ``PipelineStepError`` =
+    arrêtée à expiration — du run ou du délai propre de l'étape — n'est pas un
+    moteur en panne (pilote D-281, D3). ``PipelineStepError`` =
     l'exécuteur n'a pas pu câbler l'étape (entrée introuvable, sortie déclarée
     non produite, brique inadaptée) : le pipeline ne s'applique pas tel que
     déclaré à ce document.

@@ -20,6 +20,8 @@ supprimé §6, anti-hallucination §12). Gatée sur ``cer``.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from cinoc.evaluation.analysis import InferencePayload
 from cinoc.evaluation.result import (
     DocumentUsage,
@@ -57,20 +59,43 @@ def _label(metric: str) -> str:
     return _LABELS.get(metric, metric.upper())
 
 
-def _seconds_per_page(usage: tuple[DocumentUsage, ...]) -> dict[str, float]:
+@dataclass(frozen=True)
+class _Durations:
+    """Durées par page d'un pipeline : toutes, et séparées selon leur source."""
+
+    all: float
+    measured: tuple[float, ...]
+    resumed: tuple[float, ...]
+
+
+def _seconds_per_page(usage: tuple[DocumentUsage, ...]) -> dict[str, _Durations]:
     """Durée par page de chaque pipeline : Σ durées / n unités.
 
     Sur les unités **produites** dont la durée est mesurée : une unité en
     échec n'a rien mesuré, et la compter ferait passer une page perdue pour
     une page rapide. Wall-clock de l'exécuteur, une fois par (pipeline ×
-    document) — les vues n'ont pas de coût propre.
+    document) — les vues n'ont pas de coût propre. Une unité **reprise** de
+    l'archive garde la durée de sa première exécution : séparée de celles que
+    ce run a mesurées (D10).
     """
-    totals: dict[str, list[float]] = {}
+    measured: dict[str, list[float]] = {}
+    resumed: dict[str, list[float]] = {}
     for unit in usage:
         duration = unit.usage.duration_seconds
         if unit.outcome != "failed" and duration is not None:
-            totals.setdefault(unit.pipeline, []).append(duration)
-    return {name: sum(values) / len(values) for name, values in totals.items()}
+            (resumed if unit.resumed else measured).setdefault(
+                unit.pipeline, []
+            ).append(duration)
+    names = sorted(set(measured) | set(resumed))
+    out: dict[str, _Durations] = {}
+    for name in names:
+        values = (*measured.get(name, ()), *resumed.get(name, ()))
+        out[name] = _Durations(
+            all=sum(values) / len(values),
+            measured=tuple(measured.get(name, ())),
+            resumed=tuple(resumed.get(name, ())),
+        )
+    return out
 
 
 def _score(pipeline: PipelineResult, metric: str) -> MetricScore | None:
@@ -160,14 +185,14 @@ class KeyMeasuresSection:
         return Html(
             f"<h2>{title}</h2>\n<p class=\"muted\">{caption}</p>\n"
             + "".join(blocks)
-            + _duration_note(result, durations, lang)
+            + _duration_note(durations, lang)
         )
 
     @staticmethod
     def _table(
         pipes: list[PipelineResult],
         cols: list[str],
-        durations: dict[str, float],
+        durations: dict[str, _Durations],
         order: dict[str, int],
         lang: str,
     ) -> str:
@@ -213,13 +238,17 @@ class KeyMeasuresSection:
                         f'<td class="disp" data-sort="{v:.6f}">{disp}{cov}</td>'
                     )
             if durations:
-                seconds = durations.get(p.pipeline)
-                if seconds is None:
+                timing = durations.get(p.pipeline)
+                if timing is None:
                     cells += '<td class="disp muted">—</td>'
                 else:
+                    seconds = timing.all
                     disp = localize_decimal(f"{seconds:.1f}", lang)
+                    # ↺ : au moins une durée relue de l'archive (note dessous).
+                    mark = " ↺" if timing.resumed else ""
                     cells += (
-                        f'<td class="disp" data-sort="{seconds:.6f}">{disp}</td>'
+                        f'<td class="disp" data-sort="{seconds:.6f}">'
+                        f"{disp}{mark}</td>"
                     )
             badge = engine_cell(p.pipeline, order.get(p.pipeline, 0))
             body.append(f'<tr><td class="eng-cell">{badge}</td>{cells}</tr>')
@@ -319,27 +348,60 @@ class KeyMeasuresSection:
         return f'<p class="muted">{head}{txt}{tail}</p>\n'
 
 
-def _duration_note(
-    result: RunResult, durations: dict[str, float], lang: str
-) -> str:
-    """Ce que la durée ne dit pas encore, quand le run a une archive.
+def _mean(values: tuple[float, ...], lang: str) -> str:
+    return localize_decimal(f"{sum(values) / len(values):.1f}", lang)
 
-    Une unité reprise d'une archive (``--resume-dir``) y garde la durée de sa
-    première exécution ; le ``RunResult`` ne distingue pas une unité reprise
-    d'une unité exécutée — il le dit plutôt que de la présenter comme mesurée
-    par ce run.
+
+def _duration_note(durations: dict[str, _Durations], lang: str) -> str:
+    """Ce que ce run a mesuré, séparé de ce qu'il a relu de l'archive (D10).
+
+    Une unité reprise (``--resume-dir``) garde la durée de sa première
+    exécution — 114,6 s mesurées sous contention donnaient « 244,6 pages/h »
+    au pilote (D-281). Le ``RunResult`` dit lesquelles (``resumed``) : leur
+    cellule est marquée ↺, et la note donne, par pipeline, les deux moyennes.
     """
-    if not durations or result.manifest.artifacts_dir is None:
+    split = {name: d for name, d in sorted(durations.items()) if d.resumed}
+    if not split:
         return ""
-    return '<p class="muted">' + localized(
+    if not any(d.measured for d in durations.values()):
+        head = localized(
+            lang,
+            "Durées ↺ : toutes les unités sont relues de l'archive — aucune durée "
+            "n'est mesurée par ce run ; chacune est celle de la première "
+            "exécution de son unité.",
+            "Durations ↺: every unit is read from the archive — no duration is "
+            "measured by this run; each is its unit's first-execution duration.",
+        )
+        return f'<p class="muted">{head}</p>\n'
+    parts = []
+    for name, d in split.items():
+        measured = (
+            localized(
+                lang,
+                f"{len(d.measured)} mesurée(s) par ce run "
+                f"({_mean(d.measured, lang)} s/page)",
+                f"{len(d.measured)} measured by this run "
+                f"({_mean(d.measured, lang)} s/page)",
+            )
+            if d.measured
+            else localized(lang, "aucune mesurée par ce run", "none measured")
+        )
+        inherited = localized(
+            lang,
+            f"{len(d.resumed)} reprise(s) de l'archive "
+            f"({_mean(d.resumed, lang)} s/page, durée de leur première exécution)",
+            f"{len(d.resumed)} resumed from the archive "
+            f"({_mean(d.resumed, lang)} s/page, first-execution duration)",
+        )
+        parts.append(f"{escape(name)} — {measured} · {inherited}")
+    head = localized(
         lang,
-        "Durées : ce run a une archive de reprise. Une unité reprise de "
-        "l'archive y garde la durée mesurée à sa première exécution, que ce "
-        "rapport ne distingue pas encore d'une durée mesurée par ce run.",
-        "Durations: this run has a resume archive. A unit resumed from the "
-        "archive keeps the duration measured at its first execution, which "
-        "this report does not yet tell apart from one measured by this run.",
-    ) + "</p>\n"
+        "Durées ↺ : une unité reprise de l'archive garde la durée de sa "
+        "première exécution, pas une mesure de ce run. Séparées :",
+        "Durations ↺: a unit resumed from the archive keeps its "
+        "first-execution duration, not a measurement of this run. Split:",
+    )
+    return f'<p class="muted">{head} ' + " ; ".join(parts) + ".</p>\n"
 
 
 __all__ = ["KeyMeasuresSection"]

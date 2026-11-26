@@ -241,7 +241,17 @@ class ResumeStore:
                 return None
             if reason not in _REASONS:
                 return None
-            return DocumentExecution.failed(cast(FailureReason, reason), message)
+            try:
+                billed = (
+                    ResourceUsage.model_validate(data["billed"])
+                    if data.get("billed") is not None
+                    else None
+                )
+            except ValidationError:
+                return None
+            return DocumentExecution.failed(
+                cast(FailureReason, reason), message, billed=billed
+            )
         for outputs in by_step.values():
             for artifact in outputs.values():
                 if artifact.uri is not None and not Path(artifact.uri).is_file():
@@ -290,6 +300,13 @@ class ResumeStore:
                 "outcome": execution.outcome,
                 "reason": execution.reason,
                 "message": execution.message,
+                # Ce qu'une unité en échec a fait facturer (champ additif :
+                # absent d'une entrée antérieure → rien de facturé connu).
+                "billed": (
+                    execution.billed.model_dump(mode="json")
+                    if execution.billed is not None
+                    else None
+                ),
             }
             (unit_dir / "index.json").write_text(
                 json.dumps(payload, ensure_ascii=False, sort_keys=True),

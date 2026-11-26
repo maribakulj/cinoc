@@ -1,7 +1,7 @@
 {
  "scenario": "native_json_google_vision",
  "api": "Google Cloud Vision REST v1 — images:annotate, DOCUMENT_TEXT_DETECTION",
- "note": "Réponses **synthétiques** au format documenté de `AnnotateImageResponse` (aucune clé ni réseau dans l'environnement de capture). Une réponse par page du corpus d'essai.",
+ "note": "Réponses **synthétiques** au format documenté de `AnnotateImageResponse` (aucune clé ni réseau dans l'environnement de capture). Une réponse par page du corpus d'essai. `folio_mots` : une page **avec** sa hiérarchie blocs → paragraphes → mots → symboles (`Word.confidence`, `Symbol.text`), au format documenté de `TextAnnotation` — construite (S20), à confirmer sur une réponse réelle ; la virgule n'a pas de `confidence` : elle n'en reçoit pas.",
  "responses": {
   "folio_a": {
    "responses": [
@@ -27,6 +27,32 @@
        {"property": {"detectedLanguages": [{"languageCode": "fr", "confidence": 0.91}]}, "width": 1700, "height": 2200, "blocks": [], "confidence": 0.88}
       ],
       "text": "Le Petit Journal, 12 mars 1894. — On annonce de Boulogne-sur-Mer\nqu’une partie de la falaife s’eft effondrée hier soir, emportant deux maifons.\n"
+     }
+    }
+   ]
+  },
+  "folio_mots": {
+   "responses": [
+    {
+     "fullTextAnnotation": {
+      "pages": [
+       {
+        "property": {"detectedLanguages": [{"languageCode": "fr", "confidence": 0.98}]},
+        "width": 1700, "height": 2200, "confidence": 0.9,
+        "blocks": [
+         {"blockType": "TEXT", "confidence": 0.9, "paragraphs": [
+          {"confidence": 0.9, "words": [
+          {"boundingBox": {"vertices": [{"x": 102, "y": 210}, {"x": 142, "y": 210}, {"x": 142, "y": 248}, {"x": 102, "y": 248}]}, "symbols": [{"text": "L", "confidence": 0.99}, {"text": "e", "confidence": 0.99}], "confidence": 0.99},
+          {"boundingBox": {"vertices": [{"x": 150, "y": 210}, {"x": 190, "y": 210}, {"x": 190, "y": 248}, {"x": 150, "y": 248}]}, "symbols": [{"text": "P", "confidence": 0.98}, {"text": "e", "confidence": 0.98}, {"text": "t", "confidence": 0.98}, {"text": "i", "confidence": 0.98}, {"text": "t", "confidence": 0.98}], "confidence": 0.98},
+          {"boundingBox": {"vertices": [{"x": 250, "y": 210}, {"x": 290, "y": 210}, {"x": 290, "y": 248}, {"x": 250, "y": 248}]}, "symbols": [{"text": "J", "confidence": 0.62}, {"text": "o", "confidence": 0.62}, {"text": "u", "confidence": 0.62}, {"text": "r", "confidence": 0.62}, {"text": "n", "confidence": 0.62}, {"text": "a", "confidence": 0.62}, {"text": "1", "confidence": 0.62}], "confidence": 0.62},
+          {"boundingBox": {"vertices": [{"x": 330, "y": 210}, {"x": 370, "y": 210}, {"x": 370, "y": 248}, {"x": 330, "y": 248}]}, "symbols": [{"text": ","}]},
+          {"boundingBox": {"vertices": [{"x": 350, "y": 210}, {"x": 390, "y": 210}, {"x": 390, "y": 248}, {"x": 350, "y": 248}]}, "symbols": [{"text": "1", "confidence": 0.97}, {"text": "2", "confidence": 0.97}], "confidence": 0.97}
+          ]}
+         ]}
+        ]
+       }
+      ],
+      "text": "Le Petit Journa1, 12\n"
      }
     }
    ]

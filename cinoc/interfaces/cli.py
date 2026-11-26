@@ -9,8 +9,7 @@ from __future__ import annotations
 
 import os
 import sys
-from collections import Counter
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -58,17 +57,12 @@ from cinoc.interfaces._list_command import (
     run_list_prompts,
     run_list_recipes,
 )
+from cinoc.interfaces._run_summary import unit_summary
 from cinoc.reports import default_report_renderer, render_comparison
 from cinoc.reports.csv_export import run_result_csv
-from cinoc.reports.sections.overview import REASON_LABELS
 
 if TYPE_CHECKING:
     from cinoc.adapters.storage.history_store import SeriesKey
-
-#: Code de sortie d'un ``run`` dont le rapport est écrit mais dont au moins une
-#: unité (pipeline × document) a échoué. Distinct de ``1`` (rien n'a pu se
-#: faire) : un script sait qu'il a un rapport, et qu'il est incomplet.
-EXIT_UNITS_FAILED = 3
 
 #: Horodatage figé du rapport de démo (golden octet-stable, cf. ``demo_to_html``).
 _DEMO_EPOCH = datetime(2026, 1, 1, tzinfo=UTC)
@@ -230,31 +224,6 @@ def _print_plan(spec: RunSpec) -> int:
     return 0
 
 
-def _bilan(results: Sequence[RunResult]) -> int:
-    """Bilan des unités du run, et le code de sortie qu'il commande.
-
-    Un run qui perd 19 unités sur 20 sortait en code 0, et seules 19 lignes de
-    journal le disaient (pilote D-281, D2). Une unité **tronquée** a une sortie,
-    notée : elle est comptée, pas en échec.
-    """
-    units = [unit for result in results for unit in result.usage]
-    failed = [unit for unit in units if unit.outcome == "failed"]
-    truncated = sum(unit.outcome == "truncated" for unit in units)
-    runs = f" sur {len(results)} runs" if len(results) > 1 else ""
-    coupees = f", {truncated} tronquée(s)" if truncated else ""
-    if not failed:
-        print(f"Bilan : {len(units)} unité(s){runs}, aucune en échec{coupees}.")
-        return 0
-    motifs = Counter(REASON_LABELS[str(unit.reason)][0] for unit in failed)
-    detail = ", ".join(f"{motif} : {n}" for motif, n in sorted(motifs.items()))
-    print(
-        f"Bilan : {len(failed)} unité(s) en échec / {len(units)}{runs} "
-        f"({detail}){coupees} — le rapport les liste.",
-        file=sys.stderr,
-    )
-    return EXIT_UNITS_FAILED
-
-
 def _run_config(
     config_path: str,
     output: str,
@@ -364,7 +333,7 @@ def _run_config(
     if csv_output is not None:
         Path(csv_output).write_text(run_result_csv(result), encoding="utf-8")
     print(f"Rapport écrit : {written}")
-    return _bilan(results)
+    return unit_summary(results)
 
 
 def _run_hybrid(
@@ -588,7 +557,7 @@ def main(argv: list[str] | None = None) -> int:
     return 1  # pragma: no cover (sous-commande requise)
 
 
-__all__ = ["EXIT_UNITS_FAILED", "demo_to_html", "main"]
+__all__ = ["demo_to_html", "main"]
 
 
 if __name__ == "__main__":  # pragma: no cover

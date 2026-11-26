@@ -13,6 +13,8 @@ caller a besoin de discriminer.
 
 from __future__ import annotations
 
+from cinoc.domain.usage import ResourceUsage
+
 
 class CinocError(Exception):
     """Racine de la hiérarchie d'erreurs métier de Cinoc."""
@@ -39,7 +41,17 @@ class AdapterStepError(CinocError):
 
     Permet à un caller (typiquement l'executor) d'attraper « toute
     erreur d'adapter » sans connaître la sous-classe spécifique.
+
+    ``billed`` : ce que l'étape a **fait facturer** avant d'échouer — la page
+    soumise à Azure dont la sonde s'est perdue, les jetons d'une réponse
+    refusée, une tentative coupée après envoi. L'unité est en échec (rien à
+    noter), mais sa consommation facturable est comptée à l'économie. ``None``
+    = rien de facturable connu.
     """
+
+    def __init__(self, *args: object, billed: ResourceUsage | None = None) -> None:
+        super().__init__(*args)
+        self.billed = billed
 
 
 class DeadlineExceeded(AdapterStepError):
@@ -55,11 +67,16 @@ class DeadlineExceeded(AdapterStepError):
       d'avoir fini ;
     - son SDK lève un ``TimeoutError`` parce qu'on lui a passé
       ``context.deadline.as_sdk_timeout()`` qui s'est déclenché
-      (l'adapter wrap et re-lève en ``DeadlineExceeded``).
+      (l'adapter wrap et re-lève en ``DeadlineExceeded``) ;
+    - le **délai propre de l'étape** (réglage ``timeout`` : Tesseract, outil
+      externe, moteur distant) est dépassé — c'est la deadline de l'étape,
+      la plus proche de celle du run et de ce réglage. Un délai dépassé ne dit
+      rien du moteur (sous contention, une page de 2 s en dépasse 120 : pilote
+      D-281, D3) : motif ``cancelled``, « arrêtée (délai) », pas ``engine``.
 
-    Un adapter ne doit PAS lever ``DeadlineExceeded`` pour un timeout SDK
-    non lié à la deadline, ni pour une expiration côté serveur (504) →
-    ``AdapterStepError`` standard.
+    Un adapter ne doit PAS lever ``DeadlineExceeded`` pour une expiration
+    côté serveur (504) → ``AdapterStepError`` standard (retentée par
+    ``call_resilient`` tant que le délai le permet).
     """
 
 

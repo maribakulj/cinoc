@@ -7,7 +7,9 @@ Un seul fichier, tableur-compatible : une ligne par score, colonne ``scope``
 une valeur vide n'a pas le même sens selon qu'elle vient d'un échec ou d'une
 métrique inapplicable. Les lignes ``usage`` portent la durée de chaque unité
 (``duration_seconds``, wall-clock de l'exécuteur, vide si non mesurée) : une
-par (pipeline × document), sans vue — l'exécution n'a lieu qu'une fois.
+par (pipeline × document), sans vue — l'exécution n'a lieu qu'une fois. Une
+unité **relue de l'archive** n'a pas été mesurée par ce run : sa ligne s'appelle
+``duration_seconds_first_run`` (la durée de sa première exécution, D10).
 """
 
 from __future__ import annotations
@@ -80,7 +82,7 @@ def run_result_csv(result: RunResult) -> str:
                 "",
                 unit.pipeline,
                 unit.document_id,
-                "duration_seconds",
+                "duration_seconds_first_run" if unit.resumed else "duration_seconds",
                 "" if duration is None else repr(duration),
                 "",
                 "",

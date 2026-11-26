@@ -12,17 +12,36 @@ dense d'une page (le bon mode pour des documents, ≠ ``TEXT_DETECTION`` épars)
 lu par :func:`_extract_text` dans le corps de la réponse, gardé entier en sidecar
 ``NATIVE_JSON`` (pages, blocs, confiances, langue). La clé, passée en *query
 string*, n'est pas dans le corps.
+
+Confiances (``CONFIDENCES``) : ``fullTextAnnotation.pages[].blocks[].paragraphs[]
+.words[]`` porte, par mot, ``confidence`` ∈ [0, 1] et ses ``symbols`` (le texte
+du mot est leur concaténation) — lues par :func:`_confidences` sur le même corps.
+
+Délai fini (``timeout``, défaut 120 s, retries compris) ; l'appel passe par
+``call_resilient`` (429, 5xx, transport). Facturé à l'image : chaque tentative
+facturable est comptée (règle : ``adapters/_resilience``).
 """
 
 from __future__ import annotations
 
 import os
 from base64 import b64encode
+from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from cinoc.adapters.ocr._base import run_remote_image_to_text
+from cinoc.adapters._resilience import (
+    DEFAULT_OCR_TIMEOUT,
+    BillingMeter,
+    call_resilient,
+    register_close,
+    request_timeout,
+    step_deadline,
+    validate_timeout,
+)
+from cinoc.adapters.ocr._base import run_remote_image_to_text, word_confidence
 from cinoc.domain.artifacts import Artifact, ArtifactType
+from cinoc.domain.confidence import ConfidenceToken
 from cinoc.domain.deadline import Deadline
 from cinoc.domain.errors import AdapterStepError
 from cinoc.pipeline.protocols import ParamValue
@@ -33,8 +52,8 @@ if TYPE_CHECKING:  # annotations seules — pas d'import httpx au chargement du 
     import httpx
 
 #: 1.1 : la réponse native est publiée en sidecar (``NATIVE_JSON``) ; le texte
-#: ne change pas.
-_VERSION = "1.1"
+#: ne change pas. 1.2 : les confiances par mot sont publiées (``CONFIDENCES``).
+_VERSION = "1.2"
 _ENDPOINT = "https://vision.googleapis.com/v1/images:annotate"
 _API_KEY_ENV = "GOOGLE_VISION_API_KEY"
 _FEATURE = "DOCUMENT_TEXT_DETECTION"
@@ -67,12 +86,53 @@ def _extract_text(payload: object) -> str:
     return ""
 
 
+def _confidences(payload: object) -> list[ConfidenceToken]:
+    """Confiances par mot de la 1ʳᵉ réponse — **pur**.
+
+    Le texte d'un mot est la concaténation de ses ``symbols`` ; un mot sans
+    ``confidence`` (ou hors [0, 1]) n'en reçoit pas — ni 0, ni celle de son
+    paragraphe : il est omis.
+    """
+    responses = payload.get("responses") if isinstance(payload, dict) else None
+    first = responses[0] if isinstance(responses, list) and responses else None
+    annotation = first.get("fullTextAnnotation") if isinstance(first, dict) else None
+    tokens: list[ConfidenceToken] = []
+    for word in _words(annotation):
+        symbols = word.get("symbols")
+        text = "".join(
+            str(symbol.get("text", ""))
+            for symbol in (symbols if isinstance(symbols, list) else ())
+            if isinstance(symbol, dict)
+        )
+        token = word_confidence(text, word.get("confidence"))
+        if token is not None:
+            tokens.append(token)
+    return tokens
+
+
+def _words(annotation: object) -> list[dict[str, Any]]:
+    """Les mots d'une ``TextAnnotation``, dans l'ordre pages → blocs →
+    paragraphes → mots."""
+    nodes: list[object] = [annotation]
+    for level in ("pages", "blocks", "paragraphs", "words"):
+        nodes = [
+            child
+            for node in nodes
+            if isinstance(node, dict) and isinstance(node.get(level), list)
+            for child in node[level]
+        ]
+    return [node for node in nodes if isinstance(node, dict)]
+
+
 def _invoke_google_vision(
     *,
     image_path: str,
     deadline: Deadline,
     api_key: str,
+    control: RunControl | None = None,
+    meter: BillingMeter | None = None,
     transport: httpx.BaseTransport | None = None,
+    sleep: Callable[[float], None] | None = None,
 ) -> dict[str, Any]:
     """POST l'image à Vision et rend le corps JSON. ``transport`` injecté → cassette.
 
@@ -88,13 +148,31 @@ def _invoke_google_vision(
             {"image": {"content": content}, "features": [{"type": _FEATURE}]}
         ]
     }
+    ctrl = control if control is not None else RunControl()
     try:
         with httpx.Client(
-            timeout=deadline.as_sdk_timeout(), transport=transport
+            timeout=request_timeout(deadline), transport=transport
         ) as client:
-            response = client.post(_ENDPOINT, params={"key": api_key}, json=body)
-            response.raise_for_status()
-            data = response.json()
+            register_close(ctrl, client)
+
+            def annotate() -> object:
+                response = client.post(
+                    _ENDPOINT,
+                    params={"key": api_key},
+                    json=body,
+                    timeout=request_timeout(deadline),
+                )
+                response.raise_for_status()
+                return response.json()
+
+            data = call_resilient(
+                "google_vision",
+                annotate,
+                deadline=deadline,
+                control=ctrl,
+                meter=meter,
+                sleep=sleep,
+            )
     except httpx.HTTPStatusError as exc:
         raise AdapterStepError(
             f"google_vision : statut HTTP {exc.response.status_code}."
@@ -109,12 +187,14 @@ def _invoke_google_vision(
 
 
 class GoogleVisionAdapter:
-    """OCR cloud Google Vision : ``IMAGE`` → ``RAW_TEXT`` + ``NATIVE_JSON``."""
+    """OCR cloud Google Vision : ``IMAGE`` → ``RAW_TEXT`` + ``NATIVE_JSON`` +
+    ``CONFIDENCES``."""
 
-    def __init__(self, *, label: str) -> None:
+    def __init__(self, *, label: str, timeout: object = DEFAULT_OCR_TIMEOUT) -> None:
         if not label or not all(c.isalnum() or c in "_-" for c in label):
             raise AdapterStepError(f"google_vision : label invalide {label!r}.")
         self._label = label
+        self._timeout = validate_timeout(timeout, "google_vision")
 
     @property
     def name(self) -> str:
@@ -130,7 +210,9 @@ class GoogleVisionAdapter:
 
     @property
     def output_types(self) -> frozenset[ArtifactType]:
-        return frozenset({ArtifactType.RAW_TEXT, ArtifactType.NATIVE_JSON})
+        return frozenset(
+            {ArtifactType.RAW_TEXT, ArtifactType.NATIVE_JSON, ArtifactType.CONFIDENCES}
+        )
 
     def execute(
         self,
@@ -139,12 +221,18 @@ class GoogleVisionAdapter:
         context: RunContext,
         control: RunControl,
     ) -> StepOutput:
-        def call(image_uri: str) -> dict[str, Any]:
+        deadline = step_deadline(context.deadline, self._timeout)
+
+        def call(image_uri: str, meter: BillingMeter) -> dict[str, Any]:
             api_key = os.environ.get(_API_KEY_ENV)
             if not api_key:
                 raise AdapterStepError(f"{self.name} : {_API_KEY_ENV} manquante.")
             return _invoke_google_vision(
-                image_path=image_uri, deadline=context.deadline, api_key=api_key
+                image_path=image_uri,
+                deadline=deadline,
+                api_key=api_key,
+                control=control,
+                meter=meter,
             )
 
         return run_remote_image_to_text(
@@ -155,6 +243,7 @@ class GoogleVisionAdapter:
             control=control,
             call=call,
             extract=_extract_text,
+            confidences=_confidences,
         )
 
 

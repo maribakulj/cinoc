@@ -50,7 +50,7 @@ from pathlib import Path
 
 from cinoc.adapters.layout._base import layout_step_output, read_layout
 from cinoc.domain.artifacts import Artifact, ArtifactType
-from cinoc.domain.errors import AdapterStepError
+from cinoc.domain.errors import AdapterStepError, DeadlineExceeded
 from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
@@ -188,7 +188,8 @@ class CliLayoutSource:
                 "est-il installé et dans le PATH ?"
             ) from exc
         except subprocess.TimeoutExpired as exc:
-            raise AdapterStepError(
+            # Le délai de l'étape, pas une panne de l'outil (D3, D-281).
+            raise DeadlineExceeded(
                 f"{self.name} : l'outil n'a pas rendu la main en {delai:.0f}s."
             ) from exc
         if fini.returncode != 0:

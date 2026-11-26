@@ -90,7 +90,13 @@ class DocumentUsage(BaseModel):
     l'exécution** (``DocumentExecution``) et transportée telle quelle : une unité
     en échec a sa ligne, avec son motif codé (``reason``) et son message — c'est
     ce qui distingue un échec d'une absence. Une unité en échec n'a pas de
-    consommation mesurée (``usage`` vide).
+    durée mesurée ; son ``usage`` ne porte que ce qu'elle a fait **facturer**
+    avant d'échouer (jetons d'une réponse refusée, page soumise), vide sinon.
+
+    ``resumed`` : l'unité a été **relue de l'archive** (``--resume-dir``), pas
+    exécutée par ce run — sa durée et ses jetons sont ceux de sa première
+    exécution (D10, pilote D-281). Absent d'un JSON antérieur → ``False``, qui
+    ne prétend rien : un tel JSON ne distinguait pas.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -101,6 +107,7 @@ class DocumentUsage(BaseModel):
     outcome: UnitOutcome = "ok"
     reason: FailureReason | None = None
     message: str | None = Field(default=None, max_length=2000)
+    resumed: bool = False
 
     @model_validator(mode="after")
     def _reason_iff_failed(self) -> Self:
@@ -146,6 +153,10 @@ class RunResult(BaseModel):
     #: son nom d'alors, sans conversion (et sans glossaire). Le bilan de
     #: correction compte ``n_heavy_insertion`` (ex-``n_hallucination_heavy``) :
     #: un payload d'avant est refusé (champ inconnu) plutôt qu'aliasé.
+    #: Toujours 5 (D-292) : une ligne d'``usage`` dit si l'unité a été relue de
+    #: l'archive (``resumed``, défaut ``False``) et compte les pages facturées
+    #: (``billed_pages``, défaut ``None``) ; une unité en échec porte ce qu'elle
+    #: a fait facturer. Un JSON v5 d'avant se relit tel quel.
     schema_version: int = 5
     manifest: RunManifest
     pipelines: tuple[PipelineResult, ...] = Field(default_factory=tuple)
