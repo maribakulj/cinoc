@@ -19,8 +19,10 @@ from cinoc.domain.evaluation import EvaluationSpec, EvaluationView
 from cinoc.domain.pipeline import PipelineSpec
 from cinoc.domain.run import RunManifest
 from cinoc.evaluation._view_collectors import COLLECTEURS, ViewCollectors
+from cinoc.evaluation.analysis import InferencePayload
 from cinoc.evaluation.errors import EvaluationError
 from cinoc.evaluation.registry import MetricRegistry, register_default_metrics
+from cinoc.evaluation.result import RunResult
 from cinoc.evaluation.runner import ANALYSES_CONNUES, evaluate_run
 
 FIXED = datetime(2026, 1, 1, tzinfo=UTC)
@@ -91,8 +93,17 @@ def test_le_defaut_est_le_mode_rapide(tmp_path: Path) -> None:
     plusieurs dizaines de méga-octets devenu illisible.
     """
     resultat = _run(tmp_path, None)
-    assert resultat.analyses == ()
+    _seulement_les_tests(resultat)
     assert resultat.pipelines[0].aggregate[0].metric == "cer"
+
+
+def _seulement_les_tests(resultat: RunResult) -> None:
+    """Le mode rapide garde les **tests** inter-moteurs (coût négligeable :
+    « non calculé » vaut mieux qu'un silence, D-283), sans leur IC bootstrap."""
+    assert {a.payload.kind for a in resultat.analyses} == {"inference"}
+    for analysis in resultat.analyses:
+        assert isinstance(analysis.payload, InferencePayload)
+        assert analysis.payload.intervals == ()
 
 
 def test_le_mode_detaille_se_reclame(tmp_path: Path) -> None:
@@ -102,14 +113,14 @@ def test_le_mode_detaille_se_reclame(tmp_path: Path) -> None:
 
 def test_tuple_vide_ne_produit_aucune_analyse(tmp_path: Path) -> None:
     resultat = _run(tmp_path, ())
-    assert resultat.analyses == ()
+    _seulement_les_tests(resultat)
     # …mais les métriques déclarées, elles, sont bien là.
     assert resultat.pipelines[0].aggregate[0].metric == "cer"
 
 
 def test_selection_ne_garde_que_ce_qui_est_demande(tmp_path: Path) -> None:
     resultat = _run(tmp_path, ("diagnostics",))
-    assert {a.payload.kind for a in resultat.analyses} <= {"diagnostics"}
+    assert {a.payload.kind for a in resultat.analyses} <= {"diagnostics", "inference"}
 
 
 def test_analyse_inconnue_refusee_avec_la_liste(tmp_path: Path) -> None:

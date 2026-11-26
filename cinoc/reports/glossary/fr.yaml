@@ -246,14 +246,17 @@ region_detection:
 significance_p:
   title: "p-valeur (test statistique)"
   definition: >-
-    Probabilité d'observer un écart au moins aussi grand entre deux moteurs
-    si, en réalité, ils étaient équivalents (hypothèse nulle).
+    Probabilité d'observer des écarts au moins aussi grands entre les
+    pipelines s'ils étaient en réalité équivalents (hypothèse nulle) —
+    Wilcoxon signé-rangs à 2 pipelines, Friedman à 3 et plus, sur les
+    documents notés chez tous.
   measures: >-
-    Le degré de surprise d'un écart de performance ; une p-valeur basse
-    (< 0,05) indique un écart peu attribuable au hasard.
+    Le degré de surprise d'un écart de performance ; le verdict lit la
+    p-valeur corrigée de Holm sur tous les tests du run, sous α = 0,05.
   limits: >-
     Ne mesure ni l'ampleur ni l'importance pratique de l'écart ; sensible à
-    la taille du corpus et exige une correction en comparaisons multiples.
+    la taille du corpus. Un Friedman dit qu'au moins un pipeline diffère :
+    lesquels, seul le post-hoc de Nemenyi le dit.
 
 ece:
   title: "ECE — erreur de calibration attendue"

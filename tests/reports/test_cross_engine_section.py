@@ -17,6 +17,7 @@ from cinoc.evaluation.analysis import (
     InterEngineComplementarity,
     InterEngineDivergence,
     InterEnginePayload,
+    PairwiseDifference,
     PipelineInterval,
     PipelineRank,
     TaxonomyDivergencePair,
@@ -39,31 +40,77 @@ def _manifest() -> RunManifest:
     )
 
 
-def _result(metric: str, value: float | None) -> RunResult:
+def _result(
+    metric: str, value: float | None, payload: InferencePayload | None = None
+) -> RunResult:
+    analyses = (
+        (Analysis(scope="corpus", view="text", payload=payload),)
+        if payload is not None
+        else ()
+    )
     return RunResult(
         manifest=_manifest(),
         cross_engine=(MetricScore(metric=metric, value=value, support=10),),
+        analyses=analyses,
+    )
+
+
+def _wilcoxon(p: float, p_holm: float, family: int) -> InferencePayload:
+    return InferencePayload(
+        metric="cer", alpha=0.05, n_documents=10, test="wilcoxon",
+        p_value=p, p_holm=p_holm, family_size=family,
+        mean_ranks=(
+            PipelineRank(pipeline="alpha", mean_rank=1.2),
+            PipelineRank(pipeline="beta", mean_rank=1.8),
+        ),
     )
 
 
 def test_significant_verdict_and_parsed_columns() -> None:
     html = CrossEngineSection().render(
-        _result("text:cer:significance_p", 0.03), SectionContext()
+        _result("text:cer:significance_p", 0.03, _wilcoxon(0.03, 0.03, 1)),
+        SectionContext(),
     )
     assert html is not None
     assert "Significativité" in html
     # clé éclatée en colonnes Vue / Métrique (vue affichée en libellé humain)
     assert ">Texte brut<" in html and ">cer<" in html
     assert "0,0300" in html
-    assert "significatif" in html  # p=0,03 < 0,05
+    assert "Wilcoxon signé-rangs" in html  # le test nommé, pas « Wilcoxon / Friedman »
+    assert ">significatif<" in html  # p corrigée = 0,03 < 0,05
 
 
-def test_non_significant_verdict() -> None:
+def test_verdict_reads_the_holm_corrected_p() -> None:
+    """p brute 0,03 parmi 7 tests : corrigée 0,21 → non significatif (D7)."""
     html = CrossEngineSection().render(
-        _result("text:cer:significance_p", 0.20), SectionContext()
+        _result("text:cer:significance_p", 0.03, _wilcoxon(0.03, 0.21, 7)),
+        SectionContext(),
     )
     assert html is not None
-    assert "non sig." in html  # p=0,20 ≥ 0,05
+    assert "0,0300" in html and "0,2100" in html
+    assert "non sig." in html and ">significatif<" not in html
+    assert "Holm sur les 7 test(s)" in html
+
+
+def test_a_row_without_payload_says_uncorrected() -> None:
+    """Résultat antérieur au schéma 5 : la p brute reste, sans verdict."""
+    html = CrossEngineSection().render(
+        _result("text:cer:significance_p", 0.03), SectionContext()
+    )
+    assert html is not None
+    assert "0,0300" in html and "non corrigé" in html
+    assert ">significatif<" not in html
+
+
+def test_a_test_not_computed_gives_its_reason() -> None:
+    payload = InferencePayload(
+        metric="cer", alpha=0.05, n_documents=3, not_computed="insufficient_support"
+    )
+    html = CrossEngineSection().render(
+        _result("text:cer:significance_p", None, payload), SectionContext()
+    )
+    assert html is not None
+    assert "non calculé" in html and "3 cas complets, il en faut au moins 6" in html
 
 
 def test_none_value_rendered_as_dash() -> None:
@@ -77,60 +124,73 @@ def test_empty_cross_engine_returns_none() -> None:
     assert section.render(RunResult(manifest=_manifest()), SectionContext()) is None
 
 
-def test_inference_block_renders_ranks_cd_and_intervals() -> None:
+def _friedman(**update: object) -> InferencePayload:
     payload = InferencePayload(
         metric="cer",
         alpha=0.05,
-        n_documents=8,
-        critical_distance=1.1715,
-        q_alpha=2.343,
+        n_documents=10,
+        test="friedman",
+        p_value=0.0017,
+        p_holm=0.0017,
+        family_size=1,
+        critical_distance=1.0482,
+        q_alpha=2.3437,
         mean_ranks=(
-            PipelineRank(pipeline="alpha", mean_rank=1.375),
-            PipelineRank(pipeline="beta", mean_rank=3.0),
+            PipelineRank(pipeline="alpha", mean_rank=1.2),
+            PipelineRank(pipeline="beta", mean_rank=2.0),
+            PipelineRank(pipeline="gamma", mean_rank=2.8),
         ),
-        tied_groups=(("alpha",), ("beta",)),
+        cd_groups=(("alpha", "beta"), ("beta", "gamma")),
+        pairwise=(
+            PairwiseDifference(a="alpha", b="beta", rank_gap=0.8, significant=False),
+            PairwiseDifference(a="alpha", b="gamma", rank_gap=1.6, significant=True),
+            PairwiseDifference(a="beta", b="gamma", rank_gap=0.8, significant=False),
+        ),
         intervals=(
             PipelineInterval(
                 pipeline="alpha", mean=0.1062, lower=0.095, upper=0.1162,
-                n_documents=8,
+                n_documents=10,
             ),
         ),
     )
-    result = RunResult(
-        manifest=_manifest(),
-        cross_engine=(
-            MetricScore(metric="text:cer:significance_p", value=0.01, support=8),
-        ),
-        analyses=(Analysis(scope="corpus", view="text", payload=payload),),
-    )
+    return payload.model_copy(update=update)
+
+
+def test_inference_block_renders_ranks_posthoc_and_intervals() -> None:
+    result = _result("text:cer:significance_p", 0.0017, _friedman())
     html = CrossEngineSection().render(result, SectionContext())
     assert html is not None
-    assert "CD = 1,1715" in html
+    assert ">Friedman<" in html
+    assert "CD = 1,0482" in html and "q = 2,3437" in html
     assert "rang moyen" in html
     assert "[0,0950 ; 0,1162]" in html
-    assert "{alpha}" in html and "{beta}" in html
+    # Les paires, pas des groupes disjoints : seule alpha – gamma diffère, et
+    # les barres qui se chevauchent le montrent.
+    assert "paires significatives : alpha – gamma." in html
+    assert "{alpha, beta} · {beta, gamma}" in html
+    assert "groupes indiscernables" not in html
     # Déterminisme bit-à-bit du rendu.
     assert html == CrossEngineSection().render(result, SectionContext())
 
 
+def test_a_friedman_not_rejected_has_no_posthoc() -> None:
+    payload = _friedman(
+        p_value=0.0572, p_holm=0.343, family_size=7, critical_distance=None,
+        q_alpha=None, cd_groups=(), pairwise=(), intervals=(),
+    )
+    html = CrossEngineSection().render(
+        _result("text:cer:significance_p", 0.0572, payload), SectionContext()
+    )
+    assert html is not None
+    assert "Post-hoc de Nemenyi non effectué" in html
+    assert "IC 95" not in html  # mode rapide : rangs seuls
+
+
 def test_two_pipeline_inference_block_points_to_wilcoxon() -> None:
-    payload = InferencePayload(
-        metric="cer",
-        alpha=0.05,
-        n_documents=8,
-        mean_ranks=(
-            PipelineRank(pipeline="alpha", mean_rank=1.0),
-            PipelineRank(pipeline="beta", mean_rank=2.0),
-        ),
+    html = CrossEngineSection().render(
+        _result("text:cer:significance_p", 0.02, _wilcoxon(0.02, 0.02, 1)),
+        SectionContext(),
     )
-    result = RunResult(
-        manifest=_manifest(),
-        cross_engine=(
-            MetricScore(metric="text:cer:significance_p", value=0.02, support=8),
-        ),
-        analyses=(Analysis(scope="corpus", view="text", payload=payload),),
-    )
-    html = CrossEngineSection().render(result, SectionContext())
     assert html is not None
     assert "pas de post-hoc" in html
 
@@ -191,11 +251,19 @@ def test_inter_engine_blocks_render_with_documented_bound() -> None:
 
 def test_renders_english_labels() -> None:
     # Mêmes fixtures, contexte EN : libellés anglais présents, FR absents.
-    result = _result("text:cer:significance_p", 0.03)
+    result = _result("text:cer:significance_p", 0.03, _wilcoxon(0.03, 0.03, 1))
     html = CrossEngineSection().render(result, SectionContext(lang="en"))
     assert html is not None
     assert "Inter-engine significance" in html and "Significativité" not in html
     assert "significant" in html and "significatif" not in html
+    assert "Wilcoxon signed-rank" in html and "raw p" in html
+    posthoc = CrossEngineSection().render(
+        _result("text:cer:significance_p", 0.0017, _friedman()),
+        SectionContext(lang="en"),
+    )
+    assert posthoc is not None
+    assert "significant pairs: alpha – gamma." in posthoc
+    assert "CD bars" in posthoc and "Barres CD" not in posthoc
     assert ">View<" in html and ">Vue<" not in html
     # Le bloc inter-moteurs (complémentarité + divergence) bascule aussi en EN.
     inter = CrossEngineSection().render(

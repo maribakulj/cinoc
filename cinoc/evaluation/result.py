@@ -123,7 +123,14 @@ class RunResult(BaseModel):
     #: ``adapter_kwargs`` y devient les réglages **effectifs** ; un lecteur v3
     #: (``extra="forbid"``) refuserait ces champs. Un JSON v3 se recharge (champs
     #: vides) sans prétendre savoir quel modèle a été servi.
-    schema_version: int = 4
+    #: 5 : le payload ``inference`` porte le test (Wilcoxon/Friedman) ou le
+    #: motif de son absence, la p corrigée de Holm, et un post-hoc conditionné
+    #: au rejet — ``tied_groups`` (disjoints, faux) devient ``cd_groups``
+    #: (chevauchants), ``q_alpha_extrapolated`` disparaît (q exact par scipy).
+    #: Un JSON v4 **sans** payload ``inference`` (le mode rapide) se recharge ;
+    #: un JSON v4 qui en porte un est refusé : ses verdicts n'étaient pas
+    #: corrigés — on le re-note depuis son archive (``--resume-dir --offline``).
+    schema_version: int = 5
     manifest: RunManifest
     pipelines: tuple[PipelineResult, ...] = Field(default_factory=tuple)
     documents: tuple[RunDocumentResult, ...] = Field(default_factory=tuple)

@@ -265,7 +265,8 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Analyses détaillées : 'toutes', ou une liste séparée par des "
         "virgules ('diagnostics,word_errors'). Par défaut le run est en mode "
-        "rapide — seules les métriques déclarées par les vues sont calculées. "
+        "rapide — seules les métriques déclarées par les vues et leurs tests "
+        "inter-moteurs sont calculés ('inference' y ajoute l'IC bootstrap). "
         "Prime sur ce que dit la spec.",
     )
     run_cmd.add_argument(

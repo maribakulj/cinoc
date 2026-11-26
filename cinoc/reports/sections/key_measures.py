@@ -4,7 +4,9 @@ Le **headline** du rapport : les scores standard (CER/WER/FCA/exactitude/cMER)
 par moteur, en table **triable** (colonnes annotées du sens de lecture ↓/↑), un
 **dot plot classé** du CER avec **IC 95 % bootstrap** (calculé en couche
 evaluation — montre l'écart *et* son incertitude), et le **résultat du test**
-inter-moteurs comme **fait** (Nemenyi corrigé ou Wilcoxon).
+inter-moteurs comme **fait** : Wilcoxon (2 moteurs) ou Friedman (≥ 3), p brute
+et p corrigée de Holm, puis les paires que Nemenyi sépare quand le Friedman est
+rejeté — ou le motif pour lequel le test n'a pas été calculé.
 
 **Aucun verdict** : pas de « meilleur » déclaré, pas de recommandation. On trie
 par une valeur mesurée, on affiche un fait statistique — l'utilisateur interprète
@@ -25,6 +27,13 @@ from cinoc.reports.engine_badges import (
 )
 from cinoc.reports.html import escape, localized, view_label
 from cinoc.reports.section import Html, SectionContext
+from cinoc.reports.sections._inference_text import (
+    is_significant,
+    omnibus_label,
+    p_text,
+    posthoc_text,
+    reason_text,
+)
 from cinoc.reports.sections._tables import coverage, ordered_unique
 from cinoc.reports.svg import dot_plot_ci
 
@@ -60,15 +69,6 @@ def _inference(result: RunResult, view: str) -> InferencePayload | None:
             and payload.metric == _PRIMARY
         ):
             return payload
-    return None
-
-
-def _significance(result: RunResult, view: str) -> MetricScore | None:
-    """Test brut (Wilcoxon/Friedman) : sa valeur **et** son support (cas complets)."""
-    for score in result.cross_engine:
-        parts = score.metric.split(":")
-        if len(parts) >= 2 and parts[0] == view and parts[1] == _PRIMARY:
-            return score
     return None
 
 
@@ -201,47 +201,54 @@ class KeyMeasuresSection:
 
     @staticmethod
     def _significance(result: RunResult, view: str, lang: str) -> str:
+        """Le test de la métrique principale, tel que le payload le dit.
+
+        Toujours une phrase : le test et ses p (brute, corrigée), le post-hoc
+        s'il a eu lieu — ou le motif pour lequel rien n'a été calculé.
+        """
+        head = localized(
+            lang,
+            "<strong>Test inter-moteurs (CER)</strong> — ",
+            "<strong>Inter-engine test (CER)</strong> — ",
+        )
         payload = _inference(result, view)
-        if payload is not None and payload.critical_distance is not None:
-            groups = " · ".join(
-                "{" + ", ".join(escape(p) for p in g) + "}"
-                for g in payload.tied_groups
-            )
-            alpha = localize_decimal(f"{payload.alpha:g}", lang)
-            cd = localize_decimal(f"{payload.critical_distance:.3f}", lang)
+        if payload is None:
+            txt = localized(lang, "test non calculé.", "test not computed.")
+            return f'<p class="muted">{head}{txt}</p>\n'
+        if payload.test is None or payload.p_value is None or payload.p_holm is None:
             txt = localized(
                 lang,
-                f"<strong>Test inter-moteurs (CER)</strong> — post-hoc Nemenyi "
-                f"(α={alpha}, CD={cd}, "
-                f"{payload.n_documents} cas complets) : groupes d'indiscernables "
-                f"{groups}. Deux moteurs hors d'un même groupe = différence "
-                f"significative.",
-                f"<strong>Inter-engine test (CER)</strong> — Nemenyi post-hoc "
-                f"(α={alpha}, CD={cd}, "
-                f"{payload.n_documents} complete cases): indistinguishable groups "
-                f"{groups}. Two engines outside one group = significant difference.",
+                f"test non calculé : {escape(reason_text(payload, lang))}.",
+                f"test not computed: {escape(reason_text(payload, lang))}.",
             )
-            return f'<p class="muted">{txt}</p>\n'
-        raw = _significance(result, view)
-        p = raw.value if raw is not None else None
-        if raw is not None and p is not None:
-            verdict = localized(
-                lang,
-                "significative" if p < 0.05 else "non significative",
-                "significant" if p < 0.05 else "not significant",
-            )
-            pv = localize_decimal(f"{p:.4f}", lang)
-            txt = localized(
-                lang,
-                f"<strong>Test inter-moteurs (CER)</strong> — Wilcoxon : p = "
-                f"{pv} → différence {verdict} au seuil α = 0,05 "
-                f"({raw.support} cas complets).",
-                f"<strong>Inter-engine test (CER)</strong> — Wilcoxon: p = "
-                f"{pv} → difference {verdict} at α = 0.05 "
-                f"({raw.support} complete cases).",
-            )
-            return f'<p class="muted">{txt}</p>\n'
-        return ""
+            return f'<p class="muted">{head}{txt}</p>\n'
+        significant = is_significant(payload)
+        alpha = localize_decimal(f"{payload.alpha:g}", lang)
+        verdict = localized(
+            lang,
+            "significative" if significant else "non significative",
+            "a significant" if significant else "no significant",
+        )
+        k = len(payload.mean_ranks)
+        between = localized(
+            lang,
+            "entre les deux moteurs" if k == 2 else f"entre les {k} moteurs",
+            "between the two engines" if k == 2 else f"between the {k} engines",
+        )
+        raw, holm = p_text(payload.p_value, lang), p_text(payload.p_holm, lang)
+        m = payload.family_size
+        txt = localized(
+            lang,
+            f"{escape(omnibus_label(payload, lang))} : p = {raw}, corrigée de "
+            f"Holm sur {m} test(s) : {holm} → différence {verdict} {between} "
+            f"au seuil α = {alpha} ({payload.n_documents} cas complets).",
+            f"{escape(omnibus_label(payload, lang))}: p = {raw}, Holm-corrected "
+            f"over {m} test(s): {holm} → {verdict} difference {between} "
+            f"at α = {alpha} ({payload.n_documents} complete cases).",
+        )
+        posthoc = posthoc_text(payload, lang) if payload.test == "friedman" else ""
+        tail = f" {posthoc}" if posthoc else ""
+        return f'<p class="muted">{head}{txt}{tail}</p>\n'
 
 
 __all__ = ["KeyMeasuresSection"]

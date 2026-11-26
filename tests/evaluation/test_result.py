@@ -48,7 +48,7 @@ def test_serialisation_is_deterministic() -> None:
 
 def test_schema_version_and_stable_keys() -> None:
     result = _result()
-    assert result.schema_version == 4
+    assert result.schema_version == 5
     blob = result.model_dump_json().replace(" ", "")
     assert '"metric":"cer"' in blob
     assert '"support":1' in blob
@@ -134,3 +134,29 @@ def test_v2_payload_still_loads_as_ok_units_without_expected() -> None:
     assert reloaded.usage[0].outcome == "ok"
     assert reloaded.pipelines[0].aggregate[0].expected is None
     assert reloaded.manifest.failure_policy == "exclude"
+
+
+def test_v4_inference_payload_is_refused_not_misread() -> None:
+    """Un payload ``inference`` v4 (verdicts non corrigés, groupes disjoints)
+    n'est pas relu comme s'il disait ce que dit un v5 ; sans lui, un v4 se
+    recharge."""
+    v4 = {
+        "schema_version": 4,
+        "manifest": _manifest().model_dump(mode="json"),
+        "analyses": [
+            {
+                "scope": "corpus",
+                "view": "text",
+                "payload": {
+                    "kind": "inference", "metric": "cer", "alpha": 0.05,
+                    "n_documents": 8, "critical_distance": 1.17, "q_alpha": 2.343,
+                    "q_alpha_extrapolated": False,
+                    "tied_groups": [["a", "b"], ["c"]],
+                },
+            }
+        ],
+    }
+    with pytest.raises(ValidationError):
+        RunResult.model_validate(v4)
+    v4["analyses"] = []
+    assert RunResult.model_validate(v4).schema_version == 4
