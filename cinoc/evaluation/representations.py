@@ -15,10 +15,7 @@ from cinoc.domain.evaluation import EvaluationView
 from cinoc.domain.layout import CanonicalLayout
 from cinoc.evaluation.errors import EvaluationError
 from cinoc.evaluation.ner import EntitySet, parse_entities
-from cinoc.formats.alto import parse_alto
-from cinoc.formats.alto.layout_map import alto_to_layout
-from cinoc.formats.pagexml import parse_pagexml
-from cinoc.formats.pagexml.layout_map import page_to_layout
+from cinoc.formats.layout_xml import layout_xml_kind, parse_layout_xml
 from cinoc.formats.text import (
     NormalizationProfile,
     get_builtin_profile,
@@ -62,16 +59,11 @@ def _load_layout(uri: str, data: bytes) -> CanonicalLayout:
     sérialisé d'un ``CanonicalLayout``.
     """
     if data.lstrip()[:1] == b"<":
-        head = data[:4096].lower()
-        is_page = b"pcgts" in head or b"pagecontent" in head
         try:
-            if is_page:
-                return page_to_layout(parse_pagexml(data))
-            return alto_to_layout(parse_alto(data))
+            return parse_layout_xml(data)
         except (ValueError, FormatError) as exc:
-            kind = "PAGE" if is_page else "ALTO"
             raise EvaluationError(
-                f"{kind} illisible en layout ({uri!r}) : {exc}"
+                f"{layout_xml_kind(data)} illisible en layout ({uri!r}) : {exc}"
             ) from exc
     try:
         return CanonicalLayout.model_validate_json(data)

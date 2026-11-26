@@ -36,7 +36,6 @@ _PRICING = {
         "hourly_rate_local_cpu_eur": 0.10,
         "time_per_error_seconds": 5.0,
     },
-    "local_kinds": ["tesseract", "ollama"],
     "cloud_models": {
         "openai/gpt-4o-mini": {
             "input_eur_per_mtok": 0.20,

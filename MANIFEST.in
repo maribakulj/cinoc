@@ -10,10 +10,8 @@
 prune corpus
 # Maquettes et sources graphiques de l'interface.
 prune design
-# Campagnes de mesure et leur outillage (hors CI).
+# Campagnes de mesure (relevés et rapports, hors CI).
 prune campaigns
-# Prototype de scoreur de qualité (hors CI).
-prune qe
 # Images de déploiement du Space et CI : propres au dépôt, pas au paquet.
 prune deploy
 prune .github

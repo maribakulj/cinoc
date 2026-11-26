@@ -299,6 +299,7 @@ cinoc/app/
 - [~] **Supprimé** : tout `_benchmark_*` (double format) · `results.py`/`legacy.py` (shim) · ½ `partial_store` mort · `python_helpers` (preset). **Différé** : reprise partielle (1 seul mécanisme, à sa tranche).
 - [x] **S28b (D-301)** : catalogue OCR **lu sur le socle** (`socle_ocr_engines`) par les recettes et `engine_statuses` (`OCR_PROBES` : sondes confrontées au socle) — la quatrième copie (`recipes._OCR`) retirée ; un seul garde-fou de forme pour fournisseurs et moteurs OCR ; rejeux à JSON (`precomputed_layout`, `precomputed_region`) retirés de l'offre web (`WEB_UNREACHABLE_REPLAYS`, confronté à la règle du dépôt ZIP).
 - [x] **S29a (D-302)** : une seule table d'extensions d'image (`formats.images.IMAGE_SUFFIXES`, lue par `corpus_import`, `transcription`, `alto_corpus`, `corpus_upload`) — le dépôt ZIP accepte `.jp2`/`.webp` (signature vérifiée par `looks_like_image`), un `.webp` distant garde son extension ; **vérité `LAYOUT` d'un dépôt ZIP** : `<rad>.gt.xml` seul (validé, 422 si illisible), jamais `<rad>.xml` (la source d'`alto_source`) — `alto_corrige` noté en structure contre elle, jamais contre son propre ALTO ; la règle d'exclusion par pipeline (S28b) écartée. *Preuve : `tests/formats/test_images.py`, `tests/app/test_web_layout_truth.py`.*
+- [x] **S29b (D-303)** : `Role.aussi` retiré (jamais posé ni lu) ; la vérité-terrain ALTO/PAGE déposée lue par `formats.layout_xml.parse_layout_xml`. — *preuve : suite verte*
 
 ---
 

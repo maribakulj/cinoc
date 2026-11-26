@@ -53,11 +53,13 @@ class AltoLayoutSource:
     construction**. Un zéro tautologique ressemble à un excellent résultat, ce
     qui en fait le plus trompeur de tous.
 
-    Format attendu (celui de ``scripts/ocr_corpus.py``) : ``{"ocr": {fichier:
-    {line_id: texte}}}``. Une ligne absente du sidecar **garde son texte
-    d'ALTO** et est comptée ; une ligne présente mais **vide** est une lecture
-    d'OCR à part entière — le moteur n'a rien reconnu — et remplace donc le
-    texte. Confondre les deux crédite le moteur d'une ligne qu'il n'a pas lue.
+    Format attendu (celui de
+    ``campaigns/2026-07-25-bnl-mistral/ocr_spa_sidecar.json``) :
+    ``{"ocr": {fichier: {line_id: texte}}}``. Une ligne absente du sidecar
+    **garde son texte d'ALTO** et est comptée ; une ligne présente mais
+    **vide** est une lecture d'OCR à part entière — le moteur n'a rien
+    reconnu — et remplace donc le texte. Confondre les deux crédite le
+    moteur d'une ligne qu'il n'a pas lue.
     """
 
     #: Réglages acceptés (``pipeline.params``) : tout autre est refusé, nommé.

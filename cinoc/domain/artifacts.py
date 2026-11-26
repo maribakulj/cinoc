@@ -7,10 +7,8 @@ Distinctions clés pour les vues d'évaluation :
 
 - ``RAW_TEXT`` vs ``CORRECTED_TEXT`` — même structure (string), contrats
   différents : seul le second a été modifié par un modèle après l'OCR.
-- ``LAYOUT`` vs ``CANONICAL_DOCUMENT`` — ``LAYOUT`` porte la structure
-  spatiale neutre (régions/lignes/mots/géométrie, payload
-  ``CanonicalLayout``) ; ``CANONICAL_DOCUMENT`` est un contenu textuel
-  riche sans coordonnées (markdown/JSON de VLM).
+- ``LAYOUT`` porte la structure spatiale neutre (régions/lignes/mots/
+  géométrie, payload ``CanonicalLayout``), ordre de lecture compris.
 """
 
 from __future__ import annotations
@@ -55,10 +53,6 @@ class ArtifactType(StrEnum):
     #: PAGE XML (PRIMA / Transkribus).
     PAGE_XML = "page_xml"
 
-    #: Représentation canonique textuelle riche sans coordonnées (sortie
-    #: VLM : markdown, JSON canonique).
-    CANONICAL_DOCUMENT = "canonical_document"
-
     #: Structure de mise en page neutre (ALTO/PAGE unifiés) : pages,
     #: régions, lignes, mots, géométrie. Payload = ``CanonicalLayout``.
     #: Une sortie de segmentation est un ``LAYOUT`` à régions sans lignes.
@@ -66,12 +60,6 @@ class ArtifactType(StrEnum):
 
     #: Liste d'entités nommées (PER, LOC, ORG, DATE, MISC…).
     ENTITIES = "entities"
-
-    #: Liste ordonnée d'IDs de régions définissant l'ordre de lecture.
-    READING_ORDER = "reading_order"
-
-    #: Alignement entre deux artefacts (ex. ``RAW_TEXT`` → ``CORRECTED_TEXT``).
-    ALIGNMENT = "alignment"
 
     #: Confidences OCR au niveau token (sidecar JSON).
     CONFIDENCES = "confidences"

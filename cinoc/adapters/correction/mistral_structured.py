@@ -25,6 +25,13 @@ Chaque corps reçu est gardé dans ``responses`` (ordre d'appel), **avant** d'ê
 lu — une réponse rejetée (hors schéma) a été payée, et c'est elle qui explique
 la nouvelle tentative. L'étape de correction l'écrit en sidecar ``NATIVE_JSON``.
 Le corps seul : la clé voyage en en-tête, jamais dans la réponse.
+
+**Interruptible en vol** (D-303, comme Ollama en S29a) : la trace
+``cut_on_cancel_async`` coupe le socket de l'appel — repli ``json_object``
+compris — quand le run est arrêté. L'arrêt lève ``CorrectionAborted``,
+l'annulation du contrat de ``saknussemm`` (ni rejouée ni prise pour une panne),
+que l'étape traduit en ``RunCancelledError``. Pas de flux ici : l'API rend sa
+réponse d'un bloc, et c'est la coupure du socket qui arrête l'attente.
 """
 
 from __future__ import annotations
@@ -32,8 +39,10 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from cinoc.adapters._resilience import cut_on_cancel_async
 from cinoc.adapters.llm.mistral import _completion_from_chat
 from cinoc.domain.usage import ResourceUsage
+from cinoc.pipeline.run_control import RunControl
 
 #: Hôte de l'API. Constante, jamais fournie par l'utilisateur — donc hors du
 #: périmètre du garde SSRF (qui protège les URI *de corpus*, elles saisies).
@@ -52,6 +61,19 @@ def provider_errors() -> tuple[type[Exception], type[Exception]]:
     )
 
     return ProviderTransientError, ProviderPermanentError
+
+
+def abort_if_stopped(control: RunControl, provider: str, model: str) -> None:
+    """L'arrêt du run → ``CorrectionAborted`` (propagée par ``saknussemm``).
+
+    Partagé par les trois clients de la correction (Mistral texte et vision,
+    Ollama)."""
+    if control.is_cancelled():
+        from saknussemm.errors import (  # type: ignore[import-not-found]  # noqa: PLC0415
+            CorrectionAborted,
+        )
+
+        raise CorrectionAborted(f"{provider} ({model}) : run arrêté pendant l'appel.")
 
 
 def parse_chat_json(data: dict[str, Any], model: str) -> dict[str, Any]:
@@ -155,12 +177,14 @@ async def post_chat(
     fallback_body: dict[str, Any] | None,
     model: str,
     timeout: float,
+    control: RunControl,
 ) -> dict[str, Any]:
     """POST ``/v1/chat/completions``, avec repli de ``response_format``.
 
     Un ``400`` sur le corps principal **et seulement lui** déclenche le repli :
     c'est la signature d'un modèle qui refuse ``json_schema``, pas d'une panne.
     Tout autre code garde sa sémantique (4xx permanent, 5xx transitoire).
+    ``control`` : un arrêt coupe l'appel en vol (``CorrectionAborted``).
     """
     import httpx  # noqa: PLC0415
 
@@ -170,12 +194,17 @@ async def post_chat(
         "Content-Type": "application/json",
     }
     url = f"{MISTRAL_BASE}/v1/chat/completions"
+    cut = {"trace": cut_on_cancel_async(control)}
+    abort_if_stopped(control, "mistral", model)
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.post(url, json=body, headers=headers)
+            response = await client.post(
+                url, json=body, headers=headers, extensions=cut
+            )
             if response.status_code == 400 and fallback_body is not None:
+                abort_if_stopped(control, "mistral", model)
                 response = await client.post(
-                    url, json=fallback_body, headers=headers
+                    url, json=fallback_body, headers=headers, extensions=cut
                 )
             response.raise_for_status()
             payload = response.json()
@@ -189,6 +218,7 @@ async def post_chat(
             raise permanent(message) from exc
         raise transient(message) from exc
     except (httpx.TimeoutException, httpx.TransportError) as exc:
+        abort_if_stopped(control, "mistral", model)  # le socket coupé par l'arrêt
         raise transient(f"mistral injoignable ({model}) : {exc}") from exc
     if not isinstance(payload, dict):
         raise transient(f"mistral ({model}) n'a pas rendu un objet JSON.")
@@ -198,8 +228,11 @@ async def post_chat(
 class MistralStructuredClient:
     """``complete_structured`` sur ``/v1/chat/completions``, schéma contraint."""
 
-    def __init__(self, *, timeout: float = 300.0) -> None:
+    def __init__(
+        self, *, timeout: float = 300.0, control: RunControl | None = None
+    ) -> None:
         self._timeout = timeout
+        self._control = control if control is not None else RunControl()
         #: Corps reçus, dans l'ordre d'appel (cf. docstring du module).
         self.responses: list[dict[str, Any]] = []
 
@@ -230,6 +263,7 @@ class MistralStructuredClient:
             fallback_body={**body, "response_format": {"type": "json_object"}},
             model=model,
             timeout=self._timeout,
+            control=self._control,
         )
         self.responses.append(data)
         return parse_chat_json(data, model), usage_from(data)
@@ -242,6 +276,7 @@ class MistralStructuredClient:
 __all__ = [
     "MISTRAL_BASE",
     "MistralStructuredClient",
+    "abort_if_stopped",
     "parse_chat_json",
     "post_chat",
     "provider_errors",

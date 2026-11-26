@@ -33,17 +33,9 @@ from cinoc.app.structure_planning import (
     plan_segmentation_run,
     segmenter_kinds,
 )
+from cinoc.formats.images import image_media_type
 from cinoc.interfaces.web.security.csrf import csrf_protect
 from cinoc.reports.layout_svg import layout_to_svg
-
-#: Type MIME par extension d'image persistée (défaut binaire opaque).
-_MEDIA_TYPES = {
-    ".png": "image/png",
-    ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg",
-    ".tif": "image/tiff",
-    ".tiff": "image/tiff",
-}
 
 
 class SegmentationRunRequest(BaseModel):
@@ -112,7 +104,8 @@ def build_segmentation_router(
         path = store.image_path(seg_id)  # id validé en amont → None hors zone
         if path is None:
             raise HTTPException(status_code=404, detail="image introuvable")
-        media = _MEDIA_TYPES.get(path.suffix.lower(), "application/octet-stream")
+        # Type de la table des imports ; hors table, binaire opaque.
+        media = image_media_type(path.suffix) or "application/octet-stream"
         return FileResponse(path, media_type=media)
 
     @router.get("/api/segmentation/preview", response_class=HTMLResponse)

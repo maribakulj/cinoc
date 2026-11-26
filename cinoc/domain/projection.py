@@ -35,10 +35,5 @@ class ProjectionSpec(BaseModel):
     projector_name: str = Field(min_length=1, max_length=128)
     params: dict[str, str | int | float | bool] = Field(default_factory=dict)
 
-    @property
-    def is_identity(self) -> bool:
-        """Vrai si ``source_type == target_type``."""
-        return self.source_type == self.target_type
-
 
 __all__ = ["ProjectionSpec"]

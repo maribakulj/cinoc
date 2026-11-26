@@ -213,8 +213,11 @@ def _apply_table(text: str, table: dict[str, str]) -> str:
     return pattern.sub(lambda m: table[m.group(0)], text)
 
 
-def _strip_diacritics(text: str, form: UnicodeForm) -> str:
-    """NFD → suppression des marques combinantes (catégorie ``Mn``) → forme cible."""
+def strip_diacritics(text: str, form: UnicodeForm = "NFC") -> str:
+    """NFD → suppression des marques combinantes (catégorie ``Mn``) → forme cible.
+
+    La seule suppression de diacritiques du dépôt : le profil ``no_diacritics``
+    et la classe ``diacritic`` de la taxonomie la lisent (P5g 6, D-303)."""
     decomposed = unicodedata.normalize("NFD", text)
     stripped = "".join(c for c in decomposed if unicodedata.category(c) != "Mn")
     return _normalize_form(stripped, form)
@@ -284,7 +287,7 @@ class NormalizationProfile(BaseModel):
         if self.non_word_to_space:
             text = re.sub(r"[^\w]", " ", text)
         if self.strip_diacritics:
-            text = _strip_diacritics(text, self.unicode_form)
+            text = strip_diacritics(text, self.unicode_form)
         return self._apply_whitespace(text)
 
     def _effective_chars(self) -> frozenset[str]:

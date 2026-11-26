@@ -24,11 +24,17 @@ import asyncio
 import base64
 import importlib.util
 import json
+import sys
+import threading
+import time
+from collections.abc import Iterator
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
 import httpx
 import pytest
 
+from cinoc.adapters.correction import mistral_structured
 from cinoc.adapters.correction.mistral_multimodal import (
     MAX_IMAGES_PER_CALL,
     MistralMultimodalClient,
@@ -38,6 +44,7 @@ from cinoc.adapters.correction.mistral_structured import (
     parse_chat_json,
     usage_from,
 )
+from cinoc.pipeline.run_control import RunControl
 
 #: Les classes d'erreur attendues appartiennent au contrat de ``saknussemm`` :
 #: sans la bibliothèque, il n'y a pas de contrat à vérifier.
@@ -91,8 +98,13 @@ def _fake_client(
             return False
 
         async def post(
-            self, url: str, json: Any = None, headers: Any = None
+            self,
+            url: str,
+            json: Any = None,
+            headers: Any = None,
+            extensions: Any = None,
         ) -> httpx.Response:
+            assert extensions and "trace" in extensions  # la coupure en vol
             if calls is not None:
                 calls.append({"url": url, "body": json, "headers": headers})
             if raises is not None:
@@ -397,3 +409,83 @@ def test_a_generation_error_stays_transient() -> None:
 def test_a_complete_reply_still_parses() -> None:
     parsed = parse_chat_json(_cut("stop", '{"lines": []}'), "m")
     assert parsed == {"lines": []}
+
+
+class _Silent(BaseHTTPRequestHandler):
+    """Lit la requête et se tait 10 s (l'API Mistral qui génère)."""
+
+    release: threading.Event
+
+    def do_POST(self) -> None:  # noqa: N802 — API de http.server
+        self.rfile.read(int(self.headers.get("Content-Length") or 0))
+        self.release.wait(10)
+        try:
+            self.send_response(500)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+        except OSError:
+            return
+
+    def log_message(self, *_: object) -> None: ...
+
+
+@pytest.fixture
+def silent(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """L'hôte de l'API remplacé par un serveur local muet."""
+    handler = type("Handler", (_Silent,), {"release": threading.Event()})
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    monkeypatch.setattr(
+        mistral_structured, "MISTRAL_BASE", f"http://127.0.0.1:{httpd.server_address[1]}"
+    )
+    yield
+    handler.release.set()
+    httpd.shutdown()
+    httpd.server_close()
+
+
+def _structured(control: RunControl) -> Any:
+    return MistralStructuredClient(control=control).complete_structured(
+        "k", "m", "corrige", {"lines": []}, _SCHEMA
+    )
+
+
+def _multimodal(control: RunControl) -> Any:
+    return MistralMultimodalClient(control=control).complete_structured_multimodal(
+        api_key="k", model="m", system_prompt="regarde",
+        user_payload={"lines": []}, images=[_Part("l1")], json_schema=_SCHEMA,
+    )
+
+
+@_needs_saknussemm
+@pytest.mark.usefixtures("silent")
+@pytest.mark.parametrize("call", [_structured, _multimodal], ids=["texte", "vision"])
+def test_a_stop_cuts_the_call_in_flight(
+    call: Any, request: pytest.FixtureRequest
+) -> None:
+    """« Arrêter » → ``CorrectionAborted`` en moins de 2 s au lieu d'attendre la
+    réponse (10 s) — rouge avant D-303 : la correction par l'API Mistral était
+    la seule à ne pas être coupée en vol."""
+    from saknussemm.errors import CorrectionAborted
+
+    if sys.platform == "win32":  # ``shutdown`` d'un autre fil : mesuré sous Linux
+        request.applymarker(pytest.mark.xfail(strict=False))
+    control = RunControl()
+    threading.Timer(0.5, control.trigger_cancel).start()
+    started = time.monotonic()
+    with pytest.raises(CorrectionAborted):
+        asyncio.run(call(control))
+    assert time.monotonic() - started < 2.0
+
+
+@_needs_saknussemm
+def test_a_run_already_stopped_sends_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+    from saknussemm.errors import CorrectionAborted
+
+    calls: list[dict[str, Any]] = []
+    monkeypatch.setattr(httpx, "AsyncClient", _fake_client(calls=calls))
+    control = RunControl()
+    control.trigger_cancel()
+    with pytest.raises(CorrectionAborted, match="mistral"):
+        asyncio.run(_structured(control))
+    assert calls == []

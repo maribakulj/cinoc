@@ -15,6 +15,7 @@ import pytest
 from fastapi.testclient import TestClient
 from jinja2 import UndefinedError
 
+from cinoc.adapters.corpus.htr_united import HTRUnitedCatalogue
 from cinoc.interfaces.web import i18n
 from cinoc.interfaces.web.app import create_app
 
@@ -32,13 +33,27 @@ def _client(tmp_path: Path) -> TestClient:
     )
 
 
+class _NoHub:
+    def search(self, *_: object, **__: object) -> tuple[()]:
+        return ()
+
+
 @pytest.mark.parametrize("lang", i18n.LANGUAGES)
 @pytest.mark.parametrize("page", PAGES)
 def test_every_page_renders_under_strict_undefined(
-    tmp_path: Path, page: str, lang: str
+    tmp_path: Path, page: str, lang: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """StrictUndefined lève aussi sur un ``{% if absent %}`` : chaque page, dans
-    chaque langue, doit donc rendre sans une variable manquante."""
+    chaque langue, doit donc rendre sans une variable manquante. Les catalogues
+    de ``/library`` sont servis hors ligne : la page interrogeait HTR-United et
+    Hugging Face en direct (relevé par le garde-fou réseau, D-303)."""
+    monkeypatch.setattr(
+        "cinoc.interfaces.web.routers.home.fetch_catalogue",
+        HTRUnitedCatalogue.from_demo,
+    )
+    monkeypatch.setattr(
+        "cinoc.interfaces.web.routers.home.HuggingFaceCatalogue", _NoHub
+    )
     response = _client(tmp_path).get(page, params={"lang": lang})
     assert response.status_code == 200, response.text[:300]
 

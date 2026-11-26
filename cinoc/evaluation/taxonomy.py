@@ -31,7 +31,6 @@ les comptes ``lacuna``/``insertion``.
 
 from __future__ import annotations
 
-import unicodedata
 from collections import Counter
 
 from cinoc.evaluation._alignment import Pair, alignment
@@ -41,6 +40,7 @@ from cinoc.evaluation.analysis import (
     TaxonomyCount,
     TaxonomyPayload,
 )
+from cinoc.formats.text.normalization import strip_diacritics
 
 #: Ordre de rendu canonique des classes (déterminisme du payload).
 CLASSES: tuple[str, ...] = (
@@ -76,13 +76,6 @@ _VISUAL_CANON = (
 )
 
 
-def _strip_diacritics(text: str) -> str:
-    return "".join(
-        c for c in unicodedata.normalize("NFD", text)
-        if not unicodedata.combining(c)
-    )
-
-
 def _expand_ligatures(text: str) -> str:
     for ligature, expansion in _LIGATURES.items():
         text = text.replace(ligature, expansion)
@@ -110,7 +103,7 @@ def classify_word_pair(reference: str, hypothesis: str) -> str:
     """Classe d'une substitution mot → mot (règles pures, ordre = priorité)."""
     if reference.lower() == hypothesis.lower():
         return "case"
-    if _strip_diacritics(reference) == _strip_diacritics(hypothesis):
+    if strip_diacritics(reference) == strip_diacritics(hypothesis):
         return "diacritic"
     if _expand_ligatures(reference) == _expand_ligatures(hypothesis):
         return "ligature"

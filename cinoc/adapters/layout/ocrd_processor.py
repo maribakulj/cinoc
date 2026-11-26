@@ -71,6 +71,7 @@ from cinoc.adapters._process import wait_or_stop
 from cinoc.adapters.layout._base import layout_step_output, read_layout
 from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.errors import AdapterStepError, DeadlineExceeded
+from cinoc.formats.images import IMAGE_SUFFIXES, image_media_type
 from cinoc.pipeline.params import Param
 from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
@@ -117,16 +118,6 @@ xmlns:xlink="http://www.w3.org/1999/xlink">
 #: celle-ci est le refus web (``CLI_ONLY_KINDS``).
 _NOM_PROCESSEUR = re.compile(r"^ocrd-[A-Za-z0-9][A-Za-z0-9_-]*$")
 
-#: OCR-D exige le type MIME à l'entrée du fichier dans le workspace. On ne
-#: devine pas : une image annoncée sous un mauvais type est lue de travers.
-_MIMES = {
-    ".png": "image/png",
-    ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg",
-    ".tif": "image/tiff",
-    ".tiff": "image/tiff",
-}
-
 _DEFAULT_TIMEOUT = 900.0
 
 #: Lanceur **injectable** : ``(programme, arguments, dossier, délai, contrôle)``.
@@ -141,11 +132,14 @@ RunnerFn = Callable[[str, list[str], Path, float, RunControl], None]
 
 
 def mime_de(chemin: str) -> str:
-    """Type MIME déduit de l'extension, ou refus explicite."""
+    """Type MIME déduit de l'extension (la table des imports,
+    ``formats/images.py``), ou refus explicite. OCR-D l'exige à l'entrée du
+    fichier dans le workspace ; on ne devine pas : une image annoncée sous un
+    mauvais type est lue de travers."""
     suffixe = Path(chemin).suffix.lower()
-    mime = _MIMES.get(suffixe)
+    mime = image_media_type(suffixe)
     if mime is None:
-        connus = ", ".join(sorted(_MIMES))
+        connus = ", ".join(IMAGE_SUFFIXES)
         raise AdapterStepError(
             f"ocrd : extension d'image non gérée ({suffixe!r}). Connues : {connus}."
         )
@@ -250,7 +244,6 @@ class OcrdProcessor:
                 f"({processor!r}) n'en dit pas le maillon."
             )
         self._label = label
-        self._processor = processor
         self._parameters = dict(parameters or {})
         self._bin_dir = bin_dir
         self._timeout = timeout

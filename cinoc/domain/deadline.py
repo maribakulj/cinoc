@@ -102,10 +102,6 @@ class Deadline:
             return False
         return time.monotonic() >= self._expires_at_monotonic
 
-    def as_sdk_timeout(self) -> float | None:
-        """Valeur à passer à un SDK comme ``timeout=`` (= ``remaining_seconds``)."""
-        return self.remaining_seconds()
-
     def clamp_to_remaining(self, seconds: float) -> float:
         """Retourne ``min(seconds, remaining_seconds())``.
 

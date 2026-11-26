@@ -7,15 +7,6 @@
     "hourly_rate_local_cpu_eur": 0.08,
     "time_per_error_seconds": 5.0
   },
-  "local_kinds": [
-    "precomputed",
-    "tesseract",
-    "ollama",
-    "precomputed_layout",
-    "precomputed_region",
-    "pp_doclayout",
-    "alto_assembler"
-  ],
   "cloud_models": {
     "openai/gpt-4o-mini": {
       "input_eur_per_mtok": 0.14,

@@ -61,8 +61,9 @@ GLYPHS = {
 }
 
 #: Sigmoïde de Platt **mesurée** sur le corpus de calibration (réducteur
-#: ``max``) : ``qe-report-max.json``, AUC ligne 0,766 contre 0,500 pour
-#: l'heuristique. Les changer sans re-mesurer rendrait la note incomparable
+#: ``max``) : ``qe-report-max.json`` (``fit_qe_calibration.py`` de l'ex-``qe/``,
+#: retiré en D-303 — l'historique git le garde), AUC ligne 0,766 contre 0,500
+#: pour l'heuristique. Les changer sans re-mesurer rendrait la note incomparable
 #: d'un run à l'autre — c'est de la donnée calibrée, pas un réglage.
 PLATT_MIDPOINT = 10.9436
 PLATT_SCALE = 6.7179

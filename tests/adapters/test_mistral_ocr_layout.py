@@ -324,3 +324,37 @@ def test_en_fan_out_les_lignes_des_blocs_sont_greffees_a_la_region(
     sans = _execute(tmp_path / "b", monkeypatch, "markdown")
     (seule,) = _lignes_reconnues(sans.artifacts, region)
     assert seule.text == _GT
+
+
+def test_un_jpeg_2000_part_annonce_image_jp2(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rouge avant D-303 : la table de l'adaptateur ignorait ``.jp2`` et
+    l'annonçait ``image/png``. Le type vient de ``formats/images.py``."""
+    from tests.adapters._native_fakes import (  # noqa: PLC0415
+        SdkResponse,
+        install_fake_mistralai,
+    )
+
+    appels: list[dict[str, Any]] = []
+
+    class _Mistral:
+        def __init__(self, **_: Any) -> None:
+            def process(**kwargs: Any) -> SdkResponse:
+                appels.append(kwargs)
+                return SdkResponse.model_validate(_response("blocs"))
+
+            self.ocr = type("ocr", (), {"process": staticmethod(process)})()
+
+    install_fake_mistralai(monkeypatch, _Mistral)
+    monkeypatch.setenv("MISTRAL_API_KEY", "sk-test")
+    image = tmp_path / "page.jp2"
+    image.write_bytes(b"\x00\x00\x00\x0cjP  \r\n\x87\n")
+    from cinoc.adapters.ocr.mistral_ocr import _invoke_mistral_ocr  # noqa: PLC0415
+    from cinoc.domain.deadline import Deadline  # noqa: PLC0415
+
+    _invoke_mistral_ocr(
+        model="m", image_path=str(image), deadline=Deadline.in_seconds(60)
+    )
+    (appel,) = appels
+    assert appel["document"]["image_url"].startswith("data:image/jp2;base64,")

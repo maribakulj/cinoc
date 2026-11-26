@@ -28,13 +28,16 @@ avant d'écrire la moindre ligne.**
   tranche, est dans le roll-up — **pas ici**.
 - **Le plan qu'exécutent les sessions est [`PLAN_FIN_MIGRATION.md`](PLAN_FIN_MIGRATION.md)**
   (P0→P5i), pas les axes `T#`/`S#` : ceux-ci décrivent comment on est arrivé là.
-  **Étapes 1→4 + P0→P4 + P5a + P5d + P5e + P5f livrées.**
-- **Prochaine étape = P5g** — *par soustraction*, quatrième phase de la
-  route **P5d → P5i** vers une 1.0 publiable (`PLAN_FIN_MIGRATION.md` §« Étape
-  4quinquies », D-260 → D-266) ; P5d (*installable et sûr*), P5e (*une mesure
-  qui dit vrai*) et P5f (*une inférence tracée*) sont livrées. La
+  **Étapes 1→4 + P0→P4 + P5a + P5d + P5e + P5f + P5g livrées** (P5g côté
+  code ; ses décisions A4, A5 attendent le mainteneur).
+- **Prochaine étape = P5h** — *la preuve* (une campagne d'ablation publiée),
+  cinquième phase de la route **P5d → P5i** vers une 1.0 publiable
+  (`PLAN_FIN_MIGRATION.md` §« Étape 4quinquies », D-260 → D-266) ; P5d
+  (*installable et sûr*), P5e (*une mesure qui dit vrai*), P5f (*une inférence
+  tracée*) et P5g (*par soustraction*) sont livrées. La
   **feuille de route session par session** (S1 → S35) de cette section dit
-  laquelle ouvrir ; S1-S28 et S29a sont livrées, la suivante est S29b, et les arbitrages A1, A2, A3, A6, A9
+  laquelle ouvrir ; S1-S29 sont livrées (A4, A5 et `v1.0.0rc1` attendent le
+  mainteneur), la suivante est S30-S32, et les arbitrages A1, A2, A3, A6, A9
   sont rendus (D-271). Née d'un audit sur le produit et non sur la CI : un
   `pip install cinoc` sans extra ne démarrait pas, et plusieurs chiffres
   affichés ne mesuraient pas ce qu'annonçait leur nom. Cette route **remplace**
@@ -52,7 +55,9 @@ avant d'écrire la moindre ligne.**
   §« Axe correction structurée ».
 - **Garde-fous d'archi actifs** : `tests/architecture/` —
   `layer_dependencies`, `no_legacy_imports`, `no_side_effect_imports`,
-  `file_budgets`, `no_broad_except`, `single_version_source`, `status_freshness`.
+  `file_budgets`, `no_broad_except`, `single_version_source`, `status_freshness`,
+  `no_dead_ui` ; et, pour toute la suite, `tests/conftest.py` refuse le réseau
+  public hors marqueurs `network`/`live` (D-303).
 
 ---
 
@@ -104,10 +109,12 @@ Conséquence opérationnelle : on construit **toujours de l'intérieur vers
 l'extérieur**. Dans ce sens, chaque couche écrite ne dépend que de couches déjà
 terminées — aucun blocage de dépendance vers l'avant n'est possible.
 
-Whitelist externe de `evaluation/` (rappel Picarones) : `PIL, annotated_types,
-jiwer, numpy, pydantic, rapidfuzz, scipy, spacy, typing_extensions, yaml`. Toute
-lib OCR/LLM (`pytesseract`, `mistralai`, `azure`, `google`, `pero_ocr`…) vit en
-`adapters/`.
+Whitelist externe de `evaluation/` (celle que vérifie
+`tests/architecture/test_layer_dependencies.py`, table `LAYERS` ; la liste
+rappelée de Picarones, avec `PIL`, `jiwer`, `spacy` et `yaml`, la contredisait) : `pydantic`, `pydantic_core`, `typing_extensions`,
+`annotated_types`, `numpy`, `rapidfuzz`, `scipy`. Toute lib OCR/LLM
+(`mistralai`, `openai`, `kraken`, `pero_ocr`…) vit en `adapters/` ; Tesseract
+est un binaire lancé par Cinoc, sans `pytesseract` (D-300).
 
 ### Extensibilité par modules tiers (EXIGENCE D'ENVELOPPE, axe 1)
 
@@ -150,7 +157,7 @@ module = incrémental.
   `openai` + `ollama` (LLM), un segmenteur de référence. Le reste = incrémental
   via plugin.
 - **Dépendances lourdes = extras optionnels.** L'adapter est intégré, son SDK
-  est un extra (`pip install cinoc[llm]`). Sans l'extra, le module reste listé
+  est un extra (`pip install cinoc[openai]`, `[anthropic]`, `[mistral]`…). Sans l'extra, le module reste listé
   mais signale qu'il faut l'installer (+ clé API) — il ne plante pas.
 - **Adapter sain ≠ shim.** Un module enveloppe une lib externe pour la traduire
   vers le `Protocol` (sain, rôle de la couche 5). Interdit : un double contrat
@@ -178,10 +185,10 @@ neutre ALTO/PAGE). Pas de type `REGIONS` séparé : une sortie de segmentation e
 un `CanonicalLayout` à régions sans lignes.
 
 - Couche 1 : `ArtifactType.LAYOUT` + `region_id` optionnel sur `Artifact`. Le type
-  `CanonicalLayout` vit en `domain`, **matérialisé à la tranche segmentation** (backlog) —
-  **pas en couche 2** : sans standard externe ni consommateur, le figer maintenant serait
-  spéculatif (cf. `cinoc/formats/MIGRATION_COUCHE_2.md`, L10). Le **nom**
-  `ArtifactType.LAYOUT` reste réservé en couche 1.
+  `CanonicalLayout` vit en `domain` (`domain/layout.py`), **matérialisé à la tranche
+  segmentation** (T5) — **pas en couche 2** (cf. `cinoc/formats/MIGRATION_COUCHE_2.md`,
+  L10) ; l'ordre de lecture y vit aussi (`LayoutPage.reading_order` : le type
+  `READING_ORDER`, jamais produit, est retiré en D-303).
 - Couche 4 : fan-out — reconnaissance une fois par région, collecte des N
   résultats, gestion des échecs partiels, réassemblage par ordre de lecture.
 - Couche 3 : métriques par bloc (CER par région + agrégat page). Segmentation et
@@ -293,7 +300,7 @@ ne fige pas une forme qui dépend d'une couche non encore conçue.
 
 | Type | Source Picarones | Déclencheur |
 |---|---|---|
-| `CanonicalLayout` (+ `Point`/`BBox`/`Geometry`/`Word`/`Line`/`Region`/`LayoutPage`) | neutre ALTO/PAGE (nouveau) | tranche segmentation (couche 4) |
+| `CanonicalLayout` ✅ (+ `Point`/`BBox`/`Geometry`/`Word`/`Line`/`Region`/`LayoutPage`, `domain/layout.py`) | neutre ALTO/PAGE (nouveau) | tranche segmentation (couche 4) — fait (T5) |
 | `ProjectionReport` | `evaluation/projectors/base.py` | migration couche 3 |
 | `RunSpec` ✅ (créé T1, **sans `StepSpec`** — D-010 : `PipelineStep` suffit) | `app/schemas/run_spec.py` | couche 6 — fait ; loader YAML différé T2 |
 | `ConfidenceToken` ✅ (créé T12, D-070 — sidecar tesseract + calibration ECE/MCE) | `adapters/ocr/confidences.py` | couche 3 — fait |
@@ -311,8 +318,9 @@ couche 3), DTO web (transport → couche 8).
 
 - Python, `snake_case` fichiers/fonctions, `PascalCase` classes, `UPPER_SNAKE`
   constantes.
-- **Types purs uniquement en `domain/`** : stdlib + `pydantic` + `pydantic_core`.
-  Aucun I/O, aucun calcul métier.
+- **Types purs uniquement en `domain/`** : stdlib + `pydantic` + `pydantic_core`
+  (+ `typing_extensions`, `annotated_types`, leurs dépendances). Aucun I/O,
+  aucun calcul métier.
 - **Erreurs typées** : lever une sous-classe de `CinocError`, jamais
   `Exception`/`ValueError` brut quand l'erreur a un sens métier.
 - **Jamais `except Exception: pass`.** Toujours
@@ -323,8 +331,12 @@ couche 3), DTO web (transport → couche 8).
   `register_default_metrics()` implicite — tout enregistrement est explicite,
   idempotent, testable séparément).
 - **Modèles Pydantic** `frozen=True, extra="forbid"` pour les types de domaine.
-- Pas de placeholder de version dispersé : une source unique
-  (`_version_fallback.FALLBACK_VERSION`), vérifiée par test.
+- Pas de placeholder de version dispersé. La version est **calculée par
+  `setuptools_scm`** depuis git (`cinoc/_version.py`, généré au build ;
+  `importlib.metadata` pour un paquet installé) ; son seul **repli**,
+  `domain/_version_fallback.FALLBACK_VERSION`, est identique à
+  `[tool.setuptools_scm] fallback_version` — vérifié par
+  `test_single_version_source`.
 
 ---
 
@@ -373,8 +385,9 @@ couche 3), DTO web (transport → couche 8).
 7. Commentaires de sprint dans le code.
 8. 8+8+8 adapters LLM/VLM (→ minimal), 20 détecteurs narratifs (→ 0, supprimé).
    (Les profils de normalisation, eux, sont de la **donnée**, pas de la surface
-   exécutable : on garde l'ensemble pertinent — 14 : les 12 retenus, profils
-   anglais retirés, + les 2 profils de conformité HIPE (D-115) —
+   exécutable : on garde l'ensemble pertinent — 15 : les 12 retenus, profils
+   anglais retirés, + les 2 profils de conformité HIPE (`hipe`, `heritage`,
+   D-115) + `dehyphenated` (correction structurée, #95) —
    cf. `cinoc/formats/MIGRATION_COUCHE_2.md`.)
 9. Dossiers de tests vides « par symétrie », `docs/archive`, `CHANGELOG` de
    97 sprints, scripts de refactor morts.
@@ -427,7 +440,10 @@ couche 3), DTO web (transport → couche 8).
   de pipeline.
 - **Mini-corpus de référence** recopiable de Picarones
   (`tests/fixtures/reference_corpus/`).
-- Markers `slow`/`network`/`live` opt-in.
+- Markers `slow`/`network`/`live`/`oracle` opt-in. **Aucun test ne joint le
+  réseau public sans `network`/`live`** : `tests/conftest.py` refuse toute
+  connexion hors boucle locale et toute résolution d'un nom public, retire les
+  variables de mandataire, et fait échouer le test qui a tenté (D-303).
 - Cible couverture : 80 % au MVP, 85 % ensuite.
 
 ---
