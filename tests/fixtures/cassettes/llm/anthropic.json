@@ -1,0 +1,82 @@
+{
+ "scenario": "llm_stop_anthropic",
+ "sdk": "anthropic 2.14.0 — anthropic.types.Message",
+ "note": "Réponses **synthétiques** (aucune clé ni réseau dans l'environnement de capture), écrites au format du fil de l'API puis validées contre le modèle de réponse du SDK installé (anthropic 2.14.0, Message.model_validate). « max_tokens » : plafond de la requête atteint ; « model_context_window_exceeded » : fenêtre du modèle épuisée ; « refusal » : réponse déclinée.",
+ "responses": {
+  "end_turn": {
+   "id": "msg_cinoc_end_turn",
+   "type": "message",
+   "role": "assistant",
+   "model": "claude-haiku-4-5-20251001",
+   "content": [
+    {
+     "type": "text",
+     "text": "Le Petit Journal, 12 mars 1894."
+    }
+   ],
+   "stop_reason": "end_turn",
+   "stop_sequence": null,
+   "stop_details": null,
+   "usage": {
+    "input_tokens": 905,
+    "output_tokens": 12
+   }
+  },
+  "max_tokens": {
+   "id": "msg_cinoc_max_tokens",
+   "type": "message",
+   "role": "assistant",
+   "model": "claude-haiku-4-5-20251001",
+   "content": [
+    {
+     "type": "text",
+     "text": "Le Petit Journal, 12 mars 1894. — On annonce de Boulogne-sur-Mer qu'une partie de la falaise s'est effondrée hier soir, emportant"
+    }
+   ],
+   "stop_reason": "max_tokens",
+   "stop_sequence": null,
+   "stop_details": null,
+   "usage": {
+    "input_tokens": 905,
+    "output_tokens": 32
+   }
+  },
+  "model_context_window_exceeded": {
+   "id": "msg_cinoc_ctx",
+   "type": "message",
+   "role": "assistant",
+   "model": "claude-haiku-4-5-20251001",
+   "content": [
+    {
+     "type": "text",
+     "text": "Le Petit Journal, 12 mars 1894. — On annonce de Boulogne-sur-Mer qu'une partie de la falaise s'est effondrée hier soir, emportant"
+    }
+   ],
+   "stop_reason": "model_context_window_exceeded",
+   "stop_sequence": null,
+   "stop_details": null,
+   "usage": {
+    "input_tokens": 905,
+    "output_tokens": 32
+   }
+  },
+  "refusal": {
+   "id": "msg_cinoc_refusal",
+   "type": "message",
+   "role": "assistant",
+   "model": "claude-haiku-4-5-20251001",
+   "content": [],
+   "stop_reason": "refusal",
+   "stop_sequence": null,
+   "stop_details": {
+    "type": "refusal",
+    "category": null,
+    "explanation": null
+   },
+   "usage": {
+    "input_tokens": 905,
+    "output_tokens": 0
+   }
+  }
+ }
+}

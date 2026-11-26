@@ -104,6 +104,9 @@ class PipelineExecutor:
             INITIAL_STEP_ID: dict(initial_inputs)
         }
         step_usage: dict[str, ResourceUsage] = {}
+        # Une coupure par étape qui en déclare une : l'unité garde ses sorties
+        # (elles seront notées) et son issue dit laquelle est coupée.
+        truncations: list[str] = []
 
         for step in spec.steps:
             ctrl.raise_if_cancelled()
@@ -138,7 +141,14 @@ class PipelineExecutor:
             stamped = self._stamp(output.artifacts, step)
             self._check_outputs(step, stamped)
             by_step[step.id] = stamped
-        return DocumentExecution(by_step=by_step, step_usage=step_usage)
+            if output.truncation is not None:
+                truncations.append(f"étape {step.id!r} : {output.truncation}")
+        return DocumentExecution(
+            by_step=by_step,
+            step_usage=step_usage,
+            outcome="truncated" if truncations else "ok",
+            message="; ".join(truncations) or None,
+        )
 
     def _run_merge(
         self,

@@ -420,3 +420,49 @@ def test_usage_is_kept_per_step_and_the_total_derives_from_it() -> None:
     assert execution.usage.duration_seconds == pytest.approx(
         sum(d for d in durations if d is not None)
     )
+
+
+class _CutModule(_EchoModule):
+    """Comme ``_EchoModule``, mais sa sortie est coupée (plafond de jetons)."""
+
+    name = "fake:cut"
+
+    def execute(self, inputs, params, context, control):  # noqa: ANN001, ANN201
+        output = super().execute(inputs, params, context, control)
+        return StepOutput(artifacts=output.artifacts, truncation="plafond atteint")
+
+
+def test_a_cut_step_marks_the_unit_truncated_and_keeps_its_output() -> None:
+    """P5e 2 : la coupure est une issue d'unité, produite ici, pas au rapport.
+
+    L'unité **garde** ses sorties (une sortie coupée est une sortie réelle, qui
+    sera notée) et le message nomme l'étape — c'est ce qu'il faut pour savoir
+    laquelle relever.
+    """
+    step = PipelineStep(
+        id="vlm",
+        kind="ocr",
+        adapter_name="fake:cut",
+        input_types=(ArtifactType.IMAGE,),
+        output_types=(ArtifactType.RAW_TEXT,),
+    )
+    spec = PipelineSpec(name="p", initial_inputs=(ArtifactType.IMAGE,), steps=(step,))
+    execution = PipelineExecutor(CODE_VERSION).execute_document(
+        spec, {"fake:cut": _CutModule()}, {ArtifactType.IMAGE: _image()},
+        document_id="doc1",
+    )
+    assert execution.outcome == "truncated"
+    assert execution.reason is None
+    assert execution.message == "étape 'vlm' : plafond atteint"
+    assert ArtifactType.RAW_TEXT in execution.artifacts
+
+
+def test_a_complete_run_stays_ok() -> None:
+    spec = PipelineSpec(
+        name="p1", initial_inputs=(ArtifactType.IMAGE,), steps=(_ocr_step(),)
+    )
+    execution = PipelineExecutor(CODE_VERSION).execute_document(
+        spec, {"fake:echo": _EchoModule()}, {ArtifactType.IMAGE: _image()},
+        document_id="doc1",
+    )
+    assert (execution.outcome, execution.message) == ("ok", None)

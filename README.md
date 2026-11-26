@@ -238,6 +238,13 @@ evaluation:
 
 A target that some pipeline of the run does not have is refused when the spec is loaded, and the report's methodology says which step a targeted view scores.
 
+**LLM and VLM settings.** The four providers (`openai`, `anthropic`, `mistral`, `ollama`) take the same settings in `adapter_kwargs`, with the same defaults: `temperature: 0`, `seed: 0`, `max_tokens: 8192`, `top_p` left to the provider; `ollama` adds `num_ctx: 16384` (its own default silently truncates the input). The manifest records the **effective** values, defaults included. Anthropic's API no longer accepts `temperature`/`top_p` and has no seed: setting one there is refused, and the manifest says `null`. A response cut by its token limit is not scored as complete: the unit is marked `truncated` — scored on its actual output, and listed as such in the report, the JSON and the CSV. A refused or failed generation makes the unit fail (`engine`).
+
+```yaml
+adapter_kwargs:
+  "ollama:vlm": {label: vlm, model: "qwen2.5vl:3b", role: zero_shot, max_tokens: 4096, num_ctx: 16384}
+```
+
 ### Scoring OCR that Cinoc did not produce
 
 `precomputed` is not only a fixture device. It reads `<page>.<label>.txt` sitting

@@ -10,7 +10,8 @@ Deux détails qui ne sont pas des détails :
 * ``num_ctx`` est **explicite**. Le défaut d'``ollama`` est 2048 jetons et la
   troncature est **silencieuse** : le JSON revient coupé au milieu d'une chaîne,
   et l'erreur ressemble à une hallucination du modèle alors que c'est le serveur
-  qui a coupé.
+  qui a coupé. Quand elle arrive quand même, ``done_reason: length`` la dit :
+  erreur **permanente** (la rejouer la couperait à l'identique).
 * les échecs de transport sont traduits en ``ProviderTransientError`` /
   ``ProviderPermanentError``. La recouvrabilité de ``saknussemm`` est une liste
   blanche : une exception brute est traitée comme un bug et **fait échouer** le
@@ -90,6 +91,15 @@ class OllamaStructuredClient:
             ) from exc
 
         content = (data.get("message") or {}).get("content") or ""
+        # ``done_reason: length`` : le serveur a coupé (``num_ctx`` épuisé).
+        # Rejouer couperait à l'identique : permanente, jamais rejouée par
+        # ``saknussemm`` (ADR-008 : la correction échoue bruyamment).
+        if data.get("done_reason") == "length":
+            raise ProviderPermanentError(
+                f"ollama ({model}) : réponse tronquée (done_reason=length) — "
+                f"la rejouer la couperait à l'identique ; relever num_ctx "
+                f"(actuel : {self._num_ctx}) : {content[:200]!r}"
+            )
         try:
             parsed = json.loads(content)
         except json.JSONDecodeError as exc:

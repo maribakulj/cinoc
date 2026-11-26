@@ -6,6 +6,15 @@ passé à la construction : ``text_only`` (``RAW_TEXT`` → ``CORRECTED_TEXT``),
 clé vient de ``OPENAI_API_KEY`` ; le SDK ``openai`` est un **extra** importé
 paresseusement dans ``_invoke_openai`` / ``_invoke_openai_vision`` (isolés →
 **mockables**, CI sans clé ni réseau). La ``Deadline`` borne l'appel.
+
+Réglages (``InferenceSettings``) : ``temperature``, ``top_p``, ``seed`` et
+``max_tokens`` — ce dernier envoyé comme ``max_completion_tokens`` : ``max_tokens``
+est déprécié par l'API et refusé par les modèles de raisonnement (série o,
+gpt-5). Ces modèles refusent aussi une ``temperature`` autre que 1 : l'API
+répond 400, le SDK lève ``BadRequestError`` (un ``OpenAIError``), traduit en
+``AdapterStepError`` → l'unité échoue avec le message de l'API (motif
+``engine``), le run continue, et ``call_resilient`` ne rejoue pas un 400.
+``temperature=None`` (API Python) ne l'envoie pas.
 """
 
 from __future__ import annotations
@@ -14,12 +23,18 @@ from typing import Any, ClassVar
 
 from cinoc.adapters._resilience import call_resilient
 from cinoc.adapters.llm._base import (
+    DEFAULT_MAX_TOKENS,
+    DEFAULT_SEED,
+    DEFAULT_TEMPERATURE,
+    InferenceSettings,
     LLMCompletion,
+    StopReason,
     default_prompt_for_role,
     llm_input_types,
     llm_output_type,
     normalize_llm_content,
     run_llm_step,
+    stop_reason_from,
     usage_tokens,
     validate_llm_label,
     validate_role,
@@ -32,17 +47,28 @@ from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
 
-_VERSION = "1.0"
+#: 2 : raison d'arrêt lue, réglages d'inférence transmis (``temperature``,
+#: ``top_p``, ``seed``, ``max_completion_tokens``) — une sortie peut changer.
+_VERSION = "2.0"
 _DEFAULT_MODEL = "gpt-4o-mini"
+
+#: ``finish_reason`` (SDK openai 3.59 : ``stop``, ``length``, ``tool_calls``,
+#: ``content_filter``, ``function_call``) → raison normalisée. Les appels
+#: d'outil n'ont pas de sens ici : ``unknown``.
+_STOP_REASONS: dict[str, StopReason] = {
+    "stop": "stop",
+    "length": "length",
+    "content_filter": "refusal",
+}
 
 
 def _completion_from_chat(response: Any) -> LLMCompletion:
-    """Réponse SDK ``chat.completions`` → ``LLMCompletion`` (texte + jetons).
+    """Réponse SDK ``chat.completions`` → ``LLMCompletion`` (texte, jetons, arrêt).
 
     **Pur** (aucun réseau, aucun import SDK) → la cartographie usage→jetons
-    (``prompt_tokens``/``completion_tokens``) est **testable sur une réponse de
-    cassette**, ce que le client live (``# pragma: no cover``) ne permet pas. Les
-    jetons alimentent l'économie (coût réel par modèle).
+    (``prompt_tokens``/``completion_tokens``) et ``finish_reason`` → raison
+    d'arrêt est **testable sur une réponse de cassette**, ce que le client live
+    (``# pragma: no cover``) ne permet pas. Les jetons alimentent l'économie.
     """
     usage = getattr(response, "usage", None)
     tokens_in = usage_tokens(getattr(usage, "prompt_tokens", None))
@@ -50,13 +76,39 @@ def _completion_from_chat(response: Any) -> LLMCompletion:
     choices = getattr(response, "choices", None)
     if not choices:
         return LLMCompletion("", tokens_in, tokens_out)
+    choice = choices[0]
     return LLMCompletion(
-        normalize_llm_content(choices[0].message.content), tokens_in, tokens_out
+        normalize_llm_content(choice.message.content),
+        tokens_in,
+        tokens_out,
+        stop_reason_from(getattr(choice, "finish_reason", None), _STOP_REASONS),
     )
 
 
+def _request_kwargs(
+    model: str, messages: list[dict[str, object]], settings: InferenceSettings
+) -> dict[str, object]:
+    """Arguments de ``chat.completions.create`` — **pur**, testé sans SDK.
+
+    Un réglage ``None`` n'est pas envoyé : c'est le fournisseur qui décide, et le
+    manifeste dit ``None``, pas un défaut supposé.
+    """
+    kwargs: dict[str, object] = {"model": model, "messages": messages}
+    if settings.temperature is not None:
+        kwargs["temperature"] = settings.temperature
+    if settings.top_p is not None:
+        kwargs["top_p"] = settings.top_p
+    if settings.seed is not None:
+        kwargs["seed"] = settings.seed
+    kwargs["max_completion_tokens"] = settings.max_tokens
+    return kwargs
+
+
 def _openai_client(  # pragma: no cover -- réseau + clé API (cf. marqueur 'live')
-    model: str, messages: list[dict[str, object]], deadline: Deadline
+    model: str,
+    messages: list[dict[str, object]],
+    deadline: Deadline,
+    settings: InferenceSettings,
 ) -> LLMCompletion:
     """Appel ``chat.completions`` partagé (texte ou multimodal)."""
     import os
@@ -70,11 +122,7 @@ def _openai_client(  # pragma: no cover -- réseau + clé API (cf. marqueur 'liv
         raise AdapterStepError(
             "openai : SDK non installé (pip install 'cinoc[openai]')."
         ) from exc
-    kwargs: dict[str, object] = {
-        "model": model,
-        "messages": messages,
-        "temperature": 0.0,
-    }
+    kwargs = _request_kwargs(model, messages, settings)
     timeout = deadline.as_sdk_timeout()
     if timeout is not None:
         kwargs["timeout"] = timeout
@@ -96,13 +144,21 @@ def _openai_client(  # pragma: no cover -- réseau + clé API (cf. marqueur 'liv
 
 
 def _invoke_openai(  # pragma: no cover -- réseau + clé API (cf. marqueur 'live')
-    *, model: str, prompt: str, deadline: Deadline
+    *, model: str, prompt: str, deadline: Deadline, settings: InferenceSettings
 ) -> LLMCompletion:
-    return _openai_client(model, [{"role": "user", "content": prompt}], deadline)
+    return _openai_client(
+        model, [{"role": "user", "content": prompt}], deadline, settings
+    )
 
 
 def _invoke_openai_vision(  # pragma: no cover -- réseau + clé API (cf. marqueur 'live')
-    *, model: str, prompt: str, media_type: str, image_b64: str, deadline: Deadline
+    *,
+    model: str,
+    prompt: str,
+    media_type: str,
+    image_b64: str,
+    deadline: Deadline,
+    settings: InferenceSettings,
 ) -> LLMCompletion:
     content = [
         {"type": "text", "text": prompt},
@@ -111,7 +167,9 @@ def _invoke_openai_vision(  # pragma: no cover -- réseau + clé API (cf. marque
             "image_url": {"url": f"data:{media_type};base64,{image_b64}"},
         },
     ]
-    return _openai_client(model, [{"role": "user", "content": content}], deadline)
+    return _openai_client(
+        model, [{"role": "user", "content": content}], deadline, settings
+    )
 
 
 class OpenAIAdapter:
@@ -133,8 +191,15 @@ class OpenAIAdapter:
         model: str = _DEFAULT_MODEL,
         role: str = "text_only",
         prompt: str | None = None,
+        temperature: float | None = DEFAULT_TEMPERATURE,
+        top_p: float | None = None,
+        seed: int | None = DEFAULT_SEED,
+        max_tokens: int = DEFAULT_MAX_TOKENS,
     ) -> None:
         self._label = validate_llm_label(label, "OpenAIAdapter")
+        self._settings = InferenceSettings.build(
+            temperature=temperature, top_p=top_p, seed=seed, max_tokens=max_tokens
+        )
         self._model = model
         self._role: PipelineMode = validate_role(
             role, "OpenAIAdapter", self.SUPPORTED_MODES
@@ -150,6 +215,10 @@ class OpenAIAdapter:
     @property
     def version(self) -> str:
         return _VERSION
+
+    def inference_settings(self) -> dict[str, float | int | None]:
+        """Réglages **effectifs** (défauts compris), recopiés au manifeste."""
+        return self._settings.as_manifest()
 
     @property
     def input_types(self) -> frozenset[ArtifactType]:
@@ -168,7 +237,10 @@ class OpenAIAdapter:
     ) -> StepOutput:
         def text_invoke(prompt: str) -> LLMCompletion:
             return _invoke_openai(
-                model=self._model, prompt=prompt, deadline=context.deadline
+                model=self._model,
+                prompt=prompt,
+                deadline=context.deadline,
+                settings=self._settings,
             )
 
         def vision_invoke(
@@ -180,6 +252,7 @@ class OpenAIAdapter:
                 media_type=media_type,
                 image_b64=image_b64,
                 deadline=context.deadline,
+                settings=self._settings,
             )
 
         return run_llm_step(
@@ -192,6 +265,7 @@ class OpenAIAdapter:
             control=control,
             text_invoke=text_invoke,
             vision_invoke=vision_invoke,
+            max_tokens=self._settings.max_tokens,
         )
 
 

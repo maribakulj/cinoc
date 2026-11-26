@@ -42,7 +42,11 @@ def _params(kwargs: dict[str, Any]) -> str:
     utiles = {k: v for k, v in sorted(kwargs.items()) if k not in _BRUIT}
     if not utiles:
         return ""
-    return " · ".join(f"{escape(k)}={escape(str(v))}" for k, v in utiles.items())
+    # ``None`` = réglage **non transmis** au fournisseur (manifeste, D-277) :
+    # « — », pas le ``None`` de Python.
+    return " · ".join(
+        f"{escape(k)}={'—' if v is None else escape(str(v))}" for k, v in utiles.items()
+    )
 
 
 def _flux(step: dict[str, Any], rang: int, precedent: str | None) -> str:

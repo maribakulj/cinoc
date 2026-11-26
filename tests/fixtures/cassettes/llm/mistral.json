@@ -1,0 +1,91 @@
+{
+ "scenario": "llm_stop_mistral",
+ "sdk": "mistralai 1.12.4 — mistralai.models.ChatCompletionResponse",
+ "note": "Réponses **synthétiques** (aucune clé ni réseau dans l'environnement de capture), écrites au format du fil de l'API puis validées contre le modèle de réponse du SDK installé (mistralai 1.12.4, ChatCompletionResponse.model_validate). « length » : max_tokens atteint ; « model_length » : fenêtre de contexte du modèle épuisée ; « error » : génération interrompue côté serveur.",
+ "responses": {
+  "stop": {
+   "id": "cmpl-cinoc-stop",
+   "object": "chat.completion",
+   "created": 1764115200,
+   "model": "mistral-small-2506",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "Le Petit Journal, 12 mars 1894."
+     },
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 790,
+    "completion_tokens": 12,
+    "total_tokens": 802
+   }
+  },
+  "length": {
+   "id": "cmpl-cinoc-length",
+   "object": "chat.completion",
+   "created": 1764115200,
+   "model": "mistral-small-2506",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "Le Petit Journal, 12 mars 1894. — On annonce de Boulogne-sur-Mer qu'une partie de la falaise s'est effondrée hier soir, emportant"
+     },
+     "finish_reason": "length"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 790,
+    "completion_tokens": 32,
+    "total_tokens": 822
+   }
+  },
+  "model_length": {
+   "id": "cmpl-cinoc-model-length",
+   "object": "chat.completion",
+   "created": 1764115200,
+   "model": "mistral-small-2506",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "Le Petit Journal, 12 mars 1894. — On annonce de Boulogne-sur-Mer qu'une partie de la falaise s'est effondrée hier soir, emportant"
+     },
+     "finish_reason": "model_length"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 790,
+    "completion_tokens": 32,
+    "total_tokens": 822
+   }
+  },
+  "error": {
+   "id": "cmpl-cinoc-error",
+   "object": "chat.completion",
+   "created": 1764115200,
+   "model": "mistral-small-2506",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": ""
+     },
+     "finish_reason": "error"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 790,
+    "completion_tokens": 0,
+    "total_tokens": 790
+   }
+  }
+ }
+}

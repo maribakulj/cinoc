@@ -276,6 +276,8 @@ cinoc/reports/
 
 > **P5e 1b (D-276)** : la méthodologie affiche « Étape notée » / « Scored step » pour toute vue dont `target_step` est posée (rien pour une vue sans cible : rapport inchangé, démo octet pour octet). Preuve : `tests/app/test_step_target.py::test_report_says_which_step_a_view_scores`.
 
+> **P5e 2 (D-277)** : bloc « Unités tronquées » / « Truncated units » dans la vue d'ensemble, à la suite des unités en échec (`failures_note` → `_failed_note` + `_truncated_note`) : unité, document, message (étape, plafond), et la règle — notées sur leur sortie réelle, `failure_policy` ne s'y applique pas. CSV : `outcome` = `truncated`. Composition : les réglages effectifs du manifeste s'y lisent, un réglage non transmis (`None`) s'écrit « — ». Preuves : `tests/adapters/llm/test_stop_reasons.py::{test_the_report_and_the_csv_show_the_truncation,test_the_composition_shows_the_effective_settings}`.
+
 > Tri-état : `[x]` fait **+ preuve** · `[ ]` à faire · `[~]` différé/réserve + raison.
 > Maj dans le **même commit** que le code. **Statut : ✅ T2** — cadre `Section` + assembleur autonome + sections **overview** & **cross_engine** + rapport de **comparaison** (deltas 2 runs) verts. **+ T7 `synthesis`** : section verdict factuel par vue (meilleur pipeline CER · Δ au suivant · significativité `cross_engine`), gatée `requires=("cer",)`, déterministe — **toutes les vues S4 au design désormais livrées**. Différé : importeurs cœur · longitudinal (T7), interactivité client-side.
 

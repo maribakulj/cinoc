@@ -480,3 +480,77 @@ def _fanout_line_id(tmp_path: Any) -> str | None:
         _contexte(tmp_path), RunControl(), {}, None,
     )
     return remplie.lines[0].id
+
+
+class _Coupe:
+    """Reconnaisseur dont chaque réponse est coupée (un VLM au plafond)."""
+
+    name = "coupe"
+    version = "1.0"
+    input_types = frozenset({ArtifactType.IMAGE})
+    output_types = frozenset({ArtifactType.RAW_TEXT})
+
+    def __init__(self, tmp_path: Any) -> None:
+        self._dir = tmp_path
+
+    def execute(
+        self,
+        inputs: dict[ArtifactType, Artifact],
+        params: dict[str, Any],
+        context: RunContext,
+        control: RunControl,
+    ) -> Any:
+        from cinoc.pipeline.types import StepOutput
+
+        region = inputs[ArtifactType.IMAGE].region_id
+        sortie = self._dir / f"{region}.txt"
+        sortie.write_text("le début d'un", encoding="utf-8")
+        return StepOutput(
+            artifacts={
+                ArtifactType.RAW_TEXT: Artifact(
+                    id=f"t:{region}",
+                    document_id="d",
+                    type=ArtifactType.RAW_TEXT,
+                    uri=str(sortie),
+                )
+            },
+            truncation="plafond atteint",
+        )
+
+
+def test_a_cut_region_is_reported_not_swallowed(tmp_path: Any) -> None:
+    """Le fan-out somme déjà les jetons des N appels ; il doit aussi rendre la
+    coupure de chacun, sinon un VLM par bloc tronqué passerait pour complet."""
+    regions = tuple(
+        Region(
+            id=f"r{i}",
+            region_type="text",
+            geometry=Geometry(bbox=BBox(x=0, y=0, width=10, height=10)),
+        )
+        for i in (1, 2)
+    )
+    layout = CanonicalLayout(
+        pages=(LayoutPage(width=100, height=100, regions=regions),)
+    )
+    image = Artifact(
+        id="i",
+        document_id="d",
+        type=ArtifactType.IMAGE,
+        uri=str(tmp_path / "p.png"),
+        content_hash="0" * 64,
+    )
+    coupures: list[str] = []
+    rempli, _ = run_region_fanout(
+        layout=layout,
+        page_image=image,
+        recognizer=_Coupe(tmp_path),
+        context=_contexte(tmp_path),
+        control=RunControl(),
+        truncations=coupures,
+    )
+    assert coupures == [
+        "région 'r1' : plafond atteint",
+        "région 'r2' : plafond atteint",
+    ]
+    # La sortie coupée est gardée : c'est une lecture réelle, signalée.
+    assert all(r.lines for r in rempli.pages[0].regions)

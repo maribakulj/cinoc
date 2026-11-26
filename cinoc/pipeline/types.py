@@ -46,10 +46,18 @@ class StepOutput:
     ``artifacts`` contient tous les ``output_types`` déclarés (contrat module).
     ``usage`` ne porte que ce que le module **sait** (jetons d'un appel LLM) —
     la durée de l'étape est mesurée par l'**exécuteur**, jamais par le module.
+
+    ``truncation`` dit pourquoi la sortie est **coupée** (un LLM arrêté par son
+    plafond de jetons), ``None`` si elle est complète — ou si le module ne peut
+    pas le savoir. Une sortie coupée reste une sortie : ses artefacts sont rendus
+    et notés, et l'unité est marquée ``truncated`` au lieu de passer pour
+    complète. Seul le module le sait (il lit la réponse native) : c'est donc lui
+    qui le déclare, comme ses jetons.
     """
 
     artifacts: Mapping[ArtifactType, Artifact]
     usage: ResourceUsage | None = None
+    truncation: str | None = None
 
 
 @dataclass(frozen=True)

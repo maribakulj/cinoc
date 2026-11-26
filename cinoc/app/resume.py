@@ -42,6 +42,10 @@ logger = logging.getLogger(__name__)
 #: Version du format de l'index d'une unité. **2** : une entrée par étape
 #: (sorties + consommation), dans l'ordre d'exécution. La 1 (sans ce champ) ne
 #: gardait que le pool et l'usage agrégé ; elle est invalidée, pas convertie.
+#: L'issue (``outcome`` + ``message``) s'y ajoute sans changer de format : une
+#: unité ``truncated`` est gardée — la rejouer la couperait à l'identique et la
+#: ferait repayer — et relue ``truncated``. Une entrée sans ce champ est ``ok``
+#: (le format 2 ne gardait que des réussites complètes).
 CACHE_FORMAT = 2
 
 
@@ -129,13 +133,21 @@ class ResumeStore:
                 for entry in data["steps"]
                 if entry["usage"] is not None
             }
+            outcome = data.get("outcome", "ok")
+            message = data.get("message")
+            if outcome not in ("ok", "truncated") or not (
+                message is None or isinstance(message, str)
+            ):
+                return None
         except (AttributeError, TypeError, ValueError, KeyError, ValidationError):
             return None
         for outputs in by_step.values():
             for artifact in outputs.values():
                 if artifact.uri is not None and not Path(artifact.uri).is_file():
                     return None  # entrée incomplète → ré-exécution
-        return DocumentExecution(by_step=by_step, step_usage=step_usage)
+        return DocumentExecution(
+            by_step=by_step, step_usage=step_usage, outcome=outcome, message=message
+        )
 
     def save(self, key: str, execution: DocumentExecution) -> None:
         """Persiste fichiers + index ; best-effort (un échec n'abat pas le run).
@@ -169,7 +181,12 @@ class ResumeStore:
                         ),
                     }
                 )
-            payload = {"format": CACHE_FORMAT, "steps": steps}
+            payload = {
+                "format": CACHE_FORMAT,
+                "steps": steps,
+                "outcome": execution.outcome,
+                "message": execution.message,
+            }
             (unit_dir / "index.json").write_text(
                 json.dumps(payload, ensure_ascii=False, sort_keys=True),
                 encoding="utf-8",

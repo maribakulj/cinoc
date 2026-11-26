@@ -17,9 +17,10 @@ Modes (``PipelineMode``, source de vérité unique en ``domain``) :
 from __future__ import annotations
 
 from base64 import b64encode
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, NamedTuple, cast
+from typing import Any, Literal, NamedTuple, cast
 
 from cinoc.adapters._workspace import workspace_artifact_path
 from cinoc.domain.artifacts import Artifact, ArtifactType, compute_content_hash
@@ -57,12 +58,113 @@ _MEDIA_TYPES = {
     ".tiff": "image/tiff",
 }
 
+#: Raison d'arrêt **normalisée** d'une réponse, lue dans la réponse native de
+#: chaque fournisseur (``finish_reason``, ``stop_reason``, ``done_reason``).
+#: ``stop`` : fin naturelle ; ``length`` : coupée par un plafond de jetons (de la
+#: requête ou de la fenêtre du modèle) ; ``refusal`` : déclinée ou filtrée ;
+#: ``error`` : génération interrompue côté serveur ; ``unknown`` : absente ou hors
+#: table (un appel d'outil, une valeur nouvelle) — ni prouvée complète, ni coupée.
+StopReason = Literal["stop", "length", "refusal", "error", "unknown"]
+
+
+def stop_reason_from(native: object, table: Mapping[str, StopReason]) -> StopReason:
+    """Valeur native → ``StopReason`` ; ``unknown`` pour tout ce que la table ignore."""
+    return table.get(native, "unknown") if isinstance(native, str) else "unknown"
+
+
 class LLMCompletion(NamedTuple):
-    """Réponse d'un fournisseur : texte + jetons consommés (si exposés)."""
+    """Réponse d'un fournisseur : texte, jetons (si exposés), raison d'arrêt."""
 
     text: str
     tokens_in: int | None = None
     tokens_out: int | None = None
+    stop_reason: StopReason = "unknown"
+
+
+#: Réglages d'inférence par défaut, **les mêmes pour les quatre fournisseurs** :
+#: un banc qui compare des modèles sous des réglages différents ne compare pas
+#: des modèles. ``temperature=0`` + ``seed=0`` : la sortie la plus reproductible
+#: qu'une API permette (aucune ne la garantit). ``max_tokens`` borne la sortie —
+#: 8 192, le plus haut plafond qu'acceptent **sans flux** tous les modèles visés
+#: (le SDK anthropic borne Claude Opus 4 à 8 192 sans flux, et refuse tout modèle
+#: au-delà de ~21 000). Une page plus longue — une page de journal dense peut
+#: l'être — **se voit** (unité ``truncated``) au lieu d'être notée complète.
+DEFAULT_TEMPERATURE = 0.0
+DEFAULT_SEED = 0
+DEFAULT_MAX_TOKENS = 8192
+
+
+def _number(
+    value: object, key: str, *, low: float, high: float, low_open: bool
+) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise AdapterStepError(f"réglage {key!r} : nombre attendu, reçu {value!r}.")
+    number = float(value)
+    if (number <= low if low_open else number < low) or number > high:
+        borne = "]" if low_open else "["
+        raise AdapterStepError(
+            f"réglage {key!r} : {number} hors de {borne}{low}, {high}]."
+        )
+    return number
+
+
+def _integer(value: object, key: str, *, low: int) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < low:
+        raise AdapterStepError(
+            f"réglage {key!r} : entier ≥ {low} attendu, reçu {value!r}."
+        )
+    return value
+
+
+@dataclass(frozen=True)
+class InferenceSettings:
+    """Réglages d'échantillonnage d'un appel LLM/VLM — ``None`` = **non transmis**.
+
+    Une valeur ``None`` laisse le fournisseur décider ; c'est ce que le manifeste
+    écrit alors, plutôt qu'un défaut supposé. Construit par :meth:`build`, qui
+    valide (les kwargs d'un run viennent d'un YAML : ``temperature: 0`` est un
+    entier, ``max_tokens: 12.5`` une erreur à refuser avant le premier appel).
+    """
+
+    temperature: float | None = DEFAULT_TEMPERATURE
+    top_p: float | None = None
+    seed: int | None = DEFAULT_SEED
+    max_tokens: int = DEFAULT_MAX_TOKENS
+
+    @classmethod
+    def build(
+        cls,
+        *,
+        temperature: object = DEFAULT_TEMPERATURE,
+        top_p: object = None,
+        seed: object = DEFAULT_SEED,
+        max_tokens: object = DEFAULT_MAX_TOKENS,
+    ) -> InferenceSettings:
+        return cls(
+            temperature=(
+                None
+                if temperature is None
+                else _number(
+                    temperature, "temperature", low=0.0, high=2.0, low_open=False
+                )
+            ),
+            top_p=(
+                None
+                if top_p is None
+                else _number(top_p, "top_p", low=0.0, high=1.0, low_open=True)
+            ),
+            seed=None if seed is None else _integer(seed, "seed", low=0),
+            max_tokens=_integer(max_tokens, "max_tokens", low=1),
+        )
+
+    def as_manifest(self) -> dict[str, float | int | None]:
+        """Valeurs **effectives**, défauts compris — ce que le manifeste écrit."""
+        return {
+            "temperature": self.temperature,
+            "top_p": self.top_p,
+            "seed": self.seed,
+            "max_tokens": self.max_tokens,
+        }
 
 
 #: Appel d'un LLM texte : ``prompt → réponse`` (fournisseur + modèle capturés).
@@ -235,6 +337,7 @@ def run_llm_step(
     control: RunControl,
     text_invoke: TextInvoke,
     vision_invoke: VisionInvoke | None,
+    max_tokens: int | None = None,
 ) -> StepOutput:
     """Exécute une étape LLM/VLM selon le ``role`` — logique de mode unique.
 
@@ -243,6 +346,13 @@ def run_llm_step(
     et ``text_and_image`` exigent ``vision_invoke`` (un fournisseur texte-seul,
     ex. ollama, passe ``None`` → ces modes sont refusés proprement). Les jetons
     exposés par le fournisseur remontent dans ``StepOutput.usage``.
+
+    La **raison d'arrêt** décide de l'issue : ``length`` → l'artefact est écrit
+    (c'est une sortie réelle, qui sera notée) **et** signalé
+    (``StepOutput.truncation``, d'où l'unité ``truncated``) ; ``refusal`` ou
+    ``error`` → ``AdapterStepError`` (unité ``failed``, motif ``engine``) — un
+    refus filtré n'est pas une transcription, même partielle. ``stop`` et
+    ``unknown`` passent : sans preuve de coupure, rien n'est affirmé.
     """
     control.raise_if_cancelled()
     if context.workspace_uri is None:
@@ -273,6 +383,16 @@ def run_llm_step(
     else:  # text_only
         ocr_text = load_ocr_text(inputs, name)
         completion = text_invoke(build_prompt(prompt, ocr_text))
+    if completion.stop_reason in ("refusal", "error"):
+        cause = (
+            "refusée par le fournisseur"
+            if completion.stop_reason == "refusal"
+            else "interrompue par une erreur du fournisseur"
+        )
+        raise AdapterStepError(
+            f"{name} : réponse {cause} (raison d'arrêt {completion.stop_reason!r}) "
+            "— sortie écartée."
+        )
     artifacts = write_text_artifact(
         context.workspace_uri,
         context.document_id,
@@ -288,13 +408,25 @@ def run_llm_step(
         if completion.tokens_in is not None or completion.tokens_out is not None
         else None
     )
-    return StepOutput(artifacts=artifacts, usage=usage)
+    truncation = None
+    if completion.stop_reason == "length":
+        plafond = f", max_tokens={max_tokens}" if max_tokens is not None else ""
+        truncation = (
+            f"{name} : réponse coupée par un plafond de jetons "
+            f"(raison d'arrêt 'length'{plafond})"
+        )
+    return StepOutput(artifacts=artifacts, usage=usage, truncation=truncation)
 
 
 __all__ = [
     "DEFAULT_CORRECTION_PROMPT",
+    "DEFAULT_MAX_TOKENS",
+    "DEFAULT_SEED",
+    "DEFAULT_TEMPERATURE",
     "DEFAULT_TRANSCRIPTION_PROMPT",
+    "InferenceSettings",
     "LLMCompletion",
+    "StopReason",
     "TextInvoke",
     "VisionInvoke",
     "build_prompt",
@@ -305,6 +437,7 @@ __all__ = [
     "load_ocr_text",
     "normalize_llm_content",
     "run_llm_step",
+    "stop_reason_from",
     "usage_tokens",
     "validate_llm_label",
     "validate_role",

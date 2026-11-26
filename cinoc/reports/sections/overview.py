@@ -61,12 +61,46 @@ _REASON_LABELS: dict[str, tuple[str, str]] = {
 
 
 def failures_note(result: RunResult, lang: str) -> str:
-    """**Pourquoi** une unité manque : une ligne par unité en échec, et la règle.
+    """**Pourquoi** une unité manque ou cloche : échecs, puis coupures.
 
     Lu dans ``RunResult.usage`` (issue produite par l'exécution), jamais déduit
     d'un score absent : un ``None`` peut aussi vouloir dire « pas de vérité
     terrain » ou « métrique inapplicable », qui ne sont pas des échecs.
     """
+    return _failed_note(result, lang) + _truncated_note(result, lang)
+
+
+def _truncated_note(result: RunResult, lang: str) -> str:
+    """Unités **tronquées** : notées, mais signalées — leur score mesure aussi
+    la coupure. ``failure_policy`` ne s'y applique pas : elles ont une sortie."""
+    cut = [u for u in result.usage if u.outcome == "truncated"]
+    if not cut:
+        return ""
+    order = engine_order(p.pipeline for p in result.pipelines)
+    title = localized(lang, "Unités tronquées", "Truncated units")
+    rule = localized(
+        lang,
+        "<strong>notées sur leur sortie réelle</strong>, coupée par un plafond "
+        "de jetons : leur score compte dans la moyenne et mesure aussi la "
+        "coupure",
+        "<strong>scored on their actual output</strong>, cut by a token limit: "
+        "their score counts in the mean and also measures the cut",
+    )
+    items = []
+    for unit in cut:
+        badge = engine_cell(unit.pipeline, order.get(unit.pipeline, 0))
+        message = f" — {escape(unit.message)}" if unit.message else ""
+        items.append(
+            f'<li><span class="eng-cell">{badge}</span> · '
+            f"{escape(unit.document_id)}{message}</li>"
+        )
+    return (
+        f'<div class="failures"><p><strong>{title}</strong> ({len(cut)}) — '
+        f"{rule}.</p><ul>{''.join(items)}</ul></div>"
+    )
+
+
+def _failed_note(result: RunResult, lang: str) -> str:
     failed = [u for u in result.usage if u.outcome == "failed"]
     if not failed:
         return ""

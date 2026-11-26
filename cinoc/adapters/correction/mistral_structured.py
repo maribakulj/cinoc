@@ -53,17 +53,36 @@ def parse_chat_json(data: dict[str, Any], model: str) -> dict[str, Any]:
     enveloppe, et en dupliquer la lecture ferait diverger deux traductions
     d'erreur qui doivent rester identiques.
     """
-    transient, _ = provider_errors()
+    transient, permanent = provider_errors()
     choices = data.get("choices") or []
     content = ""
+    finish_reason = None
     if choices:
         content = (choices[0].get("message") or {}).get("content") or ""
+        finish_reason = choices[0].get("finish_reason")
+    # La raison d'arrêt tranche **avant** le JSON : une coupure au plafond
+    # (``length``) ou à la fenêtre du modèle (``model_length``) se reproduirait
+    # à l'identique — permanente, donc jamais rejouée ni repayée par
+    # ``saknussemm`` (ADR-008 : fatale pour la correction, qui échoue bruyamment
+    # au lieu d'écrire un texte à demi corrigé). Une ``error`` de génération,
+    # elle, peut guérir : transitoire.
+    if finish_reason in ("length", "model_length"):
+        raise permanent(
+            f"mistral ({model}) : réponse tronquée (finish_reason="
+            f"{finish_reason}) — la rejouer la couperait à l'identique ; "
+            f"réduire le lot ou choisir un modèle à fenêtre plus large : "
+            f"{content[:200]!r}"
+        )
+    if finish_reason == "error":
+        raise transient(
+            f"mistral ({model}) : génération interrompue (finish_reason=error)."
+        )
     try:
         parsed = json.loads(content)
     except json.JSONDecodeError as exc:
         raise transient(
-            f"mistral ({model}) n'a pas rendu du JSON — réponse tronquée ou "
-            f"hors schéma : {content[:200]!r}"
+            f"mistral ({model}) n'a pas rendu du JSON — hors schéma, sans "
+            f"troncature déclarée : {content[:200]!r}"
         ) from exc
     if not isinstance(parsed, dict):
         raise transient(

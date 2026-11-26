@@ -233,12 +233,11 @@ def test_an_unreachable_server_is_transient(
 
 
 @_needs_saknussemm
-def test_a_truncated_answer_is_transient_and_shows_what_came_back(
+def test_an_unreadable_answer_without_stop_reason_is_transient(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Le cas que ``num_ctx`` existe pour éviter : la réponse est coupée, donc
-    illisible en JSON. L'extrait dans le message évite de conclure « le modèle
-    hallucine » là où c'est le serveur qui a tranché."""
+    """Sans ``done_reason``, un JSON illisible n'est pas une troncature prouvée :
+    il reste réessayable. L'extrait dans le message dit ce qui est revenu."""
     from saknussemm.core.protocols import ProviderTransientError
 
     fake = _fake_client(payload={"message": {"content": '{"lines": ["le sol'}})
@@ -271,3 +270,28 @@ def test_an_answer_without_content_is_transient(
 
     with pytest.raises(ProviderTransientError):
         _call(monkeypatch, OllamaStructuredClient(), _fake_client(payload=body))
+
+
+@_needs_saknussemm
+def test_a_truncated_answer_is_permanent_and_sent_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Le cas que ``num_ctx`` existe pour éviter, quand il arrive quand même :
+    ``done_reason: length`` dit que le serveur a coupé. Le rejouer couperait à
+    l'identique : erreur **permanente**, que ``saknussemm`` ne rejoue pas."""
+    from saknussemm.core.protocols import ProviderPermanentError
+
+    sent: list[Any] = []
+
+    class _Counting(_fake_client(  # type: ignore[misc]
+        payload={"message": {"content": '{"lines": ["le sol'}, "done_reason": "length"}
+    )):
+        async def post(self, url: str, json: Any = None) -> httpx.Response:
+            sent.append(json)
+            return await super().post(url, json=json)
+
+    with pytest.raises(ProviderPermanentError, match="length") as capture:
+        _call(monkeypatch, OllamaStructuredClient(), _Counting)
+    assert len(sent) == 1
+    assert capture.value.retryable is False
+    assert "num_ctx" in str(capture.value)

@@ -22,6 +22,7 @@ import re
 import threading
 from collections.abc import Callable, Mapping
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path, PurePosixPath
 from tempfile import TemporaryDirectory
@@ -268,6 +269,14 @@ def run(
                             )
                             progress.tick()
                             continue
+                        if execution.message is not None:
+                            # Une coupure se signale par un message (étape,
+                            # plafond) : même règle que pour un échec — borné,
+                            # sans secret ni chemin de workspace.
+                            execution = replace(
+                                execution,
+                                message=_redact(execution.message, secrets, workspace),
+                            )
                         results[unit] = execution
                         if key is not None:
                             saves.append((key, execution))
@@ -428,6 +437,17 @@ def _collect_system_binaries(modules: Mapping[str, Module]) -> dict[str, str]:
     return binaries
 
 
+def _inference_settings(module: Module) -> dict[str, object]:
+    """Réglages d'inférence **effectifs** d'un module LLM/VLM (vide sinon).
+
+    Même mécanisme que ``system_binaries()`` : un hook détecté par duck-typing,
+    hors du ``Module`` Protocol — le contrat d'exécution reste unique, et un
+    module qui n'échantillonne rien n'a rien à déclarer.
+    """
+    probe = getattr(module, "inference_settings", None)
+    return dict(probe()) if callable(probe) else {}
+
+
 def _manifest(
     spec: RunSpec,
     modules: Mapping[str, Module],
@@ -444,8 +464,16 @@ def _manifest(
         corpus_name=spec.corpus.name,
         n_documents=len(spec.corpus.documents),
         pipeline_specs=spec.pipelines,
+        # Les kwargs saisis, **complétés des réglages effectifs** du module
+        # (``inference_settings()``, défauts compris) : un manifeste qui ne
+        # garderait que la saisie laisserait la température d'un run dépendre
+        # du défaut de la version qui l'a produit.
         adapter_kwargs={
-            name: _sans_secrets(spec.adapter_kwargs.get(name, {})) for name in names
+            name: {
+                **_sans_secrets(spec.adapter_kwargs.get(name, {})),
+                **_inference_settings(modules[name]),
+            }
+            for name in names
         },
         # Reproductibilité (R-2) : la version de chaque module exécuté entre dans
         # l'empreinte. `module_versions` = version d'*adapter* ; la version du
