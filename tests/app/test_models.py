@@ -398,36 +398,49 @@ def test_offline_check_does_not_call_the_provider(
     assert check_spec_models(_spec("openai", {"model": "x"}), live=False) == ()
 
 
-def test_the_composer_refuses_a_competitor_without_model(
+def test_a_recipe_without_model_is_refused_with_the_listing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from cinoc.app.run_planning import Competitor, RunPlanningError, plan_benchmark_run
+    """Une file sans modèle pour son VLM : refusée avant le run, le message
+    liste les modèles du fournisseur (la page le reçoit en 422)."""
+    from cinoc.app.recipe_queue import RecipeEntry, plan_recipe_run
 
     _listing(monkeypatch, _TWO)
     corpus = CorpusSpec(
         name="c", documents=(DocumentRef(id="d", image_uri=str(tmp_path / "d.png")),)
     )
-    with pytest.raises(RunPlanningError, match="gpt-test-a"):
-        plan_benchmark_run((Competitor(
-            engine="openai", mode="zero_shot"
-        ),), corpus, "r")
+    spec = plan_recipe_run(
+        corpus,
+        (RecipeEntry(recipe="vlm_seul", choices={"vlm": "openai"}),),
+        run_id="r",
+    )
+    with pytest.raises(ModelChoiceError, match="gpt-test-a"):
+        check_spec_models(spec, live=False)
 
 
 def test_a_chain_names_the_model_of_its_ocr_engine(tmp_path: Path) -> None:
-    """En chaîne, ``model`` est celui du LLM : le moteur OCR amont (Mistral OCR,
-    kraken…) a le sien, ``ocr_model`` — faute de défaut, il fallait le dire."""
-    from cinoc.app.run_planning import Competitor, plan_benchmark_run
+    """En chaîne, chaque étape a son modèle : le moteur OCR amont (Mistral OCR,
+    kraken…) a le sien — faute de défaut, il fallait le dire."""
+    from cinoc.app.recipe_queue import RecipeEntry, plan_recipe_run
 
     corpus = CorpusSpec(
         name="c", documents=(DocumentRef(id="d", image_uri=str(tmp_path / "d.png")),)
     )
-    comp = Competitor(
-        engine="mistral_ocr",
-        mode="text_only",
-        llm="mistral",
-        model="mistral-test-small-latest",
-        ocr_model="mistral-test-ocr-latest",
+    spec = plan_recipe_run(
+        corpus,
+        (
+            RecipeEntry(
+                recipe="ocr_puis_llm",
+                choices={"ocr": "mistral_ocr", "correction": "mistral"},
+                params={
+                    "ocr": {"model": "mistral-test-ocr-latest"},
+                    "correction": {"model": "mistral-test-small-latest"},
+                },
+            ),
+        ),
+        run_id="r",
     )
-    spec = plan_benchmark_run((comp,), corpus, "r")(tmp_path)
-    assert spec.adapter_kwargs["mistral_ocr:c0"]["model"] == "mistral-test-ocr-latest"
-    assert spec.adapter_kwargs["mistral:c0"]["model"] == "mistral-test-small-latest"
+    assert spec.adapter_kwargs["mistral_ocr:ocr"]["model"] == "mistral-test-ocr-latest"
+    assert spec.adapter_kwargs["mistral:correction"]["model"] == (
+        "mistral-test-small-latest"
+    )

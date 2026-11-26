@@ -14,3 +14,8 @@ description:
 steps:
   - id: ocr
     role: ocr
+  # Facultative : les entités nommées du texte lu, notées si le corpus porte une
+  # vérité terrain d'entités.
+  - id: ner
+    role: ner
+    optional: true

@@ -8,9 +8,9 @@ rapports pour un même pipeline, des noms de vue que ``cinoc compare`` ne
 rapprochait pas, et des options de notation que la page offrait sans les
 appliquer aux recettes.
 
-:func:`plan_evaluation` est désormais **la** décision, appelée par les trois
-entrées (``run_planning``, ``recipes``, ``correction_planning``) et donc par
-leurs deux transports. Elle ne lit que trois choses :
+:func:`plan_evaluation` est désormais **la** décision, appelée par le seul
+constructeur de pipeline (``recipe_queue.plan_recipe_run``, D-298) et donc par
+ses deux transports. Elle ne lit que trois choses :
 
 - ce que les pipelines **produisent** (types de sortie de leurs étapes) ;
 - ce que le corpus **porte** (types de GT, et si le texte a des lignes) ;
@@ -120,7 +120,8 @@ class EvaluationOptionsError(CinocError):
 
 class EvaluationOptions(BaseModel):
     """Ce que l'utilisateur choisit de la notation — le même objet, quelle que
-    soit l'entrée (composeur, recette, correction) et le transport.
+    soit l'entrée (la page, ``cinoc run --recipe``, ``cinoc correct``) et le
+    transport.
 
     ``archaic_list`` relie ``air`` à une liste curée et active ``hcpr`` ;
     ``detailed_analyses`` demande le mode détaillé (le défaut est le mode

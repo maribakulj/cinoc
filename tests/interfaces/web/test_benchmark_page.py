@@ -21,6 +21,19 @@ from cinoc.interfaces.web.app import create_app
 _JS = Path(__file__).resolve().parents[3] / (
     "cinoc/interfaces/web/static/js/benchmark.js"
 )
+#: Le composeur : le catalogue de recettes (D-298).
+_RECIPES_JS = _JS.with_name("recipes.js")
+
+
+def _catalog(tmp_path: Path) -> dict[str, dict[str, object]]:
+    """Le catalogue que la page lit, par nom de recette."""
+    corps = _client(tmp_path).get("/api/recipes").json()
+    return {r["name"]: r for r in corps["recipes"]}
+
+
+def _brick(recipe: dict[str, object], step: str, kind: str) -> dict[str, object]:
+    etape = next(e for e in recipe["steps"] if e["step"] == step)  # type: ignore[attr-defined]
+    return next(b for b in etape["bricks"] if b["kind"] == kind)
 
 
 def _client(tmp_path: Path) -> TestClient:
@@ -43,24 +56,24 @@ def test_benchmark_has_corpus_and_composer_controls(tmp_path: Path) -> None:
     assert 'id="corpus-select"' in body  # <select> de corpus existants
     assert 'id="queue-list"' in body  # file de concurrents rendue côté client
     assert 'id="queue-row-tpl"' in body  # gabarit de ligne de file
-    assert 'data-mode="ocr_only"' in body  # sélecteur de mode par onglets
-    # moteurs câblés présents dans le catalogue (par rôle) ; precomputed = démo, exclu.
-    for label in ("Tesseract", "OpenAI", "Ollama"):
-        assert label in body
+    # Le composeur est le catalogue de recettes ; plus d'onglets (D-298).
+    assert 'id="recipe-picker"' in body
+    assert "data-mode=" not in body
     # upload + imports ne sont plus ici : déplacés dans la Bibliothèque
     assert 'id="corpus-file"' not in body
     assert 'id="import-source"' not in body
 
 
-def test_ner_toggle_present_and_sent(tmp_path: Path) -> None:
-    # Case « NER » du composeur rendue serveur + le JS la met dans le payload du
-    # concurrent (et porte le modèle spaCy optionnel).
-    body = _client(tmp_path).get("/benchmark").text
-    assert 'id="draft-ner"' in body
-    assert 'id="draft-ner-model"' in body
-    js = _JS.read_text(encoding="utf-8")
-    assert "entry.ner = true" in js
-    assert "ner_model" in js
+def test_ner_is_an_optional_step_the_page_can_retain(tmp_path: Path) -> None:
+    """La case « NER » : une étape facultative de la recette, et son modèle
+    spaCy dans les réglages de la brique ``ner`` ; le JS l'envoie dans
+    ``optional``."""
+    simple = _catalog(tmp_path)["ocr_simple"]
+    ner = next(e for e in simple["steps"] if e["step"] == "ner")  # type: ignore[attr-defined]
+    assert ner["optional"] is True
+    assert any(p["name"] == "model" for p in ner["bricks"][0]["params"])
+    js = _RECIPES_JS.read_text(encoding="utf-8")
+    assert "data-optional" in js and "optional: optional" in js
 
 
 def test_char_exclude_field_present_and_sent(tmp_path: Path) -> None:
@@ -81,13 +94,14 @@ def test_metric_profile_selector_present_and_sent(tmp_path: Path) -> None:
 
 
 def test_every_launch_carries_the_scoring_options() -> None:
-    """Une seule politique de vues (D-297) : le composeur, la file de recettes
-    et la correction partent tous par ``withScoring`` — une option choisie à la
-    page n'est plus ignorée selon la forme de run."""
+    """Une seule politique de vues (D-297), un seul départ (D-298) : toute la
+    file part par ``POST /api/runs`` avec les options de notation — il n'y a
+    plus de route à part pour les recettes ni pour la correction."""
     js = _JS.read_text(encoding="utf-8")
-    assert js.count("withScoring(") >= 4  # définition + trois départs
-    for route in ('"/api/runs"', '"/api/runs/recipe"', '"/api/runs/correction"'):
-        assert route in js
+    assert "withScoring({ entries:" in js
+    assert '"/api/runs"' in js
+    for morte in ('"/api/runs/recipe"', '"/api/runs/correction"'):
+        assert morte not in js
 
 
 def test_config_io_controls_present_and_wired(tmp_path: Path) -> None:
@@ -110,35 +124,62 @@ def test_normalization_preview_widget_and_api_wired(tmp_path: Path) -> None:
     assert "/api/normalization/preview" in _JS.read_text(encoding="utf-8")
 
 
-def test_model_suggestions_datalist_and_api_wired(tmp_path: Path) -> None:
-    # 3c : datalist canonique (peuplée via /api/models) + le JS interroge l'API.
-    body = _client(tmp_path).get("/benchmark").text
-    assert 'id="api-model-list"' in body  # cible des suggestions openai/anthropic
-    assert "/api/models/" in _JS.read_text(encoding="utf-8")  # le JS la consomme
+def test_model_suggestions_come_from_the_provider(tmp_path: Path) -> None:
+    """L'autocomplétion des modèles par fournisseur : le catalogue donne à
+    chaque champ ``model`` d'une brique LLM/VLM l'adresse qui les liste, et le
+    composeur la lit en direct (``datalist``)."""
+    llm = _catalog(tmp_path)["ocr_puis_llm"]
+    modele = next(
+        p
+        for p in _brick(llm, "correction", "ollama")["params"]  # type: ignore[attr-defined]
+        if p["name"] == "model"
+    )
+    assert modele["models_url"] == "/api/models/ollama"
+    js = _RECIPES_JS.read_text(encoding="utf-8")
+    assert "models_url" in js and "datalist" in js
 
 
-def test_model_field_shown_in_ocr_only_mode(tmp_path: Path) -> None:
-    # 3c : le champ « Modèle » est désormais visible aussi en OCR seul (pour
-    # kraken/pero/calamari/mistral_ocr qui exigent un modèle) — gap 2c refermé.
-    body = _client(tmp_path).get("/benchmark").text
-    assert 'data-show="ocr_only text_only text_and_image zero_shot hybrid"' in body
-    assert 'id="draft-model"' in body
+def test_an_ocr_engine_that_needs_a_model_asks_for_it(tmp_path: Path) -> None:
+    """Kraken, PERO, Calamari, Mistral OCR exigent un modèle (D-268) : le champ
+    est **requis**, affiché d'emblée — le gap 2c reste refermé."""
+    simple = _catalog(tmp_path)["ocr_simple"]
+    for kind in ("kraken", "pero", "calamari", "mistral_ocr"):
+        params = _brick(simple, "ocr", kind)["params"]
+        assert any(p["name"] == "model" and p["required"] for p in params), kind  # type: ignore[attr-defined]
 
 
-def test_benchmark_exposes_prompt_inputs(tmp_path: Path) -> None:
-    # Prompt libre (textarea) ET prompts curés (select) — l'utilisateur choisit.
-    body = _client(tmp_path).get("/benchmark").text
-    assert 'id="draft-prompt"' in body  # textarea : écrire son propre prompt
-    assert 'id="draft-prompt-curated"' in body  # select : prompts curés par période
-    assert "correction_medieval_french" in body  # noms rendus serveur (dynamiques)
-    assert "zero_shot_medieval_french" in body
+def test_free_and_curated_prompts_are_offered(tmp_path: Path) -> None:
+    """Prompt libre (texte) ET prompts curés (choix) — l'utilisateur choisit ;
+    le serveur refuse les deux à la fois."""
+    vlm = _catalog(tmp_path)["vlm_seul"]
+    params = {p["name"]: p for p in _brick(vlm, "vlm", "ollama")["params"]}  # type: ignore[attr-defined]
+    assert params["prompt"]["choices"] == []
+    assert "zero_shot_medieval_french" in params["prompt_name"]["choices"]
+    assert "correction_medieval_french" in params["prompt_name"]["choices"]
+    assert "textarea" in _RECIPES_JS.read_text(encoding="utf-8")
 
 
-def test_benchmark_engine_select_disables_unavailable(tmp_path: Path) -> None:
-    # tesseract indisponible ici (ni binaire ni pytesseract) → option disabled.
-    body = _client(tmp_path).get("/benchmark").text
-    # l'option précomputed (toujours dispo) n'est pas désactivée ; au moins une l'est
-    assert "disabled" in body
+def test_tesseract_offers_its_alto_export(tmp_path: Path) -> None:
+    """La case « Exporter l'ALTO » : le réglage ``alto`` de Tesseract, au pli
+    de réglages ; l'hybride, lui, a son étape facultative ``alto``."""
+    simple = _catalog(tmp_path)["ocr_simple"]
+    alto = next(
+        p
+        for p in _brick(simple, "ocr", "tesseract")["params"]  # type: ignore[attr-defined]
+        if p["name"] == "alto"
+    )
+    assert (alto["type"], alto["required"]) == ("bool", False)
+    hybride = _catalog(tmp_path)["segmentation_puis_lecture"]
+    etape = next(e for e in hybride["steps"] if e["step"] == "alto")  # type: ignore[attr-defined]
+    assert etape["optional"] is True
+
+
+def test_an_unavailable_brick_is_greyed_with_its_reason(tmp_path: Path) -> None:
+    # Les moteurs cloud sans clé sont indisponibles ici → grisés, motif dit.
+    simple = _catalog(tmp_path)["ocr_simple"]
+    google = _brick(simple, "ocr", "google_vision")
+    assert google["available"] is False and google["detail"]
+    assert "opt.disabled = !brick.available" in _RECIPES_JS.read_text(encoding="utf-8")
 
 
 def test_nav_links_benchmark_and_reports(tmp_path: Path) -> None:
@@ -189,45 +230,37 @@ def test_csp_allows_self_script_and_connect(tmp_path: Path) -> None:
     assert "connect-src 'self'" in csp
 
 
-def test_benchmark_js_syntax_is_valid() -> None:
+@pytest.mark.parametrize("script", [_JS, _RECIPES_JS], ids=lambda p: p.name)
+def test_benchmark_js_syntax_is_valid(script: Path) -> None:
     node = shutil.which("node")
     if node is None:
         pytest.skip("node absent : vérification de syntaxe JS ignorée")
     result = subprocess.run(
-        [node, "--check", str(_JS)], capture_output=True, text=True
+        [node, "--check", str(script)], capture_output=True, text=True
     )
     assert result.returncode == 0, result.stderr
 
 
 # --- Intégration segmentation : hors du composeur principal --------------------
 
+
 def _benchmark_body(
     tmp_path: Path,
-    segmenter_available: bool,
     corpus_store: CorpusStore | None = None,
 ) -> str:
     from fastapi import FastAPI
     from fastapi.templating import Jinja2Templates
 
     from cinoc.adapters.storage.history_store import HistoryStore
-    from cinoc.app.engines import EngineStatus
     from cinoc.interfaces.web.app import _TEMPLATES_DIR
     from cinoc.interfaces.web.routers.home import build_home_router
 
-    detail = "ok" if segmenter_available else "PaddleX absent (extra [segment])"
-    status = EngineStatus(
-        kind="pp_doclayout",
-        label="PP-DocLayout",
-        available=segmenter_available,
-        detail=detail,
-    )
     app = FastAPI()
     app.include_router(
         build_home_router(
             tmp_path / "reports",
             Jinja2Templates(directory=_TEMPLATES_DIR),
             statuses=lambda: (),
-            segmenters=lambda: (status,),
             third_party=lambda: (),
             history_store=HistoryStore(tmp_path / "h.db"),
             corpus_store=corpus_store,
@@ -236,14 +269,25 @@ def _benchmark_body(
     return TestClient(app).get("/benchmark").text
 
 
-def test_hybrid_mode_exposed_in_benchmark_composer(tmp_path: Path) -> None:
-    # La segmentation N'A PLUS de page dédiée : elle se compose comme un mode
-    # **Hybride** du Banc d'essai (segmenteur + reconnaisseur par bloc).
-    body = _benchmark_body(tmp_path, segmenter_available=True)
-    assert 'data-mode="hybrid"' in body
-    assert 'id="draft-segmenter"' in body
-    assert 'id="draft-recognizer"' in body
-    assert "PP-DocLayout" in body  # le segmenteur du socle est listé dans le mode
+def test_the_hybrid_is_a_recipe_with_its_region_preview(tmp_path: Path) -> None:
+    # La segmentation N'A PAS de page dédiée : elle se compose comme la recette
+    # **segmentation_puis_lecture** (segmenteur + reconnaisseur par bloc), et
+    # l'aperçu des régions suit une recette qui segmente.
+    body = _benchmark_body(tmp_path)
+    assert 'id="seg-preview-box"' in body and 'id="seg-preview-btn"' in body
+    hybride = _catalog(tmp_path)["segmentation_puis_lecture"]
+    roles = [e["role"] for e in hybride["steps"]]  # type: ignore[attr-defined]
+    assert roles[:2] == ["segmenter", "region_recognizer"]
+    assert 'select[data-role="segmenter"]' in _JS.read_text(encoding="utf-8")
+
+
+def test_the_page_no_longer_splits_recipes_from_composed_runs(tmp_path: Path) -> None:
+    """« Une recette et un concurrent composé ne partagent pas un run » : la
+    limite et son message tombent, il n'y a plus qu'une forme d'entrée."""
+    for lang in ("fr", "en"):
+        body = _client(tmp_path).get(f"/benchmark?lang={lang}").text
+        assert "data-mixed" not in body and "data-recipes" not in body
+    assert "mixed" not in _JS.read_text(encoding="utf-8")
 
 
 def test_benchmark_corpus_select_lists_corpora(tmp_path: Path) -> None:
@@ -256,6 +300,6 @@ def test_benchmark_corpus_select_lists_corpora(tmp_path: Path) -> None:
             name="Mon corpus", documents=(DocumentRef(id="d1", image_uri="a.png"),)
         )
     )
-    body = _benchmark_body(tmp_path, segmenter_available=False, corpus_store=store)
+    body = _benchmark_body(tmp_path, corpus_store=store)
     assert 'id="corpus-select"' in body
     assert "Mon corpus" in body  # rendu comme option du <select>

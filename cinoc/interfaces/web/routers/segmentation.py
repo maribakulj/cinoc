@@ -26,10 +26,10 @@ from pydantic import BaseModel, ConfigDict, Field
 from cinoc.app.corpus_upload import CorpusStore
 from cinoc.app.engines import StatusProvider
 from cinoc.app.jobs import JobRunner
-from cinoc.app.run_planning import RunPlanningError
 from cinoc.app.segmentation import SegmentationStore
 from cinoc.app.structure_planning import (
     SEGMENTER_KIND,
+    RunPlanningError,
     plan_segmentation_run,
     segmenter_kinds,
 )

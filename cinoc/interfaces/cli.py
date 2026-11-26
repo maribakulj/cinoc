@@ -358,9 +358,8 @@ def _run_hybrid(
     *,
     segmenter: str,
     ocr: str,
-    label: str,
     source_label: str | None,
-    lang: str = "fra",
+    lang: str | None = None,
     model: str | None = None,
     prompt: str | None = None,
     endpoint: str | None = None,
@@ -369,15 +368,17 @@ def _run_hybrid(
 ) -> int:
     """Transcription **hybride** : segmente, reconnaît par bloc, assemble un ALTO/page.
 
-    Part d'un dossier d'images (sans GT) → ``CorpusSpec`` → ``plan_hybrid_run``
-    (pp_doclayout + tesseract par défaut ; tout OCR réel ou un VLM zero-shot via
-    ``--ocr``) → orchestrateur ; les ``ALTO_XML`` sont écrits dans ``out`` par un
-    sink (avant nettoyage du workspace).
+    Part d'un dossier d'images (sans GT) → ``CorpusSpec`` → la recette
+    ``segmentation_puis_lecture``, export ALTO retenu — la file de la page et
+    de ``cinoc run --recipe`` (``plan_recipe_run``, D-298), les options ne
+    faisant que nommer ses briques et ses réglages ; les ``ALTO_XML`` sont
+    écrits dans ``out`` par un sink (avant nettoyage du workspace).
 
     ``segment_only`` s'arrête à la mise en page : même corpus, même orchestrateur,
     mais ``plan_segmentation_run`` et un ``LAYOUT`` par page en sortie.
     """
     from cinoc.app import structure_planning
+    from cinoc.app.recipe_queue import RecipeEntry, plan_recipe_run
     from cinoc.app.transcription import (
         corpus_from_images,
         write_alto_files,
@@ -391,19 +392,33 @@ def _run_hybrid(
     if segment_only:
         # La mise en page est un livrable en soi : on la relit, on la corrige,
         # on rejoue plusieurs reconnaissances dessus sans re-segmenter.
-        builder = structure_planning.plan_segmentation_run(
+        spec = structure_planning.plan_segmentation_run(
             corpus, "segmentation", segmenter=segmenter,
             endpoint=endpoint, token=token,
-        )
+        )(Path(out))
         ecrire = write_layout_files
     else:
-        builder = structure_planning.plan_hybrid_run(
-            corpus, "hybrid", segmenter=segmenter, ocr=ocr, label=label,
-            source_label=source_label, lang=lang, model=model, prompt=prompt,
-            endpoint=endpoint, token=token,
+        reglages = {
+            "seg": {"endpoint": endpoint, "token": token},
+            "reco": {"source_label": source_label, "lang": lang,
+                     "model": model, "prompt": prompt},
+        }
+        spec = plan_recipe_run(
+            corpus,
+            (
+                RecipeEntry(
+                    recipe="segmentation_puis_lecture",
+                    choices={"seg": segmenter, "reco": ocr},
+                    params={
+                        etape: {k: v for k, v in valeurs.items() if v}
+                        for etape, valeurs in reglages.items()
+                    },
+                    optional=("alto",),
+                ),
+            ),
+            run_id="hybrid",
         )
         ecrire = write_alto_files
-    spec = builder(Path(out))
     out_dir = Path(out)
     written: list[Path] = []
 
@@ -539,7 +554,6 @@ def main(argv: list[str] | None = None) -> int:
                 args.out,
                 segmenter=args.segmenter,
                 ocr=args.ocr,
-                label=args.label,
                 source_label=args.source_label,
                 lang=args.lang,
                 model=args.model,

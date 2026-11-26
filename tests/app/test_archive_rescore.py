@@ -18,6 +18,7 @@ module de même identité qui **lève** s'il est appelé : la relecture
 from __future__ import annotations
 
 import json
+import re
 import unicodedata
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
@@ -29,8 +30,8 @@ import pytest
 from cinoc.app import run
 from cinoc.app.modules.registry import ModuleRegistry, register_default_modules
 from cinoc.app.orchestrator import ArchiveIncompleteError
+from cinoc.app.recipe_queue import RecipeEntry, plan_recipe_run
 from cinoc.app.resume import ResumeStore
-from cinoc.app.run_planning import Competitor, plan_benchmark_run
 from cinoc.domain.artifacts import Artifact, ArtifactType, compute_content_hash
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.documents import DocumentRef, GroundTruthRef
@@ -103,6 +104,10 @@ class _LocalOCR:
         )
 
 
+#: Le nom du pipeline VLM — la recette, sa brique, son modèle (D-298).
+_VLM = "vlm_seul · openai (gpt-4o-mini)"
+
+
 def _corpus(folder: Path) -> CorpusSpec:
     folder.mkdir(parents=True, exist_ok=True)
     documents = []
@@ -124,14 +129,22 @@ def _corpus(folder: Path) -> CorpusSpec:
 
 
 def _spec(tmp_path: Path) -> RunSpec:
-    planned = plan_benchmark_run(
-        (
-            Competitor(engine="openai", mode="zero_shot", model="gpt-4o-mini"),
-            Competitor(model="m", engine="mistral_ocr"),
-        ),
+    planned = plan_recipe_run(
         _corpus(tmp_path / "corpus"),
-        "s9",
-    )(tmp_path)
+        (
+            RecipeEntry(
+                recipe="vlm_seul",
+                choices={"vlm": "openai"},
+                params={"vlm": {"model": "gpt-4o-mini"}},
+            ),
+            RecipeEntry(
+                recipe="ocr_simple",
+                choices={"ocr": "mistral_ocr"},
+                params={"ocr": {"model": "m"}},
+            ),
+        ),
+        run_id="s9",
+    )
     local = PipelineSpec(
         name="local",
         initial_inputs=(ArtifactType.IMAGE,),
@@ -250,7 +263,7 @@ def test_an_archive_is_rescored_after_a_metric_upgrade_without_running_anything(
     added = {k for k in after if k[2] in ("del_rate", "ins_rate")}
     assert len(added) == 2 * len(_DOCS) * len(spec.pipelines)
     assert _outcomes(second) == _outcomes(first)
-    assert ("openai (zero-shot)", "folio_b") in {
+    assert (_VLM, "folio_b") in {
         k for k, v in _outcomes(second).items() if v == "truncated"
     }
     assert second.manifest.code_version == "1.0.1"
@@ -338,21 +351,21 @@ def test_an_instance_endpoint_enters_the_key_and_the_manifest(
     sorties d'OpenAI. La cible venait de ``OPENAI_BASE_URL`` (D-279) ; elle est
     la saisie ``base_url`` de l'instance depuis D-293."""
     spec, store, first, state = archived
-    assert first.manifest.adapter_kwargs["openai:c0"]["base_url"] == (
+    assert first.manifest.adapter_kwargs["openai:vlm"]["base_url"] == (
         "https://api.openai.com/v1"
     )
     vllm = spec.model_copy(
         update={
             "adapter_kwargs": {
                 **spec.adapter_kwargs,
-                "openai:c0": {
-                    **spec.adapter_kwargs["openai:c0"],
+                "openai:vlm": {
+                    **spec.adapter_kwargs["openai:vlm"],
                     "base_url": "http://vllm.local:8000/v1",
                 },
             }
         }
     )
-    with pytest.raises(ArchiveIncompleteError, match=r"openai \(zero-shot\)"):
+    with pytest.raises(ArchiveIncompleteError, match=re.escape(_VLM)):
         run(
             vllm, registry=_registry(state), code_version="1.0", resume_store=store,
             offline=True,
@@ -361,7 +374,7 @@ def test_an_instance_endpoint_enters_the_key_and_the_manifest(
     second = run(
         vllm, registry=_registry(state), code_version="1.0", resume_store=store
     )
-    assert second.manifest.adapter_kwargs["openai:c0"]["base_url"] == (
+    assert second.manifest.adapter_kwargs["openai:vlm"]["base_url"] == (
         "http://vllm.local:8000/v1"
     )
 
@@ -398,7 +411,7 @@ def test_the_provenance_hash_covers_model_and_prompt_and_is_the_key_s_basis(
             update={
                 "pipelines": spec.pipelines[:1],
                 "adapter_kwargs": {
-                    "openai:c0": {**spec.adapter_kwargs["openai:c0"], **kwargs}
+                    "openai:vlm": {**spec.adapter_kwargs["openai:vlm"], **kwargs}
                 },
             }
         )
@@ -428,10 +441,10 @@ def test_the_manifest_names_the_served_model_unicode_and_dependencies(
     _spec_, _store, first, _state = archived
     manifest = first.manifest
     # Demandé : l'alias ; servi : ce que le fournisseur a répondu.
-    assert manifest.adapter_kwargs["openai:c0"]["model"] == "gpt-4o-mini"
+    assert manifest.adapter_kwargs["openai:vlm"]["model"] == "gpt-4o-mini"
     assert manifest.served_models == {
-        "mistral_ocr:c1": ("mistral-ocr-2505",),
-        "openai:c0": ("gpt-4o-mini-2024-07-18",),
+        "mistral_ocr:ocr": ("mistral-ocr-2505",),
+        "openai:vlm": ("gpt-4o-mini-2024-07-18",),
     }
     assert manifest.unicode_version == unicodedata.unidata_version
     lock = manifest.dependencies_lock
@@ -462,8 +475,8 @@ def test_pricing_is_indexed_on_the_served_model(
     D-279 rendait « tarif inconnu » à tout run OpenAI)."""
     _spec_, _store, first, _state = archived
     rows = _economics(first)
-    assert rows["openai (zero-shot)"].cost_eur is not None
-    assert rows["openai (zero-shot)"].basis == (
+    assert rows[_VLM].cost_eur is not None
+    assert rows[_VLM].basis == (
         "machine+jetons — tarif de l'alias demandé : openai/gpt-4o-mini "
         "pour gpt-4o-mini-2024-07-18"
     )
@@ -472,14 +485,14 @@ def test_pricing_is_indexed_on_the_served_model(
         "input_eur_per_mtok": 1000.0,
         "output_eur_per_mtok": 0.0,
     }
-    priced = _economics(first, table)["openai (zero-shot)"]
+    priced = _economics(first, table)[_VLM]
     assert priced.basis == "machine+jetons"
     assert priced.cost_eur is not None and priced.cost_eur > 0.0
     # Modèle servi inconnu (réponse muette, JSON v3) : l'alias demandé.
     muet = first.model_copy(
         update={"manifest": first.manifest.model_copy(update={"served_models": {}})}
     )
-    assert _economics(muet)["openai (zero-shot)"].basis == "machine+jetons"
+    assert _economics(muet)[_VLM].basis == "machine+jetons"
 
 
 # --------------------------------------------------------------------------- #

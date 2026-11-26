@@ -17,3 +17,7 @@ steps:
     role: ocr
   - id: correction
     role: text_and_image
+  # Facultative : les entités nommées du texte **corrigé**.
+  - id: ner
+    role: ner_corrige
+    optional: true

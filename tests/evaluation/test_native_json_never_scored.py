@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from cinoc.app.run_planning import Competitor, plan_benchmark_run
+from cinoc.app.recipe_queue import RecipeEntry, plan_recipe_run
 from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.documents import DocumentRef
@@ -67,14 +67,22 @@ def test_no_planned_view_takes_the_native_response(tmp_path: object) -> None:
     corpus = CorpusSpec(
         name="c", documents=(DocumentRef(id="d", image_uri="/tmp/d.png"),)
     )
-    spec = plan_benchmark_run(
-        (
-            Competitor(model="m", engine="mistral_ocr"),
-            Competitor(model="m", engine="openai", mode="zero_shot"),
-        ),
+    spec = plan_recipe_run(
         corpus,
-        "r",
-    )(tmp_path)  # type: ignore[arg-type]
+        (
+            RecipeEntry(
+                recipe="ocr_simple",
+                choices={"ocr": "mistral_ocr"},
+                params={"ocr": {"model": "m"}},
+            ),
+            RecipeEntry(
+                recipe="vlm_seul",
+                choices={"vlm": "openai"},
+                params={"vlm": {"model": "m"}},
+            ),
+        ),
+        run_id="r",
+    )
     assert spec.evaluation.views
     for view in spec.evaluation.views:
         assert ArtifactType.NATIVE_JSON not in view.candidate_types

@@ -1,19 +1,20 @@
 """Routeur du **lanceur** : lancer un run, suivre son état, l'annuler (couche 8).
 
-``POST /api/runs`` choisit des **concurrents** (chacun = un pipeline : OCR seul,
-OCR→LLM texte/image, ou VLM zero-shot) sur un **corpus** (``corpus_id``). N
-concurrents → **un seul run** comparé (cross-engine). Sans concurrent → le run de
-**démonstration** (``precomputed``, local).
+``POST /api/runs`` lance une **file de recettes** (``entries``) sur un corpus du
+dépôt (``corpus_id``) : N entrées → **un seul run** comparé. Une entrée est une
+recette, ses briques, ses réglages et ses étapes facultatives ; OCR seul, OCR →
+LLM, VLM, segmentation puis lecture, correction d'un ALTO — tout ce que la page
+sait lancer passe par là, et par la fonction de ``cinoc run --recipe``
+(``plan_recipe_run``, D-298). Sans entrée → le run de **démonstration**
+(``precomputed``, local).
 
-Ordre de garde, par moteur référencé (``engine`` + ``llm``) :
-1. moteur inconnu → ``422`` ;
-2. **mode public** : moteur hors du socle gratuit (``PUBLIC_ENGINE_KINDS``) → ``403``
-   (fail-closed) — les moteurs cloud (clé) et tout futur kind y tombent, même si une
-   clé est posée ; seul ``tesseract`` (gratuit, local) reste exécutable publiquement ;
-3. ``corpus_id`` fourni mais introuvable → ``404`` ;
-4. moteur **indisponible** (binaire/SDK/clé absent) → ``409`` — hors mode public, un
-   moteur cloud sans clé y tombe ; avec sa clé il est autorisé (clé posée → marche) ;
-5. concurrent incohérent (mode⇄moteur) → ``422`` (``plan_benchmark_run``).
+Ordre de garde (``_garder``, le même pour une spec déposée) : brique réservée à
+la CLI → ``403`` ; montage incohérent → ``422`` ; cible hors liste blanche →
+``403`` ; brique inconnue → ``422`` ; **mode public** hors du socle local et
+gratuit (``PUBLIC_BRICK_KINDS``) → ``403``, avant toute sonde de clé ; modèle ou
+réglage refusé → ``422`` ; brique **indisponible** (binaire, SDK, clé, extra) →
+``409``. Avant elles : corpus introuvable → ``404``, recette mal formée (dont la
+vérité terrain extraite de l'ALTO à corriger) → ``422``.
 
 ``GET`` restitue l'état ; ``cancel`` déclenche l'annulation coopérative. Écritures
 protégées **CSRF**. Le ``RunResult`` produit atterrit dans le dossier vitrine.
@@ -24,7 +25,7 @@ from __future__ import annotations
 import json
 import time
 import uuid
-from collections.abc import Callable, Iterator
+from collections.abc import Iterator
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -32,14 +33,10 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from cinoc.adapters.storage import JobStore
 from cinoc.app.corpus_upload import CorpusStore
-from cinoc.app.correction_planning import (
-    ground_truth_is_its_own_source,
-    plan_correction_run,
-)
 from cinoc.app.demo import demo_spec_builder
 from cinoc.app.engines import (
     CLI_ONLY_KINDS,
-    PUBLIC_ENGINE_KINDS,
+    PUBLIC_BRICK_KINDS,
     StatusProvider,
     instance_status,
 )
@@ -49,19 +46,9 @@ from cinoc.app.models import ModelChoiceError, check_spec_models
 from cinoc.app.modules import ModuleRegistry, register_default_modules
 from cinoc.app.modules.registry import check_spec_settings
 from cinoc.app.recipe_catalog import recipe_catalog
-from cinoc.app.recipes import (
-    RecipeEntry,
-    RecipeError,
-    plan_recipe_run,
-    referenced_kinds,
-    spec_for_corpus,
-)
-from cinoc.app.run_planning import Competitor, RunPlanningError, plan_benchmark_run
-from cinoc.app.security import (
-    HostNotAllowedError,
-    check_endpoint_settings,
-    check_model_host,
-)
+from cinoc.app.recipe_queue import RecipeEntry, plan_recipe_run
+from cinoc.app.recipes import RecipeError, referenced_kinds, spec_for_corpus
+from cinoc.app.security import HostNotAllowedError, check_endpoint_settings
 from cinoc.app.spec_coherence import SpecCoherenceError
 from cinoc.app.spec_coherence import check as coherence_check
 from cinoc.domain.corpus import CorpusSpec
@@ -71,8 +58,8 @@ from cinoc.interfaces.web.security.csrf import csrf_protect
 
 
 class ScoringFields(BaseModel):
-    """Les options de notation de la page — **les mêmes** pour le composeur,
-    les recettes et la correction (une seule politique de vues, D-297)."""
+    """Les options de notation de la page — **les mêmes** pour toute entrée
+    (une seule politique de vues, D-297)."""
 
     normalization: str | None = Field(default=None, max_length=128)
     #: Caractères filtrés des deux côtés (GT/hyp) avant le calcul.
@@ -92,27 +79,17 @@ class ScoringFields(BaseModel):
 
 
 class LaunchRequest(ScoringFields):
-    """Corps (optionnel) : des concurrents + un corpus, ou rien (démonstration)."""
+    """Corps (optionnel) : une file de recettes + un corpus, ou rien (démo).
 
-    model_config = ConfigDict(extra="forbid")
-
-    competitors: tuple[Competitor, ...] = ()
-    corpus_id: str | None = None
-
-
-class RecipeRequest(ScoringFields):
-    """Lancer une **file de recettes** : des formes nommées, sur un corpus du
-    dépôt, comparées dans un seul run.
-
-    L'utilisateur choisit l'intention (« presse ancienne multi-colonnes ») et les
-    briques ; la forme, elle, vient de la recette. C'est la voie ergonomique : le
-    graphe admet des centaines de formes, elles ne rentrent pas dans un formulaire.
+    L'utilisateur choisit l'intention (« segmenter, puis lire chaque bloc ») et
+    les briques ; la forme, elle, vient de la recette. C'est aussi le format de
+    l'export de configuration : il porte la file entière.
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    corpus_id: str
-    entries: tuple[RecipeEntry, ...] = Field(min_length=1, max_length=16)
+    corpus_id: str | None = None
+    entries: tuple[RecipeEntry, ...] = Field(default=(), max_length=16)
 
 
 class SpecRequest(BaseModel):
@@ -133,36 +110,6 @@ class SpecRequest(BaseModel):
     corpus_id: str
     #: Le document de spec, tel quel. YAML accepté (le JSON en est un sous-ensemble).
     spec: str = Field(min_length=1, max_length=200_000)
-
-
-class CorrectionRequest(ScoringFields):
-    """Corps d'un run de **post-correction structurée** : un corpus, un producteur.
-
-    Pas un ``Competitor`` : c'est une **autre forme de run** (ALTO déjà là →
-    corrigé), planifiée par ``plan_correction_run`` — d'où sa route.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    corpus_id: str
-    #: ``rules`` (déterministe, hors ligne), ``ollama`` (serveur local), ou
-    #: ``mistral`` / ``mistral_vision`` (API Mistral — le second découpe chaque
-    #: ligne dans le scan). La liste des valeurs acceptées vit dans l'adapter
-    #: et le planificateur la lit : elle n'est pas répétée ici, sinon cette
-    #: route offrirait un jour un producteur de moins que la CLI.
-    producer: str = Field(default="rules", max_length=32)
-    #: Modèle du producteur — **exigé** par le planificateur dès que le
-    #: producteur en interroge un.
-    model: str | None = Field(default=None, max_length=128)
-    #: Serveur ollama — **confronté à la liste blanche de l'opérateur**
-    #: (``CINOC_MODEL_HOSTS``) avant tout lancement : venu d'un client, il
-    #: ferait sinon poster le serveur vers l'adresse de son choix.
-    host: str = Field(default="http://localhost:11434", max_length=2048)
-
-
-def _referenced_kinds(comp: Competitor) -> tuple[str, ...]:
-    """Kinds qu'un concurrent met en jeu : moteur OCR/VLM + LLM éventuel."""
-    return (comp.engine,) if comp.llm is None else (comp.engine, comp.llm)
 
 
 def _parse_last_event_id(raw: str | None) -> int:
@@ -212,26 +159,19 @@ def build_runs_router(
     corpus_store: CorpusStore,
     *,
     statuses: StatusProvider,
-    segmenters: StatusProvider | None = None,
-    ner_available: Callable[[], bool] = lambda: True,
-    correction_available: Callable[[], bool] = lambda: True,
     public_mode: bool = False,
 ) -> APIRouter:
     """Construit le routeur du lanceur (monté par ``create_app``).
 
-    ``public_mode`` (Space exposé) **verrouille** l'exécution au seul socle
-    first-party gratuit (``PUBLIC_ENGINE_KINDS``) : tout moteur cloud ou autre kind
-    est refusé en ``403`` (fail-closed), sans jamais lancer un appel facturé.
+    ``statuses`` sonde **toutes** les briques (``recipe_catalog.brick_statuses``
+    : moteurs, segmenteurs, prétraitement, NER, correction) : le catalogue grise
+    ce qu'elle dit indisponible, le lanceur le refuse en ``409`` — une sonde,
+    deux usages.
 
-    ``ner_available`` sonde la dispo de l'étape NER (extra ``[ner]``, spaCy) : un
-    concurrent NER demandé sans la lib tombe en ``409`` **avant** le lancement
-    (plutôt qu'un échec d'étape en cours de run). spaCy étant local first-party,
-    la NER reste autorisée en mode public.
-
-    ``correction_available`` fait de même pour la **post-correction structurée**
-    (extra ``[saknussemm]``). Elle est en revanche **refusée en mode public** :
-    son producteur utile parle à un serveur LLM local, qu'un Space exposé n'a
-    pas, et le producteur ``rules`` seul ne justifie pas d'ouvrir la surface.
+    ``public_mode`` (Space exposé) **verrouille** l'exécution au socle local et
+    gratuit (``PUBLIC_BRICK_KINDS``) : tout moteur cloud, la correction (elle
+    suppose un serveur LLM) ou tout autre kind est refusé en ``403``
+    (fail-closed), sans jamais lancer un appel facturé.
     """
     router = APIRouter()
 
@@ -241,92 +181,30 @@ def build_runs_router(
     def launch_run(payload: LaunchRequest | None = None) -> dict[str, str]:
         req = payload or LaunchRequest()
         run_id = f"web-{uuid.uuid4().hex[:12]}"
-        # Démonstration : aucun concurrent → precomputed (local, jamais cloud).
-        if not req.competitors:
+        # Démonstration : aucune entrée → precomputed (local, jamais cloud).
+        if not req.entries:
             if req.corpus_id is not None:
                 raise HTTPException(
                     status_code=422,
                     detail="démonstration : ne s'exécute pas sur un corpus "
-                    "(sélectionne au moins un concurrent).",
+                    "(ajoute au moins une recette à la file).",
                 )
             return {"job_id": runner.launch(demo_spec_builder(run_id))}
-
-        # 0 : briques réservées à la ligne de commande. **Avant tout le reste**,
-        # et sans égard au mode public : le refus ne porte pas sur qui regarde,
-        # il porte sur ce que la brique fait.
-        _refuser_cli(
-            {k for comp in req.competitors for k in _referenced_kinds(comp)}
-            | {comp.segmenter for comp in req.competitors if comp.segmenter}
-        )
-        sts = statuses()
-        known = {s.kind for s in sts}
-        available = {s.kind for s in sts if s.available}
-        # 1 : moteur connu (la disponibilité runtime — binaire/SDK/clé — est
-        # vérifiée à l'étape 4 : un moteur cloud sans clé y tombe en 409).
-        for comp in req.competitors:
-            for kind in _referenced_kinds(comp):
-                if kind not in known:
-                    raise HTTPException(
-                        status_code=422, detail=f"moteur inconnu : {kind!r}"
-                    )
-        # 2 : mode public → fail-closed sur le socle gratuit. Refusé AVANT toute
-        # vérification de clé/dispo : un moteur cloud ne doit pas même être tenté
-        # sur une instance publique (aucun appel facturé), clé présente ou non.
-        if public_mode:
-            for comp in req.competitors:
-                for kind in _referenced_kinds(comp):
-                    if kind not in PUBLIC_ENGINE_KINDS:
-                        raise HTTPException(
-                            status_code=403,
-                            detail=f"moteur indisponible en mode public : {kind!r} "
-                            "(seul le socle gratuit est exécuté).",
-                        )
-        # 3 : corpus.
-        corpus: CorpusSpec | None = None
-        if req.corpus_id is not None:
-            corpus = corpus_store.get(req.corpus_id)
-            if corpus is None:
-                raise HTTPException(status_code=404, detail="corpus introuvable")
-        # 4 : disponibilité runtime (binaire/SDK/clé).
-        for comp in req.competitors:
-            for kind in _referenced_kinds(comp):
-                if kind not in available:
-                    raise HTTPException(
-                        status_code=409, detail=f"moteur indisponible : {kind!r}"
-                    )
-        # 4ter : concurrent hybride → le **segmenteur** doit être disponible (extra
-        # [segment] / endpoint). Catégorie distincte des moteurs OCR (provider
-        # dédié) ; jamais masqué en mode public (local/délégué, pas de clé exposée).
-        seg_available = (
-            {s.kind for s in segmenters() if s.available}
-            if segmenters is not None
-            else set()
-        )
-        for comp in req.competitors:
-            if comp.segmenter and comp.segmenter not in seg_available:
-                raise HTTPException(
-                    status_code=409,
-                    detail=f"segmenteur indisponible : {comp.segmenter!r}",
-                )
-        # 4bis : étape NER demandée → exiger spaCy (extra [ner]) AVANT le lancement.
-        if any(comp.ner for comp in req.competitors) and not ner_available():
+        if req.corpus_id is None:
             raise HTTPException(
-                status_code=409,
-                detail="étape NER indisponible : installer 'cinoc[ner]' (spaCy).",
+                status_code=422,
+                detail="une file de recettes s'exécute sur un corpus : "
+                "choisis-en un.",
             )
-        # 5 : cohérence mode⇄moteur (dispatch exhaustif).
+        corpus = _corpus_du_depot(req.corpus_id)
         try:
-            build = plan_benchmark_run(
-                req.competitors,
-                corpus,
-                run_id,
-                options=req.options(),
+            spec = plan_recipe_run(
+                corpus, req.entries, run_id=run_id, options=req.options()
             )
-        except RunPlanningError as exc:
+        except RecipeError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
-        return {"job_id": runner.launch(build)}
-
-
+        _garder(spec)
+        return {"job_id": runner.launch(lambda _ws: spec)}
 
     def _refuser_cli(kinds: set[str]) -> None:
         """Refuse toute brique de ``CLI_ONLY_KINDS``, **quel que soit le mode**.
@@ -346,19 +224,6 @@ def build_runs_router(
                 f"{', '.join(interdites)} (elle exécute une commande décrite "
                 "par la spec).",
             )
-
-    def _hote_autorise(host: str) -> None:
-        """Refuse en 403 un hôte de serveur de modèles hors de la liste blanche
-        de l'opérateur.
-
-        Une seule fonction pour toutes les portes qui reçoivent une cible (la
-        route de correction, le ``host`` et le ``base_url`` d'une spec déposée) :
-        la règle vit en couche ``app``, ici on ne fait que la traduire en HTTP.
-        """
-        try:
-            check_model_host(host)
-        except HostNotAllowedError as exc:
-            raise HTTPException(status_code=403, detail=str(exc)) from exc
 
     def _garder(spec: RunSpec) -> None:
         """Applique à une spec les gardes du lanceur, dans le même ordre.
@@ -398,11 +263,11 @@ def build_runs_router(
                 raise HTTPException(
                     status_code=422, detail=f"brique inconnue : {kind!r}"
                 )
-            if public_mode and kind not in PUBLIC_ENGINE_KINDS:
+            if public_mode and kind not in PUBLIC_BRICK_KINDS:
                 raise HTTPException(
                     status_code=403,
                     detail=f"brique indisponible en mode public : {kind!r} "
-                    "(seul le socle gratuit est exécuté).",
+                    "(seul le socle local et gratuit est exécuté).",
                 )
         # Aucun modèle par défaut : une instance sans modèle est refusée (422),
         # le message liste les disponibles — après les gardes d'accès (403),
@@ -449,30 +314,11 @@ def build_runs_router(
     @router.get("/api/recipes")
     def list_recipes(lang: str = "fr") -> dict[str, object]:
         """Recettes livrées : forme, intention, et ce qu'il reste à choisir."""
-        sondes = statuses() + (segmenters() if segmenters is not None else ())
         return {
             "recipes": recipe_catalog(
-                lang, statuses=sondes, public_mode=public_mode
+                lang, statuses=statuses(), public_mode=public_mode
             )
         }
-
-    @router.post(
-        "/api/runs/recipe", status_code=201, dependencies=[Depends(csrf_protect)]
-    )
-    def launch_recipe(payload: RecipeRequest) -> dict[str, str]:
-        """Lance une file de recettes sur un corpus du dépôt."""
-        corpus = _corpus_du_depot(payload.corpus_id)
-        try:
-            spec = plan_recipe_run(
-                corpus,
-                payload.entries,
-                run_id=f"web-rec-{uuid.uuid4().hex[:12]}",
-                options=payload.options(),
-            )
-        except RecipeError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
-        _garder(spec)
-        return {"job_id": runner.launch(lambda _ws: spec)}
 
     @router.post(
         "/api/runs/spec", status_code=201, dependencies=[Depends(csrf_protect)]
@@ -492,65 +338,6 @@ def build_runs_router(
         except RecipeError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         _garder(spec)
-        return {"job_id": runner.launch(lambda _ws: spec)}
-
-    @router.post(
-        "/api/runs/correction",
-        status_code=201,
-        dependencies=[Depends(csrf_protect)],
-    )
-    def launch_correction(payload: CorrectionRequest) -> dict[str, str]:
-        """Lance une **post-correction structurée** sur un corpus d'ALTO.
-
-        Ordre de garde, du plus général au plus spécifique — chaque refus nomme
-        sa cause, aucun ne retombe sur un défaut muet :
-
-        1. mode public → ``403`` (le producteur utile exige un LLM local) ;
-        2. bibliothèque absente → ``409`` (avant le lancement, pas en plein run) ;
-        3. corpus introuvable → ``404`` ;
-        4. **vérité terrain dérivée de l'ALTO** → ``422``. C'est le refus qui
-           compte : sans lui, le banc compare le texte à lui-même et publie un
-           verdict inversé. Voir ``ground_truth_is_its_own_source``.
-        5. ``host`` hors de la liste blanche de l'opérateur → ``403`` (SSRF) ;
-        6. producteur incohérent (un producteur à modèle sans ``model``) → ``422``.
-        """
-        if public_mode:
-            raise HTTPException(
-                status_code=403,
-                detail="post-correction refusée en mode public (elle suppose un "
-                "serveur LLM local).",
-            )
-        if not correction_available():
-            raise HTTPException(
-                status_code=409,
-                detail="post-correction indisponible : extra [saknussemm] non "
-                "installé (le paquet n'est pas publié sur PyPI, il s'installe "
-                "depuis son dépôt).",
-            )
-        corpus = corpus_store.get(payload.corpus_id)
-        if corpus is None:
-            raise HTTPException(status_code=404, detail="corpus introuvable.")
-        if ground_truth_is_its_own_source(corpus):
-            raise HTTPException(
-                status_code=422,
-                detail="la vérité terrain de ce corpus est extraite de son "
-                "propre ALTO : le correcteur partirait du texte auquel on le "
-                "compare, et le CER vaudrait zéro par construction. Dépose une "
-                "transcription à part (<nom>.gt.txt) à côté de chaque ALTO.",
-            )
-        _hote_autorise(payload.host)
-        run_id = f"web-corr-{uuid.uuid4().hex[:12]}"
-        try:
-            spec = plan_correction_run(
-                corpus,
-                run_id,
-                producer=payload.producer,
-                model=payload.model or "",
-                host=payload.host,
-                options=payload.options(),
-            )
-        except CinocError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
         return {"job_id": runner.launch(lambda _ws: spec)}
 
     @router.post(
@@ -596,4 +383,4 @@ def build_runs_router(
     return router
 
 
-__all__ = ["Competitor", "LaunchRequest", "build_runs_router"]
+__all__ = ["LaunchRequest", "build_runs_router"]

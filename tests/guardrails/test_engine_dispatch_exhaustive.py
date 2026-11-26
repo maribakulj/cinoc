@@ -1,22 +1,18 @@
-"""Garde-fou : le dispatch concurrent→spec est **exhaustif**, sans retombée muette.
+"""Garde-fou : une brique hors de son rôle est **refusée**, jamais retombée.
 
-``plan_benchmark_run`` ne doit jamais assembler silencieusement une spec d'un
-autre moteur pour un moteur/mode **non câblé** : soit la bonne spec, soit un
-**refus explicite** (``RunPlanningError``). Verrou de non-régression du défaut
-historique « ``mistral`` → tesseract ».
+La file de recettes ne doit jamais assembler silencieusement une spec d'un autre
+moteur pour une brique **non proposée** par le rôle de l'étape : soit la bonne
+spec, soit un **refus explicite** (``RecipeError``). Verrou de non-régression du
+défaut historique « ``mistral`` → tesseract », hérité de l'ancien composeur
+(D-298 : il n'y a plus que ce constructeur).
 """
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 
-from cinoc.app.run_planning import (
-    Competitor,
-    RunPlanningError,
-    plan_benchmark_run,
-)
+from cinoc.app.recipe_queue import RecipeEntry, plan_recipe_run
+from cinoc.app.recipes import RecipeError
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.documents import DocumentRef
 
@@ -28,25 +24,26 @@ def _corpus() -> CorpusSpec:
     )
 
 
-def test_uncabled_ocr_engine_is_refused() -> None:
-    # 'mistral' n'est pas un moteur OCR : OCR seul (mode None) refusé, jamais
-    # retombé en silence sur tesseract.
-    with pytest.raises(RunPlanningError):
-        plan_benchmark_run((Competitor(model="m", engine="mistral"),), _corpus(), "r-1")
+def _plan(recipe: str, **choices: str) -> None:
+    plan_recipe_run(
+        _corpus(), (RecipeEntry(recipe=recipe, choices=choices),), run_id="r-1"
+    )
 
 
-def test_zero_shot_requires_vlm_engine() -> None:
-    with pytest.raises(RunPlanningError):
-        plan_benchmark_run(
-            (Competitor(engine="tesseract", mode="zero_shot"),), _corpus(), "r-1"
-        )
+def test_an_llm_is_not_an_ocr_engine() -> None:
+    # 'mistral' n'est pas un moteur OCR : refusé, jamais retombé sur tesseract.
+    with pytest.raises(RecipeError, match="pas proposé"):
+        _plan("ocr_simple", ocr="mistral")
 
 
-def test_text_only_requires_llm_provider() -> None:
-    with pytest.raises(RunPlanningError):
-        plan_benchmark_run(
-            (Competitor(engine="tesseract", mode="text_only"),), _corpus(), "r-1"
-        )
+def test_zero_shot_requires_a_vision_model() -> None:
+    with pytest.raises(RecipeError, match="pas proposé"):
+        _plan("vlm_seul", vlm="tesseract")
+
+
+def test_a_correction_requires_a_language_model() -> None:
+    with pytest.raises(RecipeError, match="pas proposé"):
+        _plan("ocr_puis_llm", correction="tesseract")
 
 
 def test_text_and_image_rejects_a_provider_without_vision(
@@ -62,26 +59,11 @@ def test_text_and_image_rejects_a_provider_without_vision(
     """
     from cinoc.adapters.llm.ollama import OllamaAdapter
 
-    monkeypatch.setattr(
-        OllamaAdapter, "SUPPORTED_MODES", frozenset({"text_only"})
-    )
-    with pytest.raises(RunPlanningError, match="indisponible"):
-        plan_benchmark_run(
-            (Competitor(
-                model="m", engine="tesseract", mode="text_and_image", llm="ollama"
-            ),),
-            _corpus(),
-            "r-1",
-        )
+    monkeypatch.setattr(OllamaAdapter, "SUPPORTED_MODES", frozenset({"text_only"}))
+    with pytest.raises(RecipeError, match="pas proposé"):
+        _plan("ocr_puis_vlm", correction="ollama")
 
 
 def test_a_vision_provider_is_accepted_in_text_and_image() -> None:
     """Le pendant : ce qui déclare la vision doit passer."""
-    spec = plan_benchmark_run(
-        (Competitor(
-            model="m", engine="tesseract", mode="text_and_image", llm="ollama"
-        ),),
-        _corpus(),
-        "r-1",
-    )(Path("/tmp"))
-    assert spec.pipelines
+    _plan("ocr_puis_vlm", correction="ollama")

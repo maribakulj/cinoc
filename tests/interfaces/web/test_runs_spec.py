@@ -123,7 +123,7 @@ def test_a_submitted_corpus_never_reaches_the_path_resolver(tmp_path: Path) -> N
 
 def test_writes_are_csrf_protected(tmp_path: Path) -> None:
     client = _client(tmp_path)
-    for route in ("/api/runs/spec", "/api/runs/recipe"):
+    for route in ("/api/runs/spec", "/api/runs"):
         assert client.post(route, json={"corpus_id": "x"}).status_code == 403
 
 
@@ -232,7 +232,7 @@ def test_a_recipe_launches_on_a_stored_corpus(
     client = _client(tmp_path)
     corpus_id = _corpus(client)
     reponse = client.post(
-        "/api/runs/recipe",
+        "/api/runs",
         headers=_CSRF,
         json={"corpus_id": corpus_id, "entries": [{"recipe": "ocr_simple"}]},
     )
@@ -249,7 +249,7 @@ def test_a_recipe_whose_brick_cannot_be_built_is_refused_before_launch(
     client = _client(tmp_path)
     corpus_id = _corpus(client)
     reponse = client.post(
-        "/api/runs/recipe",
+        "/api/runs",
         headers=_CSRF,
         json={
             "corpus_id": corpus_id,
@@ -270,7 +270,7 @@ def test_an_unknown_recipe_lists_the_known_ones(tmp_path: Path) -> None:
     client = _client(tmp_path)
     corpus_id = _corpus(client)
     reponse = client.post(
-        "/api/runs/recipe",
+        "/api/runs",
         headers=_CSRF,
         json={"corpus_id": corpus_id, "entries": [{"recipe": "inexistante"}]},
     )
@@ -283,7 +283,7 @@ def test_a_brick_outside_the_role_is_refused(tmp_path: Path) -> None:
     client = _client(tmp_path)
     corpus_id = _corpus(client)
     reponse = client.post(
-        "/api/runs/recipe",
+        "/api/runs",
         headers=_CSRF,
         json={
             "corpus_id": corpus_id,

@@ -23,7 +23,7 @@ from cinoc.adapters.ocr.google_vision import GoogleVisionAdapter
 from cinoc.adapters.ocr.google_vision import _confidences as google_confidences
 from cinoc.app import run
 from cinoc.app.modules.registry import ModuleRegistry, register_default_modules
-from cinoc.app.run_planning import Competitor, plan_benchmark_run
+from cinoc.app.recipe_queue import RecipeEntry, plan_recipe_run
 from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.confidence import ConfidenceToken
 from cinoc.domain.corpus import CorpusSpec
@@ -143,11 +143,14 @@ def test_both_cloud_engines_enter_the_calibration(
                 ),
             )
         )
-    spec = plan_benchmark_run(
-        (Competitor(engine="azure_di"), Competitor(engine="google_vision")),
+    spec = plan_recipe_run(
         CorpusSpec(name="pj", documents=tuple(documents)),
-        "s20",
-    )(tmp_path)
+        (
+            RecipeEntry(recipe="ocr_simple", choices={"ocr": "azure_di"}),
+            RecipeEntry(recipe="ocr_simple", choices={"ocr": "google_vision"}),
+        ),
+        run_id="s20",
+    )
     spec = spec.model_copy(
         update={
             "evaluation": spec.evaluation.model_copy(update={"analyses": "toutes"})
@@ -162,5 +165,6 @@ def test_both_cloud_engines_enter_the_calibration(
         if isinstance(analysis.payload, CalibrationPayload)
         for row in analysis.payload.pipelines
     ]
-    engines = {row.pipeline.split("_", 1)[0] for row in rows}
+    # « ocr_simple · azure_di » : la brique suit le nom de la recette (D-298).
+    engines = {row.pipeline.split(" · ", 1)[1].split("_", 1)[0] for row in rows}
     assert {"azure", "google"} <= engines, [row.pipeline for row in rows]

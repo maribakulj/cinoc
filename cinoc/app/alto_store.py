@@ -1,6 +1,7 @@
 """Persistance des exports **ALTO XML** d'un run (couche 6).
 
-Un run avec ``Competitor.alto`` produit un artefact ``ALTO_XML`` par document que
+Un run dont une étape exporte l'ALTO (réglage ``alto`` de Tesseract, étape ``alto``
+d'une recette) produit un artefact ``ALTO_XML`` par document que
 le ``RunResult`` (métriques scalaires) **ne porte pas** et que le workspace
 temporaire du run **détruit** à la fin. Ce store le **persiste**, indexé par
 ``run_id``, pour qu'un endpoint web le restitue en archive ZIP — la forme

@@ -37,25 +37,10 @@ _STRINGS: dict[str, dict[str, str]] = {
         # Banc d'essai (lanceur interactif)
         "bench_eyebrow": "Banc d'essai · comparer",
         "bench_title": "Banc d'essai",
-        "bench_desc": "Compose des concurrents (OCR, OCR→LLM, VLM) et compare-les "
-        "sur un corpus, en un seul run. Sans concurrent : démonstration.",
+        "bench_desc": "Choisis des formes de pipeline (OCR, OCR→LLM, VLM, "
+        "segmentation, correction d'ALTO) et compare-les sur un corpus, en un "
+        "seul run. File vide : démonstration.",
         "bench_run": "Lancer le benchmark",
-        "bench_correction": "Post-correction structurée",
-        "bench_correction_hint": "Corrige un corpus d'ALTO déjà là, **dans** sa "
-        "mise en page : chaque ligne garde son identifiant, donc le rapport dit "
-        "ce qui a été changé et ce que le correcteur a refusé de changer.",
-        "bench_correction_producer": "Producteur de corrections",
-        "bench_correction_rules": "Règles (déterministe, hors ligne)",
-        "bench_correction_ollama": "Ollama (serveur local)",
-        "bench_correction_model": "Modèle ollama",
-        "bench_correction_model_ph": "un modèle installé (cinoc list models ollama)",
-        "bench_correction_host": "Serveur ollama",
-        "bench_correction_launch": "Corriger ce corpus",
-        "bench_correction_no_corpus": "Choisis d'abord un corpus.",
-        "bench_correction_gt_hint": "Le corpus doit porter une transcription à "
-        "part (<nom>.gt.txt) à côté de son ALTO. Sans elle, la référence est "
-        "extraite de l'ALTO lui-même : le correcteur partirait du texte auquel "
-        "on le compare, et le score ne voudrait rien dire.",
         "bench_launching": "Lancement…",
         "bench_status": "État",
         "bench_log": "Journal",
@@ -68,18 +53,10 @@ _STRINGS: dict[str, dict[str, str]] = {
         "bench_corpus_select_hint": "Sélectionne un corpus préparé, ou reste "
         "en démonstration.",
         "bench_competitors": "Concurrents",
-        "bench_add_competitor": "Ajouter un concurrent",
-        "bench_queue_empty": "Aucun concurrent ajouté pour l'instant.",
+        "bench_queue_empty": "Aucune recette dans la file pour l'instant.",
         "bench_queue_title": "File prête à exécuter",
         "bench_queue_hint": "Chaque ligne résume un pipeline réellement lancé.",
         "bench_remove": "Retirer",
-        "bench_mode": "Mode",
-        "bench_mode_ocr": "OCR seul",
-        "bench_mode_text": "OCR → LLM (texte)",
-        "bench_mode_image": "OCR → LLM (image+texte)",
-        "bench_mode_vlm": "VLM (zero-shot)",
-        "bench_mode_hybrid": "Hybride (segmentation)",
-        "bench_mode_recipe": "Recette",
         "bench_recipe_pick": "Choisir une forme",
         "bench_recipe_add": "Ajouter à la file",
         "bench_recipe_fanout": "↳ une fois par bloc détecté",
@@ -89,48 +66,21 @@ _STRINGS: dict[str, dict[str, str]] = {
         "bench_recipe_unrunnable": "Aucune brique disponible pour l'étape :",
         "bench_recipe_added": "Ajoutée à la file.",
         "bench_recipe_hint": "Une recette est une forme éprouvée, nommée par ce "
-        "qu'elle cherche à savoir ; tu ne choisis que ses briques. Elle est "
-        "notée comme tout concurrent : mêmes vues, et les options de notation "
-        "ci-dessous s'y appliquent.",
-        "bench_recipe_mixed": "Une recette et un concurrent composé ne se "
-        "comparent pas encore dans le même run : lance-les séparément.",
+        "qu'elle cherche à savoir ; tu choisis ses briques et, au besoin, leurs "
+        "réglages. Toutes les recettes de la file partent dans un seul run, "
+        "notées sous les options ci-dessous.",
+        "bench_recipe_settings": "Réglages",
+        "bench_recipe_optional": "Ajouter :",
+        "bench_recipe_default": "défaut :",
+        "bench_recipe_models": "modèle(s) disponible(s) — clique pour choisir",
+        "bench_recipe_models_none": "Liste des modèles indisponible.",
         "bench_recipe_no_corpus": "Une recette s'exécute sur un corpus : "
         "choisis-en un.",
-        "bench_config_recipes": "Les recettes de la file ne sont pas exportées "
-        "(seuls les concurrents composés le sont).",
-        "bench_ocr_engine": "Moteur OCR",
-        "bench_segmenter": "Segmenteur",
-        "bench_segmenter_hint": "Détecte les régions en tête de pipeline ; le "
-        "distant délègue à un endpoint HF (modèle changé via l'URL).",
-        "bench_recognizer": "Reconnaisseur par bloc",
-        "bench_recognizer_hint": "Moteur appliqué à chaque bloc découpé : un OCR "
-        "réel, ou un VLM qui transcrit l'image du bloc (zero-shot). Texte assemblé "
-        "scoré CER/WER comme un pipeline à plat.",
         "bench_seg_preview": "Aperçu des régions",
         "bench_seg_preview_btn": "Prévisualiser la segmentation",
         "bench_seg_preview_hint": "Lance le segmenteur sur le corpus choisi et "
         "affiche les régions détectées (avant de lancer le benchmark).",
         "bench_seg_preview_no_corpus": "Choisis d'abord un corpus.",
-        "bench_llm": "LLM",
-        "bench_vlm": "VLM",
-        "bench_model": "Modèle",
-        "bench_model_ph": "modèle (requis pour un LLM/VLM, Mistral OCR, kraken…)",
-        "bench_ocr_model": "Modèle du moteur OCR",
-        "bench_ocr_model_ph": "si le moteur OCR en exige un (Mistral OCR, kraken…)",
-        "bench_prompt": "Prompt",
-        "bench_prompt_ph": "Vide = prompt par défaut. Pour la correction, inclus "
-        "{ocr_text} là où le texte OCR doit être inséré (sinon il est ignoré).",
-        "bench_prompt_curated_none": "— Prompt curé (par période) —",
-        "bench_prompt_hint": "Choisis un prompt curé OU écris le tien ci-dessous "
-        "(le texte libre est prioritaire).",
-        "bench_ner": "Extraire les entités nommées (NER)",
-        "bench_ner_model_ph": "modèle spaCy (défaut fr_core_news_sm)",
-        "bench_ner_hint": "Ajoute une étape NER en fin de pipeline ; scorée "
-        "(F1) si le corpus porte une vérité-terrain d'entités.",
-        "bench_alto": "Exporter l'ALTO (XML)",
-        "bench_alto_hint": "Tesseract uniquement : produit un ALTO XML par "
-        "document (géométrie + texte), téléchargeable depuis le rapport — "
-        "ré-importable dans eScriptorium ou Transkribus.",
         "bench_normalization": "Normalisation",
         "bench_norm_preview": "Aperçu de normalisation",
         "bench_norm_sample_ph": "Colle un échantillon de texte pour voir l'effet…",
@@ -149,8 +99,8 @@ _STRINGS: dict[str, dict[str, str]] = {
         "bench_config_import": "Importer…",
         "bench_config_loaded": "Configuration chargée.",
         "bench_config_invalid": "Fichier de configuration invalide.",
-        "bench_config_hint": "Sauvegarde l'état du formulaire (concurrents + "
-        "options) en JSON ; rechargeable plus tard. Aucune persistance serveur.",
+        "bench_config_hint": "Sauvegarde l'état du formulaire (file de recettes "
+        "+ options) en JSON ; rechargeable plus tard. Aucune persistance serveur.",
         "bench_options": "Options",
         "bench_execute_desc": "Lance le run puis ouvre le rapport final ou la "
         "vue de segmentation.",
@@ -180,11 +130,7 @@ _STRINGS: dict[str, dict[str, str]] = {
         "révision), téléchargées automatiquement au moment du run.",
         # Aperçu de mise en page (panneau du lanceur) + reconnaisseur hybride :
         # vestiges utiles de l'ancienne page /segmentation, repris par le composeur.
-        "seg_run_endpoint": "Endpoint (object-detection HF)",
-        "seg_run_endpoint_ph": "https://…",
-        "seg_run_token": "Jeton (optionnel)",
         "seg_run_running": "Segmentation en cours…",
-        "hyb_run_vlm": "VLM, zero-shot",
         "open_report_full": "Ouvrir le rapport",
         "sys_version": "Version",
         "sys_mode": "Mode",
@@ -322,25 +268,10 @@ _STRINGS: dict[str, dict[str, str]] = {
         "download_alto": "Download ALTO (ZIP)",
         "bench_eyebrow": "Benchmark · compare",
         "bench_title": "Benchmark",
-        "bench_desc": "Compose competitors (OCR, OCR→LLM, VLM) and compare them "
-        "on a corpus, in a single run. No competitor: demonstration.",
+        "bench_desc": "Pick pipeline shapes (OCR, OCR→LLM, VLM, segmentation, "
+        "ALTO correction) and compare them on a corpus, in a single run. Empty "
+        "queue: demonstration.",
         "bench_run": "Run the benchmark",
-        "bench_correction": "Structured post-correction",
-        "bench_correction_hint": "Corrects an existing ALTO corpus *inside* its "
-        "layout: every line keeps its identifier, so the report can say what was "
-        "changed and what the corrector refused to change.",
-        "bench_correction_producer": "Correction producer",
-        "bench_correction_rules": "Rules (deterministic, offline)",
-        "bench_correction_ollama": "Ollama (local server)",
-        "bench_correction_model": "Ollama model",
-        "bench_correction_model_ph": "an installed model (cinoc list models ollama)",
-        "bench_correction_host": "Ollama server",
-        "bench_correction_launch": "Correct this corpus",
-        "bench_correction_no_corpus": "Pick a corpus first.",
-        "bench_correction_gt_hint": "The corpus must carry a separate "
-        "transcription (<name>.gt.txt) beside its ALTO. Without one, the "
-        "reference is extracted from the ALTO itself: the corrector would start "
-        "from the very text it is scored against, and the score would be void.",
         "bench_launching": "Launching…",
         "bench_status": "Status",
         "bench_log": "Log",
@@ -353,18 +284,10 @@ _STRINGS: dict[str, dict[str, str]] = {
         "bench_corpus_select_hint": "Select a prepared corpus, or stay in "
         "demonstration mode.",
         "bench_competitors": "Competitors",
-        "bench_add_competitor": "Add a competitor",
-        "bench_queue_empty": "No competitor added yet.",
+        "bench_queue_empty": "No recipe in the queue yet.",
         "bench_queue_title": "Queue ready to run",
         "bench_queue_hint": "Each row summarizes one pipeline that will actually run.",
         "bench_remove": "Remove",
-        "bench_mode": "Mode",
-        "bench_mode_ocr": "OCR only",
-        "bench_mode_text": "OCR → LLM (text)",
-        "bench_mode_image": "OCR → LLM (image+text)",
-        "bench_mode_vlm": "VLM (zero-shot)",
-        "bench_mode_hybrid": "Hybrid (segmentation)",
-        "bench_mode_recipe": "Recipe",
         "bench_recipe_pick": "Pick a shape",
         "bench_recipe_add": "Add to the queue",
         "bench_recipe_fanout": "↳ once per detected block",
@@ -374,46 +297,19 @@ _STRINGS: dict[str, dict[str, str]] = {
         "bench_recipe_unrunnable": "No brick available for the step:",
         "bench_recipe_added": "Added to the queue.",
         "bench_recipe_hint": "A recipe is a proven shape, named by what it asks; "
-        "you only pick its bricks. It is scored like any competitor: same "
-        "views, and the scoring options below apply to it.",
-        "bench_recipe_mixed": "A recipe and a composed competitor cannot share "
-        "a run yet: launch them separately.",
+        "you pick its bricks and, if needed, their settings. Every recipe in the "
+        "queue runs in a single run, scored under the options below.",
+        "bench_recipe_settings": "Settings",
+        "bench_recipe_optional": "Add:",
+        "bench_recipe_default": "default:",
+        "bench_recipe_models": "model(s) available — click to pick",
+        "bench_recipe_models_none": "Model list unavailable.",
         "bench_recipe_no_corpus": "A recipe runs on a corpus: pick one.",
-        "bench_config_recipes": "Recipes in the queue are not exported (only "
-        "composed competitors are).",
-        "bench_ocr_engine": "OCR engine",
-        "bench_segmenter": "Segmenter",
-        "bench_segmenter_hint": "Detects regions at the head of the pipeline; the "
-        "remote one delegates to an HF endpoint (swap the model via the URL).",
-        "bench_recognizer": "Per-block recognizer",
-        "bench_recognizer_hint": "Engine applied to each cropped block: a real OCR, "
-        "or a VLM transcribing the block image (zero-shot). Assembled text scored "
-        "CER/WER like a flat pipeline.",
         "bench_seg_preview": "Region preview",
         "bench_seg_preview_btn": "Preview segmentation",
         "bench_seg_preview_hint": "Runs the segmenter on the chosen corpus and shows "
         "the detected regions (before launching the benchmark).",
         "bench_seg_preview_no_corpus": "Pick a corpus first.",
-        "bench_llm": "LLM",
-        "bench_vlm": "VLM",
-        "bench_model": "Model",
-        "bench_model_ph": "model (required for an LLM/VLM, Mistral OCR, kraken…)",
-        "bench_ocr_model": "OCR engine model",
-        "bench_ocr_model_ph": "if the OCR engine needs one (Mistral OCR, kraken…)",
-        "bench_prompt": "Prompt",
-        "bench_prompt_ph": "Empty = default prompt. For correction, include "
-        "{ocr_text} where the OCR text should be inserted (else it is ignored).",
-        "bench_prompt_curated_none": "— Curated prompt (by period) —",
-        "bench_prompt_hint": "Pick a curated prompt OR write your own below "
-        "(free text takes precedence).",
-        "bench_ner": "Extract named entities (NER)",
-        "bench_ner_model_ph": "spaCy model (default fr_core_news_sm)",
-        "bench_ner_hint": "Adds a NER step at the end of the pipeline; scored "
-        "(F1) if the corpus carries an entity ground truth.",
-        "bench_alto": "Export ALTO (XML)",
-        "bench_alto_hint": "Tesseract only: produces one ALTO XML per document "
-        "(geometry + text), downloadable from the report — re-importable into "
-        "eScriptorium or Transkribus.",
         "bench_normalization": "Normalization",
         "bench_norm_preview": "Normalization preview",
         "bench_norm_sample_ph": "Paste a text sample to see the effect…",
@@ -429,7 +325,7 @@ _STRINGS: dict[str, dict[str, str]] = {
         "bench_config_import": "Import…",
         "bench_config_loaded": "Configuration loaded.",
         "bench_config_invalid": "Invalid configuration file.",
-        "bench_config_hint": "Saves the form state (competitors + options) as "
+        "bench_config_hint": "Saves the form state (recipe queue + options) as "
         "JSON; reloadable later. No server persistence.",
         "bench_metric_profile": "Metric profile",
         "bench_metric_profile_hint": "Picks the report's ranking columns; does not "
@@ -463,11 +359,7 @@ _STRINGS: dict[str, dict[str, str]] = {
         "downloaded automatically at run time.",
         # Layout preview (launcher panel) + hybrid recognizer: useful remnants of
         # the old /segmentation page, reused by the benchmark composer.
-        "seg_run_endpoint": "Endpoint (HF object-detection)",
-        "seg_run_endpoint_ph": "https://…",
-        "seg_run_token": "Token (optional)",
         "seg_run_running": "Segmenting…",
-        "hyb_run_vlm": "VLM, zero-shot",
         "open_report_full": "Open the report",
         "sys_version": "Version",
         "sys_mode": "Mode",

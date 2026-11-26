@@ -14,8 +14,8 @@ import pytest
 
 from cinoc.app import run
 from cinoc.app.modules.registry import ModuleRegistry, register_default_modules
+from cinoc.app.recipe_queue import RecipeEntry, plan_recipe_run
 from cinoc.app.resume import ResumeStore
-from cinoc.app.run_planning import Competitor, plan_benchmark_run
 from cinoc.domain.artifacts import ArtifactType
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.documents import DocumentRef, GroundTruthRef
@@ -75,20 +75,24 @@ def test_cache_and_reasoning_tokens_survive_the_archive(
             "anthropic": lambda: wire("llm", "anthropic", "cached"),
         },
     )
-    spec = plan_benchmark_run(
-        (
-            Competitor(engine="openai", mode="zero_shot", model="gpt-4o-mini"),
-            Competitor(
-                engine="anthropic", mode="zero_shot", model="claude-haiku-4-5"
-            ),
-        ),
+    spec = plan_recipe_run(
         _corpus(tmp_path / "corpus"),
-        "s22",
-    )(tmp_path)
+        tuple(
+            RecipeEntry(
+                recipe="vlm_seul", choices={"vlm": vlm}, params={"vlm": {"model": m}}
+            )
+            for vlm, m in (("openai", "gpt-4o-mini"), ("anthropic", "claude-haiku-4-5"))
+        ),
+        run_id="s22",
+    )
     store = ResumeStore(tmp_path / "archive")
     first = run(spec, registry=_registry(), code_version="1.0", resume_store=store)
     usage = _usage(first)
-    by_kind = {name.split(" ", 1)[0]: u for name, u in usage.items()}
+    # « vlm_seul · openai (gpt-4o-mini) » : la brique suit la recette (D-298).
+    def _kind(name: str) -> str:
+        return name.split(" · ", 1)[1].split(" ", 1)[0]
+
+    by_kind = {_kind(name): u for name, u in usage.items()}
     assert by_kind["openai"] == ResourceUsage(
         tokens_in=2048, tokens_out=75, tokens_cache_read=1536, tokens_reasoning=64
     )
@@ -117,7 +121,7 @@ def test_cache_and_reasoning_tokens_survive_the_archive(
         "text", "cer", series, second.usage, second.manifest
     )
     assert analysis is not None and isinstance(analysis.payload, EconomicsPayload)
-    rows = {r.pipeline.split(" ", 1)[0]: r for r in analysis.payload.pipelines}
+    rows = {_kind(r.pipeline): r for r in analysis.payload.pipelines}
     assert rows["openai"].tokens_cache_read == 1536
     assert rows["anthropic"].tokens_reasoning == 28
     # Les deux modèles ont un tarif de lecture en cache sourcé : coût chiffré.

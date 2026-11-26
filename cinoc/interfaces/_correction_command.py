@@ -16,13 +16,14 @@ from pathlib import Path
 
 from cinoc.app import resolve_code_version
 from cinoc.app import run as run_orchestrator
-from cinoc.app.correction_planning import corpus_from_alto, plan_correction_run
+from cinoc.app.alto_corpus import corpus_from_alto
 from cinoc.app.evaluation_views import EvaluationOptions
 from cinoc.app.modules import (
     ModuleRegistry,
     discover_plugins,
     register_default_modules,
 )
+from cinoc.app.recipe_queue import RecipeEntry, plan_recipe_run
 from cinoc.app.report_images import build_facsimiles, build_thumbnails
 from cinoc.app.variance import VarianceSummary, run_repeatedly
 from cinoc.evaluation.result import RunResult
@@ -79,13 +80,21 @@ def run_correction(
     registry = ModuleRegistry()
     register_default_modules(registry)
     discover_plugins(registry, enabled=True)  # CLI local : code de confiance
-    spec = plan_correction_run(
+    # La recette ``alto_corrige``, par la file de la page (D-298) : les options
+    # ne font que nommer ses réglages.
+    correcteur = {"producer": producer, "host": host, "model": model}
+    spec = plan_recipe_run(
         corpus,
-        "correction",
-        producer=producer,
-        model=model,
-        host=host,
-        ocr_sidecar=ocr_sidecar,
+        (
+            RecipeEntry(
+                recipe="alto_corrige",
+                params={
+                    "correction": {k: v for k, v in correcteur.items() if v},
+                    **({"source": {"ocr_sidecar": ocr_sidecar}} if ocr_sidecar else {}),
+                },
+            ),
+        ),
+        run_id="correction",
         options=options,
     )
 

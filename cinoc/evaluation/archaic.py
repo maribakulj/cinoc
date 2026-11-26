@@ -78,7 +78,7 @@ ARCHAIC_LISTS: dict[str, tuple[str, ...]] = {
 
 #: Liste active par défaut : ``air`` la mesure d'office (Q4) ; ``hcpr`` n'apparaît
 #: que sur une liste **explicitement** configurée (anti-colonne-jumelle de
-#: ``mufi_err`` — cf. :mod:`cinoc.app.run_planning`).
+#: ``mufi_err`` — cf. :mod:`cinoc.app.evaluation_views`).
 DEFAULT_ARCHAIC_LIST = "archaic_core"
 
 

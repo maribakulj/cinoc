@@ -101,26 +101,20 @@ PARITE: dict[str, str] = {
     "GET /api/models/{model_provider}": "cli:list",
     "POST /api/normalization/preview": "cli:list",
     # --- Lancement et suivi d'un run. ----------------------------------------
-    # `cinoc run` est **plus général** que le composeur web : il accepte un
-    # `RunSpec` complet là où le web assemble des `Competitor`.
+    # Une file de recettes, de la page comme de `cinoc run CORPUS --recipe NOM`
+    # (`--brick`, `--set`, `--with`) : la même fonction, `plan_recipe_run` — le
+    # seul constructeur de pipeline depuis D-298. `cinoc run` accepte en plus
+    # un `RunSpec` complet ; le web, par la porte « spec complète » ci-dessous.
     "POST /api/runs": "cli:run",
     # Valider avant de lancer : `cinoc run --check` relit la spec, affiche
     # le plan et n'exécute rien — une spec de benchmark engage des appels
     # facturés.
     "POST /api/runs/config": "cli:run",
-    # La correction structurée n'est pas un concurrent de plus dans la file du
-    # composeur : c'est une **autre forme de run** (un ALTO déjà là qu'on
-    # corrige), planifiée par `plan_correction_run`. Elle a donc sa route,
-    # comme la segmentation a la sienne.
-    "POST /api/runs/correction": "cli:correct",
-    # Le composeur ouvert (D-240). Une recette se lance des deux côtés —
-    # `cinoc list recipes` la montre, `cinoc run CORPUS --recipe NOM` l'instancie
-    # par la fonction de la page (`plan_recipe_run`, D-297 : jusque-là il
-    # fallait en écrire la spec à la main, pilote D24) ; et la porte « spec
-    # complète » donne au web le graphe entier, que la CLI avait déjà par son
-    # YAML.
+    # Le catalogue de recettes (`cinoc list recipes`), et la porte « spec
+    # complète » qui donne au web le graphe entier, que la CLI avait déjà par
+    # son YAML. La correction d'un ALTO n'a plus de route à part : c'est la
+    # recette `alto_corrige`, lancée par `POST /api/runs` (D-298).
     "GET /api/recipes": "cli:list",
-    "POST /api/runs/recipe": "cli:run",
     "POST /api/runs/spec": "cli:run",
     # L'état d'un job, son annulation et son flux d'événements n'existent que
     # parce que le web exécute **en arrière-plan**. En CLI le run est au premier
@@ -242,6 +236,8 @@ PARITE_CLI: dict[str, str] = {
     # sert pas : la re-noter se fait sur le serveur, par la CLI. Une option, pas
     # une sous-commande — d'où ce commentaire plutôt qu'une ligne de la table.
     "run": "web:POST /api/runs",
+    # `hybrid` et `correct` sont deux recettes (`segmentation_puis_lecture`,
+    # `alto_corrige`) lancées par la même fonction que la file de la page.
     "hybrid": "web:POST /api/runs",
     "corpus": "web:POST /api/corpus",
     "list": "web:GET /engines",
@@ -251,7 +247,7 @@ PARITE_CLI: dict[str, str] = {
     "compare": "web:GET /reports/{name}",
     # `serve` **est** le web : lui chercher un pendant web n'aurait pas de sens.
     "serve": "cli-only: c'est la commande qui démarre l'app web.",
-    "correct": "web:POST /api/runs/correction",
+    "correct": "web:POST /api/runs",
 }
 
 
@@ -359,11 +355,9 @@ FRONT: dict[str, str] = {
     "POST /api/normalization/preview": "page:static/js/benchmark.js",
     "POST /api/runs": "page:static/js/benchmark.js",
     "POST /api/runs/config": "page:static/js/benchmark.js",
-    "POST /api/runs/correction": "page:static/js/benchmark.js",
-    # Le catalogue de recettes (D-296) : `recipes.js` le lit et pose l'entrée
-    # choisie dans la file ; `benchmark.js` lance la file par la route.
+    # Le catalogue de recettes : `recipes.js` le lit et pose l'entrée choisie
+    # dans la file ; `benchmark.js` lance la file par `POST /api/runs`.
     "GET /api/recipes": "page:static/js/recipes.js",
-    "POST /api/runs/recipe": "page:static/js/benchmark.js",
     "GET /api/runs/{job_id}": "page:static/js/benchmark.js",
     "GET /api/runs/{job_id}/events": "page:static/js/benchmark.js",
     "GET /api/segmentation/preview": "page:static/js/benchmark.js",

@@ -45,6 +45,7 @@ from cinoc.app.segmentation import SegmentationStore
 from cinoc.domain.artifacts import Artifact, ArtifactType, latest_by_type
 from cinoc.domain.errors import CinocError, RunCancelledError
 from cinoc.domain.layout import CanonicalLayout
+from cinoc.domain.pipeline import INITIAL_STEP_ID
 from cinoc.domain.run import RunManifest
 from cinoc.domain.run_spec import RunSpec
 from cinoc.evaluation.result import RunResult
@@ -201,7 +202,8 @@ class JobRunner:
         for pipeline_name, per_document in outputs.items():
             for document_id, by_step in per_document.items():
                 artifacts = latest_by_type(by_step)
-                self._persist_layout(pipeline_name, document_id, artifacts)
+                page = by_step.get(INITIAL_STEP_ID, {}).get(ArtifactType.IMAGE)
+                self._persist_layout(pipeline_name, document_id, artifacts, page)
                 self._persist_alto(
                     manifest.run_id, pipeline_name, document_id, artifacts
                 )
@@ -211,8 +213,11 @@ class JobRunner:
         pipeline_name: str,
         document_id: str,
         artifacts: Mapping[ArtifactType, Artifact],
+        page: Artifact | None = None,
     ) -> None:
-        """Persiste un ``LAYOUT`` produit dans le ``SegmentationStore`` (viz)."""
+        """Persiste un ``LAYOUT`` produit dans le ``SegmentationStore`` (viz),
+        avec l'image de la page — l'aperçu la dessine sous les régions, et
+        sans elle son SVG pointait vers une image absente (404)."""
         if self._segmentation is None:
             return
         layout_art = artifacts.get(ArtifactType.LAYOUT)
@@ -222,7 +227,15 @@ class JobRunner:
             layout = CanonicalLayout.model_validate_json(
                 Path(layout_art.uri).read_bytes()
             )
-            self._segmentation.save(layout)
+            if page is not None and page.uri is not None:
+                source = Path(page.uri)
+                self._segmentation.save(
+                    layout,
+                    image_ext=source.suffix.lower() or None,
+                    image_bytes=source.read_bytes(),
+                )
+            else:
+                self._segmentation.save(layout)
         except (OSError, ValueError) as exc:
             logger.warning(
                 "[jobs] persistance LAYOUT (%s/%s) échouée : %s",

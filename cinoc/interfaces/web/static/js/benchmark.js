@@ -1,8 +1,10 @@
-/* Banc d'essai — composeur de benchmark et suivi SSE.
+/* Banc d'essai — la file, le lancement et le suivi SSE.
  *
- * Un seul brouillon de concurrent alimente une file visible. Le serveur reste
- * la source de vérité pour le lancement et les erreurs ; le client ne traduit
- * que les états HTTP en messages lisibles.
+ * recipes.js compose les entrées (une recette, ses briques, ses réglages) et
+ * les pose dans la file ; ce script la montre, l'exporte, la réimporte et la
+ * lance par POST /api/runs — un seul chemin pour toute forme de run (D-298).
+ * Le serveur reste la source de vérité pour le lancement et les erreurs ; le
+ * client ne traduit que les états HTTP en messages lisibles.
  */
 (function () {
   "use strict";
@@ -56,18 +58,22 @@
     });
   }
 
-  // Aperçu de mise en page (mode hybride) : lance une segmentation sur le corpus
-  // choisi et injecte le SVG des régions (rendu serveur). Remplace l'ancienne page
-  // /segmentation — la visualisation vit désormais dans le lanceur.
+  // Aperçu de mise en page (recette qui segmente) : lance une segmentation sur
+  // le corpus choisi, avec le segmenteur et l'adresse de l'étape, et injecte le
+  // SVG des régions (rendu serveur). Un transport, gardé tel quel (D-298).
   function wireSegPreview() {
     var btn = document.getElementById("seg-preview-btn");
     var container = document.getElementById("seg-preview");
     if (!btn || !container) return;
     var status = document.getElementById("seg-preview-status");
     var corpusSelect = document.getElementById("corpus-select");
-    var segmenter = document.getElementById("draft-segmenter");
-    var endpoint = document.getElementById("draft-seg-endpoint");
-    var token = document.getElementById("draft-seg-token");
+
+    function stepField(step, name) {
+      var field = document.querySelector(
+        '#recipe-steps [data-step="' + step + '"][data-param="' + name + '"]'
+      );
+      return field && field.value.trim();
+    }
 
     function poll(jobId) {
       fetchJson("/api/runs/" + encodeURIComponent(jobId)).then(function (res) {
@@ -105,14 +111,11 @@
         if (status) status.textContent = btn.getAttribute("data-no-corpus") || "";
         return;
       }
-      var payload = {
-        corpus_id: corpusId,
-        segmenter: segmenter ? segmenter.value : "pp_doclayout",
-      };
-      if (payload.segmenter === "remote_segmenter") {
-        if (endpoint && endpoint.value.trim()) payload.endpoint = endpoint.value.trim();
-        if (token && token.value.trim()) payload.token = token.value.trim();
-      }
+      var segmenter = document.querySelector('#recipe-steps select[data-role="segmenter"]');
+      var step = segmenter && segmenter.getAttribute("data-step");
+      var payload = { corpus_id: corpusId, segmenter: segmenter ? segmenter.value : "" };
+      if (stepField(step, "endpoint")) payload.endpoint = stepField(step, "endpoint");
+      if (stepField(step, "token")) payload.token = stepField(step, "token");
       var headers = { "Content-Type": "application/json" };
       headers[CSRF] = "1";
       btn.disabled = true;
@@ -150,50 +153,14 @@
     var normalization = document.getElementById("normalization");
     var charExclude = document.getElementById("char-exclude");
     var metricProfile = document.getElementById("metric-profile");
-    var addBtn = document.getElementById("add-competitor");
     var queueTpl = document.getElementById("queue-row-tpl");
     var queueList = document.getElementById("queue-list");
     var queueEmpty = document.getElementById("queue-empty");
     if (!launchBtn || !statusEl || !resultEl || !queueList || !queueTpl) return;
 
+    // La file : des entrées de ``entries`` (une recette, ses choix, ses réglages,
+    // ses étapes facultatives), décrites par recipes.js.
     var queue = [];
-    var activeMode = "ocr_only";
-    var modeButtons = document.querySelectorAll("[data-mode]");
-    var draftFields = document.querySelectorAll("[data-show]");
-    var draftOcr = document.getElementById("draft-ocr");
-    var draftLlm = document.getElementById("draft-llm");
-    var draftVlm = document.getElementById("draft-vlm");
-    var draftSegmenter = document.getElementById("draft-segmenter");
-    var draftRecognizer = document.getElementById("draft-recognizer");
-    var draftSegEndpoint = document.getElementById("draft-seg-endpoint");
-    var draftSegToken = document.getElementById("draft-seg-token");
-    var draftSegEndpointField = document.getElementById("draft-seg-endpoint-field");
-    var draftSegTokenField = document.getElementById("draft-seg-token-field");
-    var draftModel = document.getElementById("draft-model");
-    var draftOcrModel = document.getElementById("draft-ocr-model");
-    var draftPrompt = document.getElementById("draft-prompt");
-    var draftPromptCurated = document.getElementById("draft-prompt-curated");
-    var draftNer = document.getElementById("draft-ner");
-    var draftNerModel = document.getElementById("draft-ner-model");
-    var draftAlto = document.getElementById("draft-alto");
-    var queueLabels = {
-      ocr: queueList.getAttribute("data-label-ocr") || "OCR",
-      ocrLlm: queueList.getAttribute("data-label-ocr-llm") || "OCR → LLM",
-      ocrVlm: queueList.getAttribute("data-label-ocr-vlm") || "OCR → VLM",
-      vlm: queueList.getAttribute("data-label-vlm") || "VLM",
-      hybrid: queueList.getAttribute("data-label-hybrid") || "Hybride",
-    };
-
-    // Endpoint/jeton du segmenteur distant : visibles seulement en mode hybride
-    // ET quand ``remote_segmenter`` est choisi (sinon ils n'ont aucun sens).
-    function syncSegFields() {
-      if (!draftSegmenter) return;
-      var isRemote =
-        activeMode === "hybrid" && draftSegmenter.value === "remote_segmenter";
-      if (draftSegEndpointField) draftSegEndpointField.hidden = !isRemote;
-      if (draftSegTokenField) draftSegTokenField.hidden = !isRemote;
-    }
-    if (draftSegmenter) draftSegmenter.addEventListener("change", syncSegFields);
 
     function currentCorpusId() {
       return corpusSelect && corpusSelect.value ? corpusSelect.value : null;
@@ -204,136 +171,9 @@
       if (corpusId && corpusSelect) corpusSelect.value = corpusId;
     }
 
-    // Le champ « Modèle » pointe vers la liste des modèles du fournisseur
-    // choisi, demandés **en direct** à /api/models/{provider} (même origine ;
-    // mise en cache). Rien de codé : liste indisponible → saisie libre, et le
-    // pourquoi s'affiche. Vision et dépréciation : seulement si déclarées.
-    var modelCache = {};
-    var MODEL_PROVIDERS = ["openai", "anthropic", "mistral", "ollama"];
-
-    function applyDatalist(listId, count, why) {
-      if (listId && count) draftModel.setAttribute("list", listId);
-      else draftModel.removeAttribute("list");
-      var hint = document.getElementById("model-hint");
-      if (hint) {
-        hint.textContent = count
-          ? count + " modèle(s) disponible(s) — clique pour choisir"
-          : why || "";
-      }
-    }
-
-    function optionLabel(model) {
-      var bits = [];
-      if (model.vision === true) bits.push("vision");
-      if (model.lifecycle === "deprecated" || model.deprecated_at) {
-        bits.push("déprécié");
-      }
-      if (model.lifecycle === "retired") bits.push("retiré");
-      return bits.join(" · ");
-    }
-
-    function fillApiList(models) {
-      var dl = document.getElementById("api-model-list");
-      if (!dl) return 0;
-      dl.textContent = "";
-      for (var i = 0; i < models.length; i++) {
-        var opt = document.createElement("option");
-        opt.value = models[i].name;
-        var label = optionLabel(models[i]);
-        if (label) opt.label = label;
-        dl.appendChild(opt);
-      }
-      return models.length;
-    }
-
-    function currentProvider() {
-      if (activeMode === "text_only") return draftLlm && draftLlm.value;
-      if (activeMode === "text_and_image" || activeMode === "zero_shot") {
-        return draftVlm && draftVlm.value;
-      }
-      // En hybride, le « modèle » cible le reconnaisseur par bloc (utile aux VLM).
-      if (activeMode === "hybrid") return draftRecognizer && draftRecognizer.value;
-      return "";
-    }
-
-    function showListing(listing) {
-      applyDatalist(
-        "api-model-list",
-        fillApiList(listing.models || []),
-        listing.unavailable ? "Liste indisponible : " + listing.unavailable : ""
-      );
-    }
-
-    function updateModelList() {
-      if (!draftModel) return;
-      var provider = currentProvider();
-      if (MODEL_PROVIDERS.indexOf(provider) < 0) {
-        applyDatalist("", 0, "");
-        return;
-      }
-      if (modelCache[provider]) {
-        showListing(modelCache[provider]);
-        return;
-      }
-      var asked = provider;
-      fetch("/api/models/" + encodeURIComponent(provider))
-        .then(function (r) {
-          return r.ok ? r.json() : { models: [] };
-        })
-        .then(function (data) {
-          modelCache[asked] = data;
-          if (currentProvider() === asked) showListing(data);
-        })
-        .catch(function () {});
-    }
-
-    function setMode(mode) {
-      activeMode = mode;
-      for (var i = 0; i < modeButtons.length; i++) {
-        var isActive = modeButtons[i].getAttribute("data-mode") === mode;
-        modeButtons[i].classList.toggle("on", isActive);
-        modeButtons[i].setAttribute("aria-selected", isActive ? "true" : "false");
-      }
-      for (var j = 0; j < draftFields.length; j++) {
-        var shown = draftFields[j].getAttribute("data-show").split(" ");
-        draftFields[j].hidden = shown.indexOf(mode) < 0;
-      }
-      syncSegFields();
-      updateModelList();
-    }
-
-    function summarize(entry) {
-      if (entry.request) return { label: entry.label, meta: entry.meta };
-      if (entry.mode === "ocr_only") {
-        return {
-          label: queueLabels.ocr,
-          meta: entry.engine,
-        };
-      }
-      if (entry.mode === "text_only") {
-        return {
-          label: queueLabels.ocrLlm,
-          meta: entry.engine + " → " + entry.llm + (entry.model ? " · " + entry.model : ""),
-        };
-      }
-      if (entry.mode === "text_and_image") {
-        return {
-          label: queueLabels.ocrVlm,
-          meta: entry.engine + " → " + entry.llm + (entry.model ? " · " + entry.model : ""),
-        };
-      }
-      if (entry.mode === "hybrid") {
-        return {
-          label: queueLabels.hybrid,
-          meta:
-            entry.segmenter + " → " + entry.engine +
-            (entry.model ? " · " + entry.model : ""),
-        };
-      }
-      return {
-        label: queueLabels.vlm,
-        meta: entry.engine + (entry.model ? " · " + entry.model : ""),
-      };
+    function summarize(request) {
+      var recipes = window.cinocRecipes;
+      return recipes ? recipes.describe(request) : { label: request.recipe, meta: "" };
     }
 
     function renderQueue() {
@@ -358,138 +198,10 @@
       });
     }
 
-    function buildDraft() {
-      var model = draftModel && draftModel.value ? draftModel.value.trim() : "";
-      // En chaîne, le modèle du moteur OCR amont (Mistral OCR, kraken…) :
-      // ``model`` y désigne le LLM aval. Aucun défaut n'est codé.
-      var ocrModel =
-        draftOcrModel && draftOcrModel.value ? draftOcrModel.value.trim() : "";
-      var prompt = draftPrompt && draftPrompt.value ? draftPrompt.value.trim() : "";
-      // Texte libre prioritaire : s'il est saisi, on ignore le prompt curé (le
-      // serveur refuse d'ailleurs les deux à la fois).
-      var promptName =
-        !prompt && draftPromptCurated ? draftPromptCurated.value : "";
-      var ner = !!(draftNer && draftNer.checked);
-      var nerModel =
-        ner && draftNerModel && draftNerModel.value
-          ? draftNerModel.value.trim()
-          : "";
-      // ALTO : export tesseract uniquement (la case est masquée en zero_shot, sans
-      // étape OCR) ; le serveur refuse l'option avec un autre moteur.
-      var alto = !!(draftAlto && draftAlto.checked) && activeMode !== "zero_shot";
-      if (activeMode === "ocr_only") {
-        // En OCR seul, `model` = le modèle du moteur (kraken/pero/calamari : path ;
-        // mistral_ocr : nom). Tesseract/Google/Azure l'ignorent.
-        return {
-          engine: draftOcr.value,
-          mode: "ocr_only",
-          model: model,
-          ner: ner,
-          nerModel: nerModel,
-          alto: alto,
-        };
-      }
-      if (activeMode === "text_only") {
-        return {
-          engine: draftOcr.value,
-          mode: "text_only",
-          llm: draftLlm.value,
-          model: model,
-          ocrModel: ocrModel,
-          prompt: prompt,
-          promptName: promptName,
-          ner: ner,
-          nerModel: nerModel,
-          alto: alto,
-        };
-      }
-      if (activeMode === "text_and_image") {
-        return {
-          engine: draftOcr.value,
-          mode: "text_and_image",
-          llm: draftVlm.value,
-          model: model,
-          ocrModel: ocrModel,
-          prompt: prompt,
-          promptName: promptName,
-          ner: ner,
-          nerModel: nerModel,
-          alto: alto,
-        };
-      }
-      if (activeMode === "hybrid") {
-        // Hybride : segmenteur en tête, ``engine`` = reconnaisseur par bloc (OCR
-        // ou VLM zero-shot). ``model``/``prompt`` ciblent le reconnaisseur.
-        var seg = draftSegmenter ? draftSegmenter.value : "";
-        var remote = seg === "remote_segmenter";
-        return {
-          engine: draftRecognizer ? draftRecognizer.value : "",
-          mode: "hybrid",
-          segmenter: seg,
-          segmenterEndpoint:
-            remote && draftSegEndpoint ? draftSegEndpoint.value.trim() : "",
-          segmenterToken:
-            remote && draftSegToken ? draftSegToken.value.trim() : "",
-          model: model,
-          prompt: prompt,
-          promptName: promptName,
-          ner: ner,
-          nerModel: nerModel,
-          alto: alto,
-        };
-      }
-      return {
-        engine: draftVlm.value,
-        mode: "zero_shot",
-        model: model,
-        prompt: prompt,
-        promptName: promptName,
-        ner: ner,
-        nerModel: nerModel,
-        alto: false,
-      };
-    }
-
-    function payloadCompetitors() {
-      var out = [];
-      for (var i = 0; i < queue.length; i++) {
-        if (queue[i].request) continue; // une recette n'est pas un Competitor
-        var entry = {};
-        entry.engine = queue[i].engine;
-        // ``ocr_only`` et ``hybrid`` n'ont pas de ``mode`` côté serveur (l'hybride
-        // est signalé par ``segmenter``). Les autres portent leur PipelineMode.
-        if (queue[i].mode !== "ocr_only" && queue[i].mode !== "hybrid") {
-          entry.mode = queue[i].mode;
-        }
-        if (queue[i].segmenter) {
-          entry.segmenter = queue[i].segmenter;
-          if (queue[i].segmenterEndpoint) {
-            entry.segmenter_endpoint = queue[i].segmenterEndpoint;
-          }
-          if (queue[i].segmenterToken) {
-            entry.segmenter_token = queue[i].segmenterToken;
-          }
-        }
-        if (queue[i].llm) entry.llm = queue[i].llm;
-        if (queue[i].model) entry.model = queue[i].model;
-        if (queue[i].ocrModel) entry.ocr_model = queue[i].ocrModel;
-        if (queue[i].prompt) entry.prompt = queue[i].prompt;
-        else if (queue[i].promptName) entry.prompt_name = queue[i].promptName;
-        if (queue[i].ner) {
-          entry.ner = true;
-          if (queue[i].nerModel) entry.ner_model = queue[i].nerModel;
-        }
-        if (queue[i].alto) entry.alto = true;
-        out.push(entry);
-      }
-      return out;
-    }
-
     // Config save/load — l'« état du formulaire » EST un LaunchRequest (même
-    // schéma que le POST /api/runs). Export = blob JSON téléchargé (état courant,
-    // 0 réseau) ; import = validé côté serveur (POST /api/runs/config) AVANT de
-    // repeupler — un fichier malformé est rejeté net, jamais appliqué en silence.
-    // Options de notation : les mêmes pour toute forme de run (D-297).
+    // schéma que le POST /api/runs) : la file entière et les options. Export =
+    // blob JSON téléchargé (0 réseau) ; import = validé côté serveur (POST
+    // /api/runs/config) AVANT de repeupler — un fichier malformé est rejeté net.
     function withScoring(cfg) {
       var corpusId = currentCorpusId();
       if (corpusId) cfg.corpus_id = corpusId;
@@ -500,12 +212,10 @@
     }
 
     function collectConfig() {
-      return withScoring({ competitors: payloadCompetitors() });
+      return withScoring({ entries: queue.slice() });
     }
 
     function exportConfig() {
-      var fb = document.getElementById("config-feedback");
-      if (fb && recipeEntries().length) fb.textContent = fb.dataset.recipes || "";
       var text = JSON.stringify(collectConfig(), null, 2);
       var uri = "data:application/json;charset=utf-8," + encodeURIComponent(text);
       var a = document.createElement("a");
@@ -517,28 +227,7 @@
     }
 
     function applyConfig(cfg) {
-      queue = [];
-      var comps = cfg.competitors || [];
-      for (var i = 0; i < comps.length; i++) {
-        var c = comps[i];
-        queue.push({
-          // ``segmenter`` posé ⇒ concurrent hybride (mode interne « hybrid »,
-          // jamais envoyé au serveur) ; sinon ``mode`` explicite ou OCR seul.
-          engine: c.engine,
-          mode: c.segmenter ? "hybrid" : c.mode || "ocr_only",
-          segmenter: c.segmenter || "",
-          segmenterEndpoint: c.segmenter_endpoint || "",
-          segmenterToken: c.segmenter_token || "",
-          llm: c.llm || "",
-          model: c.model || "",
-          ocrModel: c.ocr_model || "",
-          prompt: c.prompt || "",
-          promptName: c.prompt_name || "",
-          ner: !!c.ner,
-          nerModel: c.ner_model || "",
-          alto: !!c.alto,
-        });
-      }
+      queue = (cfg.entries || []).slice();
       renderQueue();
       if (corpusSelect) corpusSelect.value = cfg.corpus_id || "";
       if (normalization) normalization.value = cfg.normalization || "";
@@ -643,11 +332,8 @@
       };
     }
 
-    // Lancer un run et le suivre : **un seul** chemin pour les deux formes de
-    // run que la page sait démarrer (benchmark, post-correction). Elles ne
-    // diffèrent que par leur route et leur charge utile ; dupliquer le POST, la
-    // gestion d'erreur et l'abonnement SSE aurait fait diverger les deux au
-    // premier correctif.
+    // Lancer un run et le suivre : poster, gérer l'erreur, suivre en SSE,
+    // rendre la main.
     function launchAndFollow(url, payload, button) {
       button.disabled = true;
       resetRunFeedback(button.dataset.launching);
@@ -690,28 +376,9 @@
       resultEl.textContent = job.error || (resultEl.dataset.errorFallback || "failed");
     }
 
-    for (var i = 0; i < modeButtons.length; i++) {
-      modeButtons[i].addEventListener("click", function () {
-        setMode(this.getAttribute("data-mode"));
-      });
-    }
-    // Changer de fournisseur LLM/VLM met à jour la datalist du champ « Modèle ».
-    if (draftLlm) draftLlm.addEventListener("change", updateModelList);
-    if (draftVlm) draftVlm.addEventListener("change", updateModelList);
-    setMode(activeMode);
-
-    if (addBtn) {
-      addBtn.addEventListener("click", function () {
-        queue.push(buildDraft());
-        renderQueue();
-      });
-    }
     renderQueue();
-    // La file accueille aussi les recettes (recipes.js) : une seule file.
+    // recipes.js y pose les entrées composées.
     window.cinocQueue = { add: function (e) { queue.push(e); renderQueue(); } };
-    function recipeEntries() {
-      return queue.filter(function (e) { return e.request; });
-    }
 
     applyQueryCorpus();
 
@@ -727,60 +394,14 @@
       });
     }
 
+    // Une file de recettes, quelles qu'elles soient, part en un seul run ;
+    // vide et sans corpus, c'est la démonstration.
     launchBtn.addEventListener("click", function () {
-      var recipes = recipeEntries();
-      if (!recipes.length) {
-        launchAndFollow("/api/runs", collectConfig(), launchBtn);
+      if (queue.length && !currentCorpusId()) {
+        resultEl.textContent = queueList.dataset.noCorpus || "";
         return;
       }
-      // Deux constructeurs encore distincts : un seul en S26 (PLAN_UI §7).
-      var why = recipes.length < queue.length ? "mixed" : !currentCorpusId() && "noCorpus";
-      if (why) { resultEl.textContent = queueList.dataset[why] || why; return; }
-      launchAndFollow("/api/runs/recipe", withScoring({
-        entries: recipes.map(function (e) { return e.request; }),
-      }), launchBtn);
+      launchAndFollow("/api/runs", collectConfig(), launchBtn);
     });
-
-    // Post-correction structurée : une **autre forme de run** (un ALTO déjà là
-    // qu'on corrige), pas un concurrent de plus dans la file — donc sa propre
-    // route et son propre bouton. Elle réutilise `subscribe` et
-    // `reportTerminal` : le suivi SSE et le lien vers le rapport ne sont pas
-    // réécrits une seconde fois.
-    var correctBtn = document.getElementById("correct-launch");
-    if (correctBtn) {
-      var correctProducer = document.getElementById("correct-producer");
-      var correctModel = document.getElementById("correct-model");
-      var correctHost = document.getElementById("correct-host");
-
-      function syncCorrectFields() {
-        var ollama = correctProducer && correctProducer.value === "ollama";
-        var wrap = document.getElementById("correct-ollama-fields");
-        if (wrap) wrap.hidden = !ollama;
-      }
-
-      if (correctProducer) {
-        correctProducer.addEventListener("change", syncCorrectFields);
-        syncCorrectFields();
-      }
-
-      correctBtn.addEventListener("click", function () {
-        var corpusId = currentCorpusId();
-        if (!corpusId) {
-          resultEl.textContent = correctBtn.dataset.noCorpus || "";
-          return;
-        }
-        var payload = withScoring({
-          producer: correctProducer ? correctProducer.value : "rules",
-        });
-        if (correctModel && correctModel.value.trim()) {
-          payload.model = correctModel.value.trim();
-        }
-        if (correctHost && correctHost.value.trim()) {
-          payload.host = correctHost.value.trim();
-        }
-        launchAndFollow("/api/runs/correction", payload, correctBtn);
-      });
-    }
-
   });
 })();

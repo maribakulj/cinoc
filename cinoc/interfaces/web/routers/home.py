@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from collections.abc import Callable
 from pathlib import Path
 from urllib.parse import quote
 
@@ -35,15 +34,9 @@ from cinoc.adapters.storage.history_store import (
 from cinoc.app import resolve_code_version
 from cinoc.app.alto_store import AltoStore
 from cinoc.app.corpus_upload import CorpusStore
-from cinoc.app.engines import (
-    EngineStatus,
-    StatusProvider,
-    curated_prompts,
-)
+from cinoc.app.engines import StatusProvider
 from cinoc.app.evaluation_views import metric_profile_catalog
 from cinoc.app.history import series_insight
-from cinoc.app.run_planning import benchmark_engine_catalog
-from cinoc.app.structure_planning import hybrid_recognizer_catalog
 from cinoc.formats.text import NORMALIZATION_PROFILES
 from cinoc.interfaces.web._cache import TTLCache
 from cinoc.interfaces.web.catalog import available_reports
@@ -181,9 +174,7 @@ def build_home_router(
     templates: Jinja2Templates,
     *,
     statuses: StatusProvider,
-    segmenters: StatusProvider,
     third_party: StatusProvider,
-    ner: Callable[[], EngineStatus] | None = None,
     history_store: HistoryStore,
     corpus_store: CorpusStore | None = None,
     curated_author: str | None = None,
@@ -257,17 +248,9 @@ def build_home_router(
     def benchmark(request: Request, lang: str = "fr") -> HTMLResponse:
         lang = normalize_lang(lang)
         context = _base_context(lang, "benchmark", {})
-        # Catalogue moteurs par rôle (ocr/llm/vlm) : options rendues **serveur**
-        # (testables) ; le composeur JS ne fait qu'assembler les concurrents.
-        context["catalog"] = benchmark_engine_catalog(statuses())
-        # Mode **hybride** du composeur : segmenteurs du socle + reconnaisseurs
-        # par bloc (OCR réels + VLM zero-shot) — mêmes ensembles que le planner
-        # accepte (anti-vide). Le « segmenteur → bloc → texte » devient un
-        # concurrent scoré côte à côte avec les pipelines à plat.
-        context["segmenters"] = list(segmenters())
-        context["recognizers"] = hybrid_recognizer_catalog(statuses())
-        # Les modèles ne sont pas rendus ici : le composeur les demande à
-        # ``/api/models/{fournisseur}`` (en direct, les quatre fournisseurs).
+        # Le composeur est le catalogue de recettes, que la page lit à
+        # ``/api/recipes`` (briques, réglages, disponibilité) : rien d'autre à
+        # rendre ici que le corpus et les options de notation (D-298).
         # Le corpus est préparé dans la Bibliothèque ; ici on le sélectionne.
         context["corpora"] = _corpora_summaries(corpus_store)
         # Profils de normalisation lus **dynamiquement** depuis formats/text
@@ -279,12 +262,6 @@ def build_home_router(
         # Profils de métriques (colonnes de classement de la vue ``text``) :
         # même source que le plan (anti-vide) ; libellé self-documenté côté form.
         context["metric_profiles"] = metric_profile_catalog()
-        # Prompts curés par période (lus dynamiquement) → menu déroulant ; le
-        # texte libre du formulaire reste prioritaire (résolu au plan).
-        context["curated_prompts"] = list(curated_prompts())
-        # Étape NER (extra [ner]) : son statut active/désactive la case « NER » du
-        # composeur (désactivée + motif si spaCy absent).
-        context["ner"] = ner() if ner is not None else None
         return templates.TemplateResponse(request, "benchmark.html", context)
 
     @router.get("/library", response_class=HTMLResponse)

@@ -1,7 +1,7 @@
 """Le catalogue de recettes branché à la file : de la page au rapport.
 
 La page lit ``GET /api/recipes``, empile des recettes dans la file et les lance
-par ``POST /api/runs/recipe`` en **un** run comparé. Ce fichier tient le chemin
+par ``POST /api/runs`` en **un** run comparé. Ce fichier tient le chemin
 côté serveur de bout en bout : une file de deux recettes sur un corpus déposé
 produit un rapport servable. Le navigateur, lui, n'est pas testé en CI (le dépôt
 n'en a pas) ; il a été vérifié à la main, capture à l'appui (D-296).
@@ -77,7 +77,7 @@ def test_a_queue_of_recipes_runs_to_a_report(tmp_path: Path) -> None:
     client = _client(tmp_path)
     corpus_id = _corpus(client)
     reponse = client.post(
-        "/api/runs/recipe",
+        "/api/runs",
         headers=_CSRF,
         json={
             "corpus_id": corpus_id,
@@ -107,7 +107,7 @@ def test_the_page_loads_the_recipe_script(tmp_path: Path) -> None:
     recettes : la page doit au moins charger le script qui le fait."""
     page = _client(tmp_path).get("/benchmark")
     assert '<script src="/static/js/recipes.js"></script>' in page.text
-    assert 'data-mode="recipe"' in page.text
+    assert 'id="recipe-picker"' in page.text
     script = _client(tmp_path).get("/static/js/recipes.js")
     assert script.status_code == 200
     assert "/api/recipes" in script.text
@@ -140,7 +140,7 @@ def test_a_recipe_whose_brick_misses_a_required_setting_is_named(
     _tout_disponible(monkeypatch)
     client = _client(tmp_path)
     reponse = client.post(
-        "/api/runs/recipe",
+        "/api/runs",
         headers=_CSRF,
         json={
             "corpus_id": _corpus(client),
@@ -154,7 +154,7 @@ def test_a_recipe_whose_brick_misses_a_required_setting_is_named(
 def test_an_empty_queue_is_refused(tmp_path: Path) -> None:
     client = _client(tmp_path)
     reponse = client.post(
-        "/api/runs/recipe",
+        "/api/runs",
         headers=_CSRF,
         json={"corpus_id": _corpus(client), "entries": []},
     )
@@ -164,8 +164,8 @@ def test_an_empty_queue_is_refused(tmp_path: Path) -> None:
 def test_the_composer_names_a_setting_its_brick_refuses(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """``POST /api/runs`` : un concurrent dont la brique ne se construit pas
-    (Kraken sans modèle) était **lancé**, et le job échouait. Refusé désormais
+    """``POST /api/runs`` : une entrée dont la brique ne se construit pas
+    (Kraken sans modèle) était **lancée**, et le job échouait (D-296). Refusée
     avant le lancement, en 422, le réglage nommé — la règle de
     ``cinoc run --check`` et de la spec déposée."""
     _tout_disponible(monkeypatch)
@@ -173,7 +173,10 @@ def test_the_composer_names_a_setting_its_brick_refuses(
     reponse = client.post(
         "/api/runs",
         headers=_CSRF,
-        json={"corpus_id": _corpus(client), "competitors": [{"engine": "kraken"}]},
+        json={
+            "corpus_id": _corpus(client),
+            "entries": [{"recipe": "ocr_simple", "choices": {"ocr": "kraken"}}],
+        },
     )
     assert reponse.status_code == 422, reponse.json()
     assert "model" in reponse.json()["detail"]

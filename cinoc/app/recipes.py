@@ -25,12 +25,10 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Annotated
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from cinoc.app.evaluation_views import EvaluationOptions, plan_evaluation
 from cinoc.domain.artifacts import ArtifactType
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.errors import CinocError
@@ -67,6 +65,20 @@ CORR = ArtifactType.CORRECTED_TEXT
 LAYOUT, ALTO, PAGE = ArtifactType.LAYOUT, ArtifactType.ALTO_XML, ArtifactType.PAGE_XML
 ENTITIES = ArtifactType.ENTITIES
 
+#: Moteurs OCR du socle, dans l'ordre de préférence : ``tesseract`` d'abord,
+#: le seul qui tourne sur une machine nue sans poids ni clé.
+_OCR = (
+    "tesseract", "kraken", "pero", "calamari",
+    "mistral_ocr", "google_vision", "azure_di",
+)
+
+
+#: Reconnaisseurs par région qui ne lisent **aucun pixel** : le rejeu lit un
+#: texte figé par identifiant de région. Le découper exigerait Pillow et une
+#: vraie image — ce que la démo et la CI n'ont pas — pour n'en rien faire.
+_SANS_PIXELS = frozenset({"precomputed_region"})
+
+
 def roles() -> Mapping[str, Role]:
     """Rôles connus des recettes, avec les briques proposées pour chacun.
 
@@ -84,11 +96,7 @@ def roles() -> Mapping[str, Role]:
         return tuple(sorted(providers_for_mode(mode)))
     return {
         "preprocess": Role((IMAGE,), (IMAGE,), ("preprocess",)),
-        "ocr": Role(
-            (IMAGE,),
-            (RAW,),
-            ("tesseract", "kraken", "pero", "calamari", "precomputed"),
-        ),
+        "ocr": Role((IMAGE,), (RAW,), (*_OCR, "precomputed")),
         # Ordre = préférence : le premier est le défaut d'une recette qui ne
         # choisit pas. ``tesseract_layout`` ouvre la marche parce qu'il est le
         # seul à ne rien exiger — ni poids, ni SDK, ni adresse — et parce que
@@ -107,6 +115,10 @@ def roles() -> Mapping[str, Role]:
                 "doclayout_yolo",
                 "pp_doclayout",
                 "remote_segmenter",
+                # Le rejeu d'une mise en page figée (``<doc>.layout.json``) :
+                # comme ``precomputed`` pour l'OCR, il sert la démo, la CI, et
+                # « segmenter une fois, comparer plusieurs lectures dessus ».
+                "precomputed_layout",
                 # Dernier : il ne segmente rien lui-même, il *branche* ce qu'on
                 # lui nomme. Utile partout, défaut nulle part — et réservé à la
                 # CLI (``CLI_ONLY_KINDS``), donc jamais proposé par le web.
@@ -118,12 +130,18 @@ def roles() -> Mapping[str, Role]:
         # ``tesseract_layout`` d'abord : il rend un **sous-layout**, donc le
         # fan-out greffe de vraies lignes. Les reconnaisseurs qui ne rendent que
         # du texte plat donnent une ligne par bloc — correct, mais une page de
-        # trois blocs y perd ses vingt lignes.
+        # trois blocs y perd ses vingt lignes. Tout OCR convient au bloc
+        # découpé, et tout VLM qui sait transcrire une image : le mode
+        # ``zero_shot`` n'est posé que sur les briques qui le déclarent.
         "region_recognizer": Role(
             (LAYOUT, IMAGE),
             (LAYOUT,),
-            ("tesseract_layout", "tesseract", "kraken"),
+            (
+                "tesseract_layout", *_OCR, "precomputed_region",
+                *fournisseurs("zero_shot"),
+            ),
             fanout=True,
+            mode="zero_shot",
         ),
         "reading_order": Role((LAYOUT,), (LAYOUT,), ("reading_order",)),
         "structured_correction": Role(
@@ -151,7 +169,11 @@ def roles() -> Mapping[str, Role]:
             fournisseurs("text_and_image"),
             mode="text_and_image",
         ),
+        # Les entités se lisent sur le texte le plus abouti : brut après un OCR,
+        # corrigé après un LLM. Deux rôles, une brique — le pool est indexé par
+        # type, une étape doit dire lequel elle lit.
         "ner": Role((RAW,), (ENTITIES,), ("ner",)),
+        "ner_corrige": Role((CORR,), (ENTITIES,), ("ner",)),
         "vote": Role((RAW,), (RAW,), ("vote",)),
     }
 
@@ -172,6 +194,11 @@ class RecipeStep(BaseModel):
     #: Étapes que cette étape **fusionne**. Une fusion ne se décrit pas par
     #: ``after`` : le pool étant indexé par type, une seule source y survivrait.
     merge: tuple[str, ...] = ()
+    #: Étape **facultative** : absente du pipeline tant que l'entrée ne la
+    #: retient pas (les entités nommées, l'export ALTO). Toujours une feuille :
+    #: aucune étape ne la suit ni ne la fusionne, et la chaîne implicite
+    #: (``after`` absent) l'enjambe — l'ôter ne peut rien débrancher.
+    optional: bool = False
 
 
 class Recipe(BaseModel):
@@ -196,30 +223,8 @@ class Recipe(BaseModel):
         return role.briques[0]
 
 
-_Nom = Annotated[str, StringConstraints(min_length=1, max_length=64)]
-_Valeur = Annotated[str, StringConstraints(max_length=4096)] | int | float | bool
+#: Réglages par nom d'instance (``adapter_kwargs`` d'une spec).
 Settings = dict[str, dict[str, str | int | float | bool]]
-
-
-class RecipeEntry(BaseModel):
-    """Une entrée de la file : une recette, ses briques choisies, ses réglages.
-
-    Ce que la page empile et que ``plan_recipe_run`` assemble en **un** run :
-    plusieurs entrées se comparent comme les concurrents du composeur. Les
-    réglages ne sont pas filtrés ici — ``check_spec_settings`` les confronte à la
-    déclaration de chaque brique, comme pour une spec déposée.
-    """
-
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    recipe: _Nom
-    #: Brique retenue par étape (``{"ocr": "kraken"}``). Absente → le défaut.
-    choices: dict[_Nom, _Nom] = Field(default_factory=dict, max_length=32)
-    #: Réglages par étape (``{"ocr": {"model": "…"}}``), ajoutés à ceux de la
-    #: recette.
-    params: dict[_Nom, dict[_Nom, _Valeur]] = Field(
-        default_factory=dict, max_length=32
-    )
 
 
 def load_recipes(directory: Path | None = None) -> tuple[Recipe, ...]:
@@ -240,6 +245,7 @@ def load_recipes(directory: Path | None = None) -> tuple[Recipe, ...]:
 def _valider(recette: Recipe, fichier: str) -> None:
     """Refuse au chargement ce qui ne pourrait pas s'exécuter."""
     vus: set[str] = set()
+    facultatives: set[str] = set()
     for step in recette.steps:
         if step.role not in roles():
             raise RecipeError(
@@ -267,7 +273,16 @@ def _valider(recette: Recipe, fichier: str) -> None:
                 f"recette {fichier} : l'étape {step.id!r} vient après "
                 f"{step.after!r}, qui n'est pas déclarée avant elle."
             )
+        suivies = {*step.merge, *((step.after,) if step.after else ())}
+        if suivies & facultatives:
+            raise RecipeError(
+                f"recette {fichier} : l'étape {step.id!r} dépend d'une étape "
+                f"facultative ({sorted(suivies & facultatives)}) — une étape "
+                "facultative est une feuille, l'ôter ne doit rien débrancher."
+            )
         vus.add(step.id)
+        if step.optional:
+            facultatives.add(step.id)
 
 
 def plan_from_recipe(
@@ -275,28 +290,50 @@ def plan_from_recipe(
     *,
     choices: Mapping[str, str] | None = None,
     params: Mapping[str, Mapping[str, str | int | float | bool]] | None = None,
-) -> tuple[PipelineSpec, dict[str, dict[str, str | int | float | bool]]]:
+    optional: Sequence[str] = (),
+) -> tuple[PipelineSpec, Settings]:
     """Construit la ``PipelineSpec`` d'une recette, briques choisies.
 
     ``choices`` remplace la brique d'une étape (par identifiant d'étape) ;
-    ``params`` ajoute ou remplace ses paramètres. Tout le reste — types, câblage,
-    fan-out — vient du **rôle**, pas de la recette : c'est ce qui garantit qu'une
-    recette ne peut pas décrire une spec mal typée.
+    ``params`` ajoute ou remplace ses paramètres ; ``optional`` retient des
+    étapes facultatives. Tout le reste — types, câblage, fan-out — vient du
+    **rôle**, pas de la recette : c'est ce qui garantit qu'une recette ne peut
+    pas décrire une spec mal typée. Le **nom** du pipeline vient de ce qui a
+    été construit (:func:`pipeline_name`), jamais du chemin qui l'a demandé.
     """
     choisies = dict(choices or {})
     reglages = {k: dict(v) for k, v in (params or {}).items()}
-    for quoi, cles in (("choix", choisies), ("réglages", reglages)):
-        inconnues = sorted(set(cles) - {s.id for s in recipe.steps})
+    retenues = set(optional)
+    ids = [s.id for s in recipe.steps]
+    facultatives = {s.id for s in recipe.steps if s.optional}
+    for quoi, cles in (
+        ("choix", choisies), ("réglages", reglages), ("étapes retenues", retenues)
+    ):
+        inconnues = sorted(set(cles) - set(ids))
         if inconnues:
             raise RecipeError(
                 f"recette {recipe.name!r} : {quoi} pour des étapes inconnues "
-                f"{inconnues} (étapes : {[s.id for s in recipe.steps]})."
+                f"{inconnues} (étapes : {ids})."
             )
+    if retenues - facultatives:
+        raise RecipeError(
+            f"recette {recipe.name!r} : {sorted(retenues - facultatives)} ne "
+            f"sont pas facultatives (facultatives : {sorted(facultatives)})."
+        )
+    ecartees = sorted((set(choisies) | set(reglages)) & (facultatives - retenues))
+    if ecartees:
+        raise RecipeError(
+            f"recette {recipe.name!r} : choix ou réglages pour des étapes "
+            f"facultatives non retenues {ecartees} — ils seraient ignorés."
+        )
 
     etapes: list[PipelineStep] = []
-    kwargs: dict[str, dict[str, str | int | float | bool]] = {}
+    kwargs: Settings = {}
+    marques: list[tuple[RecipeStep, str, Mapping[str, object]]] = []
     precedente: str | None = None
     for step in recipe.steps:
+        if step.optional and step.id not in retenues:
+            continue
         role = roles()[step.role]
         brique = choisies.get(step.id) or recipe.brique_de(step)
         # La brique fixée par l'auteur peut sortir du rôle ; celle d'un choix,
@@ -307,7 +344,12 @@ def plan_from_recipe(
                 f"pas proposé pour le rôle {step.role!r} "
                 f"(attendu parmi {list(role.briques)})."
             )
-        nom = f"{brique}:{step.id}"
+        reglage = {
+            **_identite(brique, step.id, role.mode),
+            **step.params,
+            **reglages.get(step.id, {}),
+        }
+        nom = _nom_instance(brique, reglage)
         if step.merge:
             etapes.append(
                 PipelineStep(
@@ -334,23 +376,59 @@ def plan_from_recipe(
                     output_types=role.sorties,
                     inputs_from=inputs_from,
                     fanout=role.fanout,
-                    crop=role.fanout,
+                    crop=role.fanout and brique not in _SANS_PIXELS,
                 )
             )
-        reglage = {
-            **_identite(brique, step.id, role.mode),
-            **step.params,
-            **reglages.get(step.id, {}),
-        }
         kwargs[nom] = reglage
-        precedente = step.id
+        marques.append((step, brique, reglage))
+        if not step.optional:
+            precedente = step.id
 
     spec = PipelineSpec(
-        name=recipe.name,
+        name=pipeline_name(recipe, marques),
         initial_inputs=(ArtifactType.IMAGE,),
         steps=tuple(etapes),
     )
     return spec, kwargs
+
+
+def pipeline_name(
+    recipe: Recipe, steps: Sequence[tuple[RecipeStep, str, Mapping[str, object]]]
+) -> str:
+    """Le nom d'un pipeline : **la recette, puis ce qui la distingue**.
+
+    ``ocr_simple · tesseract``, ``ocr_puis_llm · tesseract → ollama
+    (qwen2.5:3b)``, ``segmentation_puis_lecture · tesseract_layout → tesseract
+    + alto``. Une étape y figure si sa brique est un **choix** (son rôle en
+    propose plusieurs) ou si elle reçoit un **modèle** ; une étape facultative
+    retenue s'ajoute en ``+ <étape>``. La brique est écrite même quand c'est le
+    défaut : un nom qui la tairait changerait de sens le jour où le défaut
+    change, et ``cinoc compare`` apparierait deux pipelines différents.
+
+    C'est la **seule** règle de nommage (D-298) : la CLI, la page et la
+    correction passent toutes par ici, donc un même pipeline porte le même nom
+    par toute entrée. Ce qui reste identique (mêmes briques, mêmes modèles,
+    d'autres réglages) se départage en ``#n`` dans le run.
+    """
+    marques: list[str] = []
+    retenues: list[str] = []
+    for step, brique, reglage in steps:
+        if step.optional:
+            retenues.append(f" + {step.id}")
+            continue
+        modele = reglage.get("model")
+        if len(roles()[step.role].briques) > 1 or modele:
+            marques.append(f"{brique} ({modele})" if modele else brique)
+    nom = recipe.name + (f" · {' → '.join(marques)}" if marques else "")
+    return (nom + "".join(retenues))[:120]
+
+
+def _nom_instance(brique: str, reglage: Mapping[str, object]) -> str:
+    """``<brique>:<libellé>`` — le libellé, ou la source rejouée, que la brique
+    portera ; ``<brique>`` nu pour une brique qui ne se nomme pas (le registre
+    vérifie que le module construit porte bien ce nom)."""
+    libelle = reglage.get("label") or reglage.get("source_label")
+    return f"{brique}:{libelle}" if isinstance(libelle, str) and libelle else brique
 
 
 def _identite(
@@ -391,151 +469,6 @@ def describe(recipe: Recipe, lang: str = "fr") -> str:
     return recipe.title.get(lang) or recipe.title.get("fr") or recipe.name
 
 
-def plan_recipe_run(
-    corpus: CorpusSpec,
-    entries: Sequence[RecipeEntry],
-    *,
-    run_id: str | None,
-    options: EvaluationOptions | None = None,
-) -> RunSpec:
-    """``RunSpec`` d'une **file** de recettes, sur un corpus donné : un run, un
-    pipeline par entrée, comparés dans le même rapport.
-
-    Assembler une spec est un acte de la couche ``app`` : les feuilles de
-    transport (CLI, web) choisissent les recettes et le corpus, jamais la forme
-    du résultat. Un garde-fou d'architecture le vérifie.
-
-    Deux entrées qui emploient la **même** brique aux **mêmes** réglages la
-    partagent (une lecture, pas deux) ; aux réglages différents — deux modèles
-    sous ``vlm_seul`` —, la seconde prend un libellé à part, sinon ses réglages
-    écraseraient ceux de la première. Notation : ``plan_evaluation`` (D-297).
-    """
-    if not entries:
-        raise RecipeError("file de recettes : au moins une recette requise.")
-    pipelines: list[PipelineSpec] = []
-    kwargs: Settings = {}
-    vus: dict[str, int] = {}
-    for rang, entree in enumerate(entries, start=1):
-        pipeline, reglages = plan_from_recipe(
-            recipe_by_name(entree.recipe),
-            choices=entree.choices,
-            params=entree.params,
-        )
-        pipeline = _sans_collision(pipeline, reglages, kwargs, rang)
-        vus[pipeline.name] = vus.get(pipeline.name, 0) + 1
-        if vus[pipeline.name] > 1:
-            pipeline = pipeline.model_copy(
-                update={"name": f"{pipeline.name} #{vus[pipeline.name]}"}
-            )
-        pipelines.append(pipeline)
-    try:
-        notation = plan_evaluation(pipelines, corpus, options)
-    except CinocError as exc:
-        raise RecipeError(str(exc)) from exc
-    return RunSpec(
-        corpus=corpus,
-        pipelines=tuple(pipelines),
-        evaluation=notation.evaluation,
-        adapter_kwargs=kwargs,
-        run_id=run_id,
-        metadata=notation.metadata,
-    )
-
-
-def recipe_entries(
-    names: Sequence[str],
-    *,
-    bricks: Sequence[str] = (),
-    settings: Sequence[str] = (),
-) -> tuple[RecipeEntry, ...]:
-    """La file d'une ligne de commande (``--recipe``, ``--brick``, ``--set``).
-
-    ``[N:]étape=brique`` et ``[N:]étape.réglage=valeur`` (valeur lue comme en
-    YAML : ``300`` est un entier). Sans ``N:``, chaque recette qui a l'étape ;
-    ``N:`` vise la N-ième. Une étape qu'aucune recette visée ne porte est
-    refusée — un réglage lu par personne serait ignoré en silence. Le reste est
-    vérifié comme pour la page (``plan_recipe_run``, ``check_spec_settings``).
-    """
-    if not names:
-        raise RecipeError("file de recettes : au moins une recette requise.")
-    recettes = [recipe_by_name(nom) for nom in names]
-    choix: list[dict[str, str]] = [{} for _ in recettes]
-    reglages: list[Settings] = [{} for _ in recettes]
-    for texte in bricks:
-        rangs, etape, brique = _affectation(texte, "--brick", len(recettes))
-        for i in _portees(recettes, rangs, etape, f"--brick {texte!r}"):
-            choix[i][etape] = brique
-    for texte in settings:
-        rangs, cle, brut = _affectation(texte, "--set", len(recettes))
-        etape, point, reglage = cle.partition(".")
-        if not point or not reglage:
-            raise RecipeError(
-                f"--set {texte!r} : forme attendue [N:]étape.réglage=valeur."
-            )
-        valeur = yaml.safe_load(brut) if brut.strip() else ""
-        if not isinstance(valeur, (str, int, float, bool)):
-            raise RecipeError(f"--set {texte!r} : une valeur simple est attendue.")
-        for i in _portees(recettes, rangs, etape, f"--set {texte!r}"):
-            reglages[i].setdefault(etape, {})[reglage] = valeur
-    return tuple(
-        RecipeEntry(recipe=nom, choices=choix[i], params=reglages[i])
-        for i, nom in enumerate(names)
-    )
-
-
-def _affectation(texte: str, quoi: str, n: int) -> tuple[list[int], str, str]:
-    """``[N:]clé=valeur`` → (rangs, clé, valeur) ; rang lu avant le ``=``."""
-    tete, egal, valeur = texte.partition("=")
-    rang, deux_points, cle = tete.rpartition(":")
-    if not egal or not cle:
-        raise RecipeError(f"{quoi} {texte!r} : forme attendue [N:]clé=valeur.")
-    if not deux_points:
-        return list(range(n)), cle, valeur
-    if not rang.isdigit() or not 1 <= int(rang) <= n:
-        raise RecipeError(
-            f"{quoi} {texte!r} : rang {rang!r} hors de la file (1 à {n})."
-        )
-    return [int(rang) - 1], cle, valeur
-
-
-def _portees(
-    recettes: Sequence[Recipe], rangs: list[int], etape: str, ou: str
-) -> list[int]:
-    """Les recettes visées qui ont l'étape ; aucune → refus nommé."""
-    portees = [i for i in rangs if etape in {s.id for s in recettes[i].steps}]
-    if not portees:
-        connues = sorted({s.id for i in rangs for s in recettes[i].steps})
-        raise RecipeError(
-            f"{ou} : aucune recette visée n'a d'étape {etape!r} "
-            f"(étapes : {connues})."
-        )
-    return portees
-
-
-def _sans_collision(
-    pipeline: PipelineSpec, reglages: Settings, pris: Settings, rang: int
-) -> PipelineSpec:
-    """Range les réglages d'un pipeline dans ``pris`` ; une brique déjà prise
-    sous d'**autres** réglages est renommée ``<kind>:<libellé>-<rang>``."""
-    etapes: list[PipelineStep] = []
-    for etape in pipeline.steps:
-        nom, reglage = etape.adapter_name, reglages[etape.adapter_name]
-        if nom in pris and pris[nom] != reglage:
-            libelle = reglage.get("label")
-            if not isinstance(libelle, str):
-                raise RecipeError(
-                    f"file de recettes : la brique {nom!r} revient avec "
-                    "d'autres réglages, et ne porte pas de libellé qui "
-                    "permettrait de la distinguer."
-                )
-            reglage = {**reglage, "label": f"{libelle}-{rang}"}
-            nom = f"{nom.split(':', 1)[0]}:{reglage['label']}"
-            etape = etape.model_copy(update={"adapter_name": nom})
-        pris[nom] = reglage
-        etapes.append(etape)
-    return pipeline.model_copy(update={"steps": tuple(etapes)})
-
-
 def spec_for_corpus(document: str, corpus: CorpusSpec, *, run_id: str) -> RunSpec:
     """Lit une spec **déposée** et la lie au corpus fourni par l'appelant.
 
@@ -567,8 +500,8 @@ def referenced_kinds(spec: RunSpec) -> set[str]:
     """Les ``kind`` de briques qu'une spec met en jeu.
 
     Le nom d'adapter suit la convention ``<kind>:<label>`` : c'est ce qui permet
-    d'appliquer à une spec **arbitraire** les mêmes gardes qu'à un concurrent du
-    composeur, sans avoir à comprendre la spec.
+    d'appliquer à une spec **arbitraire** les mêmes gardes qu'à une file de
+    recettes, sans avoir à comprendre la spec.
     """
     return {
         etape.adapter_name.split(":", 1)[0]
@@ -580,17 +513,15 @@ def referenced_kinds(spec: RunSpec) -> set[str]:
 __all__ = [
     "RECIPES_DIR",
     "Recipe",
-    "RecipeEntry",
     "RecipeError",
     "RecipeStep",
     "Role",
     "describe",
     "load_recipes",
+    "pipeline_name",
     "plan_from_recipe",
-    "plan_recipe_run",
     "referenced_kinds",
     "spec_for_corpus",
     "recipe_by_name",
-    "recipe_entries",
     "roles",
 ]

@@ -1,6 +1,11 @@
-"""**Une seule politique de vues** (P5g 3, D-297) : un même pipeline, qu'il
-vienne du composeur, d'une recette ou du planificateur de correction, est noté
-sous les **mêmes** vues — mêmes noms, mêmes métriques, même convention.
+"""**Une seule politique de vues** (P5g 3, D-297) : un même pipeline est noté
+sous les **mêmes** vues — mêmes noms, mêmes métriques, même convention —, et
+deux pipelines qui produisent la même chose le sont aussi.
+
+Depuis D-298 il n'y a plus qu'un constructeur (la file de recettes) : les tests
+qui confrontaient le composeur, une recette et le planificateur de correction
+sont devenus des tautologies et ont été retirés ; restent ceux qui disent ce que
+la politique décide.
 
 Avant, trois rapports différents pour un même pipeline : le composeur notait le
 texte sous le profil ``standard`` (dix colonnes), les recettes et la correction
@@ -17,9 +22,7 @@ from pathlib import Path
 
 import pytest
 
-from cinoc.app.correction_planning import plan_correction_run
-from cinoc.app.recipes import RecipeEntry, plan_recipe_run
-from cinoc.app.run_planning import Competitor, plan_benchmark_run
+from cinoc.app.recipe_queue import RecipeEntry, plan_recipe_run
 from cinoc.domain.artifacts import ArtifactType
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.documents import DocumentRef, GroundTruthRef
@@ -63,99 +66,43 @@ def _vues(spec: RunSpec) -> list[dict[str, object]]:
     return [v.model_dump(mode="json") for v in spec.evaluation.views]
 
 
-def _composeur(
-    corpus: CorpusSpec, comp: Competitor, tmp_path: Path, **options: object
-) -> RunSpec:
-    return plan_benchmark_run((comp,), corpus, "r", **options)(tmp_path)  # type: ignore[arg-type]
-
-
-_PAIRES = [
-    pytest.param(
-        Competitor(engine="tesseract"),
-        RecipeEntry(recipe="ocr_simple"),
-        id="ocr-seul",
-    ),
-    pytest.param(
-        Competitor(engine="tesseract", mode="text_only", llm="ollama", model="m"),
-        RecipeEntry(
-            recipe="ocr_puis_llm",
-            choices={"correction": "ollama"},
-            params={"correction": {"model": "m"}},
-        ),
-        id="ocr-puis-llm",
-    ),
-    pytest.param(
-        Competitor(engine="ollama", mode="zero_shot", model="m"),
-        RecipeEntry(
-            recipe="vlm_seul",
-            choices={"vlm": "ollama"},
-            params={"vlm": {"model": "m"}},
-        ),
-        id="vlm-seul",
-    ),
-]
-
-_GTS = [
-    pytest.param((ArtifactType.RAW_TEXT,), id="texte"),
-    pytest.param((ArtifactType.RAW_TEXT, ArtifactType.REFERENCE_TEXT), id="ref"),
-    pytest.param((), id="sans-gt"),
-]
-
-
-@pytest.mark.parametrize("gts", _GTS)
-@pytest.mark.parametrize(("comp", "entree"), _PAIRES)
-def test_composer_and_recipe_score_a_pipeline_under_the_same_views(
-    tmp_path: Path,
-    comp: Competitor,
-    entree: RecipeEntry,
-    gts: tuple[ArtifactType, ...],
-) -> None:
-    corpus = _corpus(tmp_path, *gts)
-    composeur = _composeur(corpus, comp, tmp_path)
-    recette = plan_recipe_run(corpus, (entree,), run_id="r")
-    assert _vues(recette) == _vues(composeur)
-    assert recette.evaluation.analyses == composeur.evaluation.analyses
-    assert recette.metadata == composeur.metadata
-
-
 def test_a_hybrid_and_a_layout_recipe_share_the_structure_view(
     tmp_path: Path,
 ) -> None:
-    """Segmentation puis reconnaissance par bloc : mêmes vues texte **et**
-    structure, par le composeur (concurrent hybride) et par une recette."""
+    """Segmentation puis reconnaissance par bloc, avec ou sans prétraitement
+    ni ordre de lecture : mêmes vues texte **et** structure."""
     corpus = _corpus(tmp_path, ArtifactType.RAW_TEXT, ArtifactType.LAYOUT)
-    composeur = _composeur(
-        corpus,
-        Competitor(engine="tesseract", segmenter="tesseract_layout"),
-        tmp_path,
+    hybride = plan_recipe_run(
+        corpus, (RecipeEntry(recipe="segmentation_puis_lecture"),), run_id="r"
     )
     recette = plan_recipe_run(
         corpus, (RecipeEntry(recipe="presse_ancienne"),), run_id="r"
     )
-    assert _vues(recette) == _vues(composeur)
+    assert _vues(recette) == _vues(hybride)
     assert "structure" in {v.name for v in recette.evaluation.views}
 
 
 @pytest.mark.parametrize(
-    "gts",
+    ("gts", "attendues"),
     [
-        pytest.param((ArtifactType.LAYOUT,), id="alto-seul"),
-        pytest.param((ArtifactType.RAW_TEXT, ArtifactType.LAYOUT), id="alto+texte"),
-        pytest.param((), id="sans-gt"),
+        pytest.param((ArtifactType.LAYOUT,), {"structure"}, id="alto-seul"),
+        pytest.param(
+            (ArtifactType.RAW_TEXT, ArtifactType.LAYOUT),
+            {"texte", "texte (lignes)", "structure"},
+            id="alto+texte",
+        ),
+        pytest.param((), {"texte"}, id="sans-gt"),
     ],
 )
-def test_correction_and_its_recipe_score_under_the_same_views(
-    tmp_path: Path, gts: tuple[ArtifactType, ...]
+def test_the_correction_is_scored_where_its_corpus_can_judge_it(
+    tmp_path: Path, gts: tuple[ArtifactType, ...], attendues: set[str]
 ) -> None:
-    """Le planificateur de correction et la recette ``alto_corrige`` décrivent
-    le même pipeline : ALTO source → projection + correction structurée."""
+    """La recette ``alto_corrige`` : la structure n'est notée que sur une GT
+    ``LAYOUT``, le texte que sur une GT ``RAW_TEXT`` (seul repli : la vue texte
+    d'un corpus sans aucune GT, exécutable et non noté)."""
     corpus = _corpus(tmp_path, *gts)
-    correction = plan_correction_run(corpus, "r")
-    recette = plan_recipe_run(
-        corpus, (RecipeEntry(recipe="alto_corrige"),), run_id="r"
-    )
-    assert _vues(recette) == _vues(correction)
-    assert recette.metadata == correction.metadata
+    recette = plan_recipe_run(corpus, (RecipeEntry(recipe="alto_corrige"),), run_id="r")
+    assert {v.name for v in recette.evaluation.views} == attendues
 
 
 def test_scoring_options_apply_to_recipes_and_correction(tmp_path: Path) -> None:
@@ -168,19 +115,17 @@ def test_scoring_options_apply_to_recipes_and_correction(tmp_path: Path) -> None
     options = EvaluationOptions(
         normalization="nfc", char_exclude=",;", metric_profile="essentiel"
     )
-    composeur = plan_benchmark_run(
-        (Competitor(engine="tesseract"),), corpus, "r", options=options
-    )(tmp_path)
     recette = plan_recipe_run(
         corpus, (RecipeEntry(recipe="ocr_simple"),), run_id="r", options=options
     )
-    assert _vues(recette) == _vues(composeur)
     (texte,) = (v for v in recette.evaluation.views if v.name == "texte")
     assert texte.normalization_profile == "nfc"
     assert texte.char_exclude == ",;"
     assert texte.metric_names == ("cer", "wer", "mer")
 
-    correction = plan_correction_run(corpus, "r", options=options)
+    correction = plan_recipe_run(
+        corpus, (RecipeEntry(recipe="alto_corrige"),), run_id="r", options=options
+    )
     (texte,) = (v for v in correction.evaluation.views if v.name == "texte")
     assert texte.normalization_profile == "nfc"
     assert texte.metric_names == ("cer", "wer", "mer")
@@ -198,5 +143,5 @@ def test_a_view_is_only_declared_when_it_can_score_something(
     )
     assert "structure" not in {v.name for v in recette.evaluation.views}
     avec_layout = _corpus(tmp_path, ArtifactType.RAW_TEXT, ArtifactType.LAYOUT)
-    ocr = _composeur(avec_layout, Competitor(engine="tesseract"), tmp_path)
+    ocr = plan_recipe_run(avec_layout, (RecipeEntry(recipe="ocr_simple"),), run_id="r")
     assert "structure" not in {v.name for v in ocr.evaluation.views}

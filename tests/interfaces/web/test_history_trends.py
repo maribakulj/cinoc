@@ -20,7 +20,6 @@ def _history_body(tmp_path: Path, store: HistoryStore, lang: str = "fr") -> str:
             tmp_path / "reports",
             Jinja2Templates(directory=_TEMPLATES_DIR),
             statuses=lambda: (),
-            segmenters=lambda: (),
             third_party=lambda: (),
             history_store=store,
         )

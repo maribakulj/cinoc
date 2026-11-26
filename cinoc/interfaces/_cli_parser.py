@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING
 
 # Les producteurs de correction sont lus en couche `app`, pas recopiés ici :
 # une interface qui énumère est une interface qui dérive.
-from cinoc.app.correction_planning import PRODUCERS
+from cinoc.app.alto_corpus import PRODUCERS
 from cinoc.app.evaluation_views import METRIC_PROFILES
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -291,7 +291,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=[],
         metavar="NOM",
         help="Instancie une recette (`cinoc list recipes`) sur le corpus de "
-        "CONFIG, comme l'onglet « Recette » du web. Répétable : les recettes "
+        "CONFIG, comme la file du banc d'essai web. Répétable : les recettes "
         "se comparent dans un seul run.",
     )
     run_cmd.add_argument(
@@ -310,6 +310,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Avec --recipe : un réglage d'étape (ocr.lang=fra+deu, "
         "vlm.model=MODÈLE), valeur lue comme en YAML. "
         "`cinoc list engines <brique>` liste les réglages.",
+    )
+    run_cmd.add_argument(
+        "--with",
+        dest="with_steps",
+        action="append",
+        default=[],
+        metavar="[N:]ÉTAPE",
+        help="Avec --recipe : retient une étape facultative (ner, alto), "
+        "comme sa case dans la page. `cinoc list recipes` les liste.",
     )
     _add_scoring(run_cmd, "Avec --recipe : ")
     run_cmd.add_argument(
@@ -425,7 +434,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     hybrid_cmd = subparsers.add_parser(
         "hybrid",
-        help="Transcription hybride : segmente → OCR par bloc → ALTO/page.",
+        help="Transcription hybride : segmente → OCR par bloc → ALTO/page "
+        "(la recette segmentation_puis_lecture, export ALTO retenu).",
     )
     hybrid_cmd.add_argument("images", help="Dossier d'images à transcrire.")
     hybrid_cmd.add_argument(
@@ -445,15 +455,15 @@ def build_parser() -> argparse.ArgumentParser:
         "(openai, anthropic, mistral) ; precomputed_region en démo.",
     )
     hybrid_cmd.add_argument(
-        "--label", default="hybrid", help="Étiquette du moteur (identité)."
-    )
-    hybrid_cmd.add_argument(
         "--source-label",
         default=None,
         help="Jeu de textes par région (mode precomputed_region).",
     )
     hybrid_cmd.add_argument(
-        "--lang", default="fra", help="Langue OCR par bloc (moteurs OCR réels)."
+        "--lang",
+        default=None,
+        help="Langue OCR par bloc (défaut : celui du moteur ; moteurs qui la "
+        "déclarent).",
     )
     hybrid_cmd.add_argument(
         "--model",

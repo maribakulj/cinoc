@@ -59,8 +59,8 @@ _IMAGE_MAGIC = (b"\x89PNG\r\n\x1a\n", b"\xff\xd8\xff", b"II*\x00", b"MM\x00*")
 #: ``"text"`` (un ``.txt`` fourni), ``"layout"`` (dérivée de l'ALTO/PAGE du même
 #: document). La distinction n'est pas cosmétique : une GT dérivée de l'ALTO est
 #: le texte que le pipeline **part corriger**, donc la comparer à lui-même donne
-#: un zéro par construction. Le lanceur de correction s'en sert pour refuser
-#: (cf. ``correction_planning.ground_truth_is_its_own_source``).
+#: un zéro par construction. La file de recettes s'en sert pour refuser
+#: (cf. ``alto_corpus.ground_truth_is_its_own_source``).
 GT_SOURCE_KEY = "gt_source"
 
 #: Basename sûr → garantit un ``DocumentRef.id`` valide (pas d'espace/accent/slash).

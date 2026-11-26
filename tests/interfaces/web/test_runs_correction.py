@@ -1,8 +1,11 @@
-"""Lanceur web de la **post-correction structurée** : ses cinq gardes.
+"""Lanceur web de la **post-correction structurée** : ses gardes.
 
 `cinoc correct` existait depuis août 2026 sans surface web (dette
 `correction-web`, `D-228`). Ce qui se joue ici n'est pas seulement d'exposer une
-route : c'est de la rendre **incapable de mentir**.
+capacité : c'est de la rendre **incapable de mentir**. Depuis D-298 la
+correction est la recette ``alto_corrige``, lancée par ``POST /api/runs`` comme
+toute file : ses gardes sont celles de toute recette, plus le refus de la
+vérité terrain extraite de l'ALTO, qui vaut pour toute entrée.
 
 Le piège est silencieux. Un corpus déposé en images + ALTO, sans transcription à
 part, voit sa vérité terrain **dérivée de cet ALTO** — c'est-à-dire du texte dont
@@ -57,29 +60,37 @@ def _upload(client: TestClient, *, transcription: bool) -> str:
 
 
 def _post(client: TestClient, body: dict) -> object:
-    return client.post("/api/runs/correction", headers=_CSRF, json=body)
+    """``{corpus_id, producer?, model?, host?}`` → une file d'une entrée
+    ``alto_corrige``, ses réglages sur l'étape ``correction``."""
+    reglages = {k: v for k, v in body.items() if k != "corpus_id"}
+    entree = {"recipe": "alto_corrige", "params": {"correction": reglages}}
+    return client.post(
+        "/api/runs",
+        headers=_CSRF,
+        json={"corpus_id": body["corpus_id"], "entries": [entree]},
+    )
 
 
 def test_write_is_csrf_protected(tmp_path: Path) -> None:
     client = _client(tmp_path)
-    resp = client.post("/api/runs/correction", json={"corpus_id": "x"})
+    resp = client.post(
+        "/api/runs",
+        json={"corpus_id": "x", "entries": [{"recipe": "alto_corrige"}]},
+    )
     assert resp.status_code == 403
 
 
 def test_public_mode_refuses_the_correction(tmp_path: Path) -> None:
     """Le producteur utile parle à un LLM local, qu'un Space exposé n'a pas."""
     client = _client(tmp_path, public_mode=True)
-    resp = _post(client, {"corpus_id": "peu-importe"})
+    resp = _post(client, {"corpus_id": _upload(client, transcription=True)})
     assert resp.status_code == 403
     assert "public" in resp.json()["detail"]
 
 
 def test_an_unknown_corpus_is_404(tmp_path: Path) -> None:
     resp = _post(_client(tmp_path), {"corpus_id": "inexistant"})
-    # 409 si la lib manque sur la machine de test : la garde de dispo passe
-    # avant celle du corpus, et c'est voulu (on ne cherche pas un corpus pour
-    # une capacité indisponible).
-    assert resp.status_code in {404, 409}
+    assert resp.status_code == 404
 
 
 @pytest.mark.skipif(not _a_saknussemm, reason="extra [saknussemm] absent")
@@ -111,7 +122,8 @@ def test_a_corpus_with_its_own_transcription_is_accepted(tmp_path: Path) -> None
 
 @pytest.mark.skipif(not _a_saknussemm, reason="extra [saknussemm] absent")
 def test_ollama_without_a_model_is_422(tmp_path: Path) -> None:
-    """Le planificateur l'exige ; la route le traduit au lieu de laisser passer."""
+    """La brique l'exige à sa construction ; la route le traduit en 422 au
+    lieu de laisser passer."""
     client = _client(tmp_path)
     corpus_id = _upload(client, transcription=True)
 
@@ -135,23 +147,20 @@ def test_the_library_absence_is_named_before_the_run(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """409 **avant** le lancement, pas un échec d'étape en plein run."""
-    from cinoc.app import engines
     from cinoc.app.engines import EngineStatus
 
+    # La sonde du catalogue — celle qui grise la brique — est celle du lanceur.
     monkeypatch.setattr(
-        engines,
-        "correction_status",
+        "cinoc.app.recipe_catalog.correction_status",
         lambda **_: EngineStatus(
-            kind="saknussemm", label="x", available=False, detail="absent"
+            kind="structured_correction",
+            label="x",
+            available=False,
+            detail="saknussemm absent",
         ),
     )
-    monkeypatch.setattr(
-        "cinoc.interfaces.web.app.correction_status",
-        lambda: EngineStatus(
-            kind="saknussemm", label="x", available=False, detail="absent"
-        ),
-    )
-    resp = _post(_client(tmp_path), {"corpus_id": "x"})
+    client = _client(tmp_path)
+    resp = _post(client, {"corpus_id": _upload(client, transcription=True)})
     assert resp.status_code == 409
     assert "saknussemm" in resp.json()["detail"]
 

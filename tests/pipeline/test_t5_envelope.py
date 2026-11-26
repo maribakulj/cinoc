@@ -1,11 +1,12 @@
 """Enveloppe T5 — pipeline hybride seg → reconnaissance par région → ALTO.
 
 Les 3 briques ``precomputed_layout`` / ``precomputed_region`` / ``alto_assembler``
-implémentent le contrat ``Module`` et sont **composées par un planner**
-(``run_planning.plan_hybrid_run``, finition T5). Ce fichier garde (1) qu'elles
-restent enregistrées au socle (anti-retrait), (2) que le planner produit la bonne
-composition seg → fanout → assemblage, et (3) qu'elle **s'exécute de bout en
-bout** : le texte de l'ALTO assemblé est celui reconnu par région.
+implémentent le contrat ``Module`` et sont **composées par une recette**
+(``segmentation_puis_lecture``, export ALTO retenu — D-298 ; c'était le
+planificateur hybride). Ce fichier garde (1) qu'elles restent enregistrées au
+socle (anti-retrait), (2) que la recette produit la bonne composition seg →
+fanout → assemblage, et (3) qu'elle **s'exécute de bout en bout** : le texte de
+l'ALTO assemblé est celui reconnu par région.
 """
 
 from __future__ import annotations
@@ -14,10 +15,11 @@ import json
 from pathlib import Path
 
 from cinoc.app.modules.registry import ModuleRegistry, register_default_modules
-from cinoc.app.structure_planning import plan_hybrid_run
+from cinoc.app.recipe_queue import RecipeEntry, plan_recipe_run
 from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.layout import CanonicalLayout, LayoutPage, Region
+from cinoc.domain.run_spec import RunSpec
 from cinoc.evaluation.representations import load_representation
 from cinoc.pipeline.executor import PipelineExecutor
 
@@ -31,27 +33,39 @@ def _registered_kinds() -> set[str]:
     return set(registry.kinds())
 
 
+def _hybrid(**choices: str) -> RunSpec:
+    """La recette hybride, export ALTO retenu ; ``reco.source_label=eng`` pour
+    le rejeu par région."""
+    replay = choices.get("reco") == "precomputed_region"
+    return plan_recipe_run(
+        CorpusSpec(name="c", documents=()),
+        (
+            RecipeEntry(
+                recipe="segmentation_puis_lecture",
+                choices=choices,
+                params={"reco": {"source_label": "eng"}} if replay else {},
+                optional=("alto",),
+            ),
+        ),
+        run_id="r",
+    )
+
+
 def test_t5_bricks_stay_registered() -> None:
     """Garde : les 3 briques de l'enveloppe hybride restent au socle.
 
-    Leur retrait casserait la composition produite par ``plan_hybrid_run`` — ce
+    Leur retrait casserait la composition de la recette hybride — ce
     test échoue si on les déregistre par erreur.
     """
     assert set(T5_ENVELOPE) <= _registered_kinds()
 
 
 def test_hybrid_planner_composes_the_three_bricks() -> None:
-    """``plan_hybrid_run`` (mode démo) fabrique seg → reco région (fanout) → ALTO."""
-    run_spec = plan_hybrid_run(
-        CorpusSpec(name="c", documents=()),
-        "r",
-        segmenter="precomputed_layout",
-        ocr="precomputed_region",
-        source_label="eng",
-    )(Path("/unused"))
+    """La recette (mode démo) fabrique seg → reco région (fanout) → texte, ALTO."""
+    run_spec = _hybrid(seg="precomputed_layout", reco="precomputed_region")
     spec = run_spec.pipelines[0]
-    assert tuple(s.id for s in spec.steps) == ("segment", "recognize", "assemble")
-    segment, recognize, assemble = spec.steps
+    assert tuple(s.id for s in spec.steps) == ("seg", "reco", "texte", "alto")
+    segment, recognize, _texte, assemble = spec.steps
     assert segment.adapter_name == "precomputed_layout"
     assert segment.output_types == (ArtifactType.LAYOUT,)
     # Étage 2 : reconnaissance par région (fan-out couche 4), LAYOUT+IMAGE → LAYOUT.
@@ -60,32 +74,30 @@ def test_hybrid_planner_composes_the_three_bricks() -> None:
     assert recognize.crop is False  # precomputed lit par region_id, aucun pixel
     assert recognize.input_types == (ArtifactType.LAYOUT, ArtifactType.IMAGE)
     assert recognize.output_types == (ArtifactType.LAYOUT,)
-    assert recognize.inputs_from == {ArtifactType.LAYOUT: "segment"}
+    assert recognize.inputs_from == {
+        ArtifactType.LAYOUT: "seg",
+        ArtifactType.IMAGE: "__initial__",
+    }
     # Étage 3 : assemblage LAYOUT rempli → ALTO_XML.
-    assert assemble.adapter_name == "alto_assembler"
+    assert assemble.adapter_name == "alto_assembler:alto"
     assert assemble.output_types == (ArtifactType.ALTO_XML,)
-    assert assemble.inputs_from == {ArtifactType.LAYOUT: "recognize"}
+    assert assemble.inputs_from == {ArtifactType.LAYOUT: "reco"}
     assert run_spec.adapter_kwargs["precomputed_region:eng"] == {
         "source_label": "eng"
     }
 
 
-def test_hybrid_planner_real_default_is_ppdoclayout_plus_tesseract() -> None:
-    """Par défaut le planner compose un pipeline **réel** : pp_doclayout + tesseract
-    par région (le crop est injecté par l'orchestrateur, cf. F-4c)."""
-    run_spec = plan_hybrid_run(CorpusSpec(name="c", documents=()), "r")(
-        Path("/unused")
-    )
-    segment, recognize, assemble = run_spec.pipelines[0].steps
-    assert segment.adapter_name == "pp_doclayout"
-    assert recognize.adapter_name == "tesseract:hybrid"
+def test_hybrid_recipe_real_bricks_crop_each_block() -> None:
+    """Un pipeline **réel** : pp_doclayout + tesseract par région (le crop est
+    injecté par l'orchestrateur, cf. F-4c)."""
+    run_spec = _hybrid(seg="pp_doclayout", reco="tesseract")
+    segment, recognize, _texte, assemble = run_spec.pipelines[0].steps
+    assert segment.adapter_name == "pp_doclayout:seg"
+    assert recognize.adapter_name == "tesseract:reco"
     assert recognize.fanout is True
     assert recognize.crop is True  # OCR réel par bloc → découpe l'image
-    assert assemble.adapter_name == "alto_assembler"
-    assert run_spec.adapter_kwargs["tesseract:hybrid"] == {
-        "label": "hybrid",
-        "lang": "fra",
-    }
+    assert assemble.adapter_name == "alto_assembler:alto"
+    assert run_spec.adapter_kwargs["tesseract:reco"] == {"label": "reco"}
 
 
 def _scene(tmp_path: Path, regions: dict[str, str]) -> Artifact:
@@ -118,14 +130,8 @@ def _scene(tmp_path: Path, regions: dict[str, str]) -> Artifact:
 
 
 def test_hybrid_planner_spec_runs_end_to_end(tmp_path: Path) -> None:
-    """La spec du planner s'exécute : l'ALTO assemblé porte le texte reconnu."""
-    run_spec = plan_hybrid_run(
-        CorpusSpec(name="c", documents=()),
-        "r",
-        segmenter="precomputed_layout",
-        ocr="precomputed_region",
-        source_label="eng",
-    )(tmp_path)
+    """La spec de la recette s'exécute : l'ALTO assemblé porte le texte reconnu."""
+    run_spec = _hybrid(seg="precomputed_layout", reco="precomputed_region")
     spec = run_spec.pipelines[0]
     registry = ModuleRegistry()
     register_default_modules(registry)
