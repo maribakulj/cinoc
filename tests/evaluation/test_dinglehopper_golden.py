@@ -56,7 +56,7 @@ Ce qui tourne où :
   dinglehopper ``--no-deps``) : dinglehopper est **exécuté**, et ses chiffres
   comme les maillons qui l'utilisent doivent égaler le golden.
 
-Régénérer (dans un environnement d'oracle, cf. ``README.md`` §Tests) ::
+Régénérer (dans un environnement d'oracle, cf. ``README.md`` §Development) ::
 
     python tests/evaluation/test_dinglehopper_golden.py
 """
