@@ -359,7 +359,7 @@ for ref, hyp in pairs:
         [tuple(op) for op in opcodes(ref.split(), hyp.split())],
         alignment(ref.split(), hyp.split()),
     ])
-sys.stdout.write(json.dumps(out, ensure_ascii=False))
+sys.stdout.write(json.dumps(out, ensure_ascii=True))
 """
 
 
