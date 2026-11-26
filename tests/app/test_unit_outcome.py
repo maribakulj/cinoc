@@ -397,3 +397,21 @@ def test_statistical_tests_use_complete_cases_and_say_so(tmp_path: Path) -> None
     assert {i.pipeline: i.n_documents for i in payload.intervals} == {"a": 7, "b": 6}
     (significance,) = result.cross_engine
     assert significance.support == 6
+
+
+def test_redacted_workspace_path_is_the_same_on_every_platform() -> None:
+    """Sous Windows le chemin sous le workspace garde ``\\`` : le message
+    nettoyé doit être identique à celui d'un run Linux (déterminisme)."""
+    from cinoc.app.orchestrator import _redact
+
+    windows = _redact(
+        r"échec (trace dans D:\tmp\cinoc-run-x\pipeline0\dump.json)",
+        (),
+        r"D:\tmp\cinoc-run-x",
+    )
+    linux = _redact(
+        "échec (trace dans /tmp/cinoc-run-x/pipeline0/dump.json)",
+        (),
+        "/tmp/cinoc-run-x",
+    )
+    assert windows == linux == "échec (trace dans <workspace>/pipeline0/dump.json)"

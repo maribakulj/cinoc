@@ -513,6 +513,14 @@ def _redact(message: str, secrets: tuple[str, ...], workspace: str) -> str:
     for secret in secrets:
         message = message.replace(secret, _SECRET_PLACEHOLDER)
     message = message.replace(workspace, "<workspace>")
+    # Le chemin sous le workspace garde le séparateur du système : sous Windows
+    # ``<workspace>\pipeline0/dump.json``. Normalisé en ``/``, le message est le
+    # même sur toutes les plateformes, comme le reste du ``RunResult``.
+    message = re.sub(
+        r"<workspace>[^\s'\"]*",
+        lambda m: m.group(0).replace("\\", "/"),
+        message,
+    )
     if len(message) > _MESSAGE_MAX:
         message = message[: _MESSAGE_MAX - 1] + "…"
     return message
