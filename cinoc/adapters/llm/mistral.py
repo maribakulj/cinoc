@@ -11,8 +11,10 @@ Réglages (``InferenceSettings``) : ``temperature``, ``top_p``, ``max_tokens`` e
 
 Délai fini (``timeout``, défaut 600 s, retries compris), passé à **chaque**
 appel (``timeout_ms``) ; client construit avec ``retry_config=None`` — le SDK
-1.12.4 n'en a pas par défaut, on l'écrit pour qu'un défaut futur ne s'ajoute pas
-sous celle de Cinoc : la seule politique de retry est ``call_resilient``.
+3.x n'en a pas par défaut (``retries`` reste non posé), on l'écrit pour qu'un
+défaut futur ne s'ajoute pas sous celle de Cinoc : la seule politique de retry
+est ``call_resilient``. SDK épinglé par majeure (``mistralai>=3,<4``) : le
+client vit dans ``mistralai.client`` depuis la 2.x.
 """
 
 from __future__ import annotations
@@ -24,6 +26,7 @@ from cinoc.adapters._native import sdk_native, served_model
 from cinoc.adapters._resilience import (
     DEFAULT_LLM_TIMEOUT,
     call_resilient,
+    register_close,
     request_timeout,
     step_deadline,
     validate_timeout,
@@ -65,7 +68,7 @@ logger = logging.getLogger(__name__)
 _VERSION = "2.1"
 _DEFAULT_MODEL = "mistral-small-latest"
 
-#: ``finish_reason`` (SDK mistralai 1.12 : ``stop``, ``length``,
+#: ``finish_reason`` (SDK mistralai 3.9 : ``stop``, ``length``,
 #: ``model_length``, ``error``, ``tool_calls``) → raison normalisée.
 #: ``model_length`` = fenêtre du modèle épuisée : une coupure comme ``length``.
 _STOP_REASONS: dict[str, StopReason] = {
@@ -135,16 +138,18 @@ def _mistral_client(
     if not api_key:
         raise AdapterStepError("mistral : MISTRAL_API_KEY manquante.")
     try:
-        from mistralai import Mistral  # type: ignore[import-not-found]
+        from mistralai.client import Mistral  # type: ignore[import-not-found]
     except ImportError as exc:
         raise AdapterStepError(
             "mistral : SDK non installé (pip install 'cinoc[mistral]')."
         ) from exc
     try:
-        # Le SDK mistralai 1.x type strictement ses kwargs/messages ; on lui
-        # passe des dicts valides à l'exécution (cf. tests live). ``ignore`` ciblé.
+        # Le SDK mistralai type strictement ses kwargs/messages ; on lui passe
+        # des dicts valides à l'exécution (cf. tests live). ``ignore`` ciblé.
         # ``retry_config=None`` : une seule politique de retry, celle de Cinoc.
         client = Mistral(api_key=api_key, retry_config=None)
+        if control is not None:
+            register_close(control, client)
 
         def _complete() -> Any:
             timeout = request_timeout(deadline)
@@ -243,7 +248,7 @@ class MistralAdapter:
 
     def effective_settings(self) -> EffectiveSettings:
         """Réglages **effectifs** (défauts compris) : manifeste et empreinte de
-        l'étape. Le SDK mistralai 1.x ne lit aucun endpoint dans
+        l'étape. Le SDK mistralai 3.x ne lit aucun endpoint dans
         l'environnement : la cible est celle du SDK, épinglé par
         ``dependencies_lock``."""
         return llm_effective_settings(
@@ -319,7 +324,7 @@ def list_mistral_models(*, timeout: float = 5.0) -> tuple[str, ...]:
     if not api_key:
         return ()
     try:
-        from mistralai import Mistral  # type: ignore[import-not-found]
+        from mistralai.client import Mistral  # type: ignore[import-not-found]
     except ImportError:
         return ()
     try:

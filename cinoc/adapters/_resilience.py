@@ -2,7 +2,7 @@
 
 **La seule politique de retry** des moteurs distants (P5f 7) : les SDK sont
 construits sans la leur (``max_retries=0`` chez OpenAI et Anthropic,
-``retry_config=None`` chez Mistral — le SDK 1.12.4 n'en a pas par défaut, on
+``retry_config=None`` chez Mistral — le SDK 3.x n'en a pas par défaut, on
 l'écrit pour qu'un défaut futur ne s'ajoute pas en silence). Avant, OpenAI et
 Anthropic retentaient deux fois sous chacune des cinq tentatives de Cinoc :
 jusqu'à 15 appels, invisibles.
@@ -120,10 +120,16 @@ def request_timeout(deadline: Deadline) -> float | None:
 
 def register_close(control: RunControl, client: object) -> None:
     """Annulation câblée *best-effort* : fermer le client interrompt l'appel
-    en vol. Un client sans ``close`` (Mistral 1.x) reste sous le sondage."""
+    en vol. ``close`` (openai, anthropic), sinon la sortie de son contexte
+    (``mistralai`` 3.x n'a que ``__exit__``, qui ferme son transport) ; un
+    client sans l'un ni l'autre reste sous le sondage."""
     close = getattr(client, "close", None)
     if callable(close):
         control.register_cancel_handle(close)
+        return
+    exit_ = getattr(client, "__exit__", None)
+    if callable(exit_):
+        control.register_cancel_handle(lambda: exit_(None, None, None))
 
 
 @dataclass

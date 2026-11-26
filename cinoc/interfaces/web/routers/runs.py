@@ -41,6 +41,7 @@ from cinoc.app.engines import (
     CLI_ONLY_KINDS,
     PUBLIC_ENGINE_KINDS,
     StatusProvider,
+    instance_status,
 )
 from cinoc.app.jobs import JobRunner
 from cinoc.app.modules import ModuleRegistry, register_default_modules
@@ -383,7 +384,7 @@ def build_runs_router(
         registre = ModuleRegistry()
         register_default_modules(registre)
         connus = {s.kind for s in sts} | set(registre.kinds())
-        disponibles = {s.kind for s in sts if s.available}
+        par_kind = {s.kind: s for s in sts}
         for kind in sorted(referenced_kinds(spec)):
             if kind not in connus:
                 raise HTTPException(
@@ -395,12 +396,27 @@ def build_runs_router(
                     detail=f"brique indisponible en mode public : {kind!r} "
                     "(seul le socle gratuit est exécuté).",
                 )
-            # Une brique hors catalogue moteur (projection, assembleur, vote…)
-            # n'a pas de sonde de disponibilité : elle est intégrée, donc prête.
-            if kind in {s.kind for s in sts} and kind not in disponibles:
-                raise HTTPException(
-                    status_code=409, detail=f"brique indisponible : {kind!r}"
-                )
+        # La disponibilité se juge **par instance** : une instance ``openai``
+        # auto-hébergée (``base_url``) n'a pas besoin d'``OPENAI_API_KEY``. Une
+        # brique hors catalogue moteur (projection, assembleur, vote…) n'a pas
+        # de sonde : elle est intégrée, donc prête.
+        for pipeline in spec.pipelines:
+            for etape in pipeline.steps:
+                statut = par_kind.get(etape.adapter_name.split(":", 1)[0])
+                if statut is None:
+                    continue
+                try:
+                    statut = instance_status(
+                        statut, spec.adapter_kwargs.get(etape.adapter_name, {})
+                    )
+                except CinocError as exc:
+                    raise HTTPException(status_code=422, detail=str(exc)) from exc
+                if not statut.available:
+                    raise HTTPException(
+                        status_code=409,
+                        detail=f"brique indisponible : {statut.kind!r} "
+                        f"({statut.detail})",
+                    )
 
     def _corpus_du_depot(corpus_id: str) -> CorpusSpec:
         corpus = corpus_store.get(corpus_id)

@@ -49,6 +49,7 @@ from tests.adapters._native_fakes import (
     AZURE_ENDPOINT,
     OLLAMA_HOST,
     SdkResponse,
+    install_fake_mistralai,
     wire,
 )
 
@@ -148,8 +149,6 @@ def _install(
     anthropic = types.ModuleType("anthropic")
     anthropic.Anthropic = _client("anthropic", ("messages", "create"))  # type: ignore[attr-defined]
     anthropic.AnthropicError = _Erreur  # type: ignore[attr-defined]
-    mistralai = types.ModuleType("mistralai")
-
     class _Mistral:
         def __init__(self, **kwargs: Any) -> None:
             seen.setdefault("mistralai:init", []).append(kwargs)
@@ -173,13 +172,9 @@ def _install(
             self.chat = types.SimpleNamespace(complete=complete)
             self.ocr = types.SimpleNamespace(process=process)
 
-    mistralai.Mistral = _Mistral  # type: ignore[attr-defined]
-    for name, module in (
-        ("openai", openai),
-        ("anthropic", anthropic),
-        ("mistralai", mistralai),
-    ):
+    for name, module in (("openai", openai), ("anthropic", anthropic)):
         monkeypatch.setitem(sys.modules, name, module)
+    install_fake_mistralai(monkeypatch, _Mistral)
     for env in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "MISTRAL_API_KEY"):
         monkeypatch.setenv(env, _SECRET)
 

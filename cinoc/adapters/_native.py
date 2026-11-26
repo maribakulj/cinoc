@@ -14,12 +14,12 @@ pydantic par ``model_dump`` — qui ignore les attributs privés où les SDK ran
 l'identifiant de requête (``_request_id``) et l'espace de travail
 (``_workspace_id``) — avec ``exclude_unset`` : ce qui est arrivé sur le fil,
 sans les défauts que le modèle ajoute. Vérifié sur openai 3.59, anthropic 2.14
-et mistralai 1.12.4 : le dump est égal au corps reçu.
+et mistralai 1.12.4, puis 3.9 (S22, blocs OCR compris) : le dump est égal
+au corps reçu.
 """
 
 from __future__ import annotations
 
-import os
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
@@ -151,20 +151,7 @@ def validate_endpoint(value: object, owner: str) -> str:
     return url
 
 
-def endpoint_from_env(env: str, default: str) -> tuple[str, str]:
-    """``(URL à appeler, URL à écrire)`` pour un endpoint réglable par
-    l'environnement (``OPENAI_BASE_URL``…).
-
-    Lue **une fois**, à la construction du module, et transmise explicitement
-    au client : un SDK qui relirait l'environnement à chaque appel pourrait
-    viser une autre cible que celle inscrite au manifeste.
-    """
-    url = os.environ.get(env, "").strip() or default
-    return url, public_endpoint(url)
-
-
 __all__ = [
-    "endpoint_from_env",
     "native_artifact",
     "public_endpoint",
     "sdk_native",

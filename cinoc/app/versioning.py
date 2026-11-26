@@ -83,7 +83,7 @@ def resolve_code_version() -> str:
 #: Extras qui ne servent qu'aux tests (outillage, oracles) : un run ne les
 #: exécute jamais, leurs versions ne disent rien de ce qu'il a produit.
 _EXTRAS_HORS_RUN = frozenset({"dev", "hipe-oracle"})
-#: Nom de distribution en tête d'une exigence PEP 508 (``mistralai>=1.5,<2``).
+#: Nom de distribution en tête d'une exigence PEP 508 (``mistralai>=3,<4``).
 _NOM = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)")
 _EXTRA = re.compile(r"""extra\s*==\s*["']([^"']+)["']""")
 

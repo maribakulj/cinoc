@@ -297,6 +297,17 @@ def _endpoint(base_url: object, api_key_env: object) -> tuple[str, str | None]:
     return url, api_key_env
 
 
+def instance_key_env(base_url: object, api_key_env: object) -> str | None:
+    """La variable de clé qu'une **instance** exige (``None`` : aucune).
+
+    Même règle que l'adaptateur, pour que la disponibilité d'une instance se
+    décide avant de la construire : un serveur auto-hébergé sans
+    ``api_key_env`` n'a pas besoin d'``OPENAI_API_KEY``. Réglages invalides →
+    ``AdapterStepError``, comme à la construction.
+    """
+    return _endpoint(base_url, api_key_env)[1]
+
+
 class OpenAIAdapter:
     """Adapter OpenAI multi-mode (post-correction texte/image, transcription VLM)."""
 
@@ -424,4 +435,4 @@ class OpenAIAdapter:
         )
 
 
-__all__ = ["OpenAIAdapter"]
+__all__ = ["OpenAIAdapter", "instance_key_env"]

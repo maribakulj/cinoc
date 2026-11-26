@@ -71,3 +71,16 @@ def test_pydantic_field():
     assert m.model_dump()["dl"] == {"remaining_seconds": None}
     m2 = M.model_validate({"dl": {"remaining_seconds": None}})
     assert m2.dl.is_infinite
+
+
+def test_in_seconds_never_exceeds_its_budget_when_the_clock_has_not_ticked(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Horloge figée (Windows : ``monotonic()`` peut rendre deux fois la même
+    valeur) sur un instant où ``(t + 30) - t`` arrondit **au-dessus** de 30 :
+    le temps restant ne dépasse pas pour autant le budget donné."""
+    frozen = 8191.610680565681
+    assert (frozen + 30.0) - frozen > 30.0  # l'arrondi qui faisait rougir la CI
+    monkeypatch.setattr("cinoc.domain.deadline.time.monotonic", lambda: frozen)
+    remaining = Deadline.in_seconds(30.0).remaining_seconds()
+    assert remaining is not None and 0 < remaining <= 30.0

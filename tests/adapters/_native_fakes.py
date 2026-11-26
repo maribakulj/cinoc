@@ -113,14 +113,21 @@ def install_fake_sdks(
     anthropic = types.ModuleType("anthropic")
     anthropic.Anthropic = _client("anthropic", "create")  # type: ignore[attr-defined]
     anthropic.AnthropicError = _Erreur  # type: ignore[attr-defined]
-    mistralai = types.ModuleType("mistralai")
-    mistralai.Mistral = _client("mistral", "complete")  # type: ignore[attr-defined]
-    for name, module in (
-        ("openai", openai),
-        ("anthropic", anthropic),
-        ("mistralai", mistralai),
-    ):
+    for name, module in (("openai", openai), ("anthropic", anthropic)):
         monkeypatch.setitem(sys.modules, name, module)
+    install_fake_mistralai(monkeypatch, _client("mistral", "complete"))
+
+
+def install_fake_mistralai(monkeypatch: pytest.MonkeyPatch, client: type) -> None:
+    """``mistralai`` 3.x factice : le client vit dans ``mistralai.client``
+    (depuis la 2.x), le paquet racine n'exporte plus ``Mistral``."""
+    racine = types.ModuleType("mistralai")
+    racine.__path__ = []  # type: ignore[attr-defined]  # un paquet, pas un module
+    sous = types.ModuleType("mistralai.client")
+    sous.Mistral = client  # type: ignore[attr-defined]
+    racine.client = sous  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "mistralai", racine)
+    monkeypatch.setitem(sys.modules, "mistralai.client", sous)
 
 
 def install_fake_http(
@@ -171,7 +178,7 @@ def set_keys(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def cut_network(monkeypatch: pytest.MonkeyPatch) -> None:
     """Plus aucun SDK importable, plus aucun client HTTP : hors ligne."""
-    for name in ("openai", "anthropic", "mistralai"):
+    for name in ("openai", "anthropic", "mistralai", "mistralai.client"):
         monkeypatch.setitem(sys.modules, name, None)
 
     def refuse(**_: Any) -> httpx.Client:
@@ -189,6 +196,7 @@ __all__ = [
     "SdkResponse",
     "cut_network",
     "install_fake_http",
+    "install_fake_mistralai",
     "install_fake_sdks",
     "set_keys",
     "wire",

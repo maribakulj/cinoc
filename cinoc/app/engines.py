@@ -17,7 +17,7 @@ from __future__ import annotations
 import importlib.util
 import os
 import shutil
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 
 from pydantic import BaseModel, ConfigDict
 
@@ -185,14 +185,46 @@ def _azure_di_status(get_env: EnvProbe) -> EngineStatus:
     )
 
 
-def _openai_status(has_module: ModuleProbe, get_env: EnvProbe) -> EngineStatus:
+def _openai_status(
+    has_module: ModuleProbe,
+    get_env: EnvProbe,
+    key_env: str | None = "OPENAI_API_KEY",
+) -> EngineStatus:
+    """``key_env`` : la variable de clé de l'instance (``None`` : un serveur
+    auto-hébergé qui n'en demande pas)."""
     if not has_module("openai"):
         detail, ok = "SDK openai non installé (extra [openai])", False
-    elif not get_env("OPENAI_API_KEY"):
-        detail, ok = "clé OPENAI_API_KEY absente", False
+    elif key_env is None:
+        detail, ok = "prêt (SDK ; serveur sans clé — base_url)", True
+    elif not get_env(key_env):
+        detail, ok = f"clé {key_env} absente", False
     else:
         detail, ok = "prêt (SDK + clé)", True
     return EngineStatus(kind="openai", label="OpenAI", available=ok, detail=detail)
+
+
+def instance_status(
+    status: EngineStatus,
+    settings: Mapping[str, object],
+    *,
+    has_module: ModuleProbe = _module_present,
+    get_env: EnvProbe = os.environ.get,
+) -> EngineStatus:
+    """La disponibilité d'une **instance** (un moteur et ses réglages).
+
+    Un moteur se règle par instance : une instance ``openai`` à un ``base_url``
+    auto-hébergé n'exige pas ``OPENAI_API_KEY`` (D-293), et la refuser parce
+    que la clé d'OpenAI manque, c'était juger l'instance sur le moteur. Seul
+    ``openai`` a une cible par instance ; pour tout autre moteur, et pour une
+    instance que le moteur déclare déjà prête, l'état du moteur vaut.
+    Réglages invalides (``base_url`` illisible) → ``AdapterStepError``.
+    """
+    if status.available or status.kind != "openai":
+        return status
+    from cinoc.adapters.llm.openai import instance_key_env  # noqa: PLC0415
+
+    key_env = instance_key_env(settings.get("base_url"), settings.get("api_key_env"))
+    return _openai_status(has_module, get_env, key_env)
 
 
 def _anthropic_status(has_module: ModuleProbe, get_env: EnvProbe) -> EngineStatus:
@@ -491,6 +523,7 @@ __all__ = [
     "preprocess_status",
     "providers_for_mode",
     "engine_statuses",
+    "instance_status",
     "ner_status",
     "segmenter_statuses",
 ]

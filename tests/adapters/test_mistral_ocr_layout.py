@@ -189,8 +189,59 @@ def _execute(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, scenario: str) -> 
     )
 
 
-def test_version_relevee_le_texte_change() -> None:
-    assert MistralOCRAdapter(label="ocr").version == "1.2"
+def test_version_relevee_les_blocs_sont_demandes() -> None:
+    """1.2 : le texte sans syntaxe ; 1.3 : la requête demande les blocs — le
+    sidecar et le ``LAYOUT`` changent, une archive 1.2 est ré-exécutée."""
+    assert MistralOCRAdapter(label="ocr").version == "1.3"
+
+
+def test_la_requete_demande_les_blocs_et_le_layout_arrive(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """De bout en bout sous un SDK factice (seul le transport est faux) : la
+    requête demande ``include_blocks`` et des confiances **par bloc**, la
+    réponse de la cassette OCR 4 traverse ``sdk_native`` et devient un
+    ``LAYOUT`` — S19 était dormant faute de cette demande (D-291)."""
+    from tests.adapters._native_fakes import (  # noqa: PLC0415
+        SdkResponse,
+        install_fake_mistralai,
+    )
+
+    appels: list[dict[str, Any]] = []
+
+    class _Mistral:
+        def __init__(self, **_: Any) -> None:
+            def process(**kwargs: Any) -> SdkResponse:
+                appels.append(kwargs)
+                return SdkResponse.model_validate(_response("blocs"))
+
+            self.ocr = type("ocr", (), {"process": staticmethod(process)})()
+
+    install_fake_mistralai(monkeypatch, _Mistral)
+    monkeypatch.setenv("MISTRAL_API_KEY", "sk-test")
+    image = tmp_path / "page.png"
+    image.write_bytes(b"\x89PNG\r\n\x1a\n")
+    out = MistralOCRAdapter(label="ocr").execute(
+        {
+            ArtifactType.IMAGE: Artifact(
+                id="d1:img", document_id="d1", type=ArtifactType.IMAGE, uri=str(image)
+            )
+        },
+        {},
+        RunContext(
+            document_id="d1", code_version="t", pipeline_name="p",
+            workspace_uri=str(tmp_path),
+        ),
+        RunControl(),
+    )
+    (appel,) = appels
+    assert appel["include_blocks"] is True
+    assert appel["confidence_scores_granularity"] == "block"
+    layout = CanonicalLayout.model_validate_json(
+        Path(out.artifacts[ArtifactType.LAYOUT].uri).read_bytes()
+    )
+    assert layout == layout_from_response(_response("blocs"))
+    assert len(layout.pages[0].regions) == 7
 
 
 def test_adaptateur_publie_le_layout_depuis_le_corps_garde(

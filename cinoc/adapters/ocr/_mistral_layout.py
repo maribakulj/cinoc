@@ -41,9 +41,10 @@ dans l'ordre de lecture du modèle.
 Format lu : modèles du SDK ``mistralai`` 3.9 (``OCRPageObject.blocks``,
 ``OCRBlockConfidenceScores``) et documentation « Basic OCR » (modèle
 ``mistral-ocr-4-1``). La cassette de test est **construite** d'après eux, à
-confirmer sur une réponse réelle. Le SDK 1.x épinglé aujourd'hui ne demande pas
-les blocs et les **retire** de la réponse qu'il décode : la projection ne sert
-donc qu'une fois le SDK relevé.
+confirmer sur une réponse réelle. L'adaptateur demande les blocs
+(``include_blocks``, ``confidence_scores_granularity="block"``) sous le SDK
+épinglé ``mistralai>=3,<4`` ; la 1.x ne les demandait pas et les retirait de la
+réponse qu'elle décodait.
 """
 
 from __future__ import annotations

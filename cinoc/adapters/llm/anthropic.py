@@ -15,9 +15,12 @@ fournisseurs — une spec peut les nommer d'un même geste — mais **refuse** u
 valeur pour ceux-là au lieu de l'ignorer, et le manifeste écrit ``None`` (non
 transmis) : le banc ne prétend pas avoir fixé ce qu'il ne pouvait pas fixer.
 
-Cible : ``ANTHROPIC_BASE_URL``, que le SDK lit en silence, est lue à la
-construction, transmise au client et écrite dans les réglages effectifs
-(``base_url``, défaut du SDK compris) — manifeste et empreinte de l'étape.
+Cible : l'endpoint d'Anthropic, **transmis explicitement** au client et écrit
+dans les réglages effectifs (``base_url``) — manifeste et empreinte de l'étape.
+``ANTHROPIC_BASE_URL``, que le SDK lirait en silence faute d'un ``base_url``
+explicite, **n'est plus lue** (même règle qu'``OPENAI_BASE_URL`` en S21) : une
+variable du processus redirigeait toutes les instances sans que la spec le dise.
+Posée, elle vaut un avertissement, et l'appel part à l'endpoint d'Anthropic.
 
 Délai fini (``timeout``, défaut 600 s, retries compris), passé à **chaque**
 appel ; client construit avec ``max_retries=0`` (le SDK retentait deux fois
@@ -27,9 +30,11 @@ sous chacune des cinq tentatives de Cinoc) : la seule politique de retry est
 
 from __future__ import annotations
 
+import logging
+import os
 from typing import Any, ClassVar
 
-from cinoc.adapters._native import endpoint_from_env, sdk_native, served_model
+from cinoc.adapters._native import sdk_native, served_model
 from cinoc.adapters._resilience import (
     DEFAULT_LLM_TIMEOUT,
     call_resilient,
@@ -70,9 +75,12 @@ from cinoc.pipeline.types import RunContext, StepOutput
 #: ne change pas.
 _VERSION = "2.1"
 _DEFAULT_MODEL = "claude-haiku-4-5-20251001"
-#: Endpoint lu dans l'environnement par le SDK anthropic ; défaut = celui du SDK.
-_BASE_URL_ENV = "ANTHROPIC_BASE_URL"
+#: L'endpoint d'Anthropic — celui de la table de tarifs (``pricing.json``).
 _DEFAULT_BASE_URL = "https://api.anthropic.com"
+#: Variable que le SDK lit quand on ne lui passe pas d'endpoint ; plus lue.
+_RETIRED_BASE_URL_ENV = "ANTHROPIC_BASE_URL"
+
+logger = logging.getLogger(__name__)
 
 #: ``stop_reason`` (SDK anthropic 2.14 : ``end_turn``, ``max_tokens``,
 #: ``stop_sequence``, ``tool_use``, ``pause_turn``, ``refusal``,
@@ -127,8 +135,6 @@ def _anthropic_client(
     control: RunControl | None = None,
 ) -> LLMCompletion:
     """Appel ``messages.create`` partagé (texte ou multimodal)."""
-    import os
-
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         raise AdapterStepError("anthropic : ANTHROPIC_API_KEY manquante.")
@@ -254,9 +260,14 @@ class AnthropicAdapter:
         self._prompt = (
             prompt if prompt is not None else default_prompt_for_role(self._role)
         )
-        self._base_url, self._public_base_url = endpoint_from_env(
-            _BASE_URL_ENV, _DEFAULT_BASE_URL
-        )
+        if os.environ.get(_RETIRED_BASE_URL_ENV, "").strip():
+            logger.warning(
+                "[anthropic] %s n'est plus lue : la cible n'est pas un réglage "
+                "du processus — appel à %s.",
+                _RETIRED_BASE_URL_ENV,
+                _DEFAULT_BASE_URL,
+            )
+        self._base_url = _DEFAULT_BASE_URL
 
     @property
     def name(self) -> str:
@@ -274,7 +285,7 @@ class AnthropicAdapter:
             role=self._role,
             prompt=self._prompt,
             settings=self._settings,
-            base_url=self._public_base_url,
+            base_url=self._base_url,
         )
 
     @property
