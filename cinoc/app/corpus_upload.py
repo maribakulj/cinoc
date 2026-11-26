@@ -21,6 +21,7 @@ radical) matérialisée sous ``dest`` — prête pour un run.
 from __future__ import annotations
 
 import io
+import logging
 import re
 import shutil
 import threading
@@ -32,6 +33,7 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from cinoc.app.corpus_import import materialize_corpus
+from cinoc.app.loader import dump_corpus_spec, load_corpus_spec
 from cinoc.app.security import validated_path
 from cinoc.domain.artifacts import ArtifactType
 from cinoc.domain.corpus import CorpusSpec
@@ -45,6 +47,14 @@ from cinoc.formats.layout_xml import layout_xml_kind, parse_layout_xml
 #: Quotas (généreux mais bornés) — un Space gratuit n'est pas un entrepôt.
 MAX_ZIP_BYTES = 25 * 1024 * 1024
 MAX_TOTAL_UNCOMPRESSED = 200 * 1024 * 1024
+logger = logging.getLogger(__name__)
+
+#: Description d'un corpus déposé, écrite dans son dossier : c'est elle que le
+#: registre relit au démarrage (D-307). Le format est celui de ``cinoc corpus
+#: import`` — chemins relatifs au fichier, donc un dossier de données déplacé
+#: reste lisible.
+CORPUS_FILE = "corpus.yaml"
+
 #: Une archive **locale** (``cinoc corpus import zip``) n'est pas un dépôt sur
 #: un serveur partagé : seul le plafond décompressé (anti-bombe) la borne. Le
 #: quota du dépôt web refusait `37-GT-BNL` (29 Mo zippé) à la CLI.
@@ -252,23 +262,46 @@ def _read_layout(path: Path) -> CanonicalLayout:
 
 
 class CorpusStore:
-    """Registre **en mémoire** des corpus uploadés (id → ``CorpusSpec`` + dossier).
+    """Registre des corpus déposés (id → ``CorpusSpec`` + dossier).
 
-    Le contenu vit sous ``base_dir`` (éphémère sur HF — acceptable : ce sont des
-    **entrées** de travail ; les *résultats* sont, eux, publiés vers un dépôt distant).
+    Chaque corpus vit sous ``base_dir/<id>/`` avec sa description
+    (:data:`CORPUS_FILE`) ; le registre **relit** ce dossier à sa construction.
+    Un serveur relancé sur le même dossier de données retrouve donc ses corpus —
+    il les perdait tous, le dossier étant temporaire et le registre en mémoire
+    (D-307). Un dossier dont la description ne se relit pas est **ignoré, dit**
+    (avertissement), jamais un démarrage en échec.
     """
 
     def __init__(self, base_dir: Path) -> None:
         self._base = base_dir
         self._corpora: dict[str, CorpusSpec] = {}
         self._lock = threading.Lock()
+        self._reload()
+
+    def _reload(self) -> None:
+        if not self._base.is_dir():
+            return
+        for folder in sorted(self._base.iterdir()):
+            description = folder / CORPUS_FILE
+            if not description.is_file():
+                continue
+            try:
+                self._corpora[folder.name] = load_corpus_spec(description)
+            except CinocError as exc:
+                logger.warning(
+                    "[corpus_upload] dégradé : corpus %s ignoré (%s)", folder.name, exc
+                )
+
+    def _register(self, corpus_id: str, spec: CorpusSpec) -> None:
+        dump_corpus_spec(spec, self._base / corpus_id / CORPUS_FILE)
+        with self._lock:
+            self._corpora[corpus_id] = spec
 
     def save(self, name: str, data: bytes) -> tuple[str, CorpusSpec]:
         """Extrait l'archive dans un dossier neuf et enregistre la ``CorpusSpec``."""
         corpus_id = uuid.uuid4().hex
         spec = extract_corpus_zip(data, self._base / corpus_id, name=name or corpus_id)
-        with self._lock:
-            self._corpora[corpus_id] = spec
+        self._register(corpus_id, spec)
         return corpus_id, spec
 
     def materialize(
@@ -290,8 +323,7 @@ class CorpusStore:
         corpus_id = uuid.uuid4().hex
         dest = self._base / corpus_id
         spec = materialize_corpus(dest, builder)
-        with self._lock:
-            self._corpora[corpus_id] = spec
+        self._register(corpus_id, spec)
         return corpus_id, spec
 
     def get(self, corpus_id: str) -> CorpusSpec | None:
@@ -314,6 +346,7 @@ class CorpusStore:
 
 
 __all__ = [
+    "CORPUS_FILE",
     "GT_SOURCE_KEY",
     "LOCAL_MAX_ZIP_BYTES",
     "MAX_ZIP_BYTES",

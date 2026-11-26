@@ -37,7 +37,7 @@ from cinoc.app.corpus_import import (
     resolve_curated_author,
 )
 from cinoc.app.corpus_upload import CorpusStore
-from cinoc.app.data_dir import resolve_data_dir
+from cinoc.app.data_dir import DataDir, resolve_data_dir
 from cinoc.app.engines import (
     EngineStatus,
     engine_statuses,
@@ -109,17 +109,25 @@ def _resolve_reports_dir(reports_dir: Path | str | None) -> Path:
     return Path(env) if env else Path("reports")
 
 
-def _resolve_uploads_dir(uploads_dir: Path | str | None) -> Path:
-    """Dossier des corpus uploadés : argument explicite > dossier temporaire neuf.
+def _runtime_subdir(
+    explicit: Path | str | None, runtime: DataDir, name: str, *, public: bool
+) -> Path:
+    """Dossier d'un état du serveur (corpus déposés, exports ALTO).
 
-    Éphémère par défaut (entrées de travail ; les résultats sont publiés à part).
+    Argument explicite > ``<données>/<name>`` > dossier temporaire neuf **en mode
+    public** : un serveur exposé ne garde pas sur son disque, d'un lancement à
+    l'autre, ce que des visiteurs y ont déposé. Hors mode public, il vit sous le
+    dossier de données — un run relu après redémarrage retrouve les images et
+    l'ALTO de son corpus (D-307).
     """
-    if uploads_dir is not None:
-        return Path(uploads_dir)
-    return Path(tempfile.mkdtemp(prefix="cinoc-uploads-"))
+    if explicit is not None:
+        return Path(explicit)
+    if public:
+        return Path(tempfile.mkdtemp(prefix=f"cinoc-{name}-"))
+    return runtime.path / name
 
 
-def _resolve_public_mode(public_mode: bool | None) -> bool:
+def resolve_public_mode(public_mode: bool | None) -> bool:
     """Mode public (verrou *fail-closed*) : arg explicite > env ``CINOC_PUBLIC_MODE``
     > ``False``.
 
@@ -169,9 +177,10 @@ def create_app(
     # Dossier **inscriptible** (≠ rapports bakés, souvent root-only sur un Space) :
     # l'historique et le puits des rapports de run y vivent. On y recopie la graine
     # des rapports bakés → la vitrine sert depuis un seul dossier inscriptible.
-    runtime_dir = resolve_data_dir(data_dir)
+    is_public = resolve_public_mode(public_mode)
+    runtime = resolve_data_dir(data_dir, public=is_public)
+    runtime_dir = runtime.path
     seed_reports(catalog_dir, runtime_dir)
-    is_public = _resolve_public_mode(public_mode)
     app = FastAPI(title="Cinoc", version=API_VERSION)
     # Ordre : le limiteur (ajouté en dernier) s'exécute en premier → il borne
     # avant tout traitement ; les en-têtes habillent la réponse qui remonte.
@@ -231,10 +240,10 @@ def create_app(
     # Export ALTO : un store disque par application, indexé par run_id. Le sink du
     # runner y dépose les ``ALTO_XML`` produits ; le routeur des rapports les
     # rezippe à la demande (téléchargement par run).
-    alto_store = AltoStore(Path(tempfile.mkdtemp(prefix="cinoc-alto-")))
+    alto_store = AltoStore(_runtime_subdir(None, runtime, "alto", public=is_public))
     # Dossier des corpus déposés : racine des chemins des ``RunResult`` du web
     # (écrits relatifs, relus contre elle par la saveur servie).
-    uploads_root = _resolve_uploads_dir(uploads_dir)
+    uploads_root = _runtime_subdir(uploads_dir, runtime, "uploads", public=is_public)
     runner = JobRunner(
         store=JobStore(),
         registry=registry,
@@ -329,4 +338,5 @@ __all__ = [
     "REPORTS_DIR_ENV",
     "SPACE_ID_ENV",
     "create_app",
+    "resolve_public_mode",
 ]

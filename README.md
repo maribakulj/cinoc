@@ -57,7 +57,11 @@ cinoc serve --reports-dir corpus                         # http://127.0.0.1:8000
 ```
 
 `--reports-dir` serves the `RunResult` JSON of that folder and reads its images
-against it: write `--json` beside the run config, as above.
+against it: write `--json` beside the run config, as above. What you do in the
+page — corpora you upload, runs you launch, their history — is kept in a
+per‑user data folder (`~/.local/share/cinoc` on Linux, `~/Library/Application
+Support/cinoc` on macOS, `%LOCALAPPDATA%\cinoc` on Windows; `CINOC_DATA_DIR`
+to choose another) and survives a restart; `cinoc serve` prints which one it uses.
 
 ## A real result — partial
 

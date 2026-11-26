@@ -7,7 +7,6 @@ pré-calculé en mémoire → ``precomputed`` → CER → ``RunResult`` → HTML
 
 from __future__ import annotations
 
-import os
 import sys
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -60,6 +59,7 @@ from cinoc.interfaces._list_command import (
 )
 from cinoc.interfaces._recipe_spec import scoring_options, spec_loader
 from cinoc.interfaces._run_summary import unit_summary
+from cinoc.interfaces._serve_command import serve_command
 from cinoc.reports import default_report_renderer, render_comparison
 from cinoc.reports.csv_export import run_result_csv
 
@@ -444,69 +444,6 @@ def _compare_command(path_a: str, path_b: str, output: str, lang: str) -> int:
     return 0
 
 
-def _load_dotenv(path: Path = Path(".env")) -> list[str]:
-    """Charge un fichier ``.env`` (``CLE=valeur`` par ligne) dans l'environnement.
-
-    Sans dépendance. **Ne remplace jamais** une variable déjà définie : l'env réel
-    prime (un secret HuggingFace l'emporte sur le ``.env`` local). ``#`` et lignes
-    vides ignorés. Renvoie les **noms** chargés (jamais les valeurs) pour une trace
-    lisible. C'est le moyen d'entrer ses clés en local (``MISTRAL_API_KEY=…``).
-    """
-    if not path.is_file():
-        return []
-    loaded: list[str] = []
-    for raw in path.read_text(encoding="utf-8").splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, _, value = line.partition("=")
-        key = key.strip()
-        if key and key not in os.environ:
-            os.environ[key] = value.strip().strip('"').strip("'")
-            loaded.append(key)
-    return loaded
-
-
-def _serve_command(host: str, port: int, reports_dir: str | None) -> int:
-    # Clés locales depuis ``.env`` (avant tout : la disponibilité des moteurs est
-    # capturée au démarrage). Sur HuggingFace, les secrets du Space priment.
-    loaded = _load_dotenv()
-    if loaded:
-        print(f"Clés chargées depuis .env : {', '.join(loaded)}")
-    # uvicorn = extra [serve], importé paresseusement : la CLI reste utilisable
-    # (demo/run/compare) sans la pile web installée.
-    try:
-        import uvicorn  # type: ignore[import-not-found]
-
-        from cinoc.interfaces.web.app import REPORTS_DIR_ENV
-    except ImportError:
-        print(
-            "Erreur : serveur non installé (pip install 'cinoc[serve]').",
-            file=sys.stderr,
-        )
-        return 1
-    if host not in ("127.0.0.1", "localhost"):
-        # 0.0.0.0 expose le service au réseau : sécurité = responsabilité du
-        # déploiement (reverse-proxy, mode public). On le signale, sans bloquer.
-        print(
-            f"Attention : écoute sur {host} (exposé au réseau). "
-            "En public, placez un reverse-proxy et activez le mode public.",
-            file=sys.stderr,
-        )
-    if reports_dir is not None:
-        os.environ[REPORTS_DIR_ENV] = reports_dir
-    print(f"Cinoc sert sur http://{host}:{port} (Ctrl-C pour arrêter).")
-    # On passe la FACTORY à uvicorn (factory=True), jamais un app de module :
-    # zéro effet de bord à l'import (gate no_side_effect_imports).
-    uvicorn.run(
-        "cinoc.interfaces.web.app:create_app",
-        host=host,
-        port=port,
-        factory=True,
-    )
-    return 0
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -584,7 +521,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "compare":
             return _compare_command(args.run_a, args.run_b, args.output, args.lang)
         if args.command == "serve":
-            return _serve_command(args.host, args.port, args.reports_dir)
+            return serve_command(args.host, args.port, args.reports_dir)
     except (CinocError, OSError) as exc:
         print(f"Erreur : {exc}", file=sys.stderr)
         return 1

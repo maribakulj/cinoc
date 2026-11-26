@@ -14,19 +14,19 @@ from __future__ import annotations
 
 import pytest
 
-from cinoc.interfaces.web.app import _resolve_public_mode
+from cinoc.interfaces.web.app import resolve_public_mode
 
 
 def test_explicit_choice_overrides_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CINOC_PUBLIC_MODE", "true")
-    assert _resolve_public_mode(False) is False
+    assert resolve_public_mode(False) is False
     monkeypatch.setenv("CINOC_PUBLIC_MODE", "false")
-    assert _resolve_public_mode(True) is True
+    assert resolve_public_mode(True) is True
 
 
 def test_env_true_opts_into_the_lock(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CINOC_PUBLIC_MODE", "true")
-    assert _resolve_public_mode(None) is True
+    assert resolve_public_mode(None) is True
 
 
 def test_space_is_not_auto_locked(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -35,4 +35,4 @@ def test_space_is_not_auto_locked(monkeypatch: pytest.MonkeyPatch) -> None:
     # maîtrise sa clé (l'ajoute, l'utilise, la retire). Verrou = opt-in seulement.
     monkeypatch.setenv("SPACE_ID", "user/space")
     monkeypatch.delenv("CINOC_PUBLIC_MODE", raising=False)
-    assert _resolve_public_mode(None) is False
+    assert resolve_public_mode(None) is False

@@ -48,6 +48,16 @@ publier, et son moment, appartiennent au mainteneur.
 
 ### Corrigé
 
+- **`cinoc serve` garde ce qu'on fait dans la page.** Un corpus déposé, un run
+  lancé et son historique disparaissaient au redémarrage : le dossier de
+  données était un temporaire neuf à chaque lancement, et la liste des corpus
+  n'était qu'en mémoire. Le défaut est désormais un dossier **par
+  utilisateur** (`~/.local/share/cinoc`, `~/Library/Application Support/cinoc`,
+  `%LOCALAPPDATA%\cinoc`), `CINOC_DATA_DIR` prime toujours, et le démarrage
+  affiche le dossier retenu. **Changement de comportement** : sans
+  `CINOC_DATA_DIR`, le serveur écrit maintenant sous ce dossier ; le mode
+  public (`CINOC_PUBLIC_MODE=true`) reste éphémère.
+
 - **Sans l'extra `[images]`, l'absence de Pillow se dit une fois.** L'avertissement se répétait à chaque vignette (quatre lignes pour deux pages).
 
 - **Un rapport de la CLI servi par `cinoc serve` retrouve ses images.** Un
