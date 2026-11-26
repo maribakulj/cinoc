@@ -116,8 +116,9 @@ def run_repeatedly(
     """Exécute ``times`` fois et renvoie ``(résultats, fourchettes)``.
 
     ``execute`` reçoit l'index du run (0-based) : l'appelant s'en sert pour
-    nommer ses sorties. Aucun run n'est rejoué ni mis en cache — répéter avec
-    un cache de reprise mesurerait le cache, pas le dispositif.
+    nommer ses sorties (``cinoc run`` y lit l'archive propre à la répétition,
+    ``resume.repetition_dir``). Aucun run n'en relit un autre — répéter sur un
+    même cache de reprise mesurerait le cache, pas le dispositif.
     """
     if times < 1:
         raise CinocError(f"run_repeatedly : {times} runs demandés, minimum 1.")

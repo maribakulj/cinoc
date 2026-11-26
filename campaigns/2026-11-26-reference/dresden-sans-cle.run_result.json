@@ -1,0 +1,5730 @@
+{
+  "schema_version": 5,
+  "manifest": {
+    "run_id": "reference-dresden-sans-cle",
+    "corpus_name": "dresden-k80-1665",
+    "n_documents": 10,
+    "pipeline_specs": [
+      {
+        "name": "E0 · tesseract",
+        "description": "OCR seul (Tesseract Fraktur ; aucun modèle Kurrent).",
+        "initial_inputs": [
+          "image"
+        ],
+        "steps": [
+          {
+            "id": "lecture",
+            "kind": "ocr",
+            "adapter_name": "tesseract:lecture",
+            "params": {},
+            "input_types": [
+              "image"
+            ],
+            "output_types": [
+              "raw_text"
+            ],
+            "inputs_from": {
+              "image": "__initial__"
+            },
+            "fanout": false,
+            "crop": false,
+            "merge_from": []
+          }
+        ]
+      },
+      {
+        "name": "E1 · segmentation → tesseract",
+        "description": "Segmentation Tesseract, OCR par région.",
+        "initial_inputs": [
+          "image"
+        ],
+        "steps": [
+          {
+            "id": "seg",
+            "kind": "segmenter",
+            "adapter_name": "tesseract_layout:seg",
+            "params": {},
+            "input_types": [
+              "image"
+            ],
+            "output_types": [
+              "layout"
+            ],
+            "inputs_from": {
+              "image": "__initial__"
+            },
+            "fanout": false,
+            "crop": false,
+            "merge_from": []
+          },
+          {
+            "id": "reco",
+            "kind": "region_recognizer",
+            "adapter_name": "tesseract:reco",
+            "params": {},
+            "input_types": [
+              "layout",
+              "image"
+            ],
+            "output_types": [
+              "layout"
+            ],
+            "inputs_from": {
+              "layout": "seg",
+              "image": "__initial__"
+            },
+            "fanout": true,
+            "crop": true,
+            "merge_from": []
+          },
+          {
+            "id": "lecture",
+            "kind": "projection",
+            "adapter_name": "layout_to_text:lecture",
+            "params": {},
+            "input_types": [
+              "layout"
+            ],
+            "output_types": [
+              "raw_text"
+            ],
+            "inputs_from": {
+              "layout": "reco"
+            },
+            "fanout": false,
+            "crop": false,
+            "merge_from": []
+          }
+        ]
+      },
+      {
+        "name": "E3 · segmentation → tesseract → saknussemm (règles)",
+        "description": "Validation de chaîne sans clé : correction structurée par règles.",
+        "initial_inputs": [
+          "image"
+        ],
+        "steps": [
+          {
+            "id": "seg",
+            "kind": "segmenter",
+            "adapter_name": "tesseract_layout:seg",
+            "params": {},
+            "input_types": [
+              "image"
+            ],
+            "output_types": [
+              "layout"
+            ],
+            "inputs_from": {
+              "image": "__initial__"
+            },
+            "fanout": false,
+            "crop": false,
+            "merge_from": []
+          },
+          {
+            "id": "reco",
+            "kind": "region_recognizer",
+            "adapter_name": "tesseract:reco",
+            "params": {},
+            "input_types": [
+              "layout",
+              "image"
+            ],
+            "output_types": [
+              "layout"
+            ],
+            "inputs_from": {
+              "layout": "seg",
+              "image": "__initial__"
+            },
+            "fanout": true,
+            "crop": true,
+            "merge_from": []
+          },
+          {
+            "id": "lecture",
+            "kind": "projection",
+            "adapter_name": "layout_to_text:lecture",
+            "params": {},
+            "input_types": [
+              "layout"
+            ],
+            "output_types": [
+              "raw_text"
+            ],
+            "inputs_from": {
+              "layout": "reco"
+            },
+            "fanout": false,
+            "crop": false,
+            "merge_from": []
+          },
+          {
+            "id": "correction",
+            "kind": "structured_correction",
+            "adapter_name": "saknussemm:regles",
+            "params": {},
+            "input_types": [
+              "layout"
+            ],
+            "output_types": [
+              "layout",
+              "corrected_text",
+              "decisions"
+            ],
+            "inputs_from": {
+              "layout": "reco"
+            },
+            "fanout": false,
+            "crop": false,
+            "merge_from": []
+          }
+        ]
+      },
+      {
+        "name": "E5 · qwen2.5vl:3b (local)",
+        "description": "VLM local zero-shot, prompt générique (déclaré au README).",
+        "initial_inputs": [
+          "image"
+        ],
+        "steps": [
+          {
+            "id": "lecture",
+            "kind": "zero_shot",
+            "adapter_name": "ollama:qwen_vlm",
+            "params": {},
+            "input_types": [
+              "image"
+            ],
+            "output_types": [
+              "raw_text"
+            ],
+            "inputs_from": {
+              "image": "__initial__"
+            },
+            "fanout": false,
+            "crop": false,
+            "merge_from": []
+          }
+        ]
+      }
+    ],
+    "adapter_kwargs": {
+      "layout_to_text:lecture": {
+        "label": "lecture"
+      },
+      "ollama:qwen_vlm": {
+        "label": "qwen_vlm",
+        "model": "qwen2.5vl:3b",
+        "host": "http://127.0.0.1:11434",
+        "role": "zero_shot",
+        "max_tokens": 2048,
+        "prompt": "Transcris fidèlement le texte de cette image de document patrimonial. Conserve l'orthographe historique et la ponctuation d'origine. N'ajoute aucun commentaire : réponds par le seul texte transcrit.",
+        "temperature": 0.0,
+        "top_p": null,
+        "seed": 0,
+        "num_ctx": 16384
+      },
+      "saknussemm:regles": {
+        "label": "regles",
+        "producer": "rules"
+      },
+      "tesseract:lecture": {
+        "label": "lecture",
+        "lang": "Fraktur"
+      },
+      "tesseract:reco": {
+        "label": "reco",
+        "lang": "Fraktur"
+      },
+      "tesseract_layout:seg": {
+        "label": "seg",
+        "lang": "Fraktur"
+      }
+    },
+    "view_specs": [
+      {
+        "name": "texte",
+        "description": "Défaut (flat_text) : la sortie la plus aval de chaque chaîne. cer_diplo = convention BNL ſ = s (repli des deux côtés).",
+        "candidate_types": [
+          "corrected_text",
+          "raw_text"
+        ],
+        "projection": null,
+        "projections_by_source_type": {},
+        "normalization_profile": "flat_text",
+        "char_exclude": null,
+        "metric_names": [
+          "cer",
+          "wer",
+          "cer_diplo",
+          "cmer",
+          "mer",
+          "unanchored_trigrams"
+        ],
+        "ignored_dimensions": [],
+        "warnings": []
+      },
+      {
+        "name": "texte (lignes)",
+        "description": "Défaut (keep_line_breaks) : sauts de ligne comptés — le chiffre comparable à dinglehopper.",
+        "candidate_types": [
+          "corrected_text",
+          "raw_text"
+        ],
+        "projection": null,
+        "projections_by_source_type": {},
+        "normalization_profile": "keep_line_breaks",
+        "char_exclude": null,
+        "metric_names": [
+          "cer"
+        ],
+        "ignored_dimensions": [],
+        "warnings": []
+      },
+      {
+        "name": "lecture",
+        "description": "Ablation : l'étape « lecture » de chaque chaîne, avant toute correction (E0/E1 dans les chaînes E2/E3/E4).",
+        "candidate_types": [
+          "raw_text"
+        ],
+        "projection": null,
+        "projections_by_source_type": {},
+        "normalization_profile": "flat_text",
+        "char_exclude": null,
+        "metric_names": [
+          "cer",
+          "wer",
+          "cer_diplo"
+        ],
+        "ignored_dimensions": [],
+        "warnings": [],
+        "target_step": "lecture"
+      },
+      {
+        "name": "sans césure",
+        "description": "Convention ⸗ : un mot coupé en fin de ligne (⸗, -, ‐, ‑, –, ¬ + saut) est recollé des deux côtés ; sauts de ligne comptés comme dans « texte (lignes) ».",
+        "candidate_types": [
+          "corrected_text",
+          "raw_text"
+        ],
+        "projection": null,
+        "projections_by_source_type": {},
+        "normalization_profile": "dehyphenated",
+        "char_exclude": null,
+        "metric_names": [
+          "cer"
+        ],
+        "ignored_dimensions": [],
+        "warnings": []
+      }
+    ],
+    "failure_policy": "exclude",
+    "code_version": "0.1.1.dev159+g78c21e6ef",
+    "started_at": "2026-11-26T19:48:41.774956Z",
+    "completed_at": "2026-11-26T20:37:47.391869Z",
+    "dependencies_lock": {
+      "cinoc": "0.1.1.dev159+g78c21e6ef",
+      "fastapi": "0.165.0",
+      "httpcore": "1.0.9",
+      "httpx": "0.28.1",
+      "jinja2": "3.1.6",
+      "lxml": "6.1.3",
+      "numpy": "2.4.6",
+      "pillow": "13.0.0.post1",
+      "pydantic": "2.13.5",
+      "pytesseract": "0.3.13",
+      "python-multipart": "0.0.32",
+      "pyyaml": "6.0.3",
+      "rapidfuzz": "3.14.6",
+      "saknussemm": "0.9.0",
+      "scipy": "1.18.1",
+      "uvicorn": "0.54.0"
+    },
+    "system_binaries_lock": {
+      "ollama:qwen2.5vl:3b": "fb90415cde1ef08aa669ae74b082d49b158729b6db1ab183c941417d507e71a1",
+      "tesseract": "tesseract 5.3.4",
+      "tesseract:tessdata": "/usr/share/tesseract-ocr/5/tessdata",
+      "tesseract:Fraktur.traineddata": "sha256:ac985c3020e42986f8a19e07f1c1b501d47ed7d8e96de69f685bb907aa8db55c"
+    },
+    "unicode_version": "15.1.0",
+    "module_versions": {
+      "layout_to_text:lecture": "1.0",
+      "ollama:qwen_vlm": "2.1",
+      "saknussemm:regles": "1.1",
+      "tesseract:lecture": "1.0",
+      "tesseract:reco": "1.0",
+      "tesseract_layout:seg": "1.0"
+    },
+    "served_models": {
+      "ollama:qwen_vlm": [
+        "qwen2.5vl:3b"
+      ]
+    },
+    "metadata": {},
+    "artifacts_dir": "archive-dresden"
+  },
+  "pipelines": [
+    {
+      "pipeline": "E0 · tesseract",
+      "view": "texte",
+      "aggregate": [
+        {
+          "metric": "cer",
+          "value": 0.7563446878317089,
+          "support": 10,
+          "expected": 10
+        },
+        {
+          "metric": "wer",
+          "value": 0.998703823720026,
+          "support": 10,
+          "expected": 10
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.7556692077583711,
+          "support": 10,
+          "expected": 10
+        },
+        {
+          "metric": "cmer",
+          "value": 0.752712954960146,
+          "support": 10,
+          "expected": 10
+        },
+        {
+          "metric": "mer",
+          "value": 0.9941935483870967,
+          "support": 10,
+          "expected": 10
+        },
+        {
+          "metric": "unanchored_trigrams",
+          "value": 0.8412429378531073,
+          "support": 10,
+          "expected": 10
+        }
+      ]
+    },
+    {
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "texte",
+      "aggregate": [
+        {
+          "metric": "cer",
+          "value": 0.7774775644118499,
+          "support": 10,
+          "expected": 10
+        },
+        {
+          "metric": "wer",
+          "value": 1.303953337653921,
+          "support": 10,
+          "expected": 10
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.7766090900318441,
+          "support": 10,
+          "expected": 10
+        },
+        {
+          "metric": "cmer",
+          "value": 0.7496278377372534,
+          "support": 10,
+          "expected": 10
+        },
+        {
+          "metric": "mer",
+          "value": 0.9945625308947108,
+          "support": 10,
+          "expected": 10
+        },
+        {
+          "metric": "unanchored_trigrams",
+          "value": 0.8629711177308639,
+          "support": 10,
+          "expected": 10
+        }
+      ]
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "texte",
+      "aggregate": [
+        {
+          "metric": "cer",
+          "value": 0.7774775644118499,
+          "support": 10,
+          "expected": 10
+        },
+        {
+          "metric": "wer",
+          "value": 1.303953337653921,
+          "support": 10,
+          "expected": 10
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.7766090900318441,
+          "support": 10,
+          "expected": 10
+        },
+        {
+          "metric": "cmer",
+          "value": 0.7496278377372534,
+          "support": 10,
+          "expected": 10
+        },
+        {
+          "metric": "mer",
+          "value": 0.9945625308947108,
+          "support": 10,
+          "expected": 10
+        },
+        {
+          "metric": "unanchored_trigrams",
+          "value": 0.8629711177308639,
+          "support": 10,
+          "expected": 10
+        }
+      ]
+    },
+    {
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "texte",
+      "aggregate": [
+        {
+          "metric": "cer",
+          "value": 1.8614232209737829,
+          "support": 4,
+          "expected": 10
+        },
+        {
+          "metric": "wer",
+          "value": 2.484297520661157,
+          "support": 4,
+          "expected": 10
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 1.8522940074906367,
+          "support": 4,
+          "expected": 10
+        },
+        {
+          "metric": "cmer",
+          "value": 0.7685319416255919,
+          "support": 4,
+          "expected": 10
+        },
+        {
+          "metric": "mer",
+          "value": 0.9476670870113493,
+          "support": 4,
+          "expected": 10
+        },
+        {
+          "metric": "unanchored_trigrams",
+          "value": 0.5554396578700324,
+          "support": 4,
+          "expected": 10
+        }
+      ]
+    },
+    {
+      "pipeline": "E0 · tesseract",
+      "view": "texte (lignes)",
+      "aggregate": [
+        {
+          "metric": "cer",
+          "value": 0.7683103348451221,
+          "support": 10,
+          "expected": 10
+        }
+      ]
+    },
+    {
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "texte (lignes)",
+      "aggregate": [
+        {
+          "metric": "cer",
+          "value": 0.7958120235453054,
+          "support": 10,
+          "expected": 10
+        }
+      ]
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "texte (lignes)",
+      "aggregate": [
+        {
+          "metric": "cer",
+          "value": 0.7958120235453054,
+          "support": 10,
+          "expected": 10
+        }
+      ]
+    },
+    {
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "texte (lignes)",
+      "aggregate": [
+        {
+          "metric": "cer",
+          "value": 1.8705524344569286,
+          "support": 4,
+          "expected": 10
+        }
+      ]
+    },
+    {
+      "pipeline": "E0 · tesseract",
+      "view": "lecture",
+      "aggregate": [
+        {
+          "metric": "cer",
+          "value": 0.7563446878317089,
+          "support": 10,
+          "expected": 10
+        },
+        {
+          "metric": "wer",
+          "value": 0.998703823720026,
+          "support": 10,
+          "expected": 10
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.7556692077583711,
+          "support": 10,
+          "expected": 10
+        }
+      ]
+    },
+    {
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "lecture",
+      "aggregate": [
+        {
+          "metric": "cer",
+          "value": 0.7774775644118499,
+          "support": 10,
+          "expected": 10
+        },
+        {
+          "metric": "wer",
+          "value": 1.303953337653921,
+          "support": 10,
+          "expected": 10
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.7766090900318441,
+          "support": 10,
+          "expected": 10
+        }
+      ]
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "lecture",
+      "aggregate": [
+        {
+          "metric": "cer",
+          "value": 0.7774775644118499,
+          "support": 10,
+          "expected": 10
+        },
+        {
+          "metric": "wer",
+          "value": 1.303953337653921,
+          "support": 10,
+          "expected": 10
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.7766090900318441,
+          "support": 10,
+          "expected": 10
+        }
+      ]
+    },
+    {
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "lecture",
+      "aggregate": [
+        {
+          "metric": "cer",
+          "value": 1.8614232209737829,
+          "support": 4,
+          "expected": 10
+        },
+        {
+          "metric": "wer",
+          "value": 2.484297520661157,
+          "support": 4,
+          "expected": 10
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 1.8522940074906367,
+          "support": 4,
+          "expected": 10
+        }
+      ]
+    },
+    {
+      "pipeline": "E0 · tesseract",
+      "view": "sans césure",
+      "aggregate": [
+        {
+          "metric": "cer",
+          "value": 0.7680725798668082,
+          "support": 10,
+          "expected": 10
+        }
+      ]
+    },
+    {
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "sans césure",
+      "aggregate": [
+        {
+          "metric": "cer",
+          "value": 0.7955795772608821,
+          "support": 10,
+          "expected": 10
+        }
+      ]
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "sans césure",
+      "aggregate": [
+        {
+          "metric": "cer",
+          "value": 0.7955795772608821,
+          "support": 10,
+          "expected": 10
+        }
+      ]
+    },
+    {
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "sans césure",
+      "aggregate": [
+        {
+          "metric": "cer",
+          "value": 1.8716627634660419,
+          "support": 4,
+          "expected": 10
+        }
+      ]
+    }
+  ],
+  "documents": [
+    {
+      "document_id": "Mscr.Dresd.K80_177",
+      "pipeline": "E0 · tesseract",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.790886899918633,
+          "support": 1229,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.0,
+          "support": 166,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.790886899918633,
+          "support": 1229,
+          "expected": null
+        },
+        {
+          "metric": "cmer",
+          "value": 0.7883211678832117,
+          "support": 1233,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 1.0,
+          "support": 166,
+          "expected": null
+        },
+        {
+          "metric": "unanchored_trigrams",
+          "value": 0.856858846918489,
+          "support": 503,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_177/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_178",
+      "pipeline": "E0 · tesseract",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7846153846153846,
+          "support": 1040,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.0,
+          "support": 162,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.7836538461538461,
+          "support": 1040,
+          "expected": null
+        },
+        {
+          "metric": "cmer",
+          "value": 0.783109404990403,
+          "support": 1042,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 1.0,
+          "support": 162,
+          "expected": null
+        },
+        {
+          "metric": "unanchored_trigrams",
+          "value": 0.8980477223427332,
+          "support": 461,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_178/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_179",
+      "pipeline": "E0 · tesseract",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7947916666666667,
+          "support": 960,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.0,
+          "support": 131,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.79375,
+          "support": 960,
+          "expected": null
+        },
+        {
+          "metric": "cmer",
+          "value": 0.7931392931392931,
+          "support": 962,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 1.0,
+          "support": 131,
+          "expected": null
+        },
+        {
+          "metric": "unanchored_trigrams",
+          "value": 0.8773148148148148,
+          "support": 432,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_179/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_180",
+      "pipeline": "E0 · tesseract",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7892756349952963,
+          "support": 1063,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.9936708860759493,
+          "support": 158,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.7883349012229539,
+          "support": 1063,
+          "expected": null
+        },
+        {
+          "metric": "cmer",
+          "value": 0.7885338345864662,
+          "support": 1064,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.9936708860759493,
+          "support": 158,
+          "expected": null
+        },
+        {
+          "metric": "unanchored_trigrams",
+          "value": 0.8105515587529976,
+          "support": 417,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_180/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_181",
+      "pipeline": "E0 · tesseract",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7447392497712717,
+          "support": 1093,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.0,
+          "support": 167,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.7438243366880146,
+          "support": 1093,
+          "expected": null
+        },
+        {
+          "metric": "cmer",
+          "value": 0.7413479052823315,
+          "support": 1098,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 1.0,
+          "support": 167,
+          "expected": null
+        },
+        {
+          "metric": "unanchored_trigrams",
+          "value": 0.8554396423248882,
+          "support": 671,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_181/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_182",
+      "pipeline": "E0 · tesseract",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7411764705882353,
+          "support": 1020,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.04,
+          "support": 150,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.7401960784313726,
+          "support": 1020,
+          "expected": null
+        },
+        {
+          "metric": "cmer",
+          "value": 0.7368421052631579,
+          "support": 1026,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.9936305732484076,
+          "support": 157,
+          "expected": null
+        },
+        {
+          "metric": "unanchored_trigrams",
+          "value": 0.85,
+          "support": 600,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_182/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_183",
+      "pipeline": "E0 · tesseract",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7265625,
+          "support": 1024,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.9875776397515528,
+          "support": 161,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.7265625,
+          "support": 1024,
+          "expected": null
+        },
+        {
+          "metric": "cmer",
+          "value": 0.7258536585365853,
+          "support": 1025,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.9875776397515528,
+          "support": 161,
+          "expected": null
+        },
+        {
+          "metric": "unanchored_trigrams",
+          "value": 0.8425760286225402,
+          "support": 559,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_183/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_184",
+      "pipeline": "E0 · tesseract",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7611336032388664,
+          "support": 988,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.0,
+          "support": 144,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.7601214574898786,
+          "support": 988,
+          "expected": null
+        },
+        {
+          "metric": "cmer",
+          "value": 0.75730110775428,
+          "support": 993,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 1.0,
+          "support": 144,
+          "expected": null
+        },
+        {
+          "metric": "unanchored_trigrams",
+          "value": 0.8685831622176592,
+          "support": 487,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_184/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_185",
+      "pipeline": "E0 · tesseract",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.6970837253057385,
+          "support": 1063,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.9936708860759493,
+          "support": 158,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.6961429915333961,
+          "support": 1063,
+          "expected": null
+        },
+        {
+          "metric": "cmer",
+          "value": 0.6842105263157895,
+          "support": 1083,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.9936708860759493,
+          "support": 158,
+          "expected": null
+        },
+        {
+          "metric": "unanchored_trigrams",
+          "value": 0.7819971870604782,
+          "support": 711,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_185/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_186",
+      "pipeline": "E0 · tesseract",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7259343148357871,
+          "support": 883,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.9726027397260274,
+          "support": 146,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.7259343148357871,
+          "support": 883,
+          "expected": null
+        },
+        {
+          "metric": "cmer",
+          "value": 0.7226606538895152,
+          "support": 887,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.9726027397260274,
+          "support": 146,
+          "expected": null
+        },
+        {
+          "metric": "unanchored_trigrams",
+          "value": 0.7910447761194029,
+          "support": 469,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_186/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_177",
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7624084621643613,
+          "support": 1229,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.0120481927710843,
+          "support": 166,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.7615947925142392,
+          "support": 1229,
+          "expected": null
+        },
+        {
+          "metric": "cmer",
+          "value": 0.7520064205457464,
+          "support": 1246,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.9940828402366864,
+          "support": 169,
+          "expected": null
+        },
+        {
+          "metric": "unanchored_trigrams",
+          "value": 0.8573466476462197,
+          "support": 701,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_177/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_178",
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7807692307692308,
+          "support": 1040,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.4753086419753085,
+          "support": 162,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.7778846153846154,
+          "support": 1040,
+          "expected": null
+        },
+        {
+          "metric": "cmer",
+          "value": 0.7638758231420508,
+          "support": 1063,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 1.0,
+          "support": 239,
+          "expected": null
+        },
+        {
+          "metric": "unanchored_trigrams",
+          "value": 0.9189497716894978,
+          "support": 876,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_178/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_179",
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.746875,
+          "support": 960,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.0,
+          "support": 131,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.7458333333333333,
+          "support": 960,
+          "expected": null
+        },
+        {
+          "metric": "cmer",
+          "value": 0.7437759336099585,
+          "support": 964,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 1.0,
+          "support": 131,
+          "expected": null
+        },
+        {
+          "metric": "unanchored_trigrams",
+          "value": 0.8270676691729323,
+          "support": 532,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_179/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_180",
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7601128880526811,
+          "support": 1063,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.0632911392405062,
+          "support": 158,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.7601128880526811,
+          "support": 1063,
+          "expected": null
+        },
+        {
+          "metric": "cmer",
+          "value": 0.7551401869158878,
+          "support": 1070,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 1.0,
+          "support": 168,
+          "expected": null
+        },
+        {
+          "metric": "unanchored_trigrams",
+          "value": 0.8569206842923794,
+          "support": 643,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_180/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_181",
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7621225983531564,
+          "support": 1093,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.2754491017964071,
+          "support": 167,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.7621225983531564,
+          "support": 1093,
+          "expected": null
+        },
+        {
+          "metric": "cmer",
+          "value": 0.7538461538461538,
+          "support": 1105,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.9953271028037384,
+          "support": 214,
+          "expected": null
+        },
+        {
+          "metric": "unanchored_trigrams",
+          "value": 0.9,
+          "support": 730,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_181/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_182",
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.746078431372549,
+          "support": 1020,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.0666666666666667,
+          "support": 150,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.746078431372549,
+          "support": 1020,
+          "expected": null
+        },
+        {
+          "metric": "cmer",
+          "value": 0.7409931840311588,
+          "support": 1027,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.9876543209876543,
+          "support": 162,
+          "expected": null
+        },
+        {
+          "metric": "unanchored_trigrams",
+          "value": 0.8363636363636363,
+          "support": 660,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_182/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_183",
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.74609375,
+          "support": 1024,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.1366459627329193,
+          "support": 161,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.74609375,
+          "support": 1024,
+          "expected": null
+        },
+        {
+          "metric": "cmer",
+          "value": 0.7353224254090471,
+          "support": 1039,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 1.0,
+          "support": 183,
+          "expected": null
+        },
+        {
+          "metric": "unanchored_trigrams",
+          "value": 0.8919753086419753,
+          "support": 648,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_183/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_184",
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.8117408906882592,
+          "support": 988,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.7083333333333333,
+          "support": 144,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.8107287449392713,
+          "support": 988,
+          "expected": null
+        },
+        {
+          "metric": "cmer",
+          "value": 0.7502338634237605,
+          "support": 1069,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.9959514170040485,
+          "support": 247,
+          "expected": null
+        },
+        {
+          "metric": "unanchored_trigrams",
+          "value": 0.869475847893114,
+          "support": 973,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_184/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_185",
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7610536218250236,
+          "support": 1063,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.6265822784810127,
+          "support": 158,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.7582314205079962,
+          "support": 1063,
+          "expected": null
+        },
+        {
+          "metric": "cmer",
+          "value": 0.7334542157751587,
+          "support": 1103,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.9884615384615385,
+          "support": 260,
+          "expected": null
+        },
+        {
+          "metric": "unanchored_trigrams",
+          "value": 0.86084142394822,
+          "support": 927,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_185/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_186",
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.9218573046432617,
+          "support": 883,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.6917808219178083,
+          "support": 146,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.9218573046432617,
+          "support": 883,
+          "expected": null
+        },
+        {
+          "metric": "cmer",
+          "value": 0.7664783427495292,
+          "support": 1062,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.988,
+          "support": 250,
+          "expected": null
+        },
+        {
+          "metric": "unanchored_trigrams",
+          "value": 0.8098933074684772,
+          "support": 1031,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_186/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_177",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7624084621643613,
+          "support": 1229,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.0120481927710843,
+          "support": 166,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.7615947925142392,
+          "support": 1229,
+          "expected": null
+        },
+        {
+          "metric": "cmer",
+          "value": 0.7520064205457464,
+          "support": 1246,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.9940828402366864,
+          "support": 169,
+          "expected": null
+        },
+        {
+          "metric": "unanchored_trigrams",
+          "value": 0.8573466476462197,
+          "support": 701,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_177/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_178",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7807692307692308,
+          "support": 1040,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.4753086419753085,
+          "support": 162,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.7778846153846154,
+          "support": 1040,
+          "expected": null
+        },
+        {
+          "metric": "cmer",
+          "value": 0.7638758231420508,
+          "support": 1063,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 1.0,
+          "support": 239,
+          "expected": null
+        },
+        {
+          "metric": "unanchored_trigrams",
+          "value": 0.9189497716894978,
+          "support": 876,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_178/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_179",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.746875,
+          "support": 960,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.0,
+          "support": 131,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.7458333333333333,
+          "support": 960,
+          "expected": null
+        },
+        {
+          "metric": "cmer",
+          "value": 0.7437759336099585,
+          "support": 964,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 1.0,
+          "support": 131,
+          "expected": null
+        },
+        {
+          "metric": "unanchored_trigrams",
+          "value": 0.8270676691729323,
+          "support": 532,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_179/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_180",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7601128880526811,
+          "support": 1063,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.0632911392405062,
+          "support": 158,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.7601128880526811,
+          "support": 1063,
+          "expected": null
+        },
+        {
+          "metric": "cmer",
+          "value": 0.7551401869158878,
+          "support": 1070,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 1.0,
+          "support": 168,
+          "expected": null
+        },
+        {
+          "metric": "unanchored_trigrams",
+          "value": 0.8569206842923794,
+          "support": 643,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_180/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_181",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7621225983531564,
+          "support": 1093,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.2754491017964071,
+          "support": 167,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.7621225983531564,
+          "support": 1093,
+          "expected": null
+        },
+        {
+          "metric": "cmer",
+          "value": 0.7538461538461538,
+          "support": 1105,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.9953271028037384,
+          "support": 214,
+          "expected": null
+        },
+        {
+          "metric": "unanchored_trigrams",
+          "value": 0.9,
+          "support": 730,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_181/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_182",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.746078431372549,
+          "support": 1020,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.0666666666666667,
+          "support": 150,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.746078431372549,
+          "support": 1020,
+          "expected": null
+        },
+        {
+          "metric": "cmer",
+          "value": 0.7409931840311588,
+          "support": 1027,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.9876543209876543,
+          "support": 162,
+          "expected": null
+        },
+        {
+          "metric": "unanchored_trigrams",
+          "value": 0.8363636363636363,
+          "support": 660,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_182/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_183",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.74609375,
+          "support": 1024,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.1366459627329193,
+          "support": 161,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.74609375,
+          "support": 1024,
+          "expected": null
+        },
+        {
+          "metric": "cmer",
+          "value": 0.7353224254090471,
+          "support": 1039,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 1.0,
+          "support": 183,
+          "expected": null
+        },
+        {
+          "metric": "unanchored_trigrams",
+          "value": 0.8919753086419753,
+          "support": 648,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_183/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_184",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.8117408906882592,
+          "support": 988,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.7083333333333333,
+          "support": 144,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.8107287449392713,
+          "support": 988,
+          "expected": null
+        },
+        {
+          "metric": "cmer",
+          "value": 0.7502338634237605,
+          "support": 1069,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.9959514170040485,
+          "support": 247,
+          "expected": null
+        },
+        {
+          "metric": "unanchored_trigrams",
+          "value": 0.869475847893114,
+          "support": 973,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_184/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_185",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7610536218250236,
+          "support": 1063,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.6265822784810127,
+          "support": 158,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.7582314205079962,
+          "support": 1063,
+          "expected": null
+        },
+        {
+          "metric": "cmer",
+          "value": 0.7334542157751587,
+          "support": 1103,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.9884615384615385,
+          "support": 260,
+          "expected": null
+        },
+        {
+          "metric": "unanchored_trigrams",
+          "value": 0.86084142394822,
+          "support": 927,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_185/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_186",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.9218573046432617,
+          "support": 883,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.6917808219178083,
+          "support": 146,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.9218573046432617,
+          "support": 883,
+          "expected": null
+        },
+        {
+          "metric": "cmer",
+          "value": 0.7664783427495292,
+          "support": 1062,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.988,
+          "support": 250,
+          "expected": null
+        },
+        {
+          "metric": "unanchored_trigrams",
+          "value": 0.8098933074684772,
+          "support": 1031,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_186/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_177",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 5.080553295362083,
+          "support": 1229,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 6.72289156626506,
+          "support": 166,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 5.06753458096013,
+          "support": 1229,
+          "expected": null
+        },
+        {
+          "metric": "cmer",
+          "value": 0.8720670391061452,
+          "support": 7160,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.9902395740905058,
+          "support": 1127,
+          "expected": null
+        },
+        {
+          "metric": "unanchored_trigrams",
+          "value": 0.5857442348008386,
+          "support": 7155,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_177/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_178",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": null,
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": null,
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": null,
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "cmer",
+          "value": null,
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": null,
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "unanchored_trigrams",
+          "value": null,
+          "support": null,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_178/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_179",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7208333333333333,
+          "support": 960,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.9389312977099237,
+          "support": 131,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.7166666666666667,
+          "support": 960,
+          "expected": null
+        },
+        {
+          "metric": "cmer",
+          "value": 0.7119341563786008,
+          "support": 972,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.9318181818181818,
+          "support": 132,
+          "expected": null
+        },
+        {
+          "metric": "unanchored_trigrams",
+          "value": 0.4877126654064272,
+          "support": 529,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_179/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_180",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.4120413922859831,
+          "support": 1063,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.8670886075949367,
+          "support": 158,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.40169332079021636,
+          "support": 1063,
+          "expected": null
+        },
+        {
+          "metric": "cmer",
+          "value": 0.38219895287958117,
+          "support": 1146,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.8011695906432749,
+          "support": 171,
+          "expected": null
+        },
+        {
+          "metric": "unanchored_trigrams",
+          "value": 0.4895549500454133,
+          "support": 1101,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_180/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_181",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": null,
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": null,
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": null,
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "cmer",
+          "value": null,
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": null,
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "unanchored_trigrams",
+          "value": null,
+          "support": null,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_181/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_182",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.5666666666666667,
+          "support": 1020,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.8466666666666667,
+          "support": 150,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.5588235294117647,
+          "support": 1020,
+          "expected": null
+        },
+        {
+          "metric": "cmer",
+          "value": 0.5406922357343311,
+          "support": 1069,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.8141025641025641,
+          "support": 156,
+          "expected": null
+        },
+        {
+          "metric": "unanchored_trigrams",
+          "value": 0.42019950124688277,
+          "support": 802,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_182/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_183",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": null,
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": null,
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": null,
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "cmer",
+          "value": null,
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": null,
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "unanchored_trigrams",
+          "value": null,
+          "support": null,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_183/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_184",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": null,
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": null,
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": null,
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "cmer",
+          "value": null,
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": null,
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "unanchored_trigrams",
+          "value": null,
+          "support": null,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_184/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_185",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": null,
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": null,
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": null,
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "cmer",
+          "value": null,
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": null,
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "unanchored_trigrams",
+          "value": null,
+          "support": null,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_185/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_186",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": null,
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": null,
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": null,
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "cmer",
+          "value": null,
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": null,
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "unanchored_trigrams",
+          "value": null,
+          "support": null,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_186/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_177",
+      "pipeline": "E0 · tesseract",
+      "view": "texte (lignes)",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7982099267697315,
+          "support": 1229,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_177/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_178",
+      "pipeline": "E0 · tesseract",
+      "view": "texte (lignes)",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7942307692307692,
+          "support": 1040,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_178/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_179",
+      "pipeline": "E0 · tesseract",
+      "view": "texte (lignes)",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.8125,
+          "support": 960,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_179/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_180",
+      "pipeline": "E0 · tesseract",
+      "view": "texte (lignes)",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.8005644402634055,
+          "support": 1063,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_180/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_181",
+      "pipeline": "E0 · tesseract",
+      "view": "texte (lignes)",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7639524245196706,
+          "support": 1093,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_181/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_182",
+      "pipeline": "E0 · tesseract",
+      "view": "texte (lignes)",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7529411764705882,
+          "support": 1020,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_182/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_183",
+      "pipeline": "E0 · tesseract",
+      "view": "texte (lignes)",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.740234375,
+          "support": 1024,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_183/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_184",
+      "pipeline": "E0 · tesseract",
+      "view": "texte (lignes)",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7692307692307693,
+          "support": 988,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_184/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_185",
+      "pipeline": "E0 · tesseract",
+      "view": "texte (lignes)",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7102539981185324,
+          "support": 1063,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_185/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_186",
+      "pipeline": "E0 · tesseract",
+      "view": "texte (lignes)",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7338618346545867,
+          "support": 883,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_186/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_177",
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "texte (lignes)",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7754271765663141,
+          "support": 1229,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_177/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_178",
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "texte (lignes)",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.8076923076923077,
+          "support": 1040,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_178/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_179",
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "texte (lignes)",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7625,
+          "support": 960,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_179/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_180",
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "texte (lignes)",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7704609595484478,
+          "support": 1063,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_180/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_181",
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "texte (lignes)",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7804208600182982,
+          "support": 1093,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_181/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_182",
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "texte (lignes)",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7617647058823529,
+          "support": 1020,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_182/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_183",
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "texte (lignes)",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7666015625,
+          "support": 1024,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_183/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_184",
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "texte (lignes)",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.8350202429149798,
+          "support": 988,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_184/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_185",
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "texte (lignes)",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7826904985888994,
+          "support": 1063,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_185/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_186",
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "texte (lignes)",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.9411098527746319,
+          "support": 883,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_186/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_177",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "texte (lignes)",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7754271765663141,
+          "support": 1229,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_177/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_178",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "texte (lignes)",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.8076923076923077,
+          "support": 1040,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_178/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_179",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "texte (lignes)",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7625,
+          "support": 960,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_179/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_180",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "texte (lignes)",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7704609595484478,
+          "support": 1063,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_180/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_181",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "texte (lignes)",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7804208600182982,
+          "support": 1093,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_181/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_182",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "texte (lignes)",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7617647058823529,
+          "support": 1020,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_182/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_183",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "texte (lignes)",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7666015625,
+          "support": 1024,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_183/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_184",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "texte (lignes)",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.8350202429149798,
+          "support": 988,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_184/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_185",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "texte (lignes)",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7826904985888994,
+          "support": 1063,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_185/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_186",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "texte (lignes)",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.9411098527746319,
+          "support": 883,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_186/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_177",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "texte (lignes)",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 5.097640358014646,
+          "support": 1229,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_177/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_178",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "texte (lignes)",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": null,
+          "support": null,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_178/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_179",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "texte (lignes)",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7260416666666667,
+          "support": 960,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_179/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_180",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "texte (lignes)",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.4129821260583255,
+          "support": 1063,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_180/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_181",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "texte (lignes)",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": null,
+          "support": null,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_181/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_182",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "texte (lignes)",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.5784313725490197,
+          "support": 1020,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_182/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_183",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "texte (lignes)",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": null,
+          "support": null,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_183/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_184",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "texte (lignes)",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": null,
+          "support": null,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_184/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_185",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "texte (lignes)",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": null,
+          "support": null,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_185/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_186",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "texte (lignes)",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": null,
+          "support": null,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_186/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_177",
+      "pipeline": "E0 · tesseract",
+      "view": "lecture",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.790886899918633,
+          "support": 1229,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.0,
+          "support": 166,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.790886899918633,
+          "support": 1229,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_177/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_178",
+      "pipeline": "E0 · tesseract",
+      "view": "lecture",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7846153846153846,
+          "support": 1040,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.0,
+          "support": 162,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.7836538461538461,
+          "support": 1040,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_178/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_179",
+      "pipeline": "E0 · tesseract",
+      "view": "lecture",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7947916666666667,
+          "support": 960,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.0,
+          "support": 131,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.79375,
+          "support": 960,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_179/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_180",
+      "pipeline": "E0 · tesseract",
+      "view": "lecture",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7892756349952963,
+          "support": 1063,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.9936708860759493,
+          "support": 158,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.7883349012229539,
+          "support": 1063,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_180/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_181",
+      "pipeline": "E0 · tesseract",
+      "view": "lecture",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7447392497712717,
+          "support": 1093,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.0,
+          "support": 167,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.7438243366880146,
+          "support": 1093,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_181/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_182",
+      "pipeline": "E0 · tesseract",
+      "view": "lecture",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7411764705882353,
+          "support": 1020,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.04,
+          "support": 150,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.7401960784313726,
+          "support": 1020,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_182/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_183",
+      "pipeline": "E0 · tesseract",
+      "view": "lecture",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7265625,
+          "support": 1024,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.9875776397515528,
+          "support": 161,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.7265625,
+          "support": 1024,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_183/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_184",
+      "pipeline": "E0 · tesseract",
+      "view": "lecture",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7611336032388664,
+          "support": 988,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.0,
+          "support": 144,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.7601214574898786,
+          "support": 988,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_184/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_185",
+      "pipeline": "E0 · tesseract",
+      "view": "lecture",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.6970837253057385,
+          "support": 1063,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.9936708860759493,
+          "support": 158,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.6961429915333961,
+          "support": 1063,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_185/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_186",
+      "pipeline": "E0 · tesseract",
+      "view": "lecture",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7259343148357871,
+          "support": 883,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.9726027397260274,
+          "support": 146,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.7259343148357871,
+          "support": 883,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_186/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_177",
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "lecture",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7624084621643613,
+          "support": 1229,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.0120481927710843,
+          "support": 166,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.7615947925142392,
+          "support": 1229,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_177/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_178",
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "lecture",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7807692307692308,
+          "support": 1040,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.4753086419753085,
+          "support": 162,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.7778846153846154,
+          "support": 1040,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_178/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_179",
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "lecture",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.746875,
+          "support": 960,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.0,
+          "support": 131,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.7458333333333333,
+          "support": 960,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_179/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_180",
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "lecture",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7601128880526811,
+          "support": 1063,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.0632911392405062,
+          "support": 158,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.7601128880526811,
+          "support": 1063,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_180/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_181",
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "lecture",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7621225983531564,
+          "support": 1093,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.2754491017964071,
+          "support": 167,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.7621225983531564,
+          "support": 1093,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_181/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_182",
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "lecture",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.746078431372549,
+          "support": 1020,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.0666666666666667,
+          "support": 150,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.746078431372549,
+          "support": 1020,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_182/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_183",
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "lecture",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.74609375,
+          "support": 1024,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.1366459627329193,
+          "support": 161,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.74609375,
+          "support": 1024,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_183/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_184",
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "lecture",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.8117408906882592,
+          "support": 988,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.7083333333333333,
+          "support": 144,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.8107287449392713,
+          "support": 988,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_184/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_185",
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "lecture",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7610536218250236,
+          "support": 1063,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.6265822784810127,
+          "support": 158,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.7582314205079962,
+          "support": 1063,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_185/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_186",
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "lecture",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.9218573046432617,
+          "support": 883,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.6917808219178083,
+          "support": 146,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.9218573046432617,
+          "support": 883,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_186/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_177",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "lecture",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7624084621643613,
+          "support": 1229,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.0120481927710843,
+          "support": 166,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.7615947925142392,
+          "support": 1229,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_177/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_178",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "lecture",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7807692307692308,
+          "support": 1040,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.4753086419753085,
+          "support": 162,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.7778846153846154,
+          "support": 1040,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_178/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_179",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "lecture",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.746875,
+          "support": 960,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.0,
+          "support": 131,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.7458333333333333,
+          "support": 960,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_179/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_180",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "lecture",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7601128880526811,
+          "support": 1063,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.0632911392405062,
+          "support": 158,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.7601128880526811,
+          "support": 1063,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_180/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_181",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "lecture",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7621225983531564,
+          "support": 1093,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.2754491017964071,
+          "support": 167,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.7621225983531564,
+          "support": 1093,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_181/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_182",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "lecture",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.746078431372549,
+          "support": 1020,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.0666666666666667,
+          "support": 150,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.746078431372549,
+          "support": 1020,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_182/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_183",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "lecture",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.74609375,
+          "support": 1024,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.1366459627329193,
+          "support": 161,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.74609375,
+          "support": 1024,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_183/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_184",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "lecture",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.8117408906882592,
+          "support": 988,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.7083333333333333,
+          "support": 144,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.8107287449392713,
+          "support": 988,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_184/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_185",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "lecture",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7610536218250236,
+          "support": 1063,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.6265822784810127,
+          "support": 158,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.7582314205079962,
+          "support": 1063,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_185/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_186",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "lecture",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.9218573046432617,
+          "support": 883,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 1.6917808219178083,
+          "support": 146,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.9218573046432617,
+          "support": 883,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_186/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_177",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "lecture",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 5.080553295362083,
+          "support": 1229,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 6.72289156626506,
+          "support": 166,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 5.06753458096013,
+          "support": 1229,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_177/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_178",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "lecture",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": null,
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": null,
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": null,
+          "support": null,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_178/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_179",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "lecture",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7208333333333333,
+          "support": 960,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.9389312977099237,
+          "support": 131,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.7166666666666667,
+          "support": 960,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_179/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_180",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "lecture",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.4120413922859831,
+          "support": 1063,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.8670886075949367,
+          "support": 158,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.40169332079021636,
+          "support": 1063,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_180/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_181",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "lecture",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": null,
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": null,
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": null,
+          "support": null,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_181/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_182",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "lecture",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.5666666666666667,
+          "support": 1020,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.8466666666666667,
+          "support": 150,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.5588235294117647,
+          "support": 1020,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_182/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_183",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "lecture",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": null,
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": null,
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": null,
+          "support": null,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_183/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_184",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "lecture",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": null,
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": null,
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": null,
+          "support": null,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_184/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_185",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "lecture",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": null,
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": null,
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": null,
+          "support": null,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_185/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_186",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "lecture",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": null,
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": null,
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": null,
+          "support": null,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_186/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_177",
+      "pipeline": "E0 · tesseract",
+      "view": "sans césure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7982099267697315,
+          "support": 1229,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_177/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_178",
+      "pipeline": "E0 · tesseract",
+      "view": "sans césure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7942307692307692,
+          "support": 1040,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_178/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_179",
+      "pipeline": "E0 · tesseract",
+      "view": "sans césure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.8114583333333333,
+          "support": 960,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_179/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_180",
+      "pipeline": "E0 · tesseract",
+      "view": "sans césure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.8001885014137606,
+          "support": 1061,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_180/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_181",
+      "pipeline": "E0 · tesseract",
+      "view": "sans césure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7630375114364135,
+          "support": 1093,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_181/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_182",
+      "pipeline": "E0 · tesseract",
+      "view": "sans césure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7529411764705882,
+          "support": 1020,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_182/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_183",
+      "pipeline": "E0 · tesseract",
+      "view": "sans césure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.740234375,
+          "support": 1024,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_183/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_184",
+      "pipeline": "E0 · tesseract",
+      "view": "sans césure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7692307692307693,
+          "support": 988,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_184/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_185",
+      "pipeline": "E0 · tesseract",
+      "view": "sans césure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7102539981185324,
+          "support": 1063,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_185/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_186",
+      "pipeline": "E0 · tesseract",
+      "view": "sans césure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7338618346545867,
+          "support": 883,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_186/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_177",
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "sans césure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7754271765663141,
+          "support": 1229,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_177/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_178",
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "sans césure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.8076923076923077,
+          "support": 1040,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_178/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_179",
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "sans césure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7625,
+          "support": 960,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_179/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_180",
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "sans césure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7700282752120641,
+          "support": 1061,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_180/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_181",
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "sans césure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7804208600182982,
+          "support": 1093,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_181/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_182",
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "sans césure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7617647058823529,
+          "support": 1020,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_182/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_183",
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "sans césure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7666015625,
+          "support": 1024,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_183/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_184",
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "sans césure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.8350202429149798,
+          "support": 988,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_184/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_185",
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "sans césure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7826904985888994,
+          "support": 1063,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_185/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_186",
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "sans césure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.9388448471121178,
+          "support": 883,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_186/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_177",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "sans césure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7754271765663141,
+          "support": 1229,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_177/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_178",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "sans césure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.8076923076923077,
+          "support": 1040,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_178/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_179",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "sans césure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7625,
+          "support": 960,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_179/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_180",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "sans césure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7700282752120641,
+          "support": 1061,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_180/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_181",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "sans césure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7804208600182982,
+          "support": 1093,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_181/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_182",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "sans césure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7617647058823529,
+          "support": 1020,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_182/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_183",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "sans césure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7666015625,
+          "support": 1024,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_183/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_184",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "sans césure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.8350202429149798,
+          "support": 988,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_184/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_185",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "sans césure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7826904985888994,
+          "support": 1063,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_185/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_186",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "sans césure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.9388448471121178,
+          "support": 883,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_186/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_177",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "sans césure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 5.097640358014646,
+          "support": 1229,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_177/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_178",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "sans césure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": null,
+          "support": null,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_178/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_179",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "sans césure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.7260416666666667,
+          "support": 960,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_179/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_180",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "sans césure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.41470311027332707,
+          "support": 1061,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_180/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_181",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "sans césure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": null,
+          "support": null,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_181/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_182",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "sans césure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.5784313725490197,
+          "support": 1020,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_182/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_183",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "sans césure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": null,
+          "support": null,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_183/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_184",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "sans césure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": null,
+          "support": null,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_184/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_185",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "sans césure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": null,
+          "support": null,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_185/full/1600,/0/default.jpg"
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_186",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "sans césure",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": null,
+          "support": null,
+          "expected": null
+        }
+      ],
+      "stratum": "de/17e/kurrent",
+      "image_ref": "https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_186/full/1600,/0/default.jpg"
+    }
+  ],
+  "cross_engine": [
+    {
+      "metric": "texte:cer:significance_p",
+      "value": null,
+      "support": 4,
+      "expected": null
+    },
+    {
+      "metric": "texte:wer:significance_p",
+      "value": null,
+      "support": 4,
+      "expected": null
+    },
+    {
+      "metric": "texte:cmer:significance_p",
+      "value": null,
+      "support": 4,
+      "expected": null
+    },
+    {
+      "metric": "texte:mer:significance_p",
+      "value": null,
+      "support": 4,
+      "expected": null
+    },
+    {
+      "metric": "texte (lignes):cer:significance_p",
+      "value": null,
+      "support": 4,
+      "expected": null
+    },
+    {
+      "metric": "lecture:cer:significance_p",
+      "value": null,
+      "support": 4,
+      "expected": null
+    },
+    {
+      "metric": "lecture:wer:significance_p",
+      "value": null,
+      "support": 4,
+      "expected": null
+    },
+    {
+      "metric": "sans césure:cer:significance_p",
+      "value": null,
+      "support": 4,
+      "expected": null
+    }
+  ],
+  "usage": [
+    {
+      "document_id": "Mscr.Dresd.K80_177",
+      "pipeline": "E0 · tesseract",
+      "usage": {
+        "duration_seconds": 1.9109357970010024,
+        "tokens_in": null,
+        "tokens_out": null,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null,
+      "resumed": false
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_178",
+      "pipeline": "E0 · tesseract",
+      "usage": {
+        "duration_seconds": 1.540777372996672,
+        "tokens_in": null,
+        "tokens_out": null,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null,
+      "resumed": false
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_179",
+      "pipeline": "E0 · tesseract",
+      "usage": {
+        "duration_seconds": 1.9235506690019974,
+        "tokens_in": null,
+        "tokens_out": null,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null,
+      "resumed": false
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_180",
+      "pipeline": "E0 · tesseract",
+      "usage": {
+        "duration_seconds": 1.7230760990059935,
+        "tokens_in": null,
+        "tokens_out": null,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null,
+      "resumed": false
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_181",
+      "pipeline": "E0 · tesseract",
+      "usage": {
+        "duration_seconds": 2.0419110859947978,
+        "tokens_in": null,
+        "tokens_out": null,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null,
+      "resumed": false
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_182",
+      "pipeline": "E0 · tesseract",
+      "usage": {
+        "duration_seconds": 1.8076556669984711,
+        "tokens_in": null,
+        "tokens_out": null,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null,
+      "resumed": false
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_183",
+      "pipeline": "E0 · tesseract",
+      "usage": {
+        "duration_seconds": 1.7074051570089068,
+        "tokens_in": null,
+        "tokens_out": null,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null,
+      "resumed": false
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_184",
+      "pipeline": "E0 · tesseract",
+      "usage": {
+        "duration_seconds": 1.5727925329993013,
+        "tokens_in": null,
+        "tokens_out": null,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null,
+      "resumed": false
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_185",
+      "pipeline": "E0 · tesseract",
+      "usage": {
+        "duration_seconds": 2.0099179669923615,
+        "tokens_in": null,
+        "tokens_out": null,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null,
+      "resumed": false
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_186",
+      "pipeline": "E0 · tesseract",
+      "usage": {
+        "duration_seconds": 1.5132253100018715,
+        "tokens_in": null,
+        "tokens_out": null,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null,
+      "resumed": false
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_177",
+      "pipeline": "E1 · segmentation → tesseract",
+      "usage": {
+        "duration_seconds": 7.509006358013721,
+        "tokens_in": null,
+        "tokens_out": null,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null,
+      "resumed": false
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_178",
+      "pipeline": "E1 · segmentation → tesseract",
+      "usage": {
+        "duration_seconds": 9.982170014016447,
+        "tokens_in": null,
+        "tokens_out": null,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null,
+      "resumed": false
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_179",
+      "pipeline": "E1 · segmentation → tesseract",
+      "usage": {
+        "duration_seconds": 4.982270275999326,
+        "tokens_in": null,
+        "tokens_out": null,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null,
+      "resumed": false
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_180",
+      "pipeline": "E1 · segmentation → tesseract",
+      "usage": {
+        "duration_seconds": 7.469251015994814,
+        "tokens_in": null,
+        "tokens_out": null,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null,
+      "resumed": false
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_181",
+      "pipeline": "E1 · segmentation → tesseract",
+      "usage": {
+        "duration_seconds": 7.6092842660000315,
+        "tokens_in": null,
+        "tokens_out": null,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null,
+      "resumed": false
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_182",
+      "pipeline": "E1 · segmentation → tesseract",
+      "usage": {
+        "duration_seconds": 7.828982022998389,
+        "tokens_in": null,
+        "tokens_out": null,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null,
+      "resumed": false
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_183",
+      "pipeline": "E1 · segmentation → tesseract",
+      "usage": {
+        "duration_seconds": 6.421426365006482,
+        "tokens_in": null,
+        "tokens_out": null,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null,
+      "resumed": false
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_184",
+      "pipeline": "E1 · segmentation → tesseract",
+      "usage": {
+        "duration_seconds": 8.486589487991296,
+        "tokens_in": null,
+        "tokens_out": null,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null,
+      "resumed": false
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_185",
+      "pipeline": "E1 · segmentation → tesseract",
+      "usage": {
+        "duration_seconds": 9.509783323985175,
+        "tokens_in": null,
+        "tokens_out": null,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null,
+      "resumed": false
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_186",
+      "pipeline": "E1 · segmentation → tesseract",
+      "usage": {
+        "duration_seconds": 7.0910167320107576,
+        "tokens_in": null,
+        "tokens_out": null,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null,
+      "resumed": false
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_177",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "usage": {
+        "duration_seconds": 11.87597274397558,
+        "tokens_in": null,
+        "tokens_out": null,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null,
+      "resumed": false
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_178",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "usage": {
+        "duration_seconds": 15.909684239028138,
+        "tokens_in": null,
+        "tokens_out": null,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null,
+      "resumed": false
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_179",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "usage": {
+        "duration_seconds": 10.85697351199633,
+        "tokens_in": null,
+        "tokens_out": null,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null,
+      "resumed": false
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_180",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "usage": {
+        "duration_seconds": 13.44760838901857,
+        "tokens_in": null,
+        "tokens_out": null,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null,
+      "resumed": false
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_181",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "usage": {
+        "duration_seconds": 13.718594934005523,
+        "tokens_in": null,
+        "tokens_out": null,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null,
+      "resumed": false
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_182",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "usage": {
+        "duration_seconds": 13.479735675980919,
+        "tokens_in": null,
+        "tokens_out": null,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null,
+      "resumed": false
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_183",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "usage": {
+        "duration_seconds": 10.529037128027994,
+        "tokens_in": null,
+        "tokens_out": null,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null,
+      "resumed": false
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_184",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "usage": {
+        "duration_seconds": 14.801178709982196,
+        "tokens_in": null,
+        "tokens_out": null,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null,
+      "resumed": false
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_185",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "usage": {
+        "duration_seconds": 13.47976256099355,
+        "tokens_in": null,
+        "tokens_out": null,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null,
+      "resumed": false
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_186",
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "usage": {
+        "duration_seconds": 13.25204591100919,
+        "tokens_in": null,
+        "tokens_out": null,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null,
+      "resumed": false
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_177",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "usage": {
+        "duration_seconds": 455.8649466989882,
+        "tokens_in": 4092,
+        "tokens_out": 2048,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "truncated",
+      "reason": null,
+      "message": "étape 'lecture' : ollama:qwen_vlm : réponse coupée par un plafond de jetons (raison d'arrêt 'length', max_tokens=2048)",
+      "resumed": false
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_178",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "usage": {
+        "duration_seconds": null,
+        "tokens_in": null,
+        "tokens_out": null,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "failed",
+      "reason": "cancelled",
+      "message": "ollama : délai dépassé (ReadTimeout).",
+      "resumed": false
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_179",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "usage": {
+        "duration_seconds": 365.2575804119988,
+        "tokens_in": 4092,
+        "tokens_out": 156,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null,
+      "resumed": false
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_180",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "usage": {
+        "duration_seconds": 450.2010660399974,
+        "tokens_in": 4092,
+        "tokens_out": 425,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null,
+      "resumed": false
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_181",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "usage": {
+        "duration_seconds": null,
+        "tokens_in": null,
+        "tokens_out": null,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "failed",
+      "reason": "cancelled",
+      "message": "ollama : délai dépassé (DeadlineExceeded).",
+      "resumed": false
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_182",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "usage": {
+        "duration_seconds": 570.587175351,
+        "tokens_in": 4092,
+        "tokens_out": 258,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null,
+      "resumed": false
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_183",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "usage": {
+        "duration_seconds": null,
+        "tokens_in": null,
+        "tokens_out": null,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "failed",
+      "reason": "cancelled",
+      "message": "ollama : délai dépassé (DeadlineExceeded).",
+      "resumed": false
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_184",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "usage": {
+        "duration_seconds": null,
+        "tokens_in": null,
+        "tokens_out": null,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "failed",
+      "reason": "cancelled",
+      "message": "ollama : délai dépassé (DeadlineExceeded).",
+      "resumed": false
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_185",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "usage": {
+        "duration_seconds": null,
+        "tokens_in": null,
+        "tokens_out": null,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "failed",
+      "reason": "cancelled",
+      "message": "ollama : délai dépassé (DeadlineExceeded).",
+      "resumed": false
+    },
+    {
+      "document_id": "Mscr.Dresd.K80_186",
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "usage": {
+        "duration_seconds": null,
+        "tokens_in": null,
+        "tokens_out": null,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "failed",
+      "reason": "cancelled",
+      "message": "ollama : délai dépassé (DeadlineExceeded).",
+      "resumed": false
+    }
+  ],
+  "analyses": [
+    {
+      "scope": "corpus",
+      "view": "lecture",
+      "pipeline": null,
+      "document_id": null,
+      "payload": {
+        "kind": "inference",
+        "metric": "cer",
+        "alpha": 0.05,
+        "n_documents": 4,
+        "test": null,
+        "not_computed": "insufficient_support",
+        "p_value": null,
+        "p_holm": null,
+        "family_size": 0,
+        "critical_distance": null,
+        "q_alpha": null,
+        "mean_ranks": [],
+        "cd_groups": [],
+        "pairwise": [],
+        "intervals": []
+      }
+    },
+    {
+      "scope": "corpus",
+      "view": "lecture",
+      "pipeline": null,
+      "document_id": null,
+      "payload": {
+        "kind": "inference",
+        "metric": "wer",
+        "alpha": 0.05,
+        "n_documents": 4,
+        "test": null,
+        "not_computed": "insufficient_support",
+        "p_value": null,
+        "p_holm": null,
+        "family_size": 0,
+        "critical_distance": null,
+        "q_alpha": null,
+        "mean_ranks": [],
+        "cd_groups": [],
+        "pairwise": [],
+        "intervals": []
+      }
+    },
+    {
+      "scope": "corpus",
+      "view": "sans césure",
+      "pipeline": null,
+      "document_id": null,
+      "payload": {
+        "kind": "inference",
+        "metric": "cer",
+        "alpha": 0.05,
+        "n_documents": 4,
+        "test": null,
+        "not_computed": "insufficient_support",
+        "p_value": null,
+        "p_holm": null,
+        "family_size": 0,
+        "critical_distance": null,
+        "q_alpha": null,
+        "mean_ranks": [],
+        "cd_groups": [],
+        "pairwise": [],
+        "intervals": []
+      }
+    },
+    {
+      "scope": "corpus",
+      "view": "texte",
+      "pipeline": null,
+      "document_id": null,
+      "payload": {
+        "kind": "inference",
+        "metric": "cer",
+        "alpha": 0.05,
+        "n_documents": 4,
+        "test": null,
+        "not_computed": "insufficient_support",
+        "p_value": null,
+        "p_holm": null,
+        "family_size": 0,
+        "critical_distance": null,
+        "q_alpha": null,
+        "mean_ranks": [],
+        "cd_groups": [],
+        "pairwise": [],
+        "intervals": []
+      }
+    },
+    {
+      "scope": "corpus",
+      "view": "texte",
+      "pipeline": null,
+      "document_id": null,
+      "payload": {
+        "kind": "inference",
+        "metric": "cmer",
+        "alpha": 0.05,
+        "n_documents": 4,
+        "test": null,
+        "not_computed": "insufficient_support",
+        "p_value": null,
+        "p_holm": null,
+        "family_size": 0,
+        "critical_distance": null,
+        "q_alpha": null,
+        "mean_ranks": [],
+        "cd_groups": [],
+        "pairwise": [],
+        "intervals": []
+      }
+    },
+    {
+      "scope": "corpus",
+      "view": "texte",
+      "pipeline": null,
+      "document_id": null,
+      "payload": {
+        "kind": "inference",
+        "metric": "mer",
+        "alpha": 0.05,
+        "n_documents": 4,
+        "test": null,
+        "not_computed": "insufficient_support",
+        "p_value": null,
+        "p_holm": null,
+        "family_size": 0,
+        "critical_distance": null,
+        "q_alpha": null,
+        "mean_ranks": [],
+        "cd_groups": [],
+        "pairwise": [],
+        "intervals": []
+      }
+    },
+    {
+      "scope": "corpus",
+      "view": "texte",
+      "pipeline": null,
+      "document_id": null,
+      "payload": {
+        "kind": "inference",
+        "metric": "wer",
+        "alpha": 0.05,
+        "n_documents": 4,
+        "test": null,
+        "not_computed": "insufficient_support",
+        "p_value": null,
+        "p_holm": null,
+        "family_size": 0,
+        "critical_distance": null,
+        "q_alpha": null,
+        "mean_ranks": [],
+        "cd_groups": [],
+        "pairwise": [],
+        "intervals": []
+      }
+    },
+    {
+      "scope": "corpus",
+      "view": "texte (lignes)",
+      "pipeline": null,
+      "document_id": null,
+      "payload": {
+        "kind": "inference",
+        "metric": "cer",
+        "alpha": 0.05,
+        "n_documents": 4,
+        "test": null,
+        "not_computed": "insufficient_support",
+        "p_value": null,
+        "p_holm": null,
+        "family_size": 0,
+        "critical_distance": null,
+        "q_alpha": null,
+        "mean_ranks": [],
+        "cd_groups": [],
+        "pairwise": [],
+        "intervals": []
+      }
+    }
+  ]
+}

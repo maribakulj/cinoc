@@ -36,8 +36,9 @@ avant d'écrire la moindre ligne.**
   (*installable et sûr*), P5e (*une mesure qui dit vrai*), P5f (*une inférence
   tracée*) et P5g (*par soustraction*) sont livrées. La
   **feuille de route session par session** (S1 → S35) de cette section dit
-  laquelle ouvrir ; S1-S29 sont livrées (A4, A5 et `v1.0.0rc1` attendent le
-  mainteneur), la suivante est S30-S32, et les arbitrages A1, A2, A3, A6, A9
+  laquelle ouvrir ; S1-S29 et S30 sont livrées (A4, A5 et `v1.0.0rc1` attendent le
+  mainteneur), la suivante est S31 (exécution Mistral — clé et accord du
+  mainteneur sur l'estimation), et les arbitrages A1, A2, A3, A6, A9
   sont rendus (D-271). Née d'un audit sur le produit et non sur la CI : un
   `pip install cinoc` sans extra ne démarrait pas, et plusieurs chiffres
   affichés ne mesuraient pas ce qu'annonçait leur nom. Cette route **remplace**

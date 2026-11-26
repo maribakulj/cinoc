@@ -1,0 +1,727 @@
+run_id: reference-bnl
+corpus:
+  name: 37-GT-BNL
+  documents:
+  - id: '0000'
+    image_uri: 0000.png
+    ground_truths:
+    - type: raw_text
+      uri: 0000.gt.txt
+    metadata:
+      gt_source: layout
+  - id: '0001'
+    image_uri: 0001.png
+    ground_truths:
+    - type: raw_text
+      uri: 0001.gt.txt
+    metadata:
+      gt_source: layout
+  - id: '0002'
+    image_uri: 0002.png
+    ground_truths:
+    - type: raw_text
+      uri: 0002.gt.txt
+    metadata:
+      gt_source: layout
+  - id: '0003'
+    image_uri: 0003.png
+    ground_truths:
+    - type: raw_text
+      uri: 0003.gt.txt
+    metadata:
+      gt_source: layout
+  - id: '0004'
+    image_uri: 0004.png
+    ground_truths:
+    - type: raw_text
+      uri: 0004.gt.txt
+    metadata:
+      gt_source: layout
+  - id: '0006'
+    image_uri: 0006.png
+    ground_truths:
+    - type: raw_text
+      uri: 0006.gt.txt
+    metadata:
+      gt_source: layout
+  - id: '0007'
+    image_uri: 0007.png
+    ground_truths:
+    - type: raw_text
+      uri: 0007.gt.txt
+    metadata:
+      gt_source: layout
+  - id: 0008
+    image_uri: 0008.png
+    ground_truths:
+    - type: raw_text
+      uri: 0008.gt.txt
+    metadata:
+      gt_source: layout
+  - id: 0009
+    image_uri: 0009.png
+    ground_truths:
+    - type: raw_text
+      uri: 0009.gt.txt
+    metadata:
+      gt_source: layout
+  - id: '0010'
+    image_uri: 0010.png
+    ground_truths:
+    - type: raw_text
+      uri: 0010.gt.txt
+    metadata:
+      gt_source: layout
+  - id: '0011'
+    image_uri: 0011.png
+    ground_truths:
+    - type: raw_text
+      uri: 0011.gt.txt
+    metadata:
+      gt_source: layout
+  - id: '0012'
+    image_uri: 0012.png
+    ground_truths:
+    - type: raw_text
+      uri: 0012.gt.txt
+    metadata:
+      gt_source: layout
+  - id: '0013'
+    image_uri: 0013.png
+    ground_truths:
+    - type: raw_text
+      uri: 0013.gt.txt
+    metadata:
+      gt_source: layout
+  - id: '0014'
+    image_uri: 0014.png
+    ground_truths:
+    - type: raw_text
+      uri: 0014.gt.txt
+    metadata:
+      gt_source: layout
+  - id: '0015'
+    image_uri: 0015.png
+    ground_truths:
+    - type: raw_text
+      uri: 0015.gt.txt
+    metadata:
+      gt_source: layout
+  - id: '0016'
+    image_uri: 0016.png
+    ground_truths:
+    - type: raw_text
+      uri: 0016.gt.txt
+    metadata:
+      gt_source: layout
+  - id: '0017'
+    image_uri: 0017.png
+    ground_truths:
+    - type: raw_text
+      uri: 0017.gt.txt
+    metadata:
+      gt_source: layout
+  - id: 0018
+    image_uri: 0018.png
+    ground_truths:
+    - type: raw_text
+      uri: 0018.gt.txt
+    metadata:
+      gt_source: layout
+  - id: 0019
+    image_uri: 0019.png
+    ground_truths:
+    - type: raw_text
+      uri: 0019.gt.txt
+    metadata:
+      gt_source: layout
+  - id: '0020'
+    image_uri: 0020.png
+    ground_truths:
+    - type: raw_text
+      uri: 0020.gt.txt
+    metadata:
+      gt_source: layout
+  - id: '0021'
+    image_uri: 0021.png
+    ground_truths:
+    - type: raw_text
+      uri: 0021.gt.txt
+    metadata:
+      gt_source: layout
+  - id: '0022'
+    image_uri: 0022.png
+    ground_truths:
+    - type: raw_text
+      uri: 0022.gt.txt
+    metadata:
+      gt_source: layout
+  - id: '0023'
+    image_uri: 0023.png
+    ground_truths:
+    - type: raw_text
+      uri: 0023.gt.txt
+    metadata:
+      gt_source: layout
+  - id: '0024'
+    image_uri: 0024.png
+    ground_truths:
+    - type: raw_text
+      uri: 0024.gt.txt
+    metadata:
+      gt_source: layout
+  - id: '0025'
+    image_uri: 0025.png
+    ground_truths:
+    - type: raw_text
+      uri: 0025.gt.txt
+    metadata:
+      gt_source: layout
+  - id: '0026'
+    image_uri: 0026.png
+    ground_truths:
+    - type: raw_text
+      uri: 0026.gt.txt
+    metadata:
+      gt_source: layout
+  - id: '0027'
+    image_uri: 0027.png
+    ground_truths:
+    - type: raw_text
+      uri: 0027.gt.txt
+    metadata:
+      gt_source: layout
+  - id: 0028
+    image_uri: 0028.png
+    ground_truths:
+    - type: raw_text
+      uri: 0028.gt.txt
+    metadata:
+      gt_source: layout
+  - id: 0029
+    image_uri: 0029.png
+    ground_truths:
+    - type: raw_text
+      uri: 0029.gt.txt
+    metadata:
+      gt_source: layout
+  - id: '0030'
+    image_uri: 0030.png
+    ground_truths:
+    - type: raw_text
+      uri: 0030.gt.txt
+    metadata:
+      gt_source: layout
+  - id: '0031'
+    image_uri: 0031.png
+    ground_truths:
+    - type: raw_text
+      uri: 0031.gt.txt
+    metadata:
+      gt_source: layout
+  - id: '0032'
+    image_uri: 0032.png
+    ground_truths:
+    - type: raw_text
+      uri: 0032.gt.txt
+    metadata:
+      gt_source: layout
+  - id: '0033'
+    image_uri: 0033.png
+    ground_truths:
+    - type: raw_text
+      uri: 0033.gt.txt
+    metadata:
+      gt_source: layout
+  - id: '0035'
+    image_uri: 0035.png
+    ground_truths:
+    - type: raw_text
+      uri: 0035.gt.txt
+    metadata:
+      gt_source: layout
+  - id: '0036'
+    image_uri: 0036.png
+    ground_truths:
+    - type: raw_text
+      uri: 0036.gt.txt
+    metadata:
+      gt_source: layout
+  - id: '0037'
+    image_uri: 0037.png
+    ground_truths:
+    - type: raw_text
+      uri: 0037.gt.txt
+    metadata:
+      gt_source: layout
+  - id: 0038
+    image_uri: 0038.png
+    ground_truths:
+    - type: raw_text
+      uri: 0038.gt.txt
+    metadata:
+      gt_source: layout
+pipelines:
+- name: E0 · tesseract
+  description: OCR seul (Tesseract Fraktur+fra).
+  initial_inputs:
+  - image
+  steps:
+  - id: lecture
+    kind: ocr
+    adapter_name: tesseract:lecture
+    input_types:
+    - image
+    output_types:
+    - raw_text
+    inputs_from:
+      image: __initial__
+- name: E1 · segmentation → tesseract
+  description: Segmentation Tesseract, OCR par région.
+  initial_inputs:
+  - image
+  steps:
+  - id: seg
+    kind: segmenter
+    adapter_name: tesseract_layout:seg
+    input_types:
+    - image
+    output_types:
+    - layout
+    inputs_from:
+      image: __initial__
+  - id: reco
+    kind: region_recognizer
+    adapter_name: tesseract:reco
+    input_types:
+    - layout
+    - image
+    output_types:
+    - layout
+    inputs_from:
+      layout: seg
+      image: __initial__
+    fanout: true
+    crop: true
+  - id: lecture
+    kind: projection
+    adapter_name: layout_to_text:lecture
+    input_types:
+    - layout
+    output_types:
+    - raw_text
+    inputs_from:
+      layout: reco
+- name: E3 · segmentation → tesseract → saknussemm (règles)
+  description: 'Validation de chaîne sans clé : correction structurée par règles.'
+  initial_inputs:
+  - image
+  steps:
+  - id: seg
+    kind: segmenter
+    adapter_name: tesseract_layout:seg
+    input_types:
+    - image
+    output_types:
+    - layout
+    inputs_from:
+      image: __initial__
+  - id: reco
+    kind: region_recognizer
+    adapter_name: tesseract:reco
+    input_types:
+    - layout
+    - image
+    output_types:
+    - layout
+    inputs_from:
+      layout: seg
+      image: __initial__
+    fanout: true
+    crop: true
+  - id: lecture
+    kind: projection
+    adapter_name: layout_to_text:lecture
+    input_types:
+    - layout
+    output_types:
+    - raw_text
+    inputs_from:
+      layout: reco
+  - id: correction
+    kind: structured_correction
+    adapter_name: saknussemm:regles
+    input_types:
+    - layout
+    output_types:
+    - layout
+    - corrected_text
+    - decisions
+    inputs_from:
+      layout: reco
+- name: E4 · segmentation → tesseract → saknussemm sélectif (règles, QE heuristique)
+  description: 'Validation de chaîne sans clé : routage QE (heuristique de saknussemm, AUC 0,5) puis règles.'
+  initial_inputs:
+  - image
+  steps:
+  - id: seg
+    kind: segmenter
+    adapter_name: tesseract_layout:seg
+    input_types:
+    - image
+    output_types:
+    - layout
+    inputs_from:
+      image: __initial__
+  - id: reco
+    kind: region_recognizer
+    adapter_name: tesseract:reco
+    input_types:
+    - layout
+    - image
+    output_types:
+    - layout
+    inputs_from:
+      layout: seg
+      image: __initial__
+    fanout: true
+    crop: true
+  - id: lecture
+    kind: projection
+    adapter_name: layout_to_text:lecture
+    input_types:
+    - layout
+    output_types:
+    - raw_text
+    inputs_from:
+      layout: reco
+  - id: correction
+    kind: structured_correction
+    adapter_name: saknussemm:regles_qe
+    input_types:
+    - layout
+    output_types:
+    - layout
+    - corrected_text
+    - decisions
+    inputs_from:
+      layout: reco
+- name: E5 · qwen2.5vl:3b (local)
+  description: VLM local zero-shot, prompt générique (déclaré au README).
+  initial_inputs:
+  - image
+  steps:
+  - id: lecture
+    kind: zero_shot
+    adapter_name: ollama:qwen_vlm
+    input_types:
+    - image
+    output_types:
+    - raw_text
+    inputs_from:
+      image: __initial__
+- name: E0 · mistral-ocr
+  description: OCR seul (Mistral OCR).
+  initial_inputs:
+  - image
+  steps:
+  - id: lecture
+    kind: ocr
+    adapter_name: mistral_ocr:lecture
+    input_types:
+    - image
+    output_types:
+    - raw_text
+    inputs_from:
+      image: __initial__
+- name: E2 · tesseract → mistral
+  description: OCR Tesseract puis correction LLM (texte).
+  initial_inputs:
+  - image
+  steps:
+  - id: lecture
+    kind: ocr
+    adapter_name: tesseract:lecture
+    input_types:
+    - image
+    output_types:
+    - raw_text
+    inputs_from:
+      image: __initial__
+  - id: correction
+    kind: correction
+    adapter_name: mistral:correction
+    input_types:
+    - raw_text
+    output_types:
+    - corrected_text
+    inputs_from:
+      raw_text: lecture
+- name: E2 · mistral-ocr → mistral
+  description: OCR Mistral puis correction LLM (texte).
+  initial_inputs:
+  - image
+  steps:
+  - id: lecture
+    kind: ocr
+    adapter_name: mistral_ocr:lecture
+    input_types:
+    - image
+    output_types:
+    - raw_text
+    inputs_from:
+      image: __initial__
+  - id: correction
+    kind: correction
+    adapter_name: mistral:correction
+    input_types:
+    - raw_text
+    output_types:
+    - corrected_text
+    inputs_from:
+      raw_text: lecture
+- name: E1 · segmentation → mistral (VLM par région)
+  description: Segmentation Tesseract, chaque région lue par le VLM.
+  initial_inputs:
+  - image
+  steps:
+  - id: seg
+    kind: segmenter
+    adapter_name: tesseract_layout:seg
+    input_types:
+    - image
+    output_types:
+    - layout
+    inputs_from:
+      image: __initial__
+  - id: reco
+    kind: region_recognizer
+    adapter_name: mistral:reco
+    input_types:
+    - layout
+    - image
+    output_types:
+    - layout
+    inputs_from:
+      layout: seg
+      image: __initial__
+    fanout: true
+    crop: true
+  - id: lecture
+    kind: projection
+    adapter_name: layout_to_text:lecture
+    input_types:
+    - layout
+    output_types:
+    - raw_text
+    inputs_from:
+      layout: reco
+- name: E3 · segmentation → tesseract → saknussemm (mistral)
+  description: Correction structurée intégrale, chaque ligne au modèle.
+  initial_inputs:
+  - image
+  steps:
+  - id: seg
+    kind: segmenter
+    adapter_name: tesseract_layout:seg
+    input_types:
+    - image
+    output_types:
+    - layout
+    inputs_from:
+      image: __initial__
+  - id: reco
+    kind: region_recognizer
+    adapter_name: tesseract:reco
+    input_types:
+    - layout
+    - image
+    output_types:
+    - layout
+    inputs_from:
+      layout: seg
+      image: __initial__
+    fanout: true
+    crop: true
+  - id: lecture
+    kind: projection
+    adapter_name: layout_to_text:lecture
+    input_types:
+    - layout
+    output_types:
+    - raw_text
+    inputs_from:
+      layout: reco
+  - id: correction
+    kind: structured_correction
+    adapter_name: saknussemm:mistral
+    input_types:
+    - layout
+    output_types:
+    - layout
+    - corrected_text
+    - decisions
+    - native_json
+    inputs_from:
+      layout: reco
+- name: E4 · segmentation → tesseract → saknussemm sélectif (mistral, QE dalembert)
+  description: 'Correction structurée sélective : seules les lignes au-dessus du seuil QE partent au modèle.'
+  initial_inputs:
+  - image
+  steps:
+  - id: seg
+    kind: segmenter
+    adapter_name: tesseract_layout:seg
+    input_types:
+    - image
+    output_types:
+    - layout
+    inputs_from:
+      image: __initial__
+  - id: reco
+    kind: region_recognizer
+    adapter_name: tesseract:reco
+    input_types:
+    - layout
+    - image
+    output_types:
+    - layout
+    inputs_from:
+      layout: seg
+      image: __initial__
+    fanout: true
+    crop: true
+  - id: lecture
+    kind: projection
+    adapter_name: layout_to_text:lecture
+    input_types:
+    - layout
+    output_types:
+    - raw_text
+    inputs_from:
+      layout: reco
+  - id: correction
+    kind: structured_correction
+    adapter_name: saknussemm:mistral_qe
+    input_types:
+    - layout
+    output_types:
+    - layout
+    - corrected_text
+    - decisions
+    - native_json
+    inputs_from:
+      layout: reco
+- name: E5 · mistral (VLM)
+  description: VLM cloud zero-shot sur la page entière.
+  initial_inputs:
+  - image
+  steps:
+  - id: lecture
+    kind: zero_shot
+    adapter_name: mistral:vlm
+    input_types:
+    - image
+    output_types:
+    - raw_text
+    inputs_from:
+      image: __initial__
+evaluation:
+  views:
+  - name: texte
+    description: 'Défaut (flat_text) : la sortie la plus aval de chaque chaîne. cer_diplo = convention
+      BNL ſ = s (repli des deux côtés).'
+    candidate_types:
+    - raw_text
+    - corrected_text
+    normalization_profile: flat_text
+    metric_names:
+    - cer
+    - wer
+    - cer_diplo
+    - cmer
+    - mer
+    - unanchored_trigrams
+  - name: texte (lignes)
+    description: 'Défaut (keep_line_breaks) : sauts de ligne comptés — le chiffre comparable à dinglehopper.'
+    candidate_types:
+    - raw_text
+    - corrected_text
+    normalization_profile: keep_line_breaks
+    metric_names:
+    - cer
+  - name: lecture
+    description: 'Ablation : l''étape « lecture » de chaque chaîne, avant toute correction (E0/E1 dans
+      les chaînes E2/E3/E4).'
+    candidate_types:
+    - raw_text
+    normalization_profile: flat_text
+    target_step: lecture
+    metric_names:
+    - cer
+    - wer
+    - cer_diplo
+  - name: sans césure
+    description: 'Convention ⸗ : un mot coupé en fin de ligne (⸗, -, ‐, ‑, –, ¬ + saut) est recollé des
+      deux côtés ; sauts de ligne comptés comme dans « texte (lignes) ».'
+    candidate_types:
+    - raw_text
+    - corrected_text
+    normalization_profile: dehyphenated
+    metric_names:
+    - cer
+adapter_kwargs:
+  tesseract:lecture:
+    label: lecture
+    lang: Fraktur+fra
+  tesseract_layout:seg:
+    label: seg
+    lang: Fraktur+fra
+  tesseract:reco:
+    label: reco
+    lang: Fraktur+fra
+  layout_to_text:lecture:
+    label: lecture
+  saknussemm:regles:
+    label: regles
+    producer: rules
+  saknussemm:regles_qe:
+    label: regles_qe
+    producer: rules
+    qe: heuristic
+    qe_skip: 0.5
+  ollama:qwen_vlm:
+    label: qwen_vlm
+    model: qwen2.5vl:3b
+    host: http://127.0.0.1:11434
+    role: zero_shot
+    max_tokens: 2048
+  mistral_ocr:lecture:
+    label: lecture
+    model: mistral-ocr-latest
+  mistral:correction:
+    label: correction
+    model: mistral-small-latest
+    role: text_only
+    max_tokens: 2048
+    prompt_name: correction_press_19c_european
+  mistral:reco:
+    label: reco
+    model: mistral-small-latest
+    role: zero_shot
+    max_tokens: 1024
+  mistral:vlm:
+    label: vlm
+    model: mistral-small-latest
+    role: zero_shot
+    max_tokens: 2048
+  saknussemm:mistral:
+    label: mistral
+    producer: mistral
+    model: mistral-small-latest
+  saknussemm:mistral_qe:
+    label: mistral_qe
+    producer: mistral
+    model: mistral-small-latest
+    qe: dalembert
+    qe_skip: 0.5

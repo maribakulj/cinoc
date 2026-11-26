@@ -386,8 +386,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="Exécute la même spec N fois et écrit une FOURCHETTE par métrique "
         "au lieu d'une décimale isolée (≥5 recommandé). Le rapport et le JSON "
         "portent le dernier run ; le bilan de variance va dans "
-        "<sortie>.variance.json. Incompatible avec --resume-dir : rejouer un "
-        "cache mesurerait le cache.",
+        "<sortie>.variance.json. Avec --resume-dir, chaque répétition archive "
+        "dans son dossier neuf (<archive>/repetition-<k>) : aucune ne relit "
+        "une autre, et --offline les re-note toutes.",
     )
     run_cmd.add_argument(
         "--check",

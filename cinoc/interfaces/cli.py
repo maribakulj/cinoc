@@ -35,7 +35,7 @@ from cinoc.app.report_images import (
     build_thumbnails,
     write_report_bundle,
 )
-from cinoc.app.resume import ResumeStore
+from cinoc.app.resume import ResumeStore, repetition_dir
 from cinoc.app.variance import run_repeatedly
 from cinoc.domain.errors import CinocError
 from cinoc.domain.run import RunManifest
@@ -256,11 +256,6 @@ def _run_config(
         raise CinocError(
             "--offline re-note une archive : il exige --resume-dir <archive>."
         )
-    if repeat > 1 and resume_dir:
-        raise CinocError(
-            "--repeat et --resume-dir s'excluent : rejouer un cache de reprise "
-            "mesurerait le cache, pas la variance du dispositif."
-        )
     registry = ModuleRegistry()
     register_default_modules(registry)
     discover_plugins(registry, enabled=True)  # CLI local : code de confiance
@@ -282,7 +277,6 @@ def _run_config(
     _coherent(spec)
     check_spec_models(spec, live=False)  # aucun modèle par défaut
     check_spec_settings(spec, registry)  # aucun réglage ignoré en silence
-    resume_store = ResumeStore(Path(resume_dir)) if resume_dir else None
     # Export HIPE = sink d'artefacts (les textes sont lus avant le nettoyage du
     # workspace) — le format JSONL porte les textes, pas les scores.
     sinks: list[ArtifactSink] = []
@@ -308,7 +302,12 @@ def _run_config(
             spec,
             registry=registry,
             code_version=resolve_code_version(),
-            resume_store=resume_store,
+            # Une archive par répétition : aucune ne relit une autre.
+            resume_store=(
+                ResumeStore(repetition_dir(Path(resume_dir), index, repeat))
+                if resume_dir
+                else None
+            ),
             artifact_sink=artifact_sink,
             max_workers=max_workers,
             offline=offline,

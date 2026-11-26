@@ -12,6 +12,3 @@ RÈGLES IMPÉRATIVES :
 5. Signale les passages illisibles par [illisible] plutôt que d'inventer
 6. Ne transcris que le texte principal — ignore les annotations marginales tardives
    sauf si elles font partie du texte courant
-
-Image (base64) :
-{image_b64}
