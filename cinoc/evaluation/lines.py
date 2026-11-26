@@ -21,14 +21,14 @@ locale) ne se relisent pas pareil. Par pipeline, sur les lignes GT du corpus
 
 **Applicabilité** : la distribution n'a de sens que si la normalisation de la
 vue **préserve les sauts de ligne** — sur un profil « à plat » (``flat_text``,
-``hipe``…), l'analyse est absente (jamais un chiffre trompeur). Sonde
+le défaut ; ``hipe``…), l'analyse est absente (jamais un chiffre trompeur) ;
+la vue par défaut « texte (lignes) » (``keep_line_breaks``) la porte. Sonde
 comportementale ``newline_preserved(view)`` : la survie de ``\\n`` à
 ``prepare_text`` (couvre profils **et** ``char_exclude``).
 """
 
 from __future__ import annotations
 
-import unicodedata
 from collections.abc import Sequence
 
 from rapidfuzz.distance import Levenshtein
@@ -66,17 +66,22 @@ def newline_preserved(view: EvaluationView) -> bool:
 
 
 def line_cer(reference: str, hypothesis: str) -> float:
-    """CER d'une paire de lignes (NFC + strip), plafonné à 1.0.
+    """CER d'une paire de lignes **déjà préparées par la vue**, plafonné à 1.0.
+
+    La formule de la métrique ``cer`` — distance d'édition / longueur de la
+    ligne de référence —, sans normalisation propre : la ligne a reçu celle de
+    la vue (``prepare_text``), comme le document. Elle appliquait autrefois
+    un NFC et un ``strip`` à elle, si bien que le CER d'une ligne et celui du
+    document ne suivaient pas la même convention (D-285). Sous le profil de la
+    vue « texte (lignes) », les blancs de bord sont déjà retirés.
 
     Ligne GT vide → 0.0 si l'hypothèse l'est aussi, 1.0 sinon (contenu
     halluciné sur une ligne blanche) — convention de la source, au niveau
     ligne seulement (un *document* sans ligne ne produit rien).
     """
-    ref = unicodedata.normalize("NFC", reference.strip())
-    hyp = unicodedata.normalize("NFC", hypothesis.strip())
-    if not ref:
-        return 0.0 if not hyp else 1.0
-    return min(Levenshtein.distance(ref, hyp) / len(ref), 1.0)
+    if not reference:
+        return 0.0 if not hypothesis else 1.0
+    return min(Levenshtein.distance(reference, hypothesis) / len(reference), 1.0)
 
 
 def aligned_line_cers(reference: str, hypothesis: str) -> list[float]:

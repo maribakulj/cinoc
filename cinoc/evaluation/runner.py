@@ -210,7 +210,11 @@ def evaluate_run(
         # pipeline_outputs / usage directement, hors du cycle observe→build.
         calibration = None
         if actives is None or "calibration" in actives:
-            calibration = calibration_analysis(view.name, corpus, pools)
+            # Les confiances de l'étape **notée** (D-285, D9) : celles d'un OCR
+            # ne disent rien du texte qu'un LLM a corrigé derrière lui.
+            calibration = calibration_analysis(
+                view, corpus, _scored_steps(view, pipeline_outputs)
+            )
         if calibration is not None:
             analyses.append(calibration)
         if "cer" in view.metric_names and (actives is None or "economics" in actives):
@@ -432,7 +436,15 @@ def _cross_engine_scores(
 def _candidate_for(
     view: EvaluationView, pipeline_name: str, by_step: StepArtifacts
 ) -> Artifact | None:
-    """L'artefact à noter : la sortie candidate de l'étape que la vue **vise**.
+    """L'artefact à noter (cf. :func:`_scored_step`)."""
+    scored = _scored_step(view, pipeline_name, by_step)
+    return None if scored is None else scored[1][scored[2]]
+
+
+def _scored_step(
+    view: EvaluationView, pipeline_name: str, by_step: StepArtifacts
+) -> tuple[str, Mapping[ArtifactType, Artifact], ArtifactType] | None:
+    """``(étape, ses sorties, type noté)`` : l'étape dont la vue note la sortie.
 
     ``view.target_step`` nommée → cette étape. Sinon, l'étape la plus **aval**
     (``by_step`` est dans l'ordre d'exécution) qui produit un type candidat.
@@ -445,12 +457,12 @@ def _candidate_for(
     déclarés, ici pour ceux qu'un module publierait sans les déclarer).
     """
     if view.target_step is not None:
-        steps: list[Mapping[ArtifactType, Artifact]] = [
-            by_step.get(view.target_step, {})
+        steps: list[tuple[str, Mapping[ArtifactType, Artifact]]] = [
+            (view.target_step, by_step.get(view.target_step, {}))
         ]
     else:
-        steps = list(reversed(list(by_step.values())))
-    for outputs in steps:
+        steps = list(reversed(list(by_step.items())))
+    for step_id, outputs in steps:
         présents = sorted(
             (t for t in outputs if t in view.candidate_types), key=lambda t: t.value
         )
@@ -461,7 +473,7 @@ def _candidate_for(
                 "restreignez 'candidate_types' à celui qui doit être noté."
             )
         if présents:
-            return outputs[présents[0]]
+            return step_id, outputs, présents[0]
     return None
 
 
@@ -555,6 +567,19 @@ def _project_side(
     if spec is None or spec.target_type != target_type:
         return None
     return get_projector(spec.projector_name)(representation, spec.params)
+
+
+def _scored_steps(
+    view: EvaluationView, pipeline_outputs: PipelineOutputs
+) -> dict[str, dict[str, tuple[str, Mapping[ArtifactType, Artifact]]]]:
+    """``{pipeline: {document: (étape notée, ses sorties)}}`` pour la vue."""
+    out: dict[str, dict[str, tuple[str, Mapping[ArtifactType, Artifact]]]] = {}
+    for pipeline, by_document in pipeline_outputs.items():
+        for document_id, by_step in by_document.items():
+            scored = _scored_step(view, pipeline, by_step)
+            if scored is not None:
+                out.setdefault(pipeline, {})[document_id] = scored[:2]
+    return out
 
 
 def _prepare(representation: object, view: EvaluationView) -> object:

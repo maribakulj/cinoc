@@ -152,7 +152,7 @@ def test_char_exclude_absent_by_default(tmp_path: Path) -> None:
 
 def _text_view_metrics(spec: object) -> tuple[str, ...]:
     views = spec.evaluation.views  # type: ignore[attr-defined]
-    text = next(v for v in views if v.name == "text")
+    text = next(v for v in views if v.name == "texte")
     return text.metric_names
 
 

@@ -68,7 +68,7 @@ def _run(config: Path, **evaluation: object) -> RunResult:
 
 def _agg(result: RunResult, pipeline: str, metric: str = "cer") -> MetricScore:
     for entry in result.pipelines:
-        if entry.pipeline == pipeline and entry.view == "text":
+        if entry.pipeline == pipeline and entry.view == "texte":
             return next(s for s in entry.aggregate if s.metric == metric)
     raise AssertionError(pipeline)
 
@@ -78,7 +78,7 @@ def _doc(result: RunResult, pipeline: str, document: str) -> MetricScore:
         if (entry.pipeline, entry.document_id, entry.view) == (
             pipeline,
             document,
-            "text",
+            "texte",
         ):
             return next(s for s in entry.scores if s.metric == "cer")
     raise AssertionError(document)
@@ -123,7 +123,7 @@ def test_json_written_by_the_cli_carries_support_and_reason(
     cer = next(
         s
         for p in data["pipelines"]
-        if p["pipeline"] == "pero" and p["view"] == "text"
+        if p["pipeline"] == "pero" and p["view"] == "texte"
         for s in p["aggregate"]
         if s["metric"] == "cer"
     )

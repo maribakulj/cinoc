@@ -336,7 +336,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Historique longitudinal : série d'un pipeline ou régressions.",
     )
     history_cmd.add_argument("db", help="Base SQLite de l'historique.")
-    history_cmd.add_argument("--view", default="text")
+    history_cmd.add_argument("--view", default="texte")
     history_cmd.add_argument("--metric", default="cer")
     history_cmd.add_argument(
         "--pipeline",

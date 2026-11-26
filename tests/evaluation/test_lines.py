@@ -20,6 +20,7 @@ from cinoc.evaluation.lines import (
     newline_preserved,
     percentile,
 )
+from cinoc.evaluation.representations import prepare_text
 
 #: Réf 5 lignes (5 caractères chacune) ; hyp à 0, 1, 2, 3 et 5 substitutions
 #: → CER par ligne [0.0, 0.2, 0.4, 0.6, 1.0] (dérivé à la main).
@@ -45,15 +46,25 @@ class TestLineCer:
 
     def test_empty_reference_conventions(self) -> None:
         assert line_cer("", "") == 0.0
-        assert line_cer("   ", "") == 0.0  # strip : ligne blanche = vide
         assert line_cer("", "halluciné") == 1.0  # contenu sur ligne blanche
 
     def test_capped_at_one(self) -> None:
         assert line_cer("ab", "abcdef") == 1.0  # 4 insertions / 2 → plafonné
 
-    def test_nfc_and_strip(self) -> None:
-        assert line_cer("café", "café") == 0.0  # composé ≡ décomposé
-        assert line_cer("  abc  ", "abc") == 0.0
+    def test_no_normalisation_of_its_own(self) -> None:
+        """D-285 : une seule définition du CER. La ligne arrive préparée par la
+        vue ; ``line_cer`` n'ajoute ni NFC ni ``strip`` — il les ajoutait, et
+        le CER d'une ligne ne suivait pas la convention du document."""
+        assert line_cer("caf\u00e9", "cafe\u0301") == 0.5  # 2 éditions / 4
+        assert line_cer("  abc  ", "abc") == pytest.approx(4 / 7)
+
+    def test_the_view_profile_is_what_prepares_the_line(self) -> None:
+        # Sous ``keep_line_breaks`` (vue « texte (lignes) »), NFC et bords sont
+        # traités par le profil, des deux côtés, comme pour le document.
+        view = _view("keep_line_breaks")
+        ref = prepare_text("caf\u00e9\n  abc  ", view)
+        hyp = prepare_text("cafe\u0301\nabc", view)
+        assert aligned_line_cers(ref, hyp) == [0.0, 0.0]
 
 
 class TestAlignedLineCers:

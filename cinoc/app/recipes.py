@@ -29,6 +29,7 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from cinoc.app.text_views import text_views
 from cinoc.domain.artifacts import ArtifactType
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.errors import CinocError
@@ -317,14 +318,18 @@ def describe(recipe: Recipe, lang: str = "fr") -> str:
     return recipe.title.get(lang) or recipe.title.get("fr") or recipe.name
 
 
-def default_evaluation(pipeline: PipelineSpec) -> EvaluationSpec:
+def default_evaluation(
+    pipeline: PipelineSpec, corpus: CorpusSpec
+) -> EvaluationSpec:
     """Vues d'évaluation déduites de ce que le pipeline **produit réellement**.
 
     Une recette décrit une forme, pas une façon de la noter. Plutôt que d'imposer
     une vue fixe — qui serait vide sur la moitié des recettes — on regarde les
     types de sortie : du texte se note en texte, une mise en page en structure,
     des entités en entités. Un type qu'aucune étape ne produit ne donne pas de
-    vue : une vue vide vaut moins que pas de vue.
+    vue : une vue vide vaut moins que pas de vue. Le texte se note sous les
+    vues texte par défaut (``text_views`` : ``texte``, plus ``texte (lignes)``
+    quand la GT du corpus a des lignes).
     """
     produits = {
         t for etape in pipeline.steps for t in etape.output_types
@@ -332,9 +337,9 @@ def default_evaluation(pipeline: PipelineSpec) -> EvaluationSpec:
     vues: list[EvaluationView] = []
     candidats_texte = produits & {RAW, CORR}
     if candidats_texte:
-        vues.append(
-            EvaluationView(
-                name="texte",
+        vues.extend(
+            text_views(
+                corpus,
                 candidate_types=frozenset(candidats_texte),
                 metric_names=("cer", "wer"),
             )
@@ -377,7 +382,7 @@ def plan_recipe_run(
     return RunSpec(
         corpus=corpus,
         pipelines=(pipeline,),
-        evaluation=default_evaluation(pipeline),
+        evaluation=default_evaluation(pipeline, corpus),
         adapter_kwargs=kwargs,
         run_id=run_id,
     )

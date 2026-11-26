@@ -8,8 +8,10 @@ payload ``diagnostics`` (``evaluation.analysis``). Heuristiques **maison**
 - **Confusions** : caractères substitués appariés positionnellement dans les
   segments ``replace`` d'un alignement ``difflib`` **à deux niveaux** (mots
   puis caractères — cf. ``char_confusions``) — top par pipeline.
-- **Pires lignes** : lignes appariées par index, CER par ligne
-  (Levenshtein/longueur de référence) — top corpus, extraits verbatim tronqués.
+- **Pires lignes** : lignes appariées par index, notées par ``lines.line_cer``
+  (la formule de l'analyse par ligne) — top corpus, extraits verbatim
+  tronqués. Absentes d'une vue dont le profil écrase les sauts de ligne : un
+  document à plat n'a qu'une « ligne », la montrer serait trompeur.
 - **Documents difficiles** : CER moyen par document sur les pipelines scorés.
 """
 
@@ -20,8 +22,6 @@ from collections import Counter
 from collections.abc import Mapping, Sequence
 from difflib import SequenceMatcher
 
-from rapidfuzz.distance import Levenshtein
-
 from cinoc.evaluation.analysis import (
     Analysis,
     CharConfusion,
@@ -30,6 +30,7 @@ from cinoc.evaluation.analysis import (
     PipelineConfusions,
     WorstLine,
 )
+from cinoc.evaluation.lines import line_cer
 from cinoc.evaluation.result import MetricScore
 
 #: Bornes de rendu : assez pour diagnostiquer, pas un dump du corpus.
@@ -93,8 +94,11 @@ def line_cers(
 ) -> list[tuple[int, float, str, str]]:
     """``(index, cer, ligne_ref, ligne_hyp)`` par paire de lignes (même index).
 
-    Les lignes de référence vides sont ignorées (CER indéfini) ; les lignes
-    excédentaires de l'hypothèse relèvent du scalaire ``hallucination``.
+    Notée par :func:`lines.line_cer`, la formule de l'analyse par ligne — une
+    seule définition du CER de ligne au rapport (D-285). L'appariement reste
+    positionnel (l'aligner comme F15 reste à faire). Les lignes de référence
+    vides sont ignorées (CER indéfini) ; les lignes excédentaires de
+    l'hypothèse relèvent du scalaire ``hallucination``.
     """
     out: list[tuple[int, float, str, str]] = []
     hyp_lines = hypothesis.splitlines()
@@ -102,8 +106,7 @@ def line_cers(
         if not ref_line:
             continue
         hyp_line = hyp_lines[index] if index < len(hyp_lines) else ""
-        cer = Levenshtein.distance(ref_line, hyp_line) / len(ref_line)
-        out.append((index, cer, ref_line, hyp_line))
+        out.append((index, line_cer(ref_line, hyp_line), ref_line, hyp_line))
     return out
 
 
@@ -114,7 +117,9 @@ def _excerpt(text: str) -> str:
 class DiagnosticsCollector:
     """Accumule confusions et lignes au fil du scoring d'une vue."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, lines: bool = True) -> None:
+        #: ``False`` : la vue écrase les sauts de ligne, pas de « pire ligne ».
+        self._with_lines = lines
         self._confusions: dict[str, Counter[tuple[str, str]]] = {}
         self._lines: list[tuple[float, str, str, int, str, str]] = []
 
@@ -123,6 +128,8 @@ class DiagnosticsCollector:
     ) -> None:
         bucket = self._confusions.setdefault(pipeline, Counter())
         bucket.update(char_confusions(reference, hypothesis))
+        if not self._with_lines:
+            return
         for index, cer, ref_line, hyp_line in line_cers(reference, hypothesis):
             if cer > 0:
                 self._lines.append(

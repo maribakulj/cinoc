@@ -35,6 +35,7 @@ from cinoc.reports.sections._inference_text import (
     posthoc_text,
     reason_text,
 )
+from cinoc.reports.sections._profile_text import convention_html
 from cinoc.reports.sections._tables import coverage, ordered_unique
 from cinoc.reports.svg import dot_plot_ci
 
@@ -86,6 +87,7 @@ class KeyMeasuresSection:
         lang = ctx.lang
         views = ordered_unique(p.view for p in result.pipelines)
         multi = len(views) > 1
+        specs = {v.name: v for v in result.manifest.view_specs}
         blocks: list[str] = []
         for view in views:
             pipes = [p for p in result.pipelines if p.view == view]
@@ -99,6 +101,11 @@ class KeyMeasuresSection:
             head = ""
             if multi:
                 head = f"<h3>{escape(view_label(view, lang))}</h3>\n"
+            # La convention à côté du chiffre (D-285) : un CER ne se lit pas
+            # sans sa normalisation.
+            spec = specs.get(view)
+            if spec is not None:
+                head += convention_html(spec, lang)
             blocks.append(
                 head
                 + self._table(pipes, cols, order, lang)

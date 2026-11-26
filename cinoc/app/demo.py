@@ -76,7 +76,7 @@ _DEMO_DOCS: tuple[tuple[str, str, str, dict[str, str]], ...] = (
 # ``air`` figure ici car le mini-corpus exerce un vrai cas : ``pero`` rend
 # « Froiſſart » (ſ long) là où la GT écrit « Froissart » → archaïsme **inséré**.
 _TEXT_VIEW = EvaluationView(
-    name="text",
+    name="texte",
     candidate_types=frozenset({ArtifactType.RAW_TEXT}),
     metric_names=("cer", "cer_diplo", "wer", "mer", "air"),
 )

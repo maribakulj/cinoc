@@ -19,7 +19,11 @@ from cinoc.formats.alto import parse_alto
 from cinoc.formats.alto.layout_map import alto_to_layout
 from cinoc.formats.pagexml import parse_pagexml
 from cinoc.formats.pagexml.layout_map import page_to_layout
-from cinoc.formats.text import get_builtin_profile, read_plaintext
+from cinoc.formats.text import (
+    NormalizationProfile,
+    get_builtin_profile,
+    read_plaintext,
+)
 
 _TEXT_TYPES = frozenset(
     {
@@ -83,6 +87,21 @@ def _load_entities(uri: str, data: bytes) -> EntitySet:
         raise EvaluationError(f"entités illisibles ({uri!r}) : {exc}") from exc
 
 
+def view_profile(view: EvaluationView) -> NormalizationProfile | None:
+    """Le profil que la vue applique ; ``None`` = comparaison brute.
+
+    Un nom inconnu lève ``EvaluationError`` : il n'y a pas de repli silencieux
+    sur un autre profil. Le rapport le lit ici pour **dire** la convention
+    (D-285) — la même résolution que celle qui a préparé les textes.
+    """
+    if view.normalization_profile is None:
+        return None
+    try:
+        return get_builtin_profile(view.normalization_profile)
+    except KeyError as exc:
+        raise EvaluationError(str(exc)) from exc
+
+
 def prepare_text(text: str, view: EvaluationView) -> str:
     """Applique la normalisation de la vue (profil + ``char_exclude``) à un texte.
 
@@ -90,11 +109,8 @@ def prepare_text(text: str, view: EvaluationView) -> str:
     analyses qui chargent leurs propres textes (bilan de correction) passent
     par ici — une seule implémentation, symétrique GT/hypothèse.
     """
-    if view.normalization_profile is not None:
-        try:
-            profile = get_builtin_profile(view.normalization_profile)
-        except KeyError as exc:
-            raise EvaluationError(str(exc)) from exc
+    profile = view_profile(view)
+    if profile is not None:
         text = profile.normalize(text)
     if view.char_exclude:
         excluded = set(view.char_exclude)
@@ -102,4 +118,4 @@ def prepare_text(text: str, view: EvaluationView) -> str:
     return text
 
 
-__all__ = ["load_representation", "prepare_text"]
+__all__ = ["load_representation", "prepare_text", "view_profile"]

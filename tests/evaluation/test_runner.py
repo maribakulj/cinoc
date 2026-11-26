@@ -13,6 +13,7 @@ from cinoc.domain.documents import DocumentRef, GroundTruthRef
 from cinoc.domain.evaluation import EvaluationSpec, EvaluationView
 from cinoc.domain.pipeline import PipelineSpec
 from cinoc.domain.run import RunManifest
+from cinoc.evaluation.analysis import DiagnosticsPayload
 from cinoc.evaluation.errors import EvaluationError
 from cinoc.evaluation.registry import MetricRegistry, register_default_metrics
 from cinoc.evaluation.result import RunResult
@@ -370,14 +371,32 @@ def test_inference_analyses_through_evaluate_run(tmp_path: Path) -> None:
         started_at=FIXED,
         completed_at=FIXED,
     )
+    # Sauts de ligne gardés : les analyses par ligne ne vivent que sous un
+    # profil qui les préserve (D-285 ; le défaut est à plat).
+    lines_view = TEXT_VIEW.model_copy(
+        update={"normalization_profile": "keep_line_breaks"}
+    )
     result = evaluate_run(
+        corpus=corpus,
+        evaluation=EvaluationSpec(views=(lines_view,), analyses="toutes"),
+        pipeline_outputs=outputs,
+        registry=_registry(),
+        manifest=manifest,
+    )
+    by_kind = {a.payload.kind: a for a in result.analyses}
+    flat = evaluate_run(
         corpus=corpus,
         evaluation=EvaluationSpec(views=(TEXT_VIEW,), analyses="toutes"),
         pipeline_outputs=outputs,
         registry=_registry(),
         manifest=manifest,
     )
-    by_kind = {a.payload.kind: a for a in result.analyses}
+    flat_kinds = {a.payload.kind: a.payload for a in flat.analyses}
+    # À plat, rien de ce qui se lit par ligne : ni distribution, ni pire ligne.
+    assert {"lines", "document_lines"}.isdisjoint(flat_kinds)
+    flat_diagnostics = flat_kinds["diagnostics"]
+    assert isinstance(flat_diagnostics, DiagnosticsPayload)
+    assert flat_diagnostics.worst_lines == ()
     assert set(by_kind) == {
         "inference",
         "diagnostics",

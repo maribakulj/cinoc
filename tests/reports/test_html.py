@@ -39,9 +39,12 @@ def test_localized_picks_language() -> None:
 
 
 def test_view_label_maps_internal_names_to_human() -> None:
-    # le nom interne « text » ne fuit plus dans l'UI
-    assert view_label("text", "fr") == "Texte brut"
-    assert view_label("text", "en") == "Plain text"
+    # le nom interne ne fuit plus dans l'UI ; « brut » non plus : la vue texte
+    # est normalisée par défaut (D-285), son profil est dit à côté du chiffre.
+    assert view_label("texte", "fr") == "Texte"
+    assert view_label("texte", "en") == "Text"
+    assert view_label("texte (lignes)", "en") == "Text (lines)"
+    assert view_label("text", "fr") == "Texte"
     assert view_label("diplomatic", "fr") == "Transcription diplomatique"
     assert view_label("diplomatic", "en") == "Diplomatic transcription"
 

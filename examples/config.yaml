@@ -89,7 +89,7 @@ pipelines:
     - raw_text
 evaluation:
   views:
-  - name: text
+  - name: texte
     candidate_types:
     - raw_text
     metric_names:

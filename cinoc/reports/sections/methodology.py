@@ -10,10 +10,16 @@ fabriquée ; un champ absent n'est pas affiché).
 
 from __future__ import annotations
 
+from cinoc.domain.artifacts import ArtifactType
 from cinoc.domain.evaluation import EvaluationView
 from cinoc.evaluation.result import RunResult
 from cinoc.reports.html import escape, localized
 from cinoc.reports.section import Html, SectionContext
+from cinoc.reports.sections._profile_text import profile_definition
+
+#: Une vue ne normalise que du texte : sur une vue structure ou entités, le
+#: profil n'a rien à préparer, la ligne « Normalisation » mentirait.
+_TEXT_TYPES = frozenset({ArtifactType.RAW_TEXT, ArtifactType.CORRECTED_TEXT})
 
 
 def _kv(label: str, value: str) -> str:
@@ -47,14 +53,13 @@ def _view_block(view: EvaluationView, lang: str) -> str:
         rows += _kv(
             localized(lang, "Étape notée", "Scored step"), escape(view.target_step)
         )
-    rows += _kv(
-        localized(lang, "Normalisation", "Normalisation"),
-        escape(view.normalization_profile or localized(lang, "aucune", "none")),
-    )
-    if view.char_exclude:
+    # Le nom **et** la définition du profil, dérivée de ses leviers (D-285) :
+    # c'est la convention sous laquelle le chiffre de la vue a été calculé.
+    # ``char_exclude`` y est dit aussi (« puis caractères exclus »).
+    if view.candidate_types & _TEXT_TYPES:
         rows += _kv(
-            localized(lang, "Caractères exclus", "Excluded characters"),
-            escape(view.char_exclude),
+            localized(lang, "Normalisation", "Normalisation"),
+            profile_definition(view, lang),
         )
     if view.metric_names:
         rows += _kv(
@@ -153,8 +158,10 @@ class MethodologySection:
         conventions = localized(
             lang,
             "<b>Conventions.</b> Les métriques d’erreur (CER, WER, MER) sont des "
-            "distances d’édition normalisées par la longueur de la référence "
-            "(plus bas = mieux). Les agrégats par moteur sont <b>micro</b> : "
+            "distances d’édition rapportées à la référence (plus bas = mieux), "
+            "calculées sur les deux textes préparés par le profil de la vue "
+            "(ci-dessus) ; leurs définitions sont au glossaire. Les agrégats "
+            "par moteur sont <b>micro</b> : "
             "Σ (valeur × poids) / Σ poids sur les documents notés, le poids étant "
             "le dénominateur de la métrique — pour un taux d’erreur, Σ erreurs / "
             "Σ longueurs de référence : un long document pèse à proportion de sa "
@@ -162,11 +169,15 @@ class MethodologySection:
             "ratio, documents rééchantillonnés. Une moyenne des taux par document "
             "(macro) est nommée comme telle (« moyen », µ). Une valeur absente "
             "est rendue « — », jamais interprétée comme zéro. Un document non "
-            "produit par un moteur est omis de ses agrégats (pas de score factice). La "
-            "normalisation typographique est appliquée avant comparaison selon le "
-            "profil de chaque vue (ci-dessus).",
+            "produit par un moteur est omis de ses agrégats (pas de score "
+            "factice). Une "
+            "vue qui ne nomme pas de profil reçoit <code>flat_text</code> ; la "
+            "comparaison brute se demande explicitement "
+            "(<code>normalization_profile: null</code>).",
             "<b>Conventions.</b> Error metrics (CER, WER, MER) are edit distances "
-            "normalised by reference length (lower is better). Per-engine aggregates "
+            "relative to the reference (lower is better), computed on both texts "
+            "as prepared by the view’s profile (above); their definitions are in "
+            "the glossary. Per-engine aggregates "
             "are <b>micro</b>: Σ (value × weight) / Σ weight over the scored "
             "documents, the weight being the metric’s denominator — for an error "
             "rate, Σ errors / Σ reference lengths: a long document weighs in "
@@ -174,8 +185,9 @@ class MethodologySection:
             "of that same ratio, resampling documents. A mean of per-document "
             "rates (macro) is named as such (“mean”, µ). A missing value "
             "renders as “—”, never as zero. A document not produced by an engine is "
-            "omitted from its aggregates (no fake score). Typographic normalisation "
-            "is applied before comparison per each view’s profile (above).",
+            "omitted from its aggregates (no fake score). A view naming no profile "
+            "gets <code>flat_text</code>; raw comparison is requested explicitly "
+            "(<code>normalization_profile: null</code>).",
         )
         title = localized(
             lang, "Méthodologie & reproductibilité", "Methodology & reproducibility"

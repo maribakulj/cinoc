@@ -193,7 +193,7 @@ exigent la paire raw/system). Noms HIPE à la frontière (Annexe A).
 ### 7.2 Deux profils de normalisation (R-1.6)
 - `hipe` : copie exacte de `norm()` (§4.3) ; `heritage` : lowercase + ponctuation +
   espaces **sans** mappings historiques (vérifier au build s'il se compose depuis
-  `caseless`/`no_punctuation` existants) ; le score `raw` = vue sans profil.
+  `caseless`/`no_punctuation` existants) ; le score `raw` = vue de comparaison brute (`normalization_profile: null` explicite ; une vue qui n'en nomme aucun reçoit `flat_text` depuis D-285).
 - Les deltas sont des **différences entre vues** (aucune mécanique nouvelle) :
   `delta_norm = cmer_raw − cmer_hipe` ; `delta_heritage = cmer_heritage − cmer_hipe`.
 - [x] Chaque nombre publié mentionne son profil (vues nommées dans le payload,

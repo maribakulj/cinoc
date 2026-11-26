@@ -133,7 +133,8 @@ _STRINGS: dict[str, dict[str, str]] = {
         "bench_options": "Options",
         "bench_execute_desc": "Lance le run puis ouvre le rapport final ou la "
         "vue de segmentation.",
-        "bench_norm_none": "(aucune)",
+        "bench_norm_none": "(défaut : flat_text, blancs écrasés, "
+        "+ vue « texte (lignes) »)",
         "bench_error_422": "Configuration incomplète ou invalide.",
         "bench_error_404": "Corpus introuvable.",
         "bench_error_409": "Un moteur requis est indisponible.",
@@ -382,7 +383,8 @@ _STRINGS: dict[str, dict[str, str]] = {
         "bench_options": "Options",
         "bench_execute_desc": "Launch the run, then open the final report or "
         "segmentation view.",
-        "bench_norm_none": "(none)",
+        "bench_norm_none": "(default: flat_text, whitespace collapsed, "
+        "+ “text (lines)” view)",
         "bench_error_422": "Incomplete or invalid configuration.",
         "bench_error_404": "Corpus not found.",
         "bench_error_409": "A required engine is unavailable.",

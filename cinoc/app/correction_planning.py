@@ -34,6 +34,7 @@ from cinoc.adapters.layout.saknussemm_correct import (
     PRODUCERS,
 )
 from cinoc.app.corpus_upload import GT_SOURCE_KEY
+from cinoc.app.text_views import text_views
 from cinoc.domain.artifacts import ArtifactType
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.documents import DocumentRef, GroundTruthRef
@@ -134,15 +135,15 @@ def plan_correction_run(
             ),
         ),
     )
-    views = [
-        EvaluationView(
-            name="texte",
+    views = list(
+        text_views(
+            corpus,
             candidate_types=frozenset(
                 {ArtifactType.RAW_TEXT, ArtifactType.CORRECTED_TEXT}
             ),
             metric_names=("cer", "wer"),
         )
-    ]
+    )
     if any(d.gt_for(ArtifactType.LAYOUT) is not None for d in corpus.documents):
         views.append(
             EvaluationView(

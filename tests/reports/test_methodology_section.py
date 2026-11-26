@@ -156,3 +156,23 @@ def test_conventions_say_the_aggregate_is_micro_in_both_languages() -> None:
     assert "Per-engine aggregates are <b>micro</b>" in english
     assert "Σ errors / Σ reference lengths" in english
     assert "bootstrap of that same ratio" in english
+
+
+def test_view_profile_is_named_and_defined_text_views_only() -> None:
+    """D-285 : nom et définition du profil d'une vue texte ; rien pour une vue
+    structure (le profil n'y prépare rien, la ligne mentirait)."""
+    texte = EvaluationView(
+        name="texte", candidate_types=frozenset({ArtifactType.RAW_TEXT})
+    )
+    structure = EvaluationView(
+        name="structure", candidate_types=frozenset({ArtifactType.LAYOUT})
+    )
+    manifest = _manifest(view_specs=(texte, structure))
+    fr = MethodologySection().render(_result(manifest), SectionContext())
+    en = MethodologySection().render(_result(manifest), SectionContext(lang="en"))
+    assert fr is not None and en is not None
+    assert fr.count(">Normalisation<") == 1
+    assert "<code>flat_text</code> : NFC, invisibles retirés" in fr
+    assert "<code>flat_text</code>: NFC, invisible characters removed" in en
+    # La convention par défaut et la comparaison brute sont dites.
+    assert "<code>normalization_profile: null</code>" in fr

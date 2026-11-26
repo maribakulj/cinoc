@@ -87,7 +87,7 @@ def test_profile_includes_calibration_and_composition_when_present() -> None:
         n_bins=2,
         pipelines=(
             PipelineCalibration(
-                pipeline="tesseract", n_tokens=10, ece=0.08, mce=0.2,
+                pipeline="tesseract", step="ocr", n_tokens=10, ece=0.08, mce=0.2,
                 bins=(
                     CalibrationBin(
                         lower=0.8, upper=1.0, mean_confidence=0.9,

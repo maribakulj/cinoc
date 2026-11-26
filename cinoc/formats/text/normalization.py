@@ -34,6 +34,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from cinoc.domain.evaluation import DEFAULT_NORMALIZATION_PROFILE
+
 logger = logging.getLogger(__name__)
 
 UnicodeForm = Literal["none", "NFC", "NFD", "NFKC", "NFKD"]
@@ -388,13 +390,19 @@ class NormalizationProfile(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Profils préconfigurés (14) — défaut neutre ``nfc``, aucun profil privilégié
+# Profils préconfigurés (14) — défaut ``flat_text`` (D-271, D-285)
 # ---------------------------------------------------------------------------
 
 NORMALIZATION_PROFILES: dict[str, NormalizationProfile] = {
     p.name: p
     for p in (
-        NormalizationProfile(name="nfc", description="NFC seul (neutre)"),
+        NormalizationProfile(
+            name="nfc",
+            description=(
+                "NFC + invisibles retirés ; blancs intacts (sauts de ligne et "
+                "espaces multiples comptés)"
+            ),
+        ),
         NormalizationProfile(
             name="nfkc", unicode_form="NFKC", description="NFKC (ligatures ﬁﬂ…)"
         ),
@@ -414,12 +422,18 @@ NORMALIZATION_PROFILES: dict[str, NormalizationProfile] = {
         NormalizationProfile(
             name="flat_text",
             whitespace="flat",
-            description="NFC + comparaison à plat (espaces et sauts écrasés)",
+            description=(
+                "Défaut : NFC + invisibles retirés + tout blanc (sauts de ligne "
+                "compris) réduit à une espace"
+            ),
         ),
         NormalizationProfile(
             name="keep_line_breaks",
             whitespace="intra_line",
-            description="NFC + espaces normalisés, sauts de ligne conservés",
+            description=(
+                "NFC + invisibles retirés + blancs d'une ligne écrasés, sauts "
+                "de ligne comptés (vue « texte (lignes) »)"
+            ),
         ),
         NormalizationProfile(
             name="no_punctuation",
@@ -499,8 +513,17 @@ NORMALIZATION_PROFILES: dict[str, NormalizationProfile] = {
     )
 }
 
-#: Profil par défaut : neutre, sans table culturelle.
-DEFAULT_PROFILE: NormalizationProfile = NORMALIZATION_PROFILES["nfc"]
+#: Profil d'une vue qui n'en nomme aucun (D-285) : NFC, invisibles retirés,
+#: tout blanc réduit à une espace. **Pourquoi à plat** : une vue texte compare
+#: une transcription, pas une segmentation en lignes — sous ``nfc`` un moteur
+#: qui déroule ses lignes payait ~1 substitution par ligne quelle que soit sa
+#: qualité (pilote BNL : CER du VLM 0,0530 contre 0,0406), et les espaces
+#: multiples comptaient, plus sévère que jiwer, ocreval ou dinglehopper.
+#: Aucune table culturelle : ``’``/``'`` et ``ſ``/``s`` restent distincts.
+DEFAULT_PROFILE: NormalizationProfile = NORMALIZATION_PROFILES[
+    DEFAULT_NORMALIZATION_PROFILE
+]
+
 
 
 def get_builtin_profile(name: str) -> NormalizationProfile:

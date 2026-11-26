@@ -183,6 +183,8 @@ backlog inexistant. **Aucune logique ne change.**
 
 > **S10b (D-282)** : les champs ensemblistes sérialisés **triés** en JSON — `EvaluationView.candidate_types` (par valeur) et `MetricSpec.tags` (`field_serializer(when_used="json")`) ; le mode Python garde le `frozenset`. Le format ne change pas (une liste), seul l'ordre devient stable : pas de version de schéma. Preuves : `tests/domain/test_evaluation.py::test_set_fields_serialize_sorted_whatever_the_hash_seed` (8 graines de hachage) · `tests/interfaces/test_run_determinism.py`.
 
+> **P5e 7 (D-285)** : `EvaluationView.normalization_profile` vaut par défaut `DEFAULT_NORMALIZATION_PROFILE` = `"flat_text"` (constante de `domain/evaluation.py`, vérifiée contre `NORMALIZATION_PROFILES` par la couche 2) ; `None` **explicite** = comparaison brute — le sens qu'avait `null` dans un JSON antérieur, donc rien n'est relu faux. Le nom est toujours sérialisé : un `RunResult` dit sous quelle convention son chiffre a été calculé. — *preuve : `tests/domain/test_evaluation.py::test_view_without_profile_gets_the_default_and_null_means_raw`*
+
 > Tri-état : `[x]` fait **+ preuve** · `[ ]` à faire · `[~]` différé/réserve + raison.
 > Mise à jour dans le **même commit** que le code (règle d'or anti-dérive).
 > **Statut couche 1 : ✅ vert** (vérifié 2026-05-31).

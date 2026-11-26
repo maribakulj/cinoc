@@ -135,8 +135,9 @@ def test_layout_candidate_scored_by_text_metric_via_projection(tmp_path: Path) -
     result = _run(tmp_path, view)
     aggregate = result.pipelines[0].aggregate[0]  # type: ignore[attr-defined]
     assert aggregate.metric == "cer"
-    # ref = "hello world\n\nsecond block" (25 car.), 1 substitution → CER 1/25.
-    assert aggregate.value == pytest.approx(1 / 25)
+    # ref = "hello world\n\nsecond block", mise à plat par le profil par défaut
+    # (D-285) : "hello world second block" (24 car.), 1 substitution → 1/24.
+    assert aggregate.value == pytest.approx(1 / 24)
     assert aggregate.support == 1
 
 

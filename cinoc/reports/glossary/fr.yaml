@@ -14,29 +14,36 @@
 cer:
   title: "CER — taux d'erreur caractère"
   definition: >-
-    Rapport entre la distance d'édition (substitutions + insertions +
-    suppressions) au niveau caractère et la longueur de la référence,
-    exprimé en proportion. 0 = transcription parfaite.
+    Distance d'édition (substitutions + insertions + suppressions) entre la
+    sortie et la référence, comptée en points de code Unicode, rapportée à
+    la longueur de la référence. Les deux textes sont d'abord préparés par le
+    profil de la vue (défaut flat_text : NFC, invisibles retirés, tout blanc
+    réduit à une espace). 0 = transcription parfaite ; dépasse 1 si la sortie
+    rallonge. Le CER par ligne applique la même formule à chaque ligne,
+    plafonnée à 1.
   measures: >-
     La fidélité caractère-à-caractère entre la sortie du moteur et la
-    vérité terrain, après le profil de normalisation choisi.
+    vérité terrain, sous la convention de la vue.
   limits: >-
     Insensible au sens des erreurs : une faute sur un caractère rare pèse
-    autant qu'une faute courante. Dépend du profil de normalisation appliqué.
+    autant qu'une faute courante. Dépend du profil : sous keep_line_breaks
+    (vue « texte (lignes) »), un saut de ligne rendu par une espace compte
+    une substitution ; à plat, non.
 
 cer_diplo:
   title: "CER diplomatique"
   definition: >-
-    CER calculé après une normalisation minimale appliquée des deux côtés :
-    forme Unicode NFC, s long ſ replié en s, caractères invisibles retirés.
+    CER calculé après le profil de la vue puis un repli minimal appliqué des
+    deux côtés : forme Unicode NFC, invisibles retirés, s long ſ replié en s.
     Les autres variantes historiques (u/v, ligatures) restent distinctes.
   measures: >-
     La fidélité à la graphie du témoin, sans pénaliser le seul choix ſ/s
     ni une différence d'encodage Unicode invisible à l'œil.
   limits: >-
-    Moins sévère que le CER brut, pas plus : l'écart entre les deux mêle
-    l'effet NFC, l'effet ſ et le nettoyage des invisibles. À ne comparer
-    qu'entre moteurs évalués sur la même vérité terrain.
+    Moins sévère que le CER, pas plus. Sous le profil par défaut, qui
+    applique déjà NFC et retire les invisibles, l'écart entre les deux isole
+    l'effet ſ ; sous une comparaison brute, il y mêle ces deux effets. À ne
+    comparer qu'entre moteurs évalués sur la même vérité terrain.
 
 wer:
   title: "WER — taux d'erreur mot"
@@ -267,8 +274,10 @@ ece:
     À quel point les scores de confiance d'un moteur sont fiables : un
     moteur bien calibré a raison à hauteur de ce qu'il annonce.
   limits: >-
-    Non applicable aux moteurs sans score de confiance ; dépend du
-    découpage en bins de confiance.
+    Mesure les confiances de l'étape que la vue note (celles d'un OCR ne
+    disent rien du texte qu'un LLM a corrigé derrière lui) ; non applicable
+    à une étape sans score de confiance. Dépend du découpage : dix bins
+    [b/10 ; (b+1)/10[, le dernier fermé à 1,0.
 
 mce:
   title: "MCE — erreur de calibration maximale"

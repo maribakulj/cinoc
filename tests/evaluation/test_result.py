@@ -160,3 +160,31 @@ def test_v4_inference_payload_is_refused_not_misread() -> None:
         RunResult.model_validate(v4)
     v4["analyses"] = []
     assert RunResult.model_validate(v4).schema_version == 4
+
+
+def test_calibration_row_without_its_step_is_refused_not_misread() -> None:
+    """D-285 (pilote D9) : une ligne de calibration d'avant ne disait pas de
+    quelle étape venaient ses confiances, et prêtait à un pipeline corrigé
+    l'ECE de son OCR. Sans ``step``, elle est refusée ; une vue d'avant sans
+    profil (``null`` = comparaison brute) se relit avec ce même sens."""
+    manifest = _manifest().model_dump(mode="json")
+    manifest["view_specs"] = [
+        {"name": "text", "candidate_types": ["raw_text"], "normalization_profile": None}
+    ]
+    row = {"pipeline": "tess→llm", "n_tokens": 3, "ece": 0.1, "mce": 0.2}
+    old = {
+        "schema_version": 5,
+        "manifest": manifest,
+        "analyses": [
+            {
+                "scope": "corpus",
+                "view": "text",
+                "payload": {"kind": "calibration", "n_bins": 10, "pipelines": [row]},
+            }
+        ],
+    }
+    with pytest.raises(ValidationError):
+        RunResult.model_validate(old)
+    old["analyses"] = []
+    (view,) = RunResult.model_validate(old).manifest.view_specs
+    assert view.normalization_profile is None
