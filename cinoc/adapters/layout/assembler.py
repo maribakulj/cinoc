@@ -15,6 +15,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import ClassVar
 
+from cinoc.adapters._params import instance_label_param, instance_name
 from cinoc.domain.artifacts import Artifact, ArtifactType, compute_content_hash
 from cinoc.domain.errors import AdapterStepError
 from cinoc.domain.layout import CanonicalLayout
@@ -32,11 +33,14 @@ class AltoAssembler:
     """Assemble un ``LAYOUT`` rempli en ``ALTO_XML`` (ALTO 4, déterministe)."""
 
     #: Réglages acceptés (``pipeline.params``) : tout autre est refusé, nommé.
-    PARAMS: ClassVar[tuple[Param, ...]] = ()
+    PARAMS: ClassVar[tuple[Param, ...]] = (instance_label_param(),)
+
+    def __init__(self, *, label: str | None = None) -> None:
+        self._label = label
 
     @property
     def name(self) -> str:
-        return "alto_assembler"
+        return instance_name("alto_assembler", self._label)
 
     @property
     def version(self) -> str:

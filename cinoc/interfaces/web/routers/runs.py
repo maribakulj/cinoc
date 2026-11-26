@@ -47,10 +47,11 @@ from cinoc.app.jobs import JobRunner
 from cinoc.app.models import ModelChoiceError, check_spec_models
 from cinoc.app.modules import ModuleRegistry, register_default_modules
 from cinoc.app.modules.registry import check_spec_settings
+from cinoc.app.recipe_catalog import recipe_catalog
 from cinoc.app.recipes import (
+    RecipeEntry,
     RecipeError,
     plan_recipe_run,
-    recipe_catalog,
     referenced_kinds,
     spec_for_corpus,
 )
@@ -88,7 +89,8 @@ class LaunchRequest(BaseModel):
 
 
 class RecipeRequest(BaseModel):
-    """Lancer une **recette** : une forme nommée, sur un corpus du dépôt.
+    """Lancer une **file de recettes** : des formes nommées, sur un corpus du
+    dépôt, comparées dans un seul run.
 
     L'utilisateur choisit l'intention (« presse ancienne multi-colonnes ») et les
     briques ; la forme, elle, vient de la recette. C'est la voie ergonomique : le
@@ -98,10 +100,7 @@ class RecipeRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     corpus_id: str
-    recipe: str = Field(min_length=1, max_length=64)
-    #: Brique retenue par étape (``{"ocr": "tesseract"}``). Absente → le défaut
-    #: de la recette.
-    choices: dict[str, str] = Field(default_factory=dict)
+    entries: tuple[RecipeEntry, ...] = Field(min_length=1, max_length=16)
 
 
 class SpecRequest(BaseModel):
@@ -443,20 +442,22 @@ def build_runs_router(
     @router.get("/api/recipes")
     def list_recipes(lang: str = "fr") -> dict[str, object]:
         """Recettes livrées : forme, intention, et ce qu'il reste à choisir."""
-        return {"recipes": recipe_catalog(lang)}
+        sondes = statuses() + (segmenters() if segmenters is not None else ())
+        return {
+            "recipes": recipe_catalog(
+                lang, statuses=sondes, public_mode=public_mode
+            )
+        }
 
     @router.post(
         "/api/runs/recipe", status_code=201, dependencies=[Depends(csrf_protect)]
     )
     def launch_recipe(payload: RecipeRequest) -> dict[str, str]:
-        """Lance une recette sur un corpus du dépôt."""
+        """Lance une file de recettes sur un corpus du dépôt."""
         corpus = _corpus_du_depot(payload.corpus_id)
         try:
             spec = plan_recipe_run(
-                corpus,
-                payload.recipe,
-                run_id=f"web-rec-{uuid.uuid4().hex[:12]}",
-                choices=payload.choices,
+                corpus, payload.entries, run_id=f"web-rec-{uuid.uuid4().hex[:12]}"
             )
         except RecipeError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc

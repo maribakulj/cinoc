@@ -180,7 +180,10 @@ def _build_pp_doclayout(kwargs: Mapping[str, ParamValue]) -> Module:
     model = kwargs.get("model")
     if not isinstance(model, str) or not model:
         model = os.environ.get("CINOC_PPDOCLAYOUT_MODEL", "PP-DocLayout-L")
-    return PPDocLayoutSegmenter(model=model)
+    label = kwargs.get("label")
+    return PPDocLayoutSegmenter(
+        model=model, label=label if isinstance(label, str) else None
+    )
 
 
 _A = "cinoc.adapters."

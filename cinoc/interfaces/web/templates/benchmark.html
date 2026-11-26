@@ -60,9 +60,32 @@
                 data-mode="zero_shot">{{ t.bench_mode_vlm }}</button>
         <button type="button" role="tab" aria-selected="false"
                 data-mode="hybrid">{{ t.bench_mode_hybrid }}</button>
+        <button type="button" role="tab" aria-selected="false"
+                data-mode="recipe">{{ t.bench_mode_recipe }}</button>
       </div>
 
       <div class="composer-draft">
+        {# Couche 1 du composeur : une forme nommée (recette), ses étapes, ses
+           briques. Peuplé par recipes.js depuis GET /api/recipes ; l'entrée
+           choisie rejoint la même file que les concurrents composés. #}
+        <div id="recipe-picker" class="recipe-picker" data-show="recipe" hidden>
+          <fieldset class="recipe-fieldset">
+            <legend class="comp-label">{{ t.bench_recipe_pick }}</legend>
+            <div id="recipe-cards" class="recipe-cards"></div>
+          </fieldset>
+          <div id="recipe-steps" class="recipe-steps"
+               data-fanout="{{ t.bench_recipe_fanout }}"
+               data-unavailable="{{ t.engine_unavailable }}"></div>
+          <p id="recipe-status" class="dropzone-meta" role="status" aria-live="polite"
+             data-loading="{{ t.bench_recipe_loading }}"
+             data-error="{{ t.bench_recipe_error }}"
+             data-missing="{{ t.bench_recipe_missing }}"
+             data-unrunnable="{{ t.bench_recipe_unrunnable }}"
+             data-added="{{ t.bench_recipe_added }}"></p>
+          <span class="dropzone-meta">{{ t.bench_recipe_hint }}</span>
+          <button id="recipe-add" class="btn btn-primary" type="button" disabled>+ {{ t.bench_recipe_add }}</button>
+        </div>
+
         <label class="comp-field" data-show="ocr_only text_only text_and_image">
           <span class="comp-label">{{ t.bench_ocr_engine }}</span>
           <select id="draft-ocr" class="select">
@@ -198,7 +221,8 @@
            /api/models/{provider}, demandés en direct (vision si déclarée). #}
         <datalist id="api-model-list"></datalist>
 
-        <button id="add-competitor" class="btn btn-primary" type="button">+ {{ t.bench_add_competitor }}</button>
+        <button id="add-competitor" class="btn btn-primary" type="button"
+                data-show="ocr_only text_only text_and_image zero_shot hybrid">+ {{ t.bench_add_competitor }}</button>
       </div>
     </div>
 
@@ -212,7 +236,9 @@
            data-label-ocr-llm="OCR → LLM"
            data-label-ocr-vlm="OCR → VLM"
            data-label-vlm="VLM"
-           data-label-hybrid="{{ t.bench_mode_hybrid }}"></div>
+           data-label-hybrid="{{ t.bench_mode_hybrid }}"
+           data-mixed="{{ t.bench_recipe_mixed }}"
+           data-no-corpus="{{ t.bench_recipe_no_corpus }}"></div>
       <p id="queue-empty" class="empty">{{ t.bench_queue_empty }}</p>
     </div>
   </div>
@@ -296,7 +322,8 @@
       </div>
       <span id="config-feedback" class="dropzone-meta" aria-live="polite"
             data-loaded="{{ t.bench_config_loaded }}"
-            data-invalid="{{ t.bench_config_invalid }}"></span>
+            data-invalid="{{ t.bench_config_invalid }}"
+            data-recipes="{{ t.bench_config_recipes }}"></span>
       <span class="dropzone-meta">{{ t.bench_config_hint }}</span>
     </div>
   </div>
@@ -356,4 +383,5 @@
   </article>
 </template>
 {% endblock %}
-{% block body_end %}<script src="/static/js/benchmark.js"></script>{% endblock %}
+{% block body_end %}<script src="/static/js/benchmark.js"></script>
+<script src="/static/js/recipes.js"></script>{% endblock %}

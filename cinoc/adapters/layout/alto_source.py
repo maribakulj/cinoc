@@ -24,6 +24,7 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import ClassVar
 
+from cinoc.adapters._params import instance_label_param, instance_name
 from cinoc.adapters._workspace import workspace_artifact_path
 from cinoc.domain.artifacts import Artifact, ArtifactType, compute_content_hash
 from cinoc.domain.documents import DocumentRef
@@ -63,14 +64,16 @@ class AltoLayoutSource:
     PARAMS: ClassVar[tuple[Param, ...]] = (
         Param("ocr_sidecar", "str", "Sidecar d'OCR du corpus (suffixe)",
               "Corpus OCR sidecar (suffix)", default=""),
+        instance_label_param(),
     )
 
-    def __init__(self, *, ocr_sidecar: str = "") -> None:
+    def __init__(self, *, ocr_sidecar: str = "", label: str | None = None) -> None:
         self._sidecar = ocr_sidecar
+        self._label = label
 
     @property
     def name(self) -> str:
-        return "alto_source"
+        return instance_name("alto_source", self._label)
 
     @property
     def version(self) -> str:

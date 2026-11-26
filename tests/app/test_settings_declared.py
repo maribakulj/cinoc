@@ -271,6 +271,38 @@ def test_a_trailing_slash_on_openais_own_endpoint_keeps_its_price() -> None:
     )
 
 
+def test_a_trailing_slash_on_ollamas_host_is_the_same_server() -> None:
+    """Reste de S23 : ``host`` d'Ollama entrait tel quel — ``…:11434/`` postait
+    sur ``//api/chat`` et changeait l'empreinte. Normalisé comme ``base_url``."""
+    base = {"label": "c", "model": "m"}
+    assert _empreinte(
+        "ollama:c", {**base, "host": "http://127.0.0.1:11434/"}
+    ) == _empreinte("ollama:c", {**base, "host": "http://127.0.0.1:11434"})
+    module = _registre().build(
+        "ollama:c", {**base, "host": "http://127.0.0.1:11434/"}
+    )
+    assert module.effective_settings()["host"] == (  # type: ignore[attr-defined]
+        "http://127.0.0.1:11434"
+    )
+
+
+def test_ollamas_host_is_refused_when_it_carries_credentials() -> None:
+    """La règle de ``base_url`` : une cible, rien d'autre — un jeton n'entre ni
+    au manifeste ni dans l'empreinte."""
+    with pytest.raises(CinocError, match="host"):
+        _registre().build(
+            "ollama:c", {"label": "c", "model": "m", "host": "http://u:p@h:11434"}
+        )
+
+
+def test_the_structured_corrector_normalises_its_ollama_host_too() -> None:
+    """Saknussemm parle au même serveur : même règle, même forme."""
+    from cinoc.adapters.layout.saknussemm_correct import SaknussemmCorrector
+
+    module = SaknussemmCorrector(label="c", host="http://127.0.0.1:11434/")
+    assert module._host == "http://127.0.0.1:11434"
+
+
 def test_raising_a_time_limit_does_not_rerun_the_pages_already_read() -> None:
     """Relever ``timeout`` pour sauver une page lente ne change aucune sortie."""
     assert _empreinte("tesseract:t", {"label": "t", "timeout": 600}) == _empreinte(

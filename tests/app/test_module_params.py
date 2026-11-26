@@ -53,7 +53,7 @@ def test_an_integer_is_an_admissible_float() -> None:
 def test_an_empty_declaration_refuses_every_setting() -> None:
     """``PARAMS = ()`` affirme « aucun réglage » — distinct de l'absence."""
     with pytest.raises(ModuleSettingsError, match="Réglages acceptés : aucun"):
-        _registre().build("alto_assembler", {"label": "x"})
+        _registre().build("precomputed_layout", {"label": "x"})
 
 
 class _Tiers(PrecomputedTextAdapter):
