@@ -272,6 +272,8 @@ cinoc/reports/
 >
 > **S7.a (D-074)** : `+ csv_export.py` — export tableur en lecture pure du `RunResult`. Preuves : `tests/reports/test_csv_export.py`.
 
+> **P5e 1 (D-275)** : « n notés / n attendus » à côté de tout agrégat incomplet (`_tables.coverage`, dans `bar_cell` — vue d'ensemble, comparaison — et dans les cellules des mesures clés), bloc **« Unités en échec »** dans la vue d'ensemble (motif localisé + message, règle `exclude`/`max_error` lue au manifeste) ; Wilcoxon suivi de ses cas complets, n du dot plot en fourchette quand les IC marginaux diffèrent ; CSV : colonnes `expected` (agrégats) et `outcome` (documents, `failed:<motif>`). FR/EN par `localized`. Preuves : `tests/app/test_unit_outcome.py::test_html_shows_scored_over_expected_and_the_reason`, `tests/reports/test_key_measures_section.py`, `tests/reports/test_csv_export.py`.
+
 > Tri-état : `[x]` fait **+ preuve** · `[ ]` à faire · `[~]` différé/réserve + raison.
 > Maj dans le **même commit** que le code. **Statut : ✅ T2** — cadre `Section` + assembleur autonome + sections **overview** & **cross_engine** + rapport de **comparaison** (deltas 2 runs) verts. **+ T7 `synthesis`** : section verdict factuel par vue (meilleur pipeline CER · Δ au suivant · significativité `cross_engine`), gatée `requires=("cer",)`, déterministe — **toutes les vues S4 au design désormais livrées**. Différé : importeurs cœur · longitudinal (T7), interactivité client-side.
 

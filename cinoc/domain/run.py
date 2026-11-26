@@ -18,7 +18,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from cinoc.domain.evaluation import EvaluationView
+from cinoc.domain.evaluation import EvaluationView, FailurePolicy
 from cinoc.domain.pipeline import PipelineSpec
 
 
@@ -42,6 +42,10 @@ class RunManifest(BaseModel):
         (api_key) n'y figurent pas — elles viennent de l'environnement.
     view_specs:
         Vues d'évaluation appliquées.
+    failure_policy:
+        Ce qu'une unité en échec devient dans les agrégats (``exclude`` :
+        hors de la moyenne ; ``max_error`` : notée à l'erreur maximale). Un
+        agrégat ne se relit pas sans elle.
     code_version:
         Version du code.
     dependencies_lock / system_binaries_lock:
@@ -70,6 +74,7 @@ class RunManifest(BaseModel):
     pipeline_specs: tuple[PipelineSpec, ...] = Field(default_factory=tuple)
     adapter_kwargs: dict[str, dict[str, Any]] = Field(default_factory=dict)
     view_specs: tuple[EvaluationView, ...] = Field(default_factory=tuple)
+    failure_policy: FailurePolicy = "exclude"
     code_version: str = Field(min_length=1, max_length=128)
     started_at: datetime
     completed_at: datetime

@@ -173,6 +173,8 @@ backlog inexistant. **Aucune logique ne change.**
 
 > **T12 (D-070)** : `+ confidence.py` — `ConfidenceToken` (mot + confiance [0,1]), schéma du payload `CONFIDENCES`, créé avec son 1ᵉʳ consommateur (calibration couche 3). Backlog domain : dernière entrée cochée.
 
+> **P5e 1 (D-275)** : `usage.py` gagne deux alias `Literal` — `UnitOutcome` (`ok` · `truncated` · `failed`) et `FailureReason` (`engine` · `infrastructure` · `unsupported` · `cancelled`), vocabulaire de l'issue d'une unité produite en couche 4 et transportée en couche 3 (aucune classe neuve) ; `evaluation.py` : `FailurePolicy` + `EvaluationSpec.failure_policy` (`exclude` par défaut, `max_error`) ; `run.py` : `RunManifest.failure_policy` (un agrégat ne se relit pas sans elle). Preuves : `tests/app/test_unit_outcome.py`, `tests/evaluation/test_result.py::test_v2_payload_still_loads_as_ok_units_without_expected`.
+
 > Tri-état : `[x]` fait **+ preuve** · `[ ]` à faire · `[~]` différé/réserve + raison.
 > Mise à jour dans le **même commit** que le code (règle d'or anti-dérive).
 > **Statut couche 1 : ✅ vert** (vérifié 2026-05-31).

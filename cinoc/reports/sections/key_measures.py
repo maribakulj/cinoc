@@ -15,7 +15,7 @@ supprimé §6, anti-hallucination §12). Gatée sur ``cer``.
 from __future__ import annotations
 
 from cinoc.evaluation.analysis import InferencePayload
-from cinoc.evaluation.result import PipelineResult, RunResult
+from cinoc.evaluation.result import MetricScore, PipelineResult, RunResult
 from cinoc.reports._numbers import localize_decimal
 from cinoc.reports.engine_badges import (
     engine_accent,
@@ -25,7 +25,7 @@ from cinoc.reports.engine_badges import (
 )
 from cinoc.reports.html import escape, localized, view_label
 from cinoc.reports.section import Html, SectionContext
-from cinoc.reports.sections._tables import ordered_unique
+from cinoc.reports.sections._tables import coverage, ordered_unique
 from cinoc.reports.svg import dot_plot_ci
 
 _PRIMARY = "cer"
@@ -42,8 +42,13 @@ _HEADLINE: tuple[tuple[str, bool, str, str], ...] = (
 )
 
 
+def _score(pipeline: PipelineResult, metric: str) -> MetricScore | None:
+    return next((s for s in pipeline.aggregate if s.metric == metric), None)
+
+
 def _val(pipeline: PipelineResult, metric: str) -> float | None:
-    return next((s.value for s in pipeline.aggregate if s.metric == metric), None)
+    score = _score(pipeline, metric)
+    return score.value if score is not None else None
 
 
 def _inference(result: RunResult, view: str) -> InferencePayload | None:
@@ -58,11 +63,12 @@ def _inference(result: RunResult, view: str) -> InferencePayload | None:
     return None
 
 
-def _significance_p(result: RunResult, view: str) -> float | None:
+def _significance(result: RunResult, view: str) -> MetricScore | None:
+    """Test brut (Wilcoxon/Friedman) : sa valeur **et** son support (cas complets)."""
     for score in result.cross_engine:
         parts = score.metric.split(":")
         if len(parts) >= 2 and parts[0] == view and parts[1] == _PRIMARY:
-            return score.value
+            return score
     return None
 
 
@@ -140,12 +146,16 @@ class KeyMeasuresSection:
         for p in ranked:
             cells = ""
             for m, _hib, _fr, _en in cols:
-                v = _val(p, m)
+                score = _score(p, m)
+                v = score.value if score is not None else None
+                cov = coverage(score, lang) if score is not None else ""
                 if v is None:
-                    cells += '<td class="disp muted">—</td>'
+                    cells += f'<td class="disp muted">—{cov}</td>'
                 else:
                     disp = localize_decimal(f"{v:.4f}", lang)
-                    cells += f'<td class="disp" data-sort="{v:.6f}">{disp}</td>'
+                    cells += (
+                        f'<td class="disp" data-sort="{v:.6f}">{disp}{cov}</td>'
+                    )
             badge = engine_cell(p.pipeline, order.get(p.pipeline, 0))
             body.append(f'<tr><td class="eng-cell">{badge}</td>{cells}</tr>')
         return (
@@ -173,7 +183,10 @@ class KeyMeasuresSection:
             for it in items
         ]
         scale_max = max(it.upper for it in items)
-        n = max((it.n_documents for it in items), default=0)
+        # IC **marginal** : chaque moteur sur ses propres documents notés — un
+        # moteur qui a perdu une unité a un n plus petit, et on le montre.
+        ns = sorted({it.n_documents for it in items})
+        n = f"{ns[0]}–{ns[-1]}" if len(ns) > 1 else str(ns[0])
         cap = localized(
             lang,
             f'<span class="muted">CER par moteur — point = moyenne, barre = IC 95 % '
@@ -209,8 +222,9 @@ class KeyMeasuresSection:
                 f"{groups}. Two engines outside one group = significant difference.",
             )
             return f'<p class="muted">{txt}</p>\n'
-        p = _significance_p(result, view)
-        if p is not None:
+        raw = _significance(result, view)
+        p = raw.value if raw is not None else None
+        if raw is not None and p is not None:
             verdict = localized(
                 lang,
                 "significative" if p < 0.05 else "non significative",
@@ -220,9 +234,11 @@ class KeyMeasuresSection:
             txt = localized(
                 lang,
                 f"<strong>Test inter-moteurs (CER)</strong> — Wilcoxon : p = "
-                f"{pv} → différence {verdict} au seuil α = 0,05.",
+                f"{pv} → différence {verdict} au seuil α = 0,05 "
+                f"({raw.support} cas complets).",
                 f"<strong>Inter-engine test (CER)</strong> — Wilcoxon: p = "
-                f"{pv} → difference {verdict} at α = 0.05.",
+                f"{pv} → difference {verdict} at α = 0.05 "
+                f"({raw.support} complete cases).",
             )
             return f'<p class="muted">{txt}</p>\n'
         return ""

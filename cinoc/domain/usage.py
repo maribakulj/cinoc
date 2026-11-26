@@ -9,7 +9,23 @@ exclues de l'identité des artefacts (déterminisme — voir ``ProvenanceRecord`
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
+
+#: Issue d'une unité (pipeline × document), **produite par l'exécution** : la
+#: couche 4 la tient en main (l'exception d'une étape, la raison d'arrêt d'un
+#: LLM) et la couche 3 la transporte dans ``RunResult`` (``DocumentUsage``).
+#: ``truncated`` = sortie obtenue mais coupée (raison d'arrêt d'un LLM) : notée,
+#: et signalée. ``failed`` = aucune sortie : l'unité n'a rien à noter.
+UnitOutcome = Literal["ok", "truncated", "failed"]
+
+#: Motif **codé** d'un échec — ce qu'on peut agréger ou filtrer sans lire un
+#: message libre. ``engine`` : le moteur (adapter) a levé ; ``infrastructure`` :
+#: l'environnement du run (image distante injoignable…) ; ``unsupported`` : le
+#: pipeline ne s'applique pas à ce document tel que déclaré (entrée ou sortie
+#: d'étape manquante) ; ``cancelled`` : l'unité a été arrêtée (deadline expirée).
+FailureReason = Literal["engine", "infrastructure", "unsupported", "cancelled"]
 
 
 def _add(a: int | None, b: int | None) -> int | None:
@@ -49,4 +65,4 @@ class ResourceUsage(BaseModel):
         )
 
 
-__all__ = ["ResourceUsage"]
+__all__ = ["FailureReason", "ResourceUsage", "UnitOutcome"]

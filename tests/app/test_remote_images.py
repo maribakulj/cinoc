@@ -140,6 +140,13 @@ def test_unreachable_remote_image_fails_unit_not_run(
     # L'injoignable est en échec **isolé** (score absent → None, jamais un 0
     # mensonger), sans abattre le run.
     assert by_doc["doc1"]["cer"] is None
+    # … et l'échec est **enregistré** avec son motif, pas réduit à une absence.
+    outcomes = {u.document_id: (u.outcome, u.reason) for u in result.usage}
+    assert outcomes == {"ok": ("ok", None), "doc1": ("failed", "infrastructure")}
+    failed = next(u for u in result.usage if u.document_id == "doc1")
+    assert "statut HTTP 404" in (failed.message or "")
+    assert (result.pipelines[0].aggregate[0].support,
+            result.pipelines[0].aggregate[0].expected) == (1, 2)
 
 
 def test_private_ip_reference_refused_by_ssrf_guard(tmp_path: Path) -> None:

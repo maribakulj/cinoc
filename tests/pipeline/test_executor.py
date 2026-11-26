@@ -5,12 +5,22 @@ from __future__ import annotations
 import pytest
 
 from cinoc.domain.artifacts import Artifact, ArtifactType
-from cinoc.domain.errors import CinocError, RunCancelledError
+from cinoc.domain.errors import (
+    AdapterStepError,
+    CinocError,
+    DeadlineExceeded,
+    RunCancelledError,
+)
 from cinoc.domain.pipeline import PipelineSpec, PipelineStep
 from cinoc.domain.usage import ResourceUsage
-from cinoc.pipeline.executor import PipelineExecutor, PipelineStepError
+from cinoc.pipeline.executor import (
+    UNIT_FAILURES,
+    PipelineExecutor,
+    PipelineStepError,
+    failure_reason,
+)
 from cinoc.pipeline.run_control import RunControl
-from cinoc.pipeline.types import StepOutput
+from cinoc.pipeline.types import DocumentExecution, StepOutput
 
 CODE_VERSION = "test-1.0"
 
@@ -292,3 +302,37 @@ def test_usage_sums_across_steps() -> None:
     assert execution.usage.tokens_in == 120
     assert execution.usage.tokens_out == 30
     assert execution.usage.duration_seconds is not None
+
+
+@pytest.mark.parametrize(
+    ("error", "reason"),
+    [
+        (AdapterStepError("le moteur a levé"), "engine"),
+        # ``DeadlineExceeded`` hérite d'``AdapterStepError`` : une unité arrêtée
+        # à expiration n'est pas un moteur en panne.
+        (DeadlineExceeded("délai"), "cancelled"),
+        (PipelineStepError("entrée introuvable"), "unsupported"),
+    ],
+)
+def test_failure_reason_is_read_on_the_error_class(
+    error: CinocError, reason: str
+) -> None:
+    assert isinstance(error, UNIT_FAILURES)
+    assert failure_reason(error) == reason
+
+
+def test_run_cancellation_is_not_a_unit_failure() -> None:
+    # L'annulation arrête le run entier : elle n'est jamais l'issue d'une unité.
+    assert not isinstance(RunCancelledError("stop"), UNIT_FAILURES)
+
+
+def test_document_execution_outcome_invariants() -> None:
+    failed = DocumentExecution.failed("engine", "boom")
+    assert (failed.outcome, failed.reason) == ("failed", "engine")
+    assert failed.message == "boom"
+    assert dict(failed.artifacts) == {}
+    assert DocumentExecution(artifacts={}).outcome == "ok"
+    with pytest.raises(CinocError):
+        DocumentExecution(artifacts={}, outcome="failed")
+    with pytest.raises(CinocError):
+        DocumentExecution(artifacts={}, reason="engine")

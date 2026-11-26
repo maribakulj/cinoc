@@ -22,10 +22,10 @@ from collections.abc import Mapping
 
 from cinoc.domain.artifacts import Artifact, ArtifactType, compute_content_hash
 from cinoc.domain.deadline import Deadline
-from cinoc.domain.errors import CinocError
+from cinoc.domain.errors import AdapterStepError, CinocError, DeadlineExceeded
 from cinoc.domain.pipeline import INITIAL_STEP_ID, PipelineSpec, PipelineStep
 from cinoc.domain.provenance import ProvenanceRecord
-from cinoc.domain.usage import ResourceUsage
+from cinoc.domain.usage import FailureReason, ResourceUsage
 from cinoc.pipeline.fanout import RegionCropper, execute_region_fanout
 from cinoc.pipeline.protocols import Module
 from cinoc.pipeline.run_control import RunControl
@@ -34,6 +34,27 @@ from cinoc.pipeline.types import DocumentExecution, RunContext, StepOutput
 
 class PipelineStepError(CinocError):
     """Une étape n'a pas pu s'exécuter (module, entrée ou sortie manquante)."""
+
+
+#: Erreurs qui font échouer **une** unité sans arrêter le run. L'annulation
+#: (``RunCancelledError``) n'en est pas : elle arrête tout.
+UNIT_FAILURES: tuple[type[CinocError], ...] = (AdapterStepError, PipelineStepError)
+
+
+def failure_reason(exc: CinocError) -> FailureReason:
+    """Motif codé d'un échec d'unité, lu sur la **classe** de l'erreur.
+
+    ``DeadlineExceeded`` avant ``AdapterStepError`` (elle en hérite) : une unité
+    arrêtée à expiration n'est pas un moteur en panne. ``PipelineStepError`` =
+    l'exécuteur n'a pas pu câbler l'étape (entrée introuvable, sortie déclarée
+    non produite, brique inadaptée) : le pipeline ne s'applique pas tel que
+    déclaré à ce document.
+    """
+    if isinstance(exc, DeadlineExceeded):
+        return "cancelled"
+    if isinstance(exc, PipelineStepError):
+        return "unsupported"
+    return "engine"
 
 
 def _parameters_hash(params: Mapping[str, object]) -> str:
@@ -229,4 +250,4 @@ class PipelineExecutor:
                 )
 
 
-__all__ = ["PipelineExecutor", "PipelineStepError"]
+__all__ = ["UNIT_FAILURES", "PipelineExecutor", "PipelineStepError", "failure_reason"]

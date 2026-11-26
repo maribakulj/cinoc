@@ -42,10 +42,67 @@ class OverviewSection:
             f'<p class="muted">{corpus} : '
             f"{escape(result.manifest.corpus_name)}</p>",
         ]
+        note = failures_note(result, ctx.lang)
+        if note:
+            parts.append(note)
         multi = len(views) > 1
         for view_name in views:
             parts.append(_table_for_view(result, view_name, ctx.lang, multi=multi))
         return Html("\n".join(parts) + "\n")
+
+
+#: Libellé du motif codé d'un échec (``FailureReason``) : ``(fr, en)``.
+_REASON_LABELS: dict[str, tuple[str, str]] = {
+    "engine": ("moteur", "engine"),
+    "infrastructure": ("infrastructure", "infrastructure"),
+    "unsupported": ("pipeline inapplicable", "pipeline not applicable"),
+    "cancelled": ("arrêtée (délai)", "stopped (deadline)"),
+}
+
+
+def failures_note(result: RunResult, lang: str) -> str:
+    """**Pourquoi** une unité manque : une ligne par unité en échec, et la règle.
+
+    Lu dans ``RunResult.usage`` (issue produite par l'exécution), jamais déduit
+    d'un score absent : un ``None`` peut aussi vouloir dire « pas de vérité
+    terrain » ou « métrique inapplicable », qui ne sont pas des échecs.
+    """
+    failed = [u for u in result.usage if u.outcome == "failed"]
+    if not failed:
+        return ""
+    order = engine_order(p.pipeline for p in result.pipelines)
+    n = len(failed)
+    if result.manifest.failure_policy == "max_error":
+        rule = localized(
+            lang,
+            "notées à l'<strong>erreur maximale</strong> (1 pour un taux "
+            "d'erreur, 0 pour un score), pondérées par leur référence",
+            "scored at the <strong>maximum error</strong> (1 for an error rate, "
+            "0 for a score), weighted by their reference",
+        )
+    else:
+        rule = localized(
+            lang,
+            "<strong>exclues de la moyenne</strong> ; un agrégat qui en a perdu "
+            "porte « n notés / n attendus »",
+            "<strong>left out of the mean</strong>; an aggregate that lost some "
+            "shows “n scored / n expected”",
+        )
+    title = localized(lang, "Unités en échec", "Failed units")
+    items = []
+    for unit in failed:
+        fr, en = _REASON_LABELS[str(unit.reason)]
+        badge = engine_cell(unit.pipeline, order.get(unit.pipeline, 0))
+        message = f" : {escape(unit.message)}" if unit.message else ""
+        items.append(
+            f'<li><span class="eng-cell">{badge}</span> · '
+            f"{escape(unit.document_id)} — <strong>{localized(lang, fr, en)}</strong>"
+            f"{message}</li>"
+        )
+    return (
+        f'<div class="failures"><p><strong>{title}</strong> ({n}) — {rule}.</p>'
+        f"<ul>{''.join(items)}</ul></div>"
+    )
 
 
 def _table_for_view(
