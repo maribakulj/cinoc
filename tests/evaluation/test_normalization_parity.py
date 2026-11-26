@@ -20,9 +20,9 @@ Colonnes :
   (``plain_extract`` + ``character_error_rate``) : chaque ligne ``strip``-ée
   puis ``normalize_sbb`` (NFC, ligatures dépliées, ``’`` → ``'``, ``—`` → ``–``,
   ``⸗`` → ``-``…), lignes jointes par ``\\n`` **compté**, distance sur les
-  **graphèmes** (uniseg). Valeurs obtenues dans un environnement séparé
-  (dinglehopper tire uniseg, multimethod, chardet, ocrd…) et figées ici ;
-  recalculées par le dernier test quand il est installé.
+  **graphèmes** (uniseg). Valeurs figées ici, **recalculées** par le dernier
+  test dans le job CI ``oracle`` (extra ``oracle`` + dinglehopper
+  ``--no-deps``, D-290) ; sautées ailleurs.
 
 Lecture des écarts :
 
@@ -130,6 +130,7 @@ def test_jiwer_column(ref: str, hyp: str, expected: float) -> None:
     assert jiwer.cer(ref, hyp) == pytest.approx(expected)
 
 
+@pytest.mark.oracle
 @pytest.mark.parametrize(
     ("name", "ref", "hyp", "expected"),
     [(c[0], c[1], c[2], c[7]) for c in _CASES],
@@ -138,7 +139,8 @@ def test_jiwer_column(ref: str, hyp: str, expected: float) -> None:
 def test_dinglehopper_column(
     tmp_path: Path, name: str, ref: str, hyp: str, expected: float
 ) -> None:
-    """Recalcul vivant, seulement si dinglehopper est installé (hors CI)."""
+    """Recalcul vivant, seulement si dinglehopper est installé : job CI
+    ``oracle`` (D-290), sauté ailleurs."""
     ocr_files = pytest.importorskip("dinglehopper.ocr_files")
     rates = pytest.importorskip("dinglehopper.character_error_rate")
     gt = tmp_path / f"{name}.gt.txt"

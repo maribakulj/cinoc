@@ -379,7 +379,18 @@ make test         # pytest (parallel)
 make ci           # full gate, with coverage threshold
 ```
 
-CI runs on Linux/macOS/Windows × Python 3.11/3.12/3.13 and enforces the coverage threshold. Detailed roadmap and decision log: [`MIGRATION_PLAN.md`](MIGRATION_PLAN.md); notable changes: [`CHANGELOG.md`](CHANGELOG.md); working contract: [`CLAUDE.md`](CLAUDE.md).
+CI runs on Linux/macOS/Windows × Python 3.11/3.12/3.13 and enforces the coverage threshold.
+
+**External oracles.** Tests marked `oracle` run the reference tools themselves — dinglehopper (CER/WER golden on `bnl_mini`, every gap named) and the `roman` package (numeral validation) — and are skipped elsewhere. A dedicated CI job, `oracle`, runs them; locally:
+
+```bash
+pip install -e ".[dev,oracle]"
+pip install --no-deps "dinglehopper==0.11.0" "ocrd==3.13.3"   # ocrd would pull all of OCR-D
+CINOC_REQUIRE_ORACLES=1 python -m pytest -q -m oracle
+python tests/evaluation/test_dinglehopper_golden.py           # regenerate the golden after a version bump
+```
+
+Detailed roadmap and decision log: [`MIGRATION_PLAN.md`](MIGRATION_PLAN.md); notable changes: [`CHANGELOG.md`](CHANGELOG.md); working contract: [`CLAUDE.md`](CLAUDE.md).
 
 ---
 

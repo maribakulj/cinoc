@@ -38,8 +38,10 @@ cer:
   oracle: >-
     Référence : CER de l'ISRI (ocreval), de jiwer et de dinglehopper.
     Vérifié contre : jiwer 4.0.0 (cer), recalculé en CI, et dinglehopper
-    0.11.0 sur dix cas de convention (écarts de normalisation dits cas
-    par cas).
+    0.11.0, exécuté en CI (job oracle) sur dix cas de convention et sur
+    les 150 couples de bnl_mini, vue « texte (lignes) » : chaque écart
+    est nommé (espaces répétées ; apostrophe ’/' et tirets de sa table
+    SBB) et leur somme rend dinglehopper exactement.
 
 cer_diplo:
   title: "CER diplomatique"
@@ -76,7 +78,8 @@ wer:
   oracle: >-
     Référence : WER de jiwer (distance d'édition au mot, mots découpés
     sur les blancs). Vérifié contre : jiwer 4.0.0 (wer), recalculé en
-    CI.
+    CI ; rapproché de dinglehopper 0.11.0 (job oracle, bnl_mini), dont le
+    WER est d'une autre définition — mots UAX #29, ponctuation écartée.
 
 mer:
   title: "MER — match error rate"

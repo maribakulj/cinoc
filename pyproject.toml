@@ -64,8 +64,32 @@ serve = ["fastapi", "uvicorn", "jinja2", "python-multipart"]
 images = ["Pillow"]  # vignettes réelles du rapport (redimensionnement) — dégradé gracieux sans
 # Oracle de conformité HIPE (golden test, jamais en runtime — SPEC_HIPE §5).
 # Extra DÉDIÉ (pas dans dev) : le scorer exige Python >= 3.12, l'inclure dans
-# dev casserait l'installation 3.11. Installé par le seul job CI 3.12.
+# dev casserait l'installation 3.11. Aucun job CI ne l'installe : le golden
+# HIPE est vendorisé, l'extra sert à le régénérer en local.
 hipe-oracle = ["hipe-ocrepair-scorer==0.9.9"]
+# Oracles de test EXÉCUTÉS (P5e 10, D-290 ; jamais en runtime) : le paquet
+# `roman` et dinglehopper, installés par le seul job CI `oracle` — les tests
+# marqués `oracle` sautent ailleurs. dinglehopper 0.11.0 et ocrd 3.13.3 s'y
+# installent À PART, en `--no-deps` (une extra ne sait pas le dire) :
+# dinglehopper déclare `ocrd>=3.3`, qui tire tout OCR-D (fastapi, docker,
+# paramiko, opencv…), alors que les modules utilisés n'en importent que
+# `ocrd_utils`. Ci-dessous, exactement ce qu'exige l'import de
+# `dinglehopper.ocr_files`, `.character_error_rate` et `.word_error_rate`,
+# relevé dans un venv vierge (lxml, numpy, rapidfuzz : base ; Pillow : dev).
+# Relever une version = régénérer le golden (`tests/evaluation/
+# test_dinglehopper_golden.py`), qui écrit la version de l'oracle qui l'a produit.
+oracle = [
+    "roman==5.2",
+    "uniseg==0.10.1",
+    "multimethod==1.12",
+    "attrs==26.1.0",
+    "chardet==7.7.0",
+    "frozendict==2.5.1",
+    "filetype==1.2.0",
+    "atomicwrites==1.4.1",
+    "Deprecated==1.2.0",
+    "wrapt==1.17.3",
+]
 
 [project.scripts]
 cinoc = "cinoc.interfaces.cli:main"
@@ -126,6 +150,7 @@ markers = [
     "slow: tests lents (opt-in)",
     "network: tests qui touchent le réseau (opt-in)",
     "live: tests contre une vraie API/binaire (opt-in)",
+    "oracle: tests contre un outil de référence exécuté (dinglehopper, roman) — job CI `oracle`, extra `oracle`",
 ]
 filterwarnings = [
     # `starlette.testclient` (versions 2026) émet une dépréciation httpx→httpx2
