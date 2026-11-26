@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import contextlib
 import ipaddress
+import itertools
 import json
 import os
 import socket
@@ -67,6 +68,40 @@ class SsrfError(CorpusHttpError):
 
 class HttpFetchError(CorpusHttpError):
     """La requête a échoué (statut, redirection cassée, dépassement de taille)."""
+
+
+class NotAnImageError(CorpusHttpError):
+    """La réponse attendue comme image n'en est pas une (octets magiques)."""
+
+
+#: Octets magiques des formats d'image acceptés au téléchargement. Ce sont eux
+#: qui tranchent, pas le ``Content-Type`` : un serveur étiquette parfois mal une
+#: vraie image, et une page d'erreur se déclare volontiers ``image/jpeg``.
+_IMAGE_SIGNATURES: tuple[tuple[str, bytes], ...] = (
+    ("JPEG", b"\xff\xd8\xff"),
+    ("PNG", b"\x89PNG\r\n\x1a\n"),
+    ("TIFF", b"II*\x00"),
+    ("TIFF", b"MM\x00*"),
+    ("BigTIFF", b"II+\x00"),
+    ("BigTIFF", b"MM\x00+"),
+    ("JPEG 2000", b"\x00\x00\x00\x0cjP  \r\n\x87\n"),  # conteneur JP2
+    ("JPEG 2000", b"\xff\x4f\xff\x51"),  # flux J2K nu
+    ("GIF", b"GIF87a"),
+    ("GIF", b"GIF89a"),
+)
+#: Fenêtre lue avant de trancher : la plus longue signature (JP2, et WebP :
+#: ``RIFF`` + taille sur 4 octets + ``WEBP``).
+_SNIFF_BYTES = 12
+
+
+def image_format(head: bytes) -> str | None:
+    """Format d'image reconnu dans les premiers octets ``head``, sinon ``None``."""
+    for name, signature in _IMAGE_SIGNATURES:
+        if head.startswith(signature):
+            return name
+    if head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+        return "WebP"
+    return None
 
 
 #: Préfixe NAT64 « bien connu » (RFC 6052 §2.1) : les **32 derniers bits**
@@ -321,6 +356,15 @@ def fetch_json(
         raise HttpFetchError(f"réponse non-JSON depuis {url!r} : {exc}.") from exc
 
 
+def _require_image(head: bytes, url: str, content_type: str) -> None:
+    if image_format(head) is None:
+        declared = content_type or "sans Content-Type"
+        raise NotAnImageError(
+            f"{url!r} ne sert pas une image ({declared}, octets {head[:8]!r}) : "
+            "JPEG, PNG, TIFF, JPEG 2000, GIF ou WebP attendu."
+        )
+
+
 def download(
     url: str,
     dest: Path,
@@ -328,7 +372,12 @@ def download(
     timeout: float = DEFAULT_TIMEOUT,
     headers: dict[str, str] | None = None,
 ) -> None:
-    """Télécharge ``url`` vers ``dest`` en **flux disque** ; anti-SSRF + plafond.
+    """Télécharge l'**image** ``url`` vers ``dest`` (flux disque, anti-SSRF, plafond).
+
+    Les premiers octets sont confrontés aux signatures d'image (cf.
+    :func:`image_format`) **avant** toute écriture : une réponse qui n'est pas une
+    image — un ``info.json`` de service IIIF, une page d'erreur HTML servie en
+    200 — lève :class:`NotAnImageError` au lieu de finir en faux ``.jpg``.
 
     Écrit au fil de l'eau dans un fichier ``.part`` voisin (jamais tout le corps
     en RAM), plafonne à ``IMAGE_MAX_BYTES``, puis **renomme atomiquement**
@@ -348,9 +397,16 @@ def download(
                 raise HttpFetchError(
                     f"statut HTTP {exc.response.status_code} sur {url!r}."
                 ) from exc
+            chunks = response.iter_bytes()
+            head = b""
+            for chunk in chunks:
+                head += chunk
+                if len(head) >= _SNIFF_BYTES:
+                    break
+            _require_image(head, url, response.headers.get("content-type", ""))
             total = 0
             with part.open("wb") as handle:
-                for chunk in response.iter_bytes():
+                for chunk in itertools.chain((head,), chunks):
                     total += len(chunk)
                     if total > IMAGE_MAX_BYTES:
                         raise HttpFetchError(
@@ -456,11 +512,13 @@ __all__ = [
     "HttpFetchError",
     "IMAGE_MAX_BYTES",
     "MANIFEST_MAX_BYTES",
+    "NotAnImageError",
     "SsrfError",
     "assert_public_url",
     "download",
     "fetch_bytes",
     "fetch_json",
     "fetch_text",
+    "image_format",
     "post_json",
 ]
