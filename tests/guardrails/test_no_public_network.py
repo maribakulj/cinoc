@@ -84,7 +84,9 @@ import pytest
 def _serve(family, address):
     server = socket.socket(family, socket.SOCK_STREAM)
     server.bind(address)
-    server.listen(1)
+    # file d'attente large : les connexions ne sont jamais acceptées, et macOS
+    # tient « 1 » au mot près (la 2ᵉ attend jusqu'au délai — #183).
+    server.listen(16)
     return server
 
 def test_loopback(monkeypatch):
