@@ -4,10 +4,13 @@ Premier moteur **payant à la page** du socle : donne un sens réel à l'axe
 coût du Pareto (économie T10, tarif ``cloud_page_kinds``). Implémente le
 ``Module`` Protocol ; SDK ``mistralai`` = extra (``cinoc[mistral]``), importé
 paresseusement dans ``_invoke_mistral_ocr`` (mockable, CI sans clé ni réseau).
-Clé ``MISTRAL_API_KEY``. Sortie : le texte (markdown) des pages, concaténé —
-**lu** dans la réponse par :func:`_text_from_response`, et la réponse entière
-(pages, images, dimensions, en-têtes et pieds) gardée en sidecar ``NATIVE_JSON``
-(un appel par page) : la projection vers ``LAYOUT`` se fera depuis lui.
+Clé ``MISTRAL_API_KEY``. Sortie : le **texte** des pages — leur markdown
+débarrassé de sa syntaxe (``markdown_to_text`` : ``#``, ``**``, ``|---|``,
+``![img](…)`` ne sont pas la page et ne doivent pas être notés) —, **lu** dans
+la réponse par :func:`_text_from_response` ; la réponse entière (pages, images,
+dimensions, en-têtes et pieds, blocs) gardée en sidecar ``NATIVE_JSON`` (un
+appel par page) ; et, quand la réponse porte des **blocs**, leur projection en
+``LAYOUT`` (``_mistral_layout.layout_from_response``), depuis ce même corps.
 """
 
 from __future__ import annotations
@@ -18,23 +21,27 @@ from typing import Any
 
 from cinoc.adapters._native import sdk_native, served_model
 from cinoc.adapters.ocr._base import run_remote_image_to_text
+from cinoc.adapters.ocr._mistral_layout import layout_from_response
 from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.deadline import Deadline
 from cinoc.domain.errors import AdapterStepError
+from cinoc.formats.text import markdown_to_text
 from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
 
 #: 1.1 : la réponse native est publiée en sidecar (``NATIVE_JSON``) ; le texte
-#: ne change pas.
-_VERSION = "1.1"
+#: ne change pas. 1.2 : le texte est le markdown **sans sa syntaxe** (il
+#: change), et un ``LAYOUT`` est publié quand la réponse porte des blocs.
+_VERSION = "1.2"
 _DEFAULT_MODEL = "mistral-ocr-latest"
 _MEDIA = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
           ".webp": "image/webp", ".tif": "image/tiff", ".tiff": "image/tiff"}
 
 
 def _text_from_response(native: object) -> str:
-    """Corps de ``POST /v1/ocr`` → texte : le markdown des pages, concaténé.
+    """Corps de ``POST /v1/ocr`` → texte : le markdown des pages, sans sa
+    syntaxe, une page après l'autre (séparées d'un saut de ligne).
 
     **Pur** : c'est la seule lecture du texte, à l'exécution comme à la
     relecture d'un sidecar.
@@ -42,10 +49,12 @@ def _text_from_response(native: object) -> str:
     pages = native.get("pages") if isinstance(native, dict) else None
     if not isinstance(pages, list):
         return ""
-    return "\n\n".join(
-        str((page.get("markdown") if isinstance(page, dict) else "") or "")
+    texts = (
+        markdown_to_text(str(page.get("markdown") or ""))
         for page in pages
-    ).strip()
+        if isinstance(page, dict)
+    )
+    return "\n".join(texts).strip()
 
 
 def _invoke_mistral_ocr(
@@ -87,7 +96,9 @@ def _invoke_mistral_ocr(
 
 
 class MistralOCRAdapter:
-    """OCR cloud Mistral : ``IMAGE`` → ``RAW_TEXT`` (markdown) + ``NATIVE_JSON``."""
+    """OCR cloud Mistral : ``IMAGE`` → ``RAW_TEXT`` + ``NATIVE_JSON`` (+ ``LAYOUT``
+    quand la réponse porte des blocs — publié en plus, non déclaré : une réponse
+    sans blocs n'en a pas)."""
 
     def __init__(self, *, label: str, model: str = _DEFAULT_MODEL) -> None:
         if not label or not all(c.isalnum() or c in "_-" for c in label):
@@ -135,6 +146,7 @@ class MistralOCRAdapter:
             ),
             extract=_text_from_response,
             served=served_model,
+            layout=layout_from_response,
         )
 
 

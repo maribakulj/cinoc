@@ -24,6 +24,7 @@ from cinoc.adapters._native import native_artifact
 from cinoc.adapters._workspace import workspace_artifact_path
 from cinoc.domain.artifacts import Artifact, ArtifactType, compute_content_hash
 from cinoc.domain.errors import AdapterStepError
+from cinoc.domain.layout import CanonicalLayout
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
 
@@ -59,6 +60,7 @@ def run_remote_image_to_text(
     call: Callable[[str], object],
     extract: Callable[[object], str],
     served: Callable[[object], str | None] | None = None,
+    layout: Callable[[object], CanonicalLayout | None] | None = None,
 ) -> StepOutput:
     """OCR distant : ``RAW_TEXT`` **et** ``NATIVE_JSON`` (le corps de la réponse).
 
@@ -66,6 +68,9 @@ def run_remote_image_to_text(
     lit le texte. Le texte n'est jamais lu ailleurs que par ``extract`` — c'est
     ce qui rend la relecture du sidecar identique à l'exécution. ``served``, pour
     un fournisseur qui le rend, lit dans ce même corps le modèle **servi**.
+    ``layout``, de même, en projette la mise en page : un ``LAYOUT`` est publié
+    **en plus** quand elle rend un ``CanonicalLayout``, rien quand elle rend
+    ``None`` (la réponse n'en porte pas).
     """
     corps: list[object] = []
 
@@ -78,10 +83,35 @@ def run_remote_image_to_text(
         name=name, label=label, inputs=inputs, context=context, control=control,
         recognize=recognize,
     )
+    artifacts = dict(output.artifacts)
+    mise_en_page = layout(corps[0]) if layout is not None and corps else None
+    if mise_en_page is not None and context.workspace_uri is not None:
+        artifacts[ArtifactType.LAYOUT] = _layout_artifact(
+            mise_en_page, context.workspace_uri, context.document_id, label, name
+        )
     modele = served(corps[0]) if served is not None and corps else None
-    if modele is None:
-        return output
-    return StepOutput(artifacts=output.artifacts, served_models=(modele,))
+    return StepOutput(
+        artifacts=artifacts, served_models=(modele,) if modele is not None else ()
+    )
+
+
+def _layout_artifact(
+    layout: CanonicalLayout,
+    workspace_uri: str,
+    document_id: str,
+    label: str,
+    name: str,
+) -> Artifact:
+    payload = layout.model_dump_json().encode("utf-8")
+    path = workspace_artifact_path(workspace_uri, document_id, label, "layout.json")
+    path.write_bytes(payload)
+    return Artifact(
+        id=f"{document_id}:{name}:layout",
+        document_id=document_id,
+        type=ArtifactType.LAYOUT,
+        uri=str(path),
+        content_hash=compute_content_hash(payload),
+    )
 
 
 def _run(

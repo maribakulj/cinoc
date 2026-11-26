@@ -40,7 +40,8 @@ from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
 
-_VERSION = "1.0"
+#: 1.1 : le score de détection est gardé (``Region.confidence``).
+_VERSION = "1.1"
 
 #: Seuil bas **assumé**. Une région manquée est perdue pour toute la chaîne (rien
 #: ne la reconnaîtra ensuite) ; une région de trop coûte une reconnaissance et se

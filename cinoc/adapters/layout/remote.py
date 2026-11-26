@@ -38,7 +38,8 @@ from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
 
-_VERSION = "1.0"
+#: 1.1 : le score de détection est gardé (``Region.confidence``).
+_VERSION = "1.1"
 _DEFAULT_MIN_SCORE = 0.5
 _DEFAULT_TIMEOUT = 60.0
 
