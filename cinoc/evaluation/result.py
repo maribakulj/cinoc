@@ -130,6 +130,10 @@ class RunResult(BaseModel):
     #: Un JSON v4 **sans** payload ``inference`` (le mode rapide) se recharge ;
     #: un JSON v4 qui en porte un est refusé : ses verdicts n'étaient pas
     #: corrigés — on le re-note depuis son archive (``--resume-dir --offline``).
+    #: Toujours 5 : l'IC d'un pipeline (``intervals``) est celui du ratio
+    #: micro affiché (``value``), plus celui d'une moyenne macro (``mean``).
+    #: La version n'avait pas été publiée ; un payload qui porte ``mean`` est
+    #: refusé (champ inconnu), le reste d'un JSON v5 se relit tel quel.
     schema_version: int = 5
     manifest: RunManifest
     pipelines: tuple[PipelineResult, ...] = Field(default_factory=tuple)

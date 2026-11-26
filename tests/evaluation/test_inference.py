@@ -1,4 +1,7 @@
-"""Inférence : test omnibus, Holm, Nemenyi conditionné, barres CD, bootstrap."""
+"""Inférence : test omnibus, Holm, Nemenyi conditionné, barres CD.
+
+L'IC bootstrap (ratio micro) a ses preuves dans ``test_micro_interval.py``.
+"""
 
 from __future__ import annotations
 
@@ -12,7 +15,7 @@ from cinoc.evaluation.analysis import InferencePayload
 from cinoc.evaluation.errors import EvaluationError
 from cinoc.evaluation.inference import (
     MIN_SUPPORT,
-    bootstrap_ci,
+    InferenceEntry,
     holm_adjusted,
     inference_analyses,
     nemenyi_critical_value,
@@ -27,10 +30,17 @@ _DATA: dict[str, list[float | None]] = {
 }
 
 
+def _entry(
+    metric: str, data: dict[str, list[float | None]]
+) -> InferenceEntry:
+    """Une ligne de famille à poids unitaires (micro = moyenne des documents)."""
+    return ("text", metric, data, {name: [1] * len(s) for name, s in data.items()})
+
+
 def _payload(
     data: dict[str, list[float | None]], **kwargs: object
 ) -> InferencePayload:
-    (analysis,) = inference_analyses([("text", "cer", data)], **kwargs)  # type: ignore[arg-type]
+    (analysis,) = inference_analyses([_entry("cer", data)], **kwargs)  # type: ignore[arg-type]
     assert isinstance(analysis.payload, InferencePayload)
     return analysis.payload
 
@@ -122,8 +132,11 @@ def test_holm_family_is_the_whole_run() -> None:
     }
     alone = _payload(clear)  # p ≈ 0,0119 : rejeté seul
     assert alone.critical_distance is not None
-    entries = [("text", "cer", clear)] + [("text", f"m{i}", noise) for i in range(19)]
-    crowded = inference_analyses(entries)  # type: ignore[arg-type]
+    entries = [_entry("cer", clear)] + [
+        _entry(f"m{i}", noise)  # type: ignore[arg-type]
+        for i in range(19)
+    ]
+    crowded = inference_analyses(entries)
     first = crowded[0].payload
     assert isinstance(first, InferencePayload)
     assert first.p_value == alone.p_value and first.family_size == 20
@@ -172,15 +185,6 @@ def test_intervals_only_when_asked() -> None:
     assert _payload(_DATA, with_intervals=False).intervals == ()
 
 
-def test_bootstrap_parity_and_determinism() -> None:
-    values = [v for v in _DATA["alpha"] if v is not None]
-    first = bootstrap_ci(values)
-    assert first == pytest.approx((0.095, 0.11625))
-    assert bootstrap_ci(values) == first  # graine fixe → bit-à-bit
-    lower, upper = first
-    assert lower <= sum(values) / len(values) <= upper
-
-
 def test_payload_refuses_incoherent_states() -> None:
     with pytest.raises(ValidationError):  # ni test ni motif
         InferencePayload(metric="cer", alpha=0.05, n_documents=6)
@@ -192,7 +196,7 @@ def test_payload_refuses_incoherent_states() -> None:
 
 
 def test_payload_serialisation_is_deterministic() -> None:
-    (first,) = inference_analyses([("text", "cer", _DATA)])
-    (second,) = inference_analyses([("text", "cer", _DATA)])
+    (first,) = inference_analyses([_entry("cer", _DATA)])
+    (second,) = inference_analyses([_entry("cer", _DATA)])
     assert first.scope == "corpus"
     assert first.model_dump_json() == second.model_dump_json()

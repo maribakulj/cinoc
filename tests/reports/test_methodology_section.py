@@ -138,3 +138,21 @@ def test_served_models_and_unicode_database_are_shown_in_both_languages() -> Non
     assert "Served models" in en and "Unicode database" in en
     for html in (fr, en):
         assert "gpt-4o-mini-2024-07-18" in html and "15.1.0" in html
+
+
+def test_conventions_say_the_aggregate_is_micro_in_both_languages() -> None:
+    """Pilote (D6) : la méthodologie disait « macro-moyennes par document »
+    alors que l'agrégat affiché est le ratio micro Σ erreurs / Σ longueurs."""
+    french = MethodologySection().render(_result(_manifest()), SectionContext())
+    english = MethodologySection().render(
+        _result(_manifest()), SectionContext(lang="en")
+    )
+    assert french is not None and english is not None
+    assert "macro-moyennes par document" not in french
+    assert "Les agrégats par moteur sont <b>micro</b>" in french
+    assert "Σ erreurs / Σ longueurs de référence" in french
+    assert "bootstrap de ce même ratio" in french
+    assert "macro-averages unless" not in english
+    assert "Per-engine aggregates are <b>micro</b>" in english
+    assert "Σ errors / Σ reference lengths" in english
+    assert "bootstrap of that same ratio" in english
