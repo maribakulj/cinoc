@@ -67,3 +67,34 @@ def test_to_file_missing_source_writes_nothing(tmp_path: Path) -> None:
 def test_to_file_uses_forward_slash_href(tmp_path: Path) -> None:
     href = thumbnail_to_file(_png(tmp_path / "x.png", (40, 30)), tmp_path / "a", "s")
     assert href is not None and "/" in href and "\\" not in href  # href web portable
+
+
+def test_missing_pillow_is_said_once_not_per_thumbnail(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Sans l'extra ``[images]``, l'avertissement tient à l'installation : une
+    ligne, pas une par vignette (D-306 ; 4 lignes pour 2 pages avant)."""
+    import builtins
+    import logging
+
+    from cinoc.adapters import images
+
+    pages = []
+    for name in ("a.png", "b.png"):
+        page = tmp_path / name
+        page.write_bytes(b"\x89PNG\r\n\x1a\n")
+        pages.append(page)
+    real_import = builtins.__import__
+
+    def no_pil(name: str, *args: object, **kwargs: object) -> object:
+        if name == "PIL" or name.startswith("PIL."):
+            raise ImportError("No module named 'PIL'")
+        return real_import(name, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(builtins, "__import__", no_pil)
+    images._warn_no_pillow.cache_clear()
+    with caplog.at_level(logging.WARNING, logger=images.__name__):
+        for page in pages * 2:
+            assert images.thumbnail_data_uri(page) is None
+    said = [r for r in caplog.records if "Pillow indisponible" in r.getMessage()]
+    assert len(said) == 1
