@@ -34,7 +34,9 @@ def test_satisfies_module_protocol() -> None:
     assert isinstance(adapter, Module)
     assert adapter.name == "mistral_ocr:ocr"
     assert adapter.input_types == frozenset({ArtifactType.IMAGE})
-    assert adapter.output_types == frozenset({ArtifactType.RAW_TEXT})
+    assert adapter.output_types == frozenset(
+        {ArtifactType.RAW_TEXT, ArtifactType.NATIVE_JSON}
+    )
 
 
 def test_execute_writes_markdown_text(
@@ -42,7 +44,7 @@ def test_execute_writes_markdown_text(
 ) -> None:
     monkeypatch.setattr(
         "cinoc.adapters.ocr.mistral_ocr._invoke_mistral_ocr",
-        lambda **_: "# Page\n\ntexte reconnu",
+        lambda **_: {"pages": [{"index": 0, "markdown": "# Page\n\ntexte reconnu"}]},
     )
     out = MistralOCRAdapter(label="ocr").execute(
         {ArtifactType.IMAGE: _image(tmp_path)}, {}, _ctx(tmp_path), RunControl()

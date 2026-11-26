@@ -35,7 +35,7 @@ from cinoc.adapters.llm._base import (
     StopReason,
     default_prompt_for_role,
     llm_input_types,
-    llm_output_type,
+    llm_output_types,
     normalize_llm_content,
     run_llm_step,
     stop_reason_from,
@@ -53,7 +53,9 @@ from cinoc.pipeline.types import RunContext, StepOutput
 
 #: 2 : ``options`` explicites (``temperature``, ``seed``, ``num_predict``,
 #: ``num_ctx``) et ``done_reason`` lu — une sortie peut changer.
-_VERSION = "2.0"
+#: 2.1 : la réponse native est publiée en sidecar (``NATIVE_JSON``) ; le texte
+#: ne change pas.
+_VERSION = "2.1"
 _DEFAULT_MODEL = "llama3"
 
 _DEFAULT_HOST = "http://localhost:11434"
@@ -83,6 +85,10 @@ def _options(settings: InferenceSettings, num_ctx: int) -> dict[str, float | int
 def _completion_from_chat(data: object, model: str) -> LLMCompletion:
     """Corps de ``/api/chat`` → ``LLMCompletion`` (texte, jetons, arrêt) — **pur**.
 
+    Le corps est gardé tel quel en sidecar ``NATIVE_JSON`` (``native``) : le
+    relire rend la même complétion. Un serveur ollama n'a pas de clé ; l'hôte,
+    qui pourrait en porter une dans son URL, n'est pas dans le corps.
+
     Ollama peut renvoyer une **erreur en HTTP 200** (modèle introuvable sous ce
     nom, mémoire insuffisante…) : ``raise_for_status`` ne la voit pas. On la
     remonte explicitement, sinon la « correction » serait un texte vide silencieux.
@@ -98,6 +104,7 @@ def _completion_from_chat(data: object, model: str) -> LLMCompletion:
         usage_tokens(counts.get("prompt_eval_count")),
         usage_tokens(counts.get("eval_count")),
         stop_reason_from(counts.get("done_reason"), _STOP_REASONS),
+        native=data,
     )
 
 
@@ -114,7 +121,7 @@ def _fail_or_cancel(control: RunControl, model: str, exc: Exception) -> NoReturn
     raise AdapterStepError(f"ollama a échoué ({model}) : {exc}") from exc
 
 
-def _invoke_ollama(  # pragma: no cover -- réseau (serveur ollama ; cf. marqueur 'live')
+def _invoke_ollama(
     *,
     model: str,
     prompt: str,
@@ -257,7 +264,7 @@ class OllamaAdapter:
 
     @property
     def output_types(self) -> frozenset[ArtifactType]:
-        return frozenset({llm_output_type(self._role)})
+        return llm_output_types(self._role)
 
     def execute(
         self,

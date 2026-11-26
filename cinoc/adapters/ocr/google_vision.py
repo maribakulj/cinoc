@@ -8,7 +8,10 @@ rejouer) : transport léger, **testable par cassette HTTP**, auth par **clé d'A
 ``_invoke_google_vision`` (mockable, CI sans clé ni réseau).
 
 Sortie : ``fullTextAnnotation.text`` de ``DOCUMENT_TEXT_DETECTION`` — le texte
-dense d'une page (le bon mode pour des documents, ≠ ``TEXT_DETECTION`` épars).
+dense d'une page (le bon mode pour des documents, ≠ ``TEXT_DETECTION`` épars) —
+lu par :func:`_extract_text` dans le corps de la réponse, gardé entier en sidecar
+``NATIVE_JSON`` (pages, blocs, confiances, langue). La clé, passée en *query
+string*, n'est pas dans le corps.
 """
 
 from __future__ import annotations
@@ -16,9 +19,9 @@ from __future__ import annotations
 import os
 from base64 import b64encode
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from cinoc.adapters.ocr._base import run_image_to_text
+from cinoc.adapters.ocr._base import run_remote_image_to_text
 from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.deadline import Deadline
 from cinoc.domain.errors import AdapterStepError
@@ -29,7 +32,9 @@ from cinoc.pipeline.types import RunContext, StepOutput
 if TYPE_CHECKING:  # annotations seules — pas d'import httpx au chargement du module
     import httpx
 
-_VERSION = "1.0"
+#: 1.1 : la réponse native est publiée en sidecar (``NATIVE_JSON``) ; le texte
+#: ne change pas.
+_VERSION = "1.1"
 _ENDPOINT = "https://vision.googleapis.com/v1/images:annotate"
 _API_KEY_ENV = "GOOGLE_VISION_API_KEY"
 _FEATURE = "DOCUMENT_TEXT_DETECTION"
@@ -40,7 +45,8 @@ def _extract_text(payload: object) -> str:
 
     Forme : ``{"responses": [{"fullTextAnnotation": {"text": …}}]}`` (ou
     ``{"error": {"message": …}}`` pour un échec par image). Aucun texte détecté
-    (page blanche) → ``""`` — un résultat valide, pas une erreur.
+    (page blanche) → ``""`` — un résultat valide, pas une erreur. **Pur** : la
+    seule lecture du texte, à l'exécution comme à la relecture d'un sidecar.
     """
     if not isinstance(payload, dict):
         raise AdapterStepError("google_vision : réponse JSON inattendue (objet).")
@@ -67,8 +73,8 @@ def _invoke_google_vision(
     deadline: Deadline,
     api_key: str,
     transport: httpx.BaseTransport | None = None,
-) -> str:
-    """POST l'image à Vision et renvoie le texte. ``transport`` injecté → cassette.
+) -> dict[str, Any]:
+    """POST l'image à Vision et rend le corps JSON. ``transport`` injecté → cassette.
 
     Endpoint **fixe et de confiance** (Google) : pas de durcissement anti-SSRF (≠
     importeurs de corpus, dont l'URL vient de l'utilisateur). La clé d'API est en
@@ -97,11 +103,13 @@ def _invoke_google_vision(
         raise AdapterStepError(
             f"google_vision : échec de transport : {type(exc).__name__}."
         ) from exc
-    return _extract_text(data)
+    if not isinstance(data, dict):
+        raise AdapterStepError("google_vision : réponse JSON inattendue (objet).")
+    return data
 
 
 class GoogleVisionAdapter:
-    """OCR cloud Google Vision : ``IMAGE`` → ``RAW_TEXT`` (texte dense de la page)."""
+    """OCR cloud Google Vision : ``IMAGE`` → ``RAW_TEXT`` + ``NATIVE_JSON``."""
 
     def __init__(self, *, label: str) -> None:
         if not label or not all(c.isalnum() or c in "_-" for c in label):
@@ -122,7 +130,7 @@ class GoogleVisionAdapter:
 
     @property
     def output_types(self) -> frozenset[ArtifactType]:
-        return frozenset({ArtifactType.RAW_TEXT})
+        return frozenset({ArtifactType.RAW_TEXT, ArtifactType.NATIVE_JSON})
 
     def execute(
         self,
@@ -131,7 +139,7 @@ class GoogleVisionAdapter:
         context: RunContext,
         control: RunControl,
     ) -> StepOutput:
-        def recognize(image_uri: str) -> str:
+        def call(image_uri: str) -> dict[str, Any]:
             api_key = os.environ.get(_API_KEY_ENV)
             if not api_key:
                 raise AdapterStepError(f"{self.name} : {_API_KEY_ENV} manquante.")
@@ -139,13 +147,14 @@ class GoogleVisionAdapter:
                 image_path=image_uri, deadline=context.deadline, api_key=api_key
             )
 
-        return run_image_to_text(
+        return run_remote_image_to_text(
             name=self.name,
             label=self._label,
             inputs=inputs,
             context=context,
             control=control,
-            recognize=recognize,
+            call=call,
+            extract=_extract_text,
         )
 
 

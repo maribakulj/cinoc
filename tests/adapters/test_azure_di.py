@@ -14,7 +14,11 @@ from pathlib import Path
 import httpx
 import pytest
 
-from cinoc.adapters.ocr.azure_di import AzureDocIntelAdapter, _invoke_azure_di
+from cinoc.adapters.ocr.azure_di import (
+    AzureDocIntelAdapter,
+    _extract_text,
+    _invoke_azure_di,
+)
 from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.deadline import Deadline
 from cinoc.domain.errors import AdapterStepError
@@ -67,7 +71,9 @@ def test_satisfies_module_protocol() -> None:
     assert isinstance(adapter, Module)
     assert adapter.name == "azure_di:az"
     assert adapter.input_types == frozenset({ArtifactType.IMAGE})
-    assert adapter.output_types == frozenset({ArtifactType.RAW_TEXT})
+    assert adapter.output_types == frozenset(
+        {ArtifactType.RAW_TEXT, ArtifactType.NATIVE_JSON}
+    )
 
 
 def test_rejects_bad_label() -> None:
@@ -80,7 +86,11 @@ def test_execute_writes_text(
 ) -> None:
     _set_creds(monkeypatch)
     monkeypatch.setattr(
-        "cinoc.adapters.ocr.azure_di._invoke_azure_di", lambda **_: "texte reconnu"
+        "cinoc.adapters.ocr.azure_di._invoke_azure_di",
+        lambda **_: {
+            "status": "succeeded",
+            "analyzeResult": {"content": "texte reconnu"},
+        },
     )
     out = AzureDocIntelAdapter(label="az").execute(
         {ArtifactType.IMAGE: _image(tmp_path)}, {}, _ctx(tmp_path), RunControl()
@@ -142,14 +152,14 @@ def test_invoke_submits_then_polls_and_extracts(tmp_path: Path) -> None:
         seen["get_url"] = str(request.url)
         return httpx.Response(200, json=_RESULT)
 
-    text = _invoke_azure_di(
+    text = _extract_text(_invoke_azure_di(
         endpoint=_ENDPOINT,
         image_path=_image_file(tmp_path),
         deadline=Deadline.infinite(),
         key="secret",
         transport=_transport(handler),
         sleep=_nosleep,
-    )
+    ))
     # Valeur dérivée main : analyzeResult.content strippé.
     assert text == "Bonjour le monde\nseconde ligne"
     assert str(seen["post_path"]).endswith("/documentModels/prebuilt-read:analyze")
@@ -170,14 +180,14 @@ def test_invoke_polls_until_succeeded(tmp_path: Path) -> None:
             return httpx.Response(200, json={"status": "running"})
         return httpx.Response(200, json=_RESULT)
 
-    text = _invoke_azure_di(
+    text = _extract_text(_invoke_azure_di(
         endpoint=_ENDPOINT,
         image_path=_image_file(tmp_path),
         deadline=Deadline.infinite(),
         key="k",
         transport=_transport(handler),
         sleep=_nosleep,
-    )
+    ))
     assert text == "Bonjour le monde\nseconde ligne"
     assert state["polls"] == 3  # 2× running puis succeeded
 
@@ -189,14 +199,14 @@ def test_invoke_failed_status_raises(tmp_path: Path) -> None:
         return httpx.Response(200, json={"status": "failed"})
 
     with pytest.raises(AdapterStepError, match="failed"):
-        _invoke_azure_di(
+        _extract_text(_invoke_azure_di(
             endpoint=_ENDPOINT,
             image_path=_image_file(tmp_path),
             deadline=Deadline.infinite(),
             key="k",
             transport=_transport(handler),
             sleep=_nosleep,
-        )
+        ))
 
 
 def test_invoke_missing_operation_location_raises(tmp_path: Path) -> None:
@@ -204,14 +214,14 @@ def test_invoke_missing_operation_location_raises(tmp_path: Path) -> None:
         return httpx.Response(202)  # pas d'en-tête Operation-Location
 
     with pytest.raises(AdapterStepError, match="Operation-Location"):
-        _invoke_azure_di(
+        _extract_text(_invoke_azure_di(
             endpoint=_ENDPOINT,
             image_path=_image_file(tmp_path),
             deadline=Deadline.infinite(),
             key="k",
             transport=_transport(handler),
             sleep=_nosleep,
-        )
+        ))
 
 
 def test_invoke_submit_http_error_raises(tmp_path: Path) -> None:
@@ -219,14 +229,14 @@ def test_invoke_submit_http_error_raises(tmp_path: Path) -> None:
         return httpx.Response(401, json={"error": {"message": "clé invalide"}})
 
     with pytest.raises(AdapterStepError, match="statut HTTP 401"):
-        _invoke_azure_di(
+        _extract_text(_invoke_azure_di(
             endpoint=_ENDPOINT,
             image_path=_image_file(tmp_path),
             deadline=Deadline.infinite(),
             key="bad",
             transport=_transport(handler),
             sleep=_nosleep,
-        )
+        ))
 
 
 def test_invoke_blank_page_returns_empty(tmp_path: Path) -> None:
@@ -235,12 +245,12 @@ def test_invoke_blank_page_returns_empty(tmp_path: Path) -> None:
             return httpx.Response(202, headers={"operation-location": _OP_URL})
         return httpx.Response(200, json={"status": "succeeded", "analyzeResult": {}})
 
-    text = _invoke_azure_di(
+    text = _extract_text(_invoke_azure_di(
         endpoint=_ENDPOINT,
         image_path=_image_file(tmp_path),
         deadline=Deadline.infinite(),
         key="k",
         transport=_transport(handler),
         sleep=_nosleep,
-    )
+    ))
     assert text == ""

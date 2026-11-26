@@ -43,7 +43,9 @@ def test_each_mode_declares_the_types_it_actually_consumes() -> None:
         adapter = OllamaAdapter(label="x", model="m", role=mode)
         entrees, sorties = attendu[mode]
         assert adapter.input_types == frozenset(entrees), mode
-        assert adapter.output_types == frozenset(sorties), mode
+        assert adapter.output_types == frozenset(
+            {*sorties, ArtifactType.NATIVE_JSON}
+        ), mode
 
 
 def test_every_mode_is_still_a_module() -> None:
@@ -188,4 +190,6 @@ def test_the_registry_passes_the_mode_through() -> None:
         "ollama:vlm", {"label": "vlm", "model": "m", "role": "zero_shot"}
     )
     assert module.input_types == frozenset({ArtifactType.IMAGE})
-    assert module.output_types == frozenset({ArtifactType.RAW_TEXT})
+    assert module.output_types == frozenset(
+        {ArtifactType.RAW_TEXT, ArtifactType.NATIVE_JSON}
+    )

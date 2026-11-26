@@ -19,6 +19,11 @@ Trois sorties, et c'est délibéré :
   protégée ou parce que rien n'a été proposé : deux situations que rien ne
   distingue une fois le texte écrit.
 
+Un producteur qui interroge un modèle publie aussi ``NATIVE_JSON`` —
+``{"responses": [...]}``, chaque corps reçu, dans l'ordre d'appel, rejets compris.
+Le texte corrigé n'est pas la lecture d'**une** réponse mais ce que les gardes ont
+retenu de toutes : le sidecar garde l'observation, il ne rejoue pas le texte.
+
 Ce que la bibliothèque décide, l'étape le rapporte sans le retoucher : une ligne
 refusée par une garde ressort **avec son texte d'origine**. C'est le principe de
 `saknussemm` — l'application décide, le modèle informe — et le contredire ici
@@ -31,6 +36,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from cinoc.adapters._native import native_artifact
 from cinoc.adapters._workspace import workspace_artifact_path
 from cinoc.adapters.layout.to_text import _page_text
 from cinoc.domain.artifacts import Artifact, ArtifactType, compute_content_hash
@@ -40,7 +46,8 @@ from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
 
-_VERSION = "1.0"
+#: 1.1 : la réponse native de chaque appel au modèle est publiée (``NATIVE_JSON``).
+_VERSION = "1.1"
 
 #: Le seul producteur qui consomme l'image de la page.
 VISION_PRODUCER = "mistral_vision"
@@ -161,13 +168,18 @@ class SaknussemmCorrector:
 
     @property
     def output_types(self) -> frozenset[ArtifactType]:
-        return frozenset(
-            {
-                ArtifactType.LAYOUT,
-                ArtifactType.CORRECTED_TEXT,
-                ArtifactType.DECISIONS,
-            }
-        )
+        """Les trois sorties, **+ ``NATIVE_JSON``** quand un modèle est interrogé.
+
+        ``rules`` n'appelle rien : il n'a pas de réponse native à garder.
+        """
+        types = {
+            ArtifactType.LAYOUT,
+            ArtifactType.CORRECTED_TEXT,
+            ArtifactType.DECISIONS,
+        }
+        if self._producer in MODEL_PRODUCERS:
+            types.add(ArtifactType.NATIVE_JSON)
+        return frozenset(types)
 
     # -- producteur ---------------------------------------------------------
 
@@ -215,14 +227,18 @@ class SaknussemmCorrector:
             escalate_at_or_above=self._qe_escalate,
         )
 
-    def _build_producer(self) -> Any:
+    def _build_producer(self) -> tuple[Any, Any]:
+        """``(producteur, client)`` — le client garde les réponses reçues
+        (``responses``) ; ``None`` pour ``rules``, qui n'appelle rien. Un client
+        neuf par exécution : deux unités concurrentes ne mêlent pas leurs
+        réponses."""
         if self._producer == "rules":
             from saknussemm.producers.rules import (  # type: ignore[import-not-found]  # noqa: PLC0415
                 RulesProducer,
                 default_french_ocr_rules,
             )
 
-            return RulesProducer(default_french_ocr_rules())
+            return RulesProducer(default_french_ocr_rules()), None
 
         if self._producer == VISION_PRODUCER:
             return self._build_vision_producer()
@@ -236,21 +252,20 @@ class SaknussemmCorrector:
                 MistralStructuredClient,
             )
 
-            return LLMEditProducer(
-                MistralStructuredClient(),
-                api_key=self._api_key(),
-                model=self._model,
+            mistral = MistralStructuredClient()
+            return (
+                LLMEditProducer(mistral, api_key=self._api_key(), model=self._model),
+                mistral,
             )
 
         from cinoc.adapters.correction.ollama_structured import (  # noqa: PLC0415
             OllamaStructuredClient,
         )
 
-        return LLMEditProducer(
-            OllamaStructuredClient(host=self._host), api_key="", model=self._model
-        )
+        ollama = OllamaStructuredClient(host=self._host)
+        return LLMEditProducer(ollama, api_key="", model=self._model), ollama
 
-    def _build_vision_producer(self) -> Any:
+    def _build_vision_producer(self) -> tuple[Any, Any]:
         """``VisionEditProducer`` + le plafond d'images **déclaré** au moteur.
 
         Sans ``max_images``, le routeur composerait un lot de plus de huit
@@ -274,8 +289,9 @@ class SaknussemmCorrector:
             MistralMultimodalClient,
         )
 
+        vision = MistralMultimodalClient()
         return VisionEditProducer(
-            MistralMultimodalClient(),
+            vision,
             api_key=cle,
             model=self._model,
             capabilities=ModelCapabilities(
@@ -284,7 +300,7 @@ class SaknussemmCorrector:
                 structured_output=True,
                 max_images=MAX_IMAGES_PER_CALL,
             ),
-        )
+        ), vision
 
     def _page_images(
         self, inputs: dict[ArtifactType, Artifact], page_ids: list[str]
@@ -375,8 +391,9 @@ class SaknussemmCorrector:
 
             guard_config = GuardConfig.vision()
         scoreur, politique = self._build_qe()
+        producteur, client = self._build_producer()
         pipeline = CorrectionPipeline(
-            producer=self._build_producer(),
+            producer=producteur,
             observer=_Observer(),
             guard_config=guard_config,
             qe_scorer=scoreur,
@@ -399,7 +416,26 @@ class SaknussemmCorrector:
             for outcome in result.report.lines
         }
         corrected = _apply(layout, decided, manifest_page_ids(manifest))
-        return self._emit(corrected, _decisions(result, context.document_id), context)
+        output = self._emit(corrected, _decisions(result, context.document_id), context)
+        if client is None:
+            return output
+        return StepOutput(
+            artifacts={
+                **output.artifacts,
+                ArtifactType.NATIVE_JSON: self._native(client.responses, context),
+            }
+        )
+
+    def _native(self, responses: list[Any], context: RunContext) -> Artifact:
+        """Les corps reçus du modèle, dans l'ordre d'appel (``{"responses"}``)."""
+        return native_artifact(
+            native={"responses": responses},
+            # Sans workspace, ``_out`` écrit dans le dossier courant : idem.
+            workspace_uri=context.workspace_uri or ".",
+            document_id=context.document_id,
+            label=self._label,
+            adapter_name=self.name,
+        )
 
     def _emit(
         self, layout: CanonicalLayout, decisions: bytes, context: RunContext

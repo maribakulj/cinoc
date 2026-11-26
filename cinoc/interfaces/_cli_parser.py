@@ -240,8 +240,10 @@ def build_parser() -> argparse.ArgumentParser:
     run_cmd.add_argument(
         "--resume-dir",
         default=None,
-        help="Cache de reprise : les (pipeline × document) déjà produits à "
-        "l'identique y sont rechargés au lieu d'être ré-exécutés.",
+        help="Cache de reprise et dossier d'artefacts du run : les (pipeline × "
+        "document) déjà produits à l'identique y sont rechargés au lieu d'être "
+        "ré-exécutés, et les sorties y survivent au run — réponses natives des "
+        "moteurs distants comprises.",
     )
     run_cmd.add_argument(
         "--analyses",

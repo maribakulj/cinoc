@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal, NamedTuple, cast
 
+from cinoc.adapters._native import native_artifact
 from cinoc.adapters._workspace import workspace_artifact_path
 from cinoc.domain.artifacts import Artifact, ArtifactType, compute_content_hash
 from cinoc.domain.errors import AdapterStepError
@@ -73,12 +74,27 @@ def stop_reason_from(native: object, table: Mapping[str, StopReason]) -> StopRea
 
 
 class LLMCompletion(NamedTuple):
-    """Réponse d'un fournisseur : texte, jetons (si exposés), raison d'arrêt."""
+    """Réponse d'un fournisseur : texte, jetons (si exposés), raison d'arrêt.
+
+    ``native`` est le **corps** de la réponse dont tout le reste est lu — celui
+    qu'écrit le sidecar ``NATIVE_JSON``. Les quatre ``_completion_from_*`` le
+    posent toujours : ils lisent ce corps, et le relire depuis le sidecar rend la
+    même ``LLMCompletion``. ``None`` n'existe que pour un faux client de test qui
+    fabrique une complétion sans réponse.
+    """
 
     text: str
     tokens_in: int | None = None
     tokens_out: int | None = None
     stop_reason: StopReason = "unknown"
+    native: object | None = None
+
+
+def wire_field(data: object, key: str) -> Any:
+    """Champ ``key`` d'un objet JSON décodé ; ``None`` s'il manque ou si ``data``
+    n'est pas un objet. Les conversions lisent le corps reçu, jamais un objet de
+    SDK : c'est ce qui les rend applicables au sidecar."""
+    return data.get(key) if isinstance(data, Mapping) else None
 
 
 #: Réglages d'inférence par défaut, **les mêmes pour les quatre fournisseurs** :
@@ -237,6 +253,11 @@ def llm_input_types(role: PipelineMode) -> frozenset[ArtifactType]:
     return frozenset({ArtifactType.IMAGE})  # zero_shot
 
 
+def llm_output_types(role: PipelineMode) -> frozenset[ArtifactType]:
+    """Ce que publie une étape LLM/VLM : son texte **et** la réponse native."""
+    return frozenset({llm_output_type(role), ArtifactType.NATIVE_JSON})
+
+
 def llm_output_type(role: PipelineMode) -> ArtifactType:
     """Type produit : ``RAW_TEXT`` en transcription, sinon ``CORRECTED_TEXT``."""
     return (
@@ -345,7 +366,8 @@ def run_llm_step(
     l'invocation fournisseur idoine, écrit l'artefact du bon type. ``zero_shot``
     et ``text_and_image`` exigent ``vision_invoke`` (un fournisseur texte-seul,
     ex. ollama, passe ``None`` → ces modes sont refusés proprement). Les jetons
-    exposés par le fournisseur remontent dans ``StepOutput.usage``.
+    exposés par le fournisseur remontent dans ``StepOutput.usage`` ; le corps de
+    la réponse (``completion.native``) est écrit en sidecar ``NATIVE_JSON``.
 
     La **raison d'arrêt** décide de l'issue : ``length`` → l'artefact est écrit
     (c'est une sortie réelle, qui sera notée) **et** signalé
@@ -401,6 +423,14 @@ def run_llm_step(
         completion.text,
         output_type=llm_output_type(role),
     )
+    if completion.native is not None:
+        artifacts[ArtifactType.NATIVE_JSON] = native_artifact(
+            native=completion.native,
+            workspace_uri=context.workspace_uri,
+            document_id=context.document_id,
+            label=label,
+            adapter_name=name,
+        )
     usage = (
         ResourceUsage(
             tokens_in=completion.tokens_in, tokens_out=completion.tokens_out
@@ -433,6 +463,7 @@ __all__ = [
     "default_prompt_for_role",
     "llm_input_types",
     "llm_output_type",
+    "llm_output_types",
     "load_image_b64",
     "load_ocr_text",
     "normalize_llm_content",
@@ -441,5 +472,6 @@ __all__ = [
     "usage_tokens",
     "validate_llm_label",
     "validate_role",
+    "wire_field",
     "write_text_artifact",
 ]

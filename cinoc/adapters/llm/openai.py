@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from typing import Any, ClassVar
 
+from cinoc.adapters._native import sdk_native
 from cinoc.adapters._resilience import call_resilient
 from cinoc.adapters.llm._base import (
     DEFAULT_MAX_TOKENS,
@@ -31,13 +32,14 @@ from cinoc.adapters.llm._base import (
     StopReason,
     default_prompt_for_role,
     llm_input_types,
-    llm_output_type,
+    llm_output_types,
     normalize_llm_content,
     run_llm_step,
     stop_reason_from,
     usage_tokens,
     validate_llm_label,
     validate_role,
+    wire_field,
 )
 from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.deadline import Deadline
@@ -49,7 +51,9 @@ from cinoc.pipeline.types import RunContext, StepOutput
 
 #: 2 : raison d'arrêt lue, réglages d'inférence transmis (``temperature``,
 #: ``top_p``, ``seed``, ``max_completion_tokens``) — une sortie peut changer.
-_VERSION = "2.0"
+#: 2.1 : la réponse native est publiée en sidecar (``NATIVE_JSON``) ; le texte
+#: ne change pas.
+_VERSION = "2.1"
 _DEFAULT_MODEL = "gpt-4o-mini"
 
 #: ``finish_reason`` (SDK openai 3.59 : ``stop``, ``length``, ``tool_calls``,
@@ -62,26 +66,29 @@ _STOP_REASONS: dict[str, StopReason] = {
 }
 
 
-def _completion_from_chat(response: Any) -> LLMCompletion:
-    """Réponse SDK ``chat.completions`` → ``LLMCompletion`` (texte, jetons, arrêt).
+def _completion_from_chat(response: object) -> LLMCompletion:
+    """Corps de ``chat.completions`` → ``LLMCompletion`` (texte, jetons, arrêt).
 
-    **Pur** (aucun réseau, aucun import SDK) → la cartographie usage→jetons
-    (``prompt_tokens``/``completion_tokens``) et ``finish_reason`` → raison
-    d'arrêt est **testable sur une réponse de cassette**, ce que le client live
-    (``# pragma: no cover``) ne permet pas. Les jetons alimentent l'économie.
+    **Pur** (aucun réseau, aucun import SDK) et lu sur le **corps** de la réponse
+    — le dict que ``sdk_native`` tire du modèle du SDK, et que le sidecar
+    ``NATIVE_JSON`` garde : relire le sidecar rend la même complétion. La
+    cartographie usage→jetons (``prompt_tokens``/``completion_tokens``) et
+    ``finish_reason`` → raison d'arrêt se teste sur cassette. Les jetons
+    alimentent l'économie.
     """
-    usage = getattr(response, "usage", None)
-    tokens_in = usage_tokens(getattr(usage, "prompt_tokens", None))
-    tokens_out = usage_tokens(getattr(usage, "completion_tokens", None))
-    choices = getattr(response, "choices", None)
-    if not choices:
-        return LLMCompletion("", tokens_in, tokens_out)
+    usage = wire_field(response, "usage")
+    tokens_in = usage_tokens(wire_field(usage, "prompt_tokens"))
+    tokens_out = usage_tokens(wire_field(usage, "completion_tokens"))
+    choices = wire_field(response, "choices")
+    if not isinstance(choices, list) or not choices:
+        return LLMCompletion("", tokens_in, tokens_out, native=response)
     choice = choices[0]
     return LLMCompletion(
-        normalize_llm_content(choice.message.content),
+        normalize_llm_content(wire_field(wire_field(choice, "message"), "content")),
         tokens_in,
         tokens_out,
-        stop_reason_from(getattr(choice, "finish_reason", None), _STOP_REASONS),
+        stop_reason_from(wire_field(choice, "finish_reason"), _STOP_REASONS),
+        native=response,
     )
 
 
@@ -104,7 +111,7 @@ def _request_kwargs(
     return kwargs
 
 
-def _openai_client(  # pragma: no cover -- réseau + clé API (cf. marqueur 'live')
+def _openai_client(
     model: str,
     messages: list[dict[str, object]],
     deadline: Deadline,
@@ -140,10 +147,10 @@ def _openai_client(  # pragma: no cover -- réseau + clé API (cf. marqueur 'liv
         raise AdapterStepError(
             f"openai a échoué ({model}) : {type(exc).__name__}: {exc}"
         ) from exc
-    return _completion_from_chat(response)
+    return _completion_from_chat(sdk_native(response, "openai"))
 
 
-def _invoke_openai(  # pragma: no cover -- réseau + clé API (cf. marqueur 'live')
+def _invoke_openai(
     *, model: str, prompt: str, deadline: Deadline, settings: InferenceSettings
 ) -> LLMCompletion:
     return _openai_client(
@@ -151,7 +158,7 @@ def _invoke_openai(  # pragma: no cover -- réseau + clé API (cf. marqueur 'liv
     )
 
 
-def _invoke_openai_vision(  # pragma: no cover -- réseau + clé API (cf. marqueur 'live')
+def _invoke_openai_vision(
     *,
     model: str,
     prompt: str,
@@ -226,7 +233,7 @@ class OpenAIAdapter:
 
     @property
     def output_types(self) -> frozenset[ArtifactType]:
-        return frozenset({llm_output_type(self._role)})
+        return llm_output_types(self._role)
 
     def execute(
         self,

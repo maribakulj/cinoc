@@ -50,7 +50,9 @@ def test_satisfies_module_protocol() -> None:
     assert isinstance(adapter, Module)
     assert adapter.name == "ollama:llama"
     assert adapter.input_types == frozenset({ArtifactType.RAW_TEXT})
-    assert adapter.output_types == frozenset({ArtifactType.CORRECTED_TEXT})
+    assert adapter.output_types == frozenset(
+        {ArtifactType.CORRECTED_TEXT, ArtifactType.NATIVE_JSON}
+    )
 
 
 def test_invalid_label_rejected() -> None:

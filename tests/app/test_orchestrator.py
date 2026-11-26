@@ -289,7 +289,7 @@ def test_manifest_captures_module_versions(
     )
     # R-2 : la version déclarée de chaque module exécuté entre dans l'empreinte.
     assert result.manifest.module_versions == {
-        "openai:gpt": "2.0",
+        "openai:gpt": "2.1",
         "precomputed:engA": "1.0",
         "precomputed:engB": "1.0",
     }

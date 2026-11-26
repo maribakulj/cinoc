@@ -1,0 +1,35 @@
+{
+ "scenario": "native_json_google_vision",
+ "api": "Google Cloud Vision REST v1 — images:annotate, DOCUMENT_TEXT_DETECTION",
+ "note": "Réponses **synthétiques** au format documenté de `AnnotateImageResponse` (aucune clé ni réseau dans l'environnement de capture). Une réponse par page du corpus d'essai.",
+ "responses": {
+  "folio_a": {
+   "responses": [
+    {
+     "textAnnotations": [
+      {"locale": "fr", "description": "Le Petit Journal, 12 mars 1894. — On annonce de Boulogne-sur-Mer\nqu'une partie de la falaise s'est effondrée hier soir, emportant deux maisons.\n", "boundingPoly": {"vertices": [{"x": 102, "y": 210}, {"x": 1600, "y": 210}, {"x": 1600, "y": 300}, {"x": 102, "y": 300}]}}
+     ],
+     "fullTextAnnotation": {
+      "pages": [
+       {"property": {"detectedLanguages": [{"languageCode": "fr", "confidence": 0.98}]}, "width": 1700, "height": 2200, "blocks": [], "confidence": 0.97}
+      ],
+      "text": "Le Petit Journal, 12 mars 1894. — On annonce de Boulogne-sur-Mer\nqu'une partie de la falaise s'est effondrée hier soir, emportant deux maisons.\n"
+     }
+    }
+   ]
+  },
+  "folio_b": {
+   "responses": [
+    {
+     "textAnnotations": [],
+     "fullTextAnnotation": {
+      "pages": [
+       {"property": {"detectedLanguages": [{"languageCode": "fr", "confidence": 0.91}]}, "width": 1700, "height": 2200, "blocks": [], "confidence": 0.88}
+      ],
+      "text": "Le Petit Journal, 12 mars 1894. — On annonce de Boulogne-sur-Mer\nqu’une partie de la falaife s’eft effondrée hier soir, emportant deux maifons.\n"
+     }
+    }
+   ]
+  }
+ }
+}

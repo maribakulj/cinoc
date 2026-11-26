@@ -245,6 +245,8 @@ adapter_kwargs:
   "ollama:vlm": {label: vlm, model: "qwen2.5vl:3b", role: zero_shot, max_tokens: 4096, num_ctx: 16384}
 ```
 
+**Native responses are kept.** Every remote engine (`mistral_ocr`, `azure_di`, `google_vision`, the four LLM/VLM providers, and the structured correction when it calls a model) also writes the body the API returned, as a `native_json` sidecar next to its text: canonical JSON (sorted keys), no API key, header or URL. The scored text is only one reading of that body, made by the adapter's own conversion function — so another reading (a better protocol, a layout projection) can be redone from the sidecar without paying for the call again. Sidecars are never scored, and never enter the `RunResult`. They outlive the run in its artifacts directory, `--resume-dir` (recorded as `artifacts_dir` in the manifest); without one, they disappear with the temporary workspace, like every other output.
+
 ### Scoring OCR that Cinoc did not produce
 
 `precomputed` is not only a fixture device. It reads `<page>.<label>.txt` sitting

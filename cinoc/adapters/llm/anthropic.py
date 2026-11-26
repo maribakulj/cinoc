@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from typing import Any, ClassVar
 
+from cinoc.adapters._native import sdk_native
 from cinoc.adapters._resilience import call_resilient
 from cinoc.adapters.llm._base import (
     DEFAULT_MAX_TOKENS,
@@ -28,13 +29,14 @@ from cinoc.adapters.llm._base import (
     StopReason,
     default_prompt_for_role,
     llm_input_types,
-    llm_output_type,
+    llm_output_types,
     normalize_llm_content,
     run_llm_step,
     stop_reason_from,
     usage_tokens,
     validate_llm_label,
     validate_role,
+    wire_field,
 )
 from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.deadline import Deadline
@@ -46,7 +48,9 @@ from cinoc.pipeline.types import RunContext, StepOutput
 
 #: 2 : raison d'arrêt lue ; ``max_tokens`` paramétrable (8 192 par défaut, au
 #: lieu de 4 096 codés) — une sortie peut changer.
-_VERSION = "2.0"
+#: 2.1 : la réponse native est publiée en sidecar (``NATIVE_JSON``) ; le texte
+#: ne change pas.
+_VERSION = "2.1"
 _DEFAULT_MODEL = "claude-haiku-4-5-20251001"
 
 #: ``stop_reason`` (SDK anthropic 2.14 : ``end_turn``, ``max_tokens``,
@@ -62,20 +66,22 @@ _STOP_REASONS: dict[str, StopReason] = {
 }
 
 
-def _completion_from_message(response: Any) -> LLMCompletion:
-    """Réponse SDK ``messages.create`` → ``LLMCompletion`` (texte, jetons, arrêt).
+def _completion_from_message(response: object) -> LLMCompletion:
+    """Corps de ``messages.create`` → ``LLMCompletion`` (texte, jetons, arrêt).
 
-    **Pur** (aucun réseau, aucun SDK) → la cartographie usage→jetons
+    **Pur** (aucun réseau, aucun SDK) et lu sur le **corps** de la réponse — le
+    dict que ``sdk_native`` tire du ``Message`` du SDK, gardé en sidecar
+    ``NATIVE_JSON`` : relire le sidecar rend la même complétion. Usage→jetons
     (``input_tokens``/``output_tokens``, **noms propres à Claude**) et
-    ``stop_reason`` est **testable sur cassette** ; le client live
-    (``# pragma: no cover``) ne le permettrait pas. Jetons → économie.
+    ``stop_reason`` se testent sur cassette. Jetons → économie.
     """
-    usage = getattr(response, "usage", None)
+    usage = wire_field(response, "usage")
     return LLMCompletion(
-        normalize_llm_content(getattr(response, "content", None)),
-        usage_tokens(getattr(usage, "input_tokens", None)),
-        usage_tokens(getattr(usage, "output_tokens", None)),
-        stop_reason_from(getattr(response, "stop_reason", None), _STOP_REASONS),
+        normalize_llm_content(wire_field(response, "content")),
+        usage_tokens(wire_field(usage, "input_tokens")),
+        usage_tokens(wire_field(usage, "output_tokens")),
+        stop_reason_from(wire_field(response, "stop_reason"), _STOP_REASONS),
+        native=response,
     )
 
 
@@ -90,7 +96,7 @@ def _request_kwargs(
     }
 
 
-def _anthropic_client(  # pragma: no cover -- réseau + clé API (cf. 'live')
+def _anthropic_client(
     model: str, content: object, deadline: Deadline, settings: InferenceSettings
 ) -> LLMCompletion:
     """Appel ``messages.create`` partagé (texte ou multimodal)."""
@@ -131,16 +137,16 @@ def _anthropic_client(  # pragma: no cover -- réseau + clé API (cf. 'live')
         raise AdapterStepError(
             f"anthropic a échoué ({model}) : {type(exc).__name__}: {exc}"
         ) from exc
-    return _completion_from_message(response)
+    return _completion_from_message(sdk_native(response, "anthropic"))
 
 
-def _invoke_anthropic(  # pragma: no cover -- réseau + clé API (cf. marqueur 'live')
+def _invoke_anthropic(
     *, model: str, prompt: str, deadline: Deadline, settings: InferenceSettings
 ) -> LLMCompletion:
     return _anthropic_client(model, prompt, deadline, settings)
 
 
-def _invoke_anthropic_vision(  # pragma: no cover -- réseau + clé API (cf. 'live')
+def _invoke_anthropic_vision(
     *,
     model: str,
     prompt: str,
@@ -226,7 +232,7 @@ class AnthropicAdapter:
 
     @property
     def output_types(self) -> frozenset[ArtifactType]:
-        return frozenset({llm_output_type(self._role)})
+        return llm_output_types(self._role)
 
     def execute(
         self,

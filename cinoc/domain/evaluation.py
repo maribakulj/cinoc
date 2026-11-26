@@ -22,10 +22,12 @@ from pydantic import (
     ConfigDict,
     Field,
     SerializerFunctionWrapHandler,
+    field_validator,
     model_serializer,
 )
 
 from cinoc.domain.artifacts import ArtifactType
+from cinoc.domain.errors import CinocError
 from cinoc.domain.projection import ProjectionSpec
 
 
@@ -93,6 +95,25 @@ class EvaluationView(BaseModel):
     ignored_dimensions: tuple[str, ...] = Field(default_factory=tuple)
     warnings: tuple[str, ...] = Field(default_factory=tuple)
     target_step: str | None = Field(default=None, min_length=1, max_length=128)
+
+    @field_validator("candidate_types")
+    @classmethod
+    def _native_response_is_never_scored(
+        cls, value: frozenset[ArtifactType]
+    ) -> frozenset[ArtifactType]:
+        """``NATIVE_JSON`` n'est pas une transcription : il n'est jamais candidat.
+
+        C'est la réponse brute d'une API, dont le texte noté n'est qu'une
+        lecture ; la noter comparerait du JSON à une vérité terrain. Le refus
+        vaut au chargement, avant qu'une vue vide ne coûte un run.
+        """
+        if ArtifactType.NATIVE_JSON in value:
+            raise CinocError(
+                "'candidate_types' ne peut pas contenir 'native_json' : la réponse "
+                "native d'un moteur n'est pas une sortie à noter (c'est sa "
+                "lecture en texte qui l'est)."
+            )
+        return value
 
     @model_serializer(mode="wrap")
     def _omit_default_target(

@@ -61,7 +61,9 @@ def test_satisfies_module_protocol() -> None:
     assert isinstance(adapter, Module)
     assert adapter.name == "mistral:ministral"
     assert adapter.input_types == frozenset({ArtifactType.RAW_TEXT})
-    assert adapter.output_types == frozenset({ArtifactType.CORRECTED_TEXT})
+    assert adapter.output_types == frozenset(
+        {ArtifactType.CORRECTED_TEXT, ArtifactType.NATIVE_JSON}
+    )
 
 
 def test_invalid_label_rejected() -> None:
@@ -77,7 +79,9 @@ def test_invalid_role_rejected() -> None:
 def test_role_types() -> None:
     zs = MistralAdapter(label="pix", role="zero_shot")
     assert zs.input_types == frozenset({ArtifactType.IMAGE})
-    assert zs.output_types == frozenset({ArtifactType.RAW_TEXT})
+    assert zs.output_types == frozenset(
+        {ArtifactType.RAW_TEXT, ArtifactType.NATIVE_JSON}
+    )
 
 
 def test_execute_produces_corrected_text(
