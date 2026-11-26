@@ -176,8 +176,9 @@ class EvaluationSpec(BaseModel):
     ===================  ==========================================
     valeur               effet
     ===================  ==========================================
-    ``None`` (défaut)    **mode rapide** : aucune analyse, seules
-                         les métriques déclarées sont calculées
+    ``None`` (défaut)    **mode rapide** : les métriques déclarées
+                         et leurs tests inter-moteurs (payload
+                         ``inference`` sans IC bootstrap), rien d'autre
     ``"toutes"``         mode détaillé : toutes les analyses
     ``("diagnostics",)`` seulement celles nommées
     ``()``               aucune (identique au défaut, explicite)
@@ -192,7 +193,10 @@ class EvaluationSpec(BaseModel):
     de méga-octets et devient illisible.
 
     Le mode détaillé reste **entier** : c'est un choix au lancement, pas une
-    version dégradée.
+    version dégradée. Les **tests** (Wilcoxon/Friedman, Holm, Nemenyi) ne sont
+    pas une option : leur coût est négligeable, et un rapport qui se tait sur
+    la significativité laisse lire un écart comme un verdict. L'analyse
+    ``inference`` ajoute l'IC bootstrap, qui, lui, coûte.
 
     ``failure_policy`` dit ce que devient une unité **en échec** (aucune sortie)
     dans les agrégats. ``"exclude"`` (défaut) : elle sort de la moyenne, et

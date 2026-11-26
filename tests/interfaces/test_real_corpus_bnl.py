@@ -211,6 +211,29 @@ def test_bnl_cross_engine_significance_is_live(bnl_result: RunResult) -> None:
     )
 
 
+def test_bnl_posthoc_shows_the_pair_that_differs(bnl_result: RunResult) -> None:
+    """S11 (D-283) : 5 moteurs, mode rapide — le test est un **Friedman**, il
+    tourne sans qu'on le demande, et le post-hoc nomme la **seule** paire que
+    Nemenyi sépare en MER. Les anciens groupes disjoints ({fra, deu, frk,
+    deu_latf} · {easyocr}) faisaient lire quatre paires là où il y en a une."""
+    from cinoc.evaluation.analysis import InferencePayload
+
+    payloads = {
+        (a.view, a.payload.metric): a.payload
+        for a in bnl_result.analyses
+        if isinstance(a.payload, InferencePayload)
+    }
+    mer = payloads[("text", "mer")]
+    assert mer.test == "friedman" and mer.family_size == 10
+    assert mer.p_holm is not None and mer.p_holm < 0.05
+    assert [(p.a, p.b) for p in mer.pairwise if p.significant] == [("easyocr", "fra")]
+    assert len(mer.cd_groups) == 2 and set(mer.cd_groups[0]) & set(mer.cd_groups[1])
+    assert all(payload.intervals == () for payload in payloads.values())
+    html = default_report_renderer().render(bnl_result, title="Cinoc — BNL")
+    assert "Friedman : p = " in html and "Wilcoxon :" not in html
+    assert "paires significatives : easyocr – fra." in html
+
+
 def test_bnl_report_is_octet_stable(bnl_result: RunResult) -> None:
     renderer = default_report_renderer()
     assert renderer.render(bnl_result, title="Cinoc — BNL") == renderer.render(

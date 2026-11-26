@@ -15,9 +15,9 @@ lignes, documents difficiles), ``calibration`` (ECE/MCE), ``taxonomy``
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class PipelineRank(BaseModel):
@@ -53,13 +53,24 @@ class PairwiseDifference(BaseModel):
     significant: bool
 
 
-class InferencePayload(BaseModel):
-    """Inférentiel d'une (vue × métrique) : rangs, Nemenyi, IC bootstrap.
+#: Test omnibus apparié : Wilcoxon signé-rangs à 2 pipelines, Friedman au-delà.
+OmnibusTest = Literal["wilcoxon", "friedman"]
 
-    ``critical_distance``/``tied_groups``/``pairwise`` ne sont renseignés qu'à
-    **k ≥ 3 pipelines** (le post-hoc corrige les comparaisons multiples après
-    Friedman) ; à k = 2 le scalaire ``significance_p`` (Wilcoxon) reste le
-    verdict, et seuls rangs + intervalles sont portés.
+#: Pourquoi un test n'a pas été calculé — le rapport le dit au lieu de se taire.
+NotComputedReason = Literal["single_pipeline", "insufficient_support", "no_difference"]
+
+
+class InferencePayload(BaseModel):
+    """Inférentiel d'une (vue × métrique) : test, correction, post-hoc, IC.
+
+    Toujours produit, mode rapide compris : soit un **test** (``test`` +
+    ``p_value`` brute + ``p_holm`` corrigée sur les ``family_size`` tests du
+    run), soit le **motif** pour lequel il n'a pas été calculé
+    (``not_computed``). Le post-hoc de Nemenyi (``critical_distance``,
+    ``cd_groups``, ``pairwise``) n'existe que si un **Friedman** est rejeté
+    **après** correction (``p_holm < alpha``) : à 2 pipelines, le Wilcoxon est
+    lui-même la comparaison de la paire. ``intervals`` (bootstrap) n'est
+    rempli qu'en mode détaillé — son coût, lui, n'est pas négligeable.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -69,18 +80,44 @@ class InferencePayload(BaseModel):
     alpha: float = Field(gt=0, lt=1)
     #: Cas complets (documents où tous les pipelines ont une valeur).
     n_documents: int = Field(ge=0)
+    test: OmnibusTest | None = None
+    not_computed: NotComputedReason | None = None
+    p_value: float | None = Field(default=None, ge=0, le=1)
+    #: p corrigée par Holm sur la famille des tests calculés du run.
+    p_holm: float | None = Field(default=None, ge=0, le=1)
+    family_size: int = Field(default=0, ge=0)
     critical_distance: float | None = Field(default=None, ge=0)
     q_alpha: float | None = Field(default=None, ge=0)
-    #: Transparence : q_α extrapolé au-delà de la table (k > 50).
-    q_alpha_extrapolated: bool = False
     #: Triés par (rang, pipeline) croissants — ordre déterministe.
     mean_ranks: tuple[PipelineRank, ...] = ()
-    #: Groupes maximaux d'indiscernables (fenêtre ≤ CD sur les rangs triés).
-    tied_groups: tuple[tuple[str, ...], ...] = ()
+    #: Barres de la distance critique (Demšar) : groupes **maximaux** de
+    #: pipelines consécutifs en rang dont l'étendue ≤ CD. Ils se
+    #: **chevauchent** : deux pipelines ne diffèrent significativement que
+    #: s'ils ne partagent aucun groupe.
+    cd_groups: tuple[tuple[str, ...], ...] = ()
     #: Paires triées (a < b par nom).
     pairwise: tuple[PairwiseDifference, ...] = ()
     #: Triés par pipeline — ordre déterministe.
     intervals: tuple[PipelineInterval, ...] = ()
+
+    @model_validator(mode="after")
+    def _coherent(self) -> Self:
+        if (self.test is None) == (self.not_computed is None):
+            raise ValueError("un test calculé, ou le motif de son absence")
+        if (self.p_value is None) != (self.test is None) or (
+            (self.p_holm is None) != (self.p_value is None)
+        ):
+            raise ValueError("p brute et p corrigée vont avec un test calculé")
+        posthoc = self.critical_distance is not None
+        if posthoc and not (
+            self.test == "friedman"
+            and self.p_holm is not None
+            and self.p_holm < self.alpha
+        ):
+            raise ValueError("post-hoc sans Friedman rejeté après correction")
+        if not posthoc and (self.cd_groups or self.pairwise):
+            raise ValueError("groupes et paires sont ceux d'un post-hoc")
+        return self
 
 
 class PipelineEconomics(BaseModel):
@@ -1132,6 +1169,8 @@ __all__ = [
     "ModernizedToken",
     "ModernizedVariant",
     "NerPayload",
+    "NotComputedReason",
+    "OmnibusTest",
     "OverNormalizedWord",
     "PairwiseDifference",
     "PhilologyPayload",

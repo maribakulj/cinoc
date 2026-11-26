@@ -241,14 +241,17 @@ region_detection:
 significance_p:
   title: "p-value (statistical test)"
   definition: >-
-    Probability of observing a difference at least as large between two
-    engines if they were in fact equivalent (null hypothesis).
+    Probability of observing gaps at least as large between the pipelines
+    if they were in fact equivalent (null hypothesis) — Wilcoxon signed-rank
+    for 2 pipelines, Friedman for 3 or more, over the documents scored for
+    all of them.
   measures: >-
-    How surprising a performance gap is; a low p-value (< 0.05) indicates a
-    gap unlikely to be due to chance.
+    How surprising a performance gap is; the verdict reads the p-value
+    corrected by Holm over all the run's tests, below α = 0.05.
   limits: >-
     Measures neither the magnitude nor the practical importance of the gap;
-    sensitive to corpus size and requires correction for multiple comparisons.
+    sensitive to corpus size. A Friedman test says at least one pipeline
+    differs: which ones, only the Nemenyi post-hoc says.
 
 ece:
   title: "ECE — expected calibration error"

@@ -34,7 +34,7 @@ from cinoc.evaluation.correction import correction_analysis
 from cinoc.evaluation.decisions import decisions_analysis
 from cinoc.evaluation.economics import economics_analysis
 from cinoc.evaluation.errors import EvaluationError
-from cinoc.evaluation.inference import inference_analysis
+from cinoc.evaluation.inference import PerPipeline, inference_analyses
 from cinoc.evaluation.ner import EntitySet
 from cinoc.evaluation.projectors import get_projector
 from cinoc.evaluation.registry import MetricRegistry
@@ -118,6 +118,8 @@ def evaluate_run(
     documents: list[RunDocumentResult] = []
     cross_engine: list[MetricScore] = []
     analyses: list[Analysis] = []
+    #: Séries de chaque (vue × métrique) : la famille de Holm est le run entier.
+    tests: list[tuple[str, str, PerPipeline]] = []
     actives = _analyses_actives(evaluation)
     failed = frozenset(
         (u.pipeline, u.document_id) for u in usage if u.outcome == "failed"
@@ -192,8 +194,7 @@ def evaluate_run(
                 )
             )
         cross_engine.extend(_cross_engine_scores(view, series, registry))
-        if actives is None or "inference" in actives:
-            analyses.extend(_inference_analyses(view, series))
+        tests.extend(_inference_entries(view, series))
         analyses.extend(
             collectors.build(
                 view.name,
@@ -227,6 +228,14 @@ def evaluate_run(
         if decisions is not None:
             analyses.append(decisions)
 
+    # Tests inter-moteurs **toujours** calculés (coût négligeable), corrigés
+    # sur le run entier ; l'IC bootstrap, lui, reste au mode détaillé.
+    analyses.extend(
+        inference_analyses(
+            tests, with_intervals=actives is None or "inference" in actives
+        )
+    )
+
     # Post-passe cross-vues : la conformité HIPE lit les résultats des vues
     # raw/hipe/heritage déjà calculés (zéro re-scoring) — cf. ``conformity``.
     conformity = (
@@ -256,23 +265,26 @@ def evaluate_run(
     )
 
 
-def _inference_analyses(view: EvaluationView, series: _Series) -> list[Analysis]:
-    """Inférentiel corrigé par métrique de la vue (cf. ``evaluation.inference``).
+def _inference_entries(
+    view: EvaluationView, series: _Series
+) -> list[tuple[str, str, PerPipeline]]:
+    """(vue, métrique, séries alignées) de chaque métrique de la vue.
 
-    Consomme les **mêmes séries alignées** que la passe inter-moteurs : même
-    index = même document, ``None`` = non applicable — un seul calcul des
-    scores, deux lectures (scalaire ``significance_p`` + payload structuré).
+    Les **mêmes séries** que la passe inter-moteurs : même index = même
+    document, ``None`` = non applicable — un seul calcul des scores, deux
+    lectures (scalaire ``significance_p`` + payload ``inference``).
     """
-    out: list[Analysis] = []
-    for metric_name in view.metric_names:
-        per_pipeline = {
-            pipeline: [score.value for score in scores]
-            for pipeline, scores in series[metric_name].items()
-        }
-        analysis = inference_analysis(view.name, metric_name, per_pipeline)
-        if analysis is not None:
-            out.append(analysis)
-    return out
+    return [
+        (
+            view.name,
+            metric_name,
+            {
+                pipeline: [score.value for score in scores]
+                for pipeline, scores in series[metric_name].items()
+            },
+        )
+        for metric_name in view.metric_names
+    ]
 
 
 def _aggregate(name: str, scores: list[MetricScore], missed: int) -> MetricScore:
