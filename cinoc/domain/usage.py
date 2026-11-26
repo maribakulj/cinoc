@@ -47,8 +47,19 @@ class ResourceUsage(BaseModel):
     duration_seconds: float | None = Field(default=None, ge=0)
     #: Jetons d'entrée/sortie d'un appel LLM/VLM (remontés par l'adapter quand
     #: le fournisseur les expose ; ``None`` pour un moteur non facturé au jeton).
+    #: ``tokens_in`` est **toute** l'entrée, cache compris (Anthropic la
+    #: ventile en ``input_tokens`` hors cache + lectures + écritures : l'adapter
+    #: les additionne) ; ``tokens_out`` toute la sortie, raisonnement compris.
     tokens_in: int | None = Field(default=None, ge=0)
     tokens_out: int | None = Field(default=None, ge=0)
+    #: **Parties** des totaux ci-dessus, quand la réponse les rend — ``None`` =
+    #: non rendu (jamais un 0 supposé). ``tokens_cache_read`` : entrée lue dans
+    #: le cache du fournisseur ; ``tokens_cache_write`` : entrée écrite en
+    #: cache ; ``tokens_reasoning`` : sortie de raisonnement — facturée comme
+    #: sortie et déjà dans ``tokens_out``, donc jamais ajoutée au coût.
+    tokens_cache_read: int | None = Field(default=None, ge=0)
+    tokens_cache_write: int | None = Field(default=None, ge=0)
+    tokens_reasoning: int | None = Field(default=None, ge=0)
     #: Pages facturées par un OCR distant facturé à la page (Mistral OCR,
     #: Azure DI, Google Vision) : **chaque tentative facturable** — une requête
     #: par image, donc une par région en fan-out, et une tentative coupée après
@@ -71,6 +82,11 @@ class ResourceUsage(BaseModel):
             duration_seconds=duration,
             tokens_in=_add(self.tokens_in, other.tokens_in),
             tokens_out=_add(self.tokens_out, other.tokens_out),
+            tokens_cache_read=_add(self.tokens_cache_read, other.tokens_cache_read),
+            tokens_cache_write=_add(
+                self.tokens_cache_write, other.tokens_cache_write
+            ),
+            tokens_reasoning=_add(self.tokens_reasoning, other.tokens_reasoning),
             billed_pages=_add(self.billed_pages, other.billed_pages),
         )
 

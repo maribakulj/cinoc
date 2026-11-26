@@ -145,6 +145,17 @@ class PipelineEconomics(BaseModel):
     duration_seconds: float | None = Field(default=None, ge=0)
     tokens_in: int | None = Field(default=None, ge=0)
     tokens_out: int | None = Field(default=None, ge=0)
+    #: Parties des jetons ci-dessus (``ResourceUsage``) : entrée lue / écrite
+    #: en cache, sortie de raisonnement — ``None`` si aucune unité ne les rend.
+    #: Le raisonnement est **dans** ``tokens_out`` : affiché, jamais recompté.
+    tokens_cache_read: int | None = Field(default=None, ge=0)
+    tokens_cache_write: int | None = Field(default=None, ge=0)
+    tokens_reasoning: int | None = Field(default=None, ge=0)
+    #: Modèles (``kind/modèle``) dont des jetons de cache rendus n'ont **pas**
+    #: de tarif dans la table (lecture sans ``cache_read_eur_per_mtok``, ou
+    #: toute écriture) : ``cost_eur`` est ``None`` plutôt qu'un tarif plein ou
+    #: un oubli ; le rapport le dit (« jetons de cache non tarifés »).
+    unpriced_cache: tuple[str, ...] = ()
     #: Pages facturées à la page, **tentatives facturables comprises** (une
     #: par requête d'image : fan-out, tentative coupée après envoi), unités en
     #: échec comprises ; ``None`` sans étage facturé à la page.
@@ -158,7 +169,8 @@ class PipelineEconomics(BaseModel):
     self_hosted: tuple[str, ...] = ()
     cost_eur: float | None = Field(default=None, ge=0)
     #: « machine » · « machine+jetons » · « tarif inconnu : <kind:model> » (un
-    #: endpoint hors de la table : « <kind/model> @ <hôte:port> ») ;
+    #: endpoint hors de la table : « <kind/model> @ <hôte:port> ») ·
+    #: « jetons de cache non tarifés : <kind/model> » ;
     #: suivi de « — tarif de l'alias demandé : <kind/alias> pour <servi> » quand
     #: un instantané daté absent de la table prend le tarif de son alias.
     basis: str = Field(min_length=1, max_length=256)

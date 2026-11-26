@@ -1,7 +1,7 @@
 {
  "scenario": "llm_stop_mistral",
  "sdk": "mistralai 1.12.4 — mistralai.models.ChatCompletionResponse",
- "note": "Réponses **synthétiques** (aucune clé ni réseau dans l'environnement de capture), écrites au format du fil de l'API puis validées contre le modèle de réponse du SDK installé (mistralai 1.12.4, ChatCompletionResponse.model_validate). « length » : max_tokens atteint ; « model_length » : fenêtre de contexte du modèle épuisée ; « error » : génération interrompue côté serveur.",
+ "note": "Réponses **synthétiques** (aucune clé ni réseau dans l'environnement de capture), écrites au format du fil de l'API puis validées contre le modèle de réponse du SDK installé (mistralai 1.12.4, ChatCompletionResponse.model_validate). « length » : max_tokens atteint ; « model_length » : fenêtre de contexte du modèle épuisée ; « error » : génération interrompue côté serveur. « cached » (S22, validé contre mistralai 3.9.0, UsageInfo.prompt_tokens_details) : `cached_tokens` lu comme une partie de `prompt_tokens` (forme OpenAI ; non confirmé par une source de Mistral) ; le chat de mistralai 3.9 ne rend aucun compte de raisonnement.",
  "responses": {
   "stop": {
    "id": "cmpl-cinoc-stop",
@@ -85,6 +85,30 @@
     "prompt_tokens": 790,
     "completion_tokens": 0,
     "total_tokens": 790
+   }
+  },
+  "cached": {
+   "id": "cmpl-cinoc-cached",
+   "object": "chat.completion",
+   "created": 1764115200,
+   "model": "mistral-small-2506",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "Le Petit Journal, 12 mars 1894."
+     },
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 1790,
+    "completion_tokens": 12,
+    "total_tokens": 1802,
+    "prompt_tokens_details": {
+     "cached_tokens": 1024
+    }
    }
   }
  }

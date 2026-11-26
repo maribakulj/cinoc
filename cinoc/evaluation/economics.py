@@ -7,9 +7,13 @@ jamais en exécutant la source). Modèle de coût simple et auditable :
 - **temps machine** : durée mesurée (E1, wall-clock exécuteur) × taux horaire
   indicatif de la table — appliqué à tout pipeline (la machine est occupée) ;
 - **jetons cloud** : jetons mesurés (E1, remontés par les adapters) × tarif
-  €/MTok de la table, par (kind/modèle). Le modèle est celui que le fournisseur
-  dit avoir **servi** (``RunManifest.served_models``) quand il est connu, le
-  modèle **demandé** sinon (réponse muette, JSON antérieur) : un alias
+  €/MTok de la table, par (kind/modèle) ; la part de l'entrée **lue en
+  cache** au tarif ``cache_read_eur_per_mtok`` du modèle — sans ce tarif, ou
+  à la moindre écriture en cache, « jetons de cache non tarifés » et coût
+  ``None`` ; le raisonnement est déjà dans la sortie, jamais recompté. Le
+  modèle est celui que le fournisseur dit avoir **servi**
+  (``RunManifest.served_models``) quand il est connu, le modèle **demandé**
+  sinon (réponse muette, JSON antérieur) : un alias
   (``gpt-4o-mini``) peut désigner un autre modèle, à un autre prix, d'un mois à
   l'autre. Servi absent de la table mais **instantané daté de l'alias
   demandé** — l'alias exact suivi de ``-AAAA-MM-JJ`` (OpenAI :
@@ -55,6 +59,7 @@ from urllib.parse import urlsplit
 
 from cinoc.domain.pipeline import PipelineSpec
 from cinoc.domain.run import RunManifest
+from cinoc.domain.usage import ResourceUsage
 from cinoc.evaluation.analysis import (
     Analysis,
     EconomicsPayload,
@@ -210,16 +215,22 @@ def _cloud_model_keys(
 
 def _token_cost(
     keys: Mapping[str, str],
-    tokens_in: int | None,
-    tokens_out: int | None,
+    tokens: ResourceUsage,
     pricing: Mapping[str, Any],
-) -> tuple[float | None, str, str | None]:
-    """``(coût jetons, basis, note)`` — ``None`` si un modèle est hors table.
+) -> tuple[float | None, str, str | None, tuple[str, ...]]:
+    """``(coût jetons, basis, note, non tarifés)`` — ``None`` si un modèle est
+    hors table, ou si des jetons de cache rendus n'y ont pas de tarif.
 
     ``note`` nomme l'alias dont le tarif a été appliqué à un instantané daté.
+    ``tokens_in`` est toute l'entrée : la part lue en cache prend le tarif
+    ``cache_read_eur_per_mtok`` du modèle, le reste le tarif d'entrée. Une
+    lecture sans ce tarif, ou **toute** écriture en cache — son prix dépend
+    d'une durée de vie (5 min, 1 h…) que le compte ne dit pas, et la table n'en
+    porte aucun —, rend le coût ``None`` et le dit (quatrième élément) : ni le
+    tarif plein, ni l'oubli. Le raisonnement est dans ``tokens_out``.
     """
     if not keys:
-        return 0.0, "machine", None
+        return 0.0, "machine", None, ()
     models = pricing.get("cloud_models", {})
     priced: dict[str, str] = {}
     for key, requested in keys.items():
@@ -229,22 +240,29 @@ def _token_cost(
             priced[key] = requested
     unknown = [key for key in keys if key not in priced]
     if unknown:
-        return None, f"tarif inconnu : {', '.join(unknown)}", None
+        return None, f"tarif inconnu : {', '.join(unknown)}", None, ()
     if len(keys) > 1:
         # Les jetons E1 sont agrégés par document : à plusieurs étages cloud
         # on ne peut pas les ventiler par modèle → coût non attribuable.
-        return None, f"jetons non ventilables : {', '.join(keys)}", None
+        return None, f"jetons non ventilables : {', '.join(keys)}", None, ()
     ((key, tarif),) = priced.items()
     entry = models[tarif]
-    cost = (tokens_in or 0) / 1e6 * float(entry["input_eur_per_mtok"]) + (
-        tokens_out or 0
-    ) / 1e6 * float(entry["output_eur_per_mtok"])
+    read = tokens.tokens_cache_read or 0
+    write = tokens.tokens_cache_write or 0
+    if write > 0 or (read > 0 and "cache_read_eur_per_mtok" not in entry):
+        return None, f"jetons de cache non tarifés : {key}", None, (key,)
+    uncached = max((tokens.tokens_in or 0) - read, 0)
+    cost = (
+        uncached * float(entry["input_eur_per_mtok"])
+        + read * float(entry.get("cache_read_eur_per_mtok", 0.0))
+        + (tokens.tokens_out or 0) * float(entry["output_eur_per_mtok"])
+    ) / 1e6
     note = (
         None
         if tarif == key
         else f"tarif de l'alias demandé : {tarif} pour {key.split('/', 1)[1]}"
     )
-    return cost, "machine+jetons", note
+    return cost, "machine+jetons", note, ()
 
 
 def _estimated_errors(scores: Sequence[MetricScore]) -> float | None:
@@ -294,11 +312,18 @@ def economics_analysis(
         duration = sum(u.usage.duration_seconds or 0.0 for u in entries)
         tokens_in = sum(u.usage.tokens_in or 0 for u in paid) or None
         tokens_out = sum(u.usage.tokens_out or 0 for u in paid) or None
+        # Les parties : somme ``None``-tolérante (un 0 rendu reste 0).
+        parts = ResourceUsage()
+        for unit in paid:
+            parts = parts.merged_with(unit.usage)
+        tokens = parts.model_copy(
+            update={"tokens_in": tokens_in, "tokens_out": tokens_out}
+        )
         n_documents = len(entries)
         keys, self_hosted = _cloud_model_keys(
             specs[name], manifest.adapter_kwargs, table, manifest.served_models
         )
-        token_cost, basis, note = _token_cost(keys, tokens_in, tokens_out, table)
+        token_cost, basis, note, unpriced = _token_cost(keys, tokens, table)
         rates = _page_rates(specs[name], table)
         pages = _billed_pages(paid) if rates else None
         page_cost: float | None = 0.0
@@ -343,6 +368,10 @@ def economics_analysis(
                 duration_seconds=duration,
                 tokens_in=tokens_in,
                 tokens_out=tokens_out,
+                tokens_cache_read=parts.tokens_cache_read,
+                tokens_cache_write=parts.tokens_cache_write,
+                tokens_reasoning=parts.tokens_reasoning,
+                unpriced_cache=unpriced,
                 billed_pages=pages,
                 n_resumed=sum(u.resumed for u in paid),
                 self_hosted=self_hosted,

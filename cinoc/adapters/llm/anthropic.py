@@ -111,15 +111,34 @@ def _completion_from_message(response: object) -> LLMCompletion:
     ``NATIVE_JSON`` : relire le sidecar rend la même complétion. Usage→jetons
     (``input_tokens``/``output_tokens``, **noms propres à Claude**) et
     ``stop_reason`` se testent sur cassette. Jetons → économie.
+
+    ``input_tokens`` ne compte que l'entrée **hors cache** : les lectures
+    (``cache_read_input_tokens``) et écritures (``cache_creation_input_tokens``)
+    s'y **ajoutent** (doc « Prompt caching » d'Anthropic) — ``tokens_in`` en
+    est la somme, pour dire la même chose que chez OpenAI.
+    ``output_tokens_details.thinking_tokens`` (SDK anthropic 2.14) est une
+    partie d'``output_tokens``, « total inclusif qui fait foi pour la
+    facturation ». Absents → ``None``.
     """
     usage = wire_field(response, "usage")
+    uncached = usage_tokens(wire_field(usage, "input_tokens"))
+    read = usage_tokens(wire_field(usage, "cache_read_input_tokens"))
+    write = usage_tokens(wire_field(usage, "cache_creation_input_tokens"))
+    tokens_in = (
+        None if uncached is None else uncached + (read or 0) + (write or 0)
+    )
     return LLMCompletion(
         normalize_llm_content(wire_field(response, "content")),
-        usage_tokens(wire_field(usage, "input_tokens")),
+        tokens_in,
         usage_tokens(wire_field(usage, "output_tokens")),
         stop_reason_from(wire_field(response, "stop_reason"), _STOP_REASONS),
         native=response,
         model=served_model(response),
+        tokens_cache_read=read,
+        tokens_cache_write=write,
+        tokens_reasoning=usage_tokens(
+            wire_field(wire_field(usage, "output_tokens_details"), "thinking_tokens")
+        ),
     )
 
 
@@ -163,7 +182,7 @@ def _anthropic_client(
             register_close(control, client)
 
         def _create() -> Any:
-            return client.messages.create(
+            return client.messages.create(  # type: ignore[call-overload]
                 **_request_kwargs(model, content, settings),  # type: ignore[arg-type]
                 timeout=request_timeout(deadline),
             )

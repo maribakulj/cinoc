@@ -134,14 +134,38 @@ def _completion_from_chat(response: object) -> LLMCompletion:
     cartographie usage→jetons (``prompt_tokens``/``completion_tokens``) et
     ``finish_reason`` → raison d'arrêt se teste sur cassette. Les jetons
     alimentent l'économie.
+
+    Ventilation (SDK openai 3.60, ``CompletionUsage``) :
+    ``prompt_tokens_details.cached_tokens`` et ``.cache_write_tokens`` sont des
+    **parties** de ``prompt_tokens`` (guide « Prompt caching » : l'entrée
+    ordinaire = entrée − lectures − écritures) ;
+    ``completion_tokens_details.reasoning_tokens`` une partie de
+    ``completion_tokens`` (« facturés comme jetons de sortie », guide
+    « Reasoning » ; le SDK le dit aussi des prédictions rejetées). Absents →
+    ``None``.
     """
     usage = wire_field(response, "usage")
+    prompt = wire_field(usage, "prompt_tokens_details")
+    read = usage_tokens(wire_field(prompt, "cached_tokens"))
+    write = usage_tokens(wire_field(prompt, "cache_write_tokens"))
+    reasoning = usage_tokens(
+        wire_field(wire_field(usage, "completion_tokens_details"), "reasoning_tokens")
+    )
     tokens_in = usage_tokens(wire_field(usage, "prompt_tokens"))
     tokens_out = usage_tokens(wire_field(usage, "completion_tokens"))
     choices = wire_field(response, "choices")
     model = served_model(response)
     if not isinstance(choices, list) or not choices:
-        return LLMCompletion("", tokens_in, tokens_out, native=response, model=model)
+        return LLMCompletion(
+            "",
+            tokens_in,
+            tokens_out,
+            native=response,
+            model=model,
+            tokens_cache_read=read,
+            tokens_cache_write=write,
+            tokens_reasoning=reasoning,
+        )
     choice = choices[0]
     return LLMCompletion(
         normalize_llm_content(wire_field(wire_field(choice, "message"), "content")),
@@ -150,6 +174,9 @@ def _completion_from_chat(response: object) -> LLMCompletion:
         stop_reason_from(wire_field(choice, "finish_reason"), _STOP_REASONS),
         native=response,
         model=model,
+        tokens_cache_read=read,
+        tokens_cache_write=write,
+        tokens_reasoning=reasoning,
     )
 
 

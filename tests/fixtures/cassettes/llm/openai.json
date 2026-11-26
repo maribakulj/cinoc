@@ -1,7 +1,7 @@
 {
  "scenario": "llm_stop_openai",
  "sdk": "openai 3.59.0 — openai.types.chat.ChatCompletion",
- "note": "Réponses **synthétiques** (aucune clé ni réseau dans l'environnement de capture), écrites au format du fil de l'API puis validées contre le modèle de réponse du SDK installé (openai 3.59.0, ChatCompletion.model_validate). « length » : max_completion_tokens atteint ; « content_filter » : sortie retenue par le filtre.",
+ "note": "Réponses **synthétiques** (aucune clé ni réseau dans l'environnement de capture), écrites au format du fil de l'API puis validées contre le modèle de réponse du SDK installé (openai 3.59.0, ChatCompletion.model_validate). « length » : max_completion_tokens atteint ; « content_filter » : sortie retenue par le filtre. « cached » (S22, validé contre openai 3.60.0, CompletionUsage) : `prompt_tokens_details.cached_tokens` — une **partie** de `prompt_tokens` (facturée 0,5× chez gpt-4o-mini) — et `completion_tokens_details.reasoning_tokens` — une partie de `completion_tokens`, facturée comme sortie (docstring de `rejected_prediction_tokens` du SDK ; guide « Reasoning » d'OpenAI).",
  "responses": {
   "stop": {
    "id": "chatcmpl-cinoc-stop",
@@ -64,6 +64,37 @@
     "prompt_tokens": 812,
     "completion_tokens": 0,
     "total_tokens": 812
+   }
+  },
+  "cached": {
+   "id": "chatcmpl-cinoc-cached",
+   "object": "chat.completion",
+   "created": 1764115200,
+   "model": "gpt-4o-mini-2024-07-18",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "Le Petit Journal, 12 mars 1894."
+     },
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 2048,
+    "completion_tokens": 75,
+    "total_tokens": 2123,
+    "prompt_tokens_details": {
+     "cached_tokens": 1536,
+     "audio_tokens": 0
+    },
+    "completion_tokens_details": {
+     "reasoning_tokens": 64,
+     "audio_tokens": 0,
+     "accepted_prediction_tokens": 0,
+     "rejected_prediction_tokens": 0
+    }
    }
   }
  }

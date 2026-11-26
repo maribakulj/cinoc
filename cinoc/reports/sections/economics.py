@@ -12,7 +12,7 @@ explicite est rendu — jamais un chiffre silencieusement périmé.
 
 from __future__ import annotations
 
-from cinoc.evaluation.analysis import EconomicsPayload, MarginalCost
+from cinoc.evaluation.analysis import EconomicsPayload, MarginalCost, PipelineEconomics
 from cinoc.evaluation.result import RunResult
 from cinoc.reports._numbers import localize_decimal
 from cinoc.reports.engine_badges import engine_cell, engine_order
@@ -41,6 +41,52 @@ def _fmt_int(value: int | None) -> str:
     return "—" if value is None else f"{value}"
 
 
+def _tokens_cell(total: int | None, parts: tuple[str, ...], lang: str) -> str:
+    """Total de jetons, suivi de ses **parties** rendues (cache, raisonnement)
+    — aucune quand le fournisseur ne les a pas données."""
+    if not parts:
+        return _fmt_int(total)
+    joined = ", ".join(parts)
+    return _fmt_int(total) + localized(
+        lang,
+        f'<br><span class="muted">dont {joined}</span>',
+        f'<br><span class="muted">incl. {joined}</span>',
+    )
+
+
+def _input_parts(row: PipelineEconomics, lang: str) -> tuple[str, ...]:
+    parts = []
+    if row.tokens_cache_read is not None:
+        parts.append(
+            localized(
+                lang,
+                f"{row.tokens_cache_read} lus en cache",
+                f"{row.tokens_cache_read} read from cache",
+            )
+        )
+    if row.tokens_cache_write is not None:
+        parts.append(
+            localized(
+                lang,
+                f"{row.tokens_cache_write} écrits en cache",
+                f"{row.tokens_cache_write} written to cache",
+            )
+        )
+    return tuple(parts)
+
+
+def _output_parts(row: PipelineEconomics, lang: str) -> tuple[str, ...]:
+    if row.tokens_reasoning is None:
+        return ()
+    return (
+        localized(
+            lang,
+            f"{row.tokens_reasoning} de raisonnement",
+            f"{row.tokens_reasoning} reasoning",
+        ),
+    )
+
+
 def _block(
     view: str, payload: EconomicsPayload, lang: str, order: dict[str, int]
 ) -> str:
@@ -50,7 +96,16 @@ def _block(
         dur = _fmt(row.duration_seconds, lang, "{:.1f}")
         if row.n_resumed:
             dur += " ↺"  # durées relues de l'archive (note sous le tableau)
-        basis = escape(row.basis)
+        if row.unpriced_cache:
+            # La base est une phrase : elle se dit dans la langue du rapport.
+            models = ", ".join(escape(m) for m in row.unpriced_cache)
+            basis = localized(
+                lang,
+                f"jetons de cache non tarifés : {models}",
+                f"cache tokens not priced: {models}",
+            )
+        else:
+            basis = escape(row.basis)
         if row.billed_pages is not None:
             basis += localized(
                 lang,
@@ -63,13 +118,15 @@ def _block(
                 lang, f" — auto-hébergé : {served}", f" — self-hosted: {served}"
             )
         pph = _fmt(row.pages_per_hour, lang, "{:.1f}")
+        tokens_in = _tokens_cell(row.tokens_in, _input_parts(row, lang), lang)
+        tokens_out = _tokens_cell(row.tokens_out, _output_parts(row, lang), lang)
         pph_eff = _fmt(row.pages_per_hour_effective, lang, "{:.1f}")
         rows.append(
             f'<tr><td class="eng-cell">{badge}</td>'
             f'<td class="disp">{_fmt(row.cer, lang)}</td>'
             f'<td class="disp">{dur}</td>'
-            f'<td class="disp">{_fmt_int(row.tokens_in)}</td>'
-            f'<td class="disp">{_fmt_int(row.tokens_out)}</td>'
+            f'<td class="disp">{tokens_in}</td>'
+            f'<td class="disp">{tokens_out}</td>'
             f'<td class="disp">{_fmt(row.cost_eur, lang)}</td>'
             f'<td class="eng-cell">{basis}</td>'
             f'<td class="disp">{pph}</td>'
