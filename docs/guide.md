@@ -319,6 +319,44 @@ No engine, no network, no adapter to write. It is the cheapest way to answer
 *« is the thing I already use any good? »*, and it is also how you compare a new
 pipeline against a frozen baseline without re-running it.
 
+**An ALTO from another tool** enters the same way, through two bricks:
+`alto_source` reads `<page>.xml` (or `<page>.alto.xml`) next to the image, and
+`layout_to_text` flattens it in reading order — the text that is scored. Put
+each image, its ALTO and its transcription side by side (`page_001.png`,
+`page_001.xml`, `page_001.gt.txt`), zip them, and import:
+
+```bash
+cinoc corpus import zip pages.zip --dest corpus   # writes corpus/corpus.yaml
+```
+
+Then add these lines at the end of `corpus/corpus.yaml` — a corpus file becomes
+a run file by gaining `pipelines:` and `evaluation:` — and run
+`cinoc run corpus/corpus.yaml -o report.html`:
+
+<!-- spec: score-alto -->
+```yaml
+pipelines:
+  - name: my_alto
+    steps:
+      - {id: source, kind: alto_source, adapter_name: alto_source,
+         input_types: [image], output_types: [layout]}
+      - {id: text, kind: projection, adapter_name: "layout_to_text:text",
+         input_types: [layout], output_types: [raw_text]}
+evaluation:
+  views:
+    - {name: texte, candidate_types: [raw_text], metric_names: [cer, wer]}
+adapter_kwargs:
+  "layout_to_text:text": {label: text}
+```
+
+`cinoc list engines <brick>` prints what a brick consumes and produces and the
+settings it requires (`layout_to_text` requires its `label`). The transcription
+is what makes the score mean something: without `page_001.gt.txt`, the import
+derives the reference from that same ALTO, and the run is refused rather than
+publish a zero by construction. For the ALTO a Cinoc run wrote
+(`<page>.<pipeline>.alto.xml`), give the source its pipeline:
+`"alto_source": {pipeline: ocr_simple_tesseract}`.
+
 `cinoc hybrid --segment-only` stops after segmentation and writes one `<doc>.layout.json` per page — exactly what `precomputed_layout` reads back, so you can segment once and then compare several recognisers on the same layout. These two JSON replays (`precomputed_layout`, `precomputed_region`) are command-line only: a corpus uploaded on the web carries images, `.txt` and `.xml`, never their JSON, so the benchmark page does not offer them.
 
 ### Getting a corpus

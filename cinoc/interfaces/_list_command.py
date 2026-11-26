@@ -36,6 +36,7 @@ from cinoc.app.modules import (
     discover_plugins,
     register_default_modules,
 )
+from cinoc.app.modules.params import closest_hint
 from cinoc.app.normalization_preview import preview_normalization
 from cinoc.domain.errors import CinocError
 from cinoc.pipeline.params import Param
@@ -71,18 +72,63 @@ def _param_line(param: Param) -> str:
     return f"  {param.name:<20} {param.type:<5} {param.label_fr}{suite}\n      {regle}"
 
 
+def _signatures(kind: str) -> list[str]:
+    """Ce que la brique consomme et produit, lu sur les **rôles de recette** qui
+    la proposent — la signature qu'une étape de spec écrit en ``input_types`` /
+    ``output_types``. Jamais deviné : une brique hors rôle n'en affiche pas."""
+    from cinoc.app.recipes import roles  # noqa: PLC0415
+
+    lignes = []
+    for nom, role in roles().items():
+        if kind in role.briques:
+            entrees = " + ".join(t.value for t in role.entrees)
+            sorties = " · ".join(t.value for t in role.sorties)
+            par_bloc = ", une fois par région" if role.fanout else ""
+            lignes.append(f"{entrees} → {sorties}  (rôle « {nom} »{par_bloc})")
+    return lignes
+
+
+def _unknown_brick(kind: str, registre: ModuleRegistry) -> CinocError:
+    """Un nom inconnu : un rôle de recette (``projection``) se reconnaît et
+    nomme ses briques ; sinon le nom connu le plus proche."""
+    from cinoc.app.recipes import roles  # noqa: PLC0415
+
+    role = roles().get(kind)
+    if role is not None and role.briques:
+        return CinocError(
+            f"{kind!r} est un rôle de recette, pas une brique — "
+            f"brique(s) : {', '.join(role.briques)} "
+            f"(cinoc list engines {role.briques[0]})."
+        )
+    connues = list(registre.kinds())
+    return CinocError(
+        f"brique inconnue : {kind!r}{closest_hint(kind, connues)} "
+        f"(connues : {', '.join(connues)})."
+    )
+
+
 def _print_brick(kind: str) -> int:
     """Les réglages qu'une brique **déclare** (``PARAMS``) — ceux qu'une spec
-    peut poser en ``adapter_kwargs`` ; tout autre est refusé, nommé."""
+    peut poser en ``adapter_kwargs`` ; tout autre est refusé, nommé. Avec ce
+    qu'elle consomme et produit, et ce qu'elle exige : de quoi écrire l'étape."""
     registre = ModuleRegistry()
     register_default_modules(registre)
     discover_plugins(registre, enabled=True)  # CLI local : code de confiance
     if kind not in registre.kinds():
-        raise CinocError(
-            f"brique inconnue : {kind!r} (connues : {', '.join(registre.kinds())})."
-        )
+        raise _unknown_brick(kind, registre)
     params = registre.declared_params(kind)
     print(f"{kind} — réglages (adapter_kwargs.\"{kind}:<libellé>\".<réglage>)")
+    for signature in _signatures(kind):
+        print(f"  consomme → produit : {signature}")
+    requis = [p.name for p in params or () if p.required]
+    if requis:
+        valeurs = ", ".join(
+            f"{n}: <{'libellé' if n == 'label' else n}>" for n in requis
+        )
+        print(
+            f"  requis : {', '.join(requis)} — adapter_kwargs: "
+            f"{{\"{kind}:<libellé>\": {{{valeurs}}}}}"
+        )
     if params is None:
         print(
             "  brique tierce : sa déclaration (PARAMS), si elle en a une, se lit à "

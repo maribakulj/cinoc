@@ -40,10 +40,12 @@ from cinoc.adapters.layout.saknussemm_correct import (
     PRODUCERS,
 )
 from cinoc.app.corpus_upload import GT_SOURCE_KEY, truths_beside
+from cinoc.app.spec_coherence import SpecCoherenceError
 from cinoc.domain.artifacts import ArtifactType
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.documents import DocumentRef, GroundTruthRef
 from cinoc.domain.errors import CinocError
+from cinoc.domain.run_spec import RunSpec
 from cinoc.formats.images import IMAGE_SUFFIXES
 
 
@@ -194,11 +196,38 @@ def ground_truth_is_its_own_source(corpus: CorpusSpec) -> bool:
     )
 
 
+def refuse_self_reference(spec: RunSpec) -> None:
+    """Refuse de lire un ALTO **dont la vérité terrain est extraite**.
+
+    Un corpus déposé en images + ALTO, sans transcription à part, voit sa vérité
+    terrain dérivée de cet ALTO : une étape ``alto_source`` partirait du texte
+    auquel on la compare, et le CER vaudrait zéro par construction — un verdict
+    qui ressemble à un excellent résultat. Seule issue : lire l'OCR d'ailleurs
+    (``ocr_sidecar``). Vaut pour **toute** spec — recette de la page, ``cinoc
+    run --recipe``, spec écrite à la main (CLI comme web), D-307.
+    """
+    if not ground_truth_is_its_own_source(spec.corpus):
+        return
+    for pipeline in spec.pipelines:
+        for etape in pipeline.steps:
+            if etape.adapter_name.split(":", 1)[0] != "alto_source":
+                continue
+            if not spec.adapter_kwargs.get(etape.adapter_name, {}).get("ocr_sidecar"):
+                raise SpecCoherenceError(
+                    "la vérité terrain de ce corpus est extraite de son propre "
+                    "ALTO : le correcteur partirait du texte auquel on le "
+                    "compare, et le CER vaudrait zéro par construction. Dépose "
+                    "une transcription à part (<nom>.gt.txt) à côté de chaque "
+                    "ALTO."
+                )
+
+
 __all__ = [
     # Ré-exportés pour les transports : une interface lit la capacité en couche
     # `app`, jamais en couche `adapters` — et surtout jamais en la recopiant.
     "PRODUCERS",
     "corpus_from_alto",
     "ground_truth_is_its_own_source",
+    "refuse_self_reference",
     "truth_summary",
 ]

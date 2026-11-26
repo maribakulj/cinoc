@@ -167,3 +167,36 @@ def test_list_engines_refuses_an_unknown_brick(
 def test_list_engines_marks_a_secret(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["list", "engines", "remote_segmenter"]) == 0
     assert "secret" in capsys.readouterr().out
+
+
+# --------------------------------------------------------------------------- #
+# Ce qu'il faut pour écrire l'étape à la main (D-307, n° 5 du testeur)
+# --------------------------------------------------------------------------- #
+
+
+def test_list_engines_says_what_a_brick_consumes_and_produces(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Le testeur a écrit ``alto_source → layout_to_text`` en devinant : la
+    fiche d'une brique ne disait ni ses types ni le réglage qu'elle exige."""
+    assert main(["list", "engines", "layout_to_text"]) == 0
+    sortie = capsys.readouterr().out
+    assert "layout → raw_text" in sortie
+    assert "requis : label" in sortie
+    assert '"layout_to_text:<libellé>": {label: <libellé>}' in sortie
+
+
+def test_list_engines_names_the_brick_of_a_recipe_role(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert main(["list", "engines", "projection"]) == 1
+    erreur = capsys.readouterr().err
+    assert "rôle de recette" in erreur
+    assert "layout_to_text" in erreur
+
+
+def test_list_engines_suggests_a_close_name(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert main(["list", "engines", "tesseractt"]) == 1
+    assert "vouliez-vous 'tesseract'" in capsys.readouterr().err

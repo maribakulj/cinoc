@@ -48,6 +48,16 @@ publier, et son moment, appartiennent au mainteneur.
 
 ### Corrigé
 
+- **Noter un ALTO d'un autre outil, sans moteur.** Le README le promettait
+  par `precomputed`, qui ne lit que du texte. Le guide donne la spec
+  (`alto_source` → `layout_to_text`), exécutée telle quelle par la suite et sur
+  la roue installée. `cinoc list engines <brique>` dit ce que la brique
+  consomme et produit et ce qu'elle exige (`label` de `layout_to_text`, avec la
+  ligne `adapter_kwargs` à écrire) ; un rôle de recette (`projection`) nomme
+  ses briques, un nom mal tapé reçoit le plus proche. Une spec écrite à la
+  main qui lirait un ALTO contre la vérité extraite de lui-même est refusée,
+  comme la recette `alto_corrige` l'était déjà.
+
 - **`cinoc correct` ne note plus un ALTO contre lui-même.** Sur un ALTO
   d'OCR, la commande déclarait cet ALTO vérité terrain de la vue `structure`
   et affichait `F1 1,0 · CER 0,0` — la sortie comparée à sa propre entrée —,

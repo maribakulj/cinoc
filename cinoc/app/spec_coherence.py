@@ -114,7 +114,14 @@ def declared_labels(
 
 def check(spec: RunSpec) -> None:
     """Tous les contrôles de cohérence. Lève au **premier** manquement."""
+    # Importé ici : ``alto_corpus`` tire le dépôt de corpus, qui n'a rien à faire
+    # dans le chargement de ce module (et le cycle serait réel).
+    from cinoc.app.alto_corpus import refuse_self_reference  # noqa: PLC0415
+
     check_region_class_settings(spec)
+    # Un ALTO lu contre la vérité extraite de lui-même : zéro par construction,
+    # pour une spec écrite à la main comme pour une recette (D-307).
+    refuse_self_reference(spec)
 
 
 __all__ = [

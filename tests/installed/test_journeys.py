@@ -45,6 +45,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.installed._score_alto import guide_spec, pages_zip
+
 VENV_ENV = "CINOC_INSTALLED_VENV"
 EXTRAS_ENV = "CINOC_INSTALLED_EXTRAS"
 
@@ -149,6 +151,30 @@ def test_a_bare_install_scores_existing_outputs(tmp_path: Path) -> None:
     run_json = tmp_path / "examples" / "run.json"
     result = json.loads(run_json.read_text(encoding="utf-8"))
     assert {p["pipeline"] for p in result["pipelines"]} == {"tesseract", "pero"}
+
+
+@installed
+def test_a_bare_install_scores_an_existing_alto(tmp_path: Path) -> None:
+    """Un ALTO d'un autre outil, noté sans moteur par la spec du guide (D-307) ;
+    sans transcription à côté, le run est refusé — jamais un zéro par
+    construction."""
+    for avec, attendu in ((True, 0), (False, 1)):
+        work = tmp_path / ("avec" if avec else "sans")
+        work.mkdir()
+        pages_zip(work, transcriptions=avec)
+        cinoc("corpus", "import", "zip", "pages.zip", "--dest", "corpus", cwd=work)
+        fichier = work / "corpus" / "corpus.yaml"
+        fichier.write_text(
+            fichier.read_text(encoding="utf-8") + guide_spec(), encoding="utf-8"
+        )
+        done = cinoc("run", "corpus/corpus.yaml", "-o", "r.html", "--json",
+                     "corpus/run.json", cwd=work, expect=attendu)
+        if not avec:
+            assert "propre ALTO" in done.stderr
+            continue
+        result = json.loads((work / "corpus" / "run.json").read_text(encoding="utf-8"))
+        (texte,) = [p for p in result["pipelines"] if p["view"] == "texte"]
+        assert next(s["value"] for s in texte["aggregate"] if s["metric"] == "cer") == 0
 
 
 @installed

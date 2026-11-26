@@ -104,8 +104,10 @@ class AltoLayoutSource:
         Param(
             "pipeline",
             "str",
-            "Pipeline Cinoc dont lire l'ALTO (<document>.<pipeline>.alto.xml)",
-            "Cinoc pipeline whose ALTO to read (<document>.<pipeline>.alto.xml)",
+            "Pipeline Cinoc dont lire l'ALTO (<document>.<pipeline>.alto.xml ;"
+            " sans lui : <nom>.xml ou <nom>.alto.xml près de l'image)",
+            "Cinoc pipeline whose ALTO to read (<document>.<pipeline>.alto.xml;"
+            " without it: <name>.xml or <name>.alto.xml next to the image)",
             default="",
         ),
         instance_label_param(),
