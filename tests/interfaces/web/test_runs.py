@@ -13,11 +13,7 @@ from fastapi.testclient import TestClient
 from cinoc.app.engines import EngineStatus, engine_statuses
 from cinoc.app.evaluation_views import EvaluationOptions
 from cinoc.interfaces.web.app import create_app
-from cinoc.interfaces.web.routers.runs import (
-    CorrectionRequest,
-    LaunchRequest,
-    RecipeRequest,
-)
+from cinoc.interfaces.web.routers.runs import LaunchRequest
 from cinoc.interfaces.web.security.csrf import CSRF_HEADER
 
 _CSRF = {CSRF_HEADER: "1"}
@@ -58,15 +54,14 @@ def test_launch_request_accepts_metric_profile() -> None:
 
 
 def test_every_launch_takes_the_same_scoring_options() -> None:
-    """Une seule politique de vues (D-297) : composeur, recettes et correction
-    reçoivent les mêmes options de notation, sous les mêmes noms de champ."""
+    """Une seule politique de vues (D-297), une seule route (D-298) : toute
+    file reçoit les options de notation sous les mêmes noms de champ."""
     choix = {"normalization": "nfc", "char_exclude": ",", "metric_profile": "essentiel"}
     attendu = EvaluationOptions(**choix)
     assert LaunchRequest(**choix).options() == attendu
-    assert RecipeRequest(
+    assert LaunchRequest(
         corpus_id="c", entries=({"recipe": "ocr_simple"},), **choix
     ).options() == attendu
-    assert CorrectionRequest(corpus_id="c", **choix).options() == attendu
 
 
 def test_an_unknown_option_on_a_recipe_is_a_named_422(tmp_path: Path) -> None:
@@ -81,7 +76,7 @@ def test_an_unknown_option_on_a_recipe_is_a_named_422(tmp_path: Path) -> None:
         headers=_CSRF,
     )
     reponse = client.post(
-        "/api/runs/recipe",
+        "/api/runs",
         headers=_CSRF,
         json={
             "corpus_id": depot.json()["corpus_id"],
@@ -99,8 +94,16 @@ def test_an_unknown_option_on_a_recipe_is_a_named_422(tmp_path: Path) -> None:
 def test_config_endpoint_echoes_canonical(tmp_path: Path) -> None:
     # A : la config du formulaire EST un LaunchRequest ; l'endpoint la valide et
     # la renvoie canonique (exclude_none) — round-trip pour l'import client.
+    # La file **entière** voyage : depuis D-298 l'export porte les recettes (il
+    # ne portait que les concurrents composés, et la page le disait).
+    entree = {
+        "recipe": "ocr_puis_llm",
+        "choices": {"correction": "openai"},
+        "params": {"correction": {"model": "m", "prompt": "Corrige."}},
+        "optional": ["ner"],
+    }
     cfg = {
-        "competitors": [{"engine": "tesseract", "mode": "text_only", "llm": "openai"}],
+        "entries": [entree],
         "corpus_id": "c1",
         "char_exclude": ",.;",
         "metric_profile": "philologie",
@@ -111,11 +114,7 @@ def test_config_endpoint_echoes_canonical(tmp_path: Path) -> None:
     assert out["corpus_id"] == "c1"
     assert out["char_exclude"] == ",.;"
     assert out["metric_profile"] == "philologie"
-    comp = out["competitors"][0]
-    assert comp["engine"] == "tesseract" and comp["mode"] == "text_only"
-    assert comp["llm"] == "openai"
-    # exclude_none : pas de clé None (model absent) ; le défaut non-None reste.
-    assert "model" not in comp and comp["lang"] == "fra"
+    assert out["entries"] == [entree]
     # normalization non fournie (None) → absente de la forme canonique.
     assert "normalization" not in out
 
@@ -130,7 +129,7 @@ def test_config_endpoint_rejects_invalid(tmp_path: Path) -> None:
 def test_config_endpoint_requires_csrf(tmp_path: Path) -> None:
     # Écriture protégée comme la preview de normalisation (corps valide → on
     # prouve que c'est bien le CSRF qui refuse, pas la validation du corps).
-    r = _client(tmp_path).post("/api/runs/config", json={"competitors": []})
+    r = _client(tmp_path).post("/api/runs/config", json={"entries": []})
     assert r.status_code == 403
 
 
@@ -179,7 +178,7 @@ def test_public_mode_allows_local_demo(tmp_path: Path) -> None:
     assert _poll_until_terminal(client, resp.json()["job_id"])["state"] == "done"
 
 
-# --- Concurrents : sélection + gardes HTTP -----------------------------------
+# --- La file : gardes HTTP ---------------------------------------------------
 
 _PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
 
@@ -197,32 +196,56 @@ def _upload_demo_corpus(client: TestClient) -> str:
     return client.post("/api/corpus", files=files, headers=_CSRF).json()["corpus_id"]
 
 
-def test_unknown_engine_is_422(tmp_path: Path) -> None:
-    resp = _post(_client(tmp_path), {"competitors": [{"engine": "bogus"}]})
+def _queue(client: TestClient, *entries: dict, **extra: object) -> object:
+    """Poste une file sur un corpus déposé."""
+    body = {"corpus_id": _upload_demo_corpus(client), "entries": list(entries)}
+    return _post(client, {**body, **extra})
+
+
+def _llm(recipe: str = "ocr_puis_llm", provider: str = "openai") -> dict:
+    return {
+        "recipe": recipe,
+        "choices": {"correction": provider},
+        "params": {"correction": {"model": "m"}},
+    }
+
+
+def test_unknown_recipe_is_422(tmp_path: Path) -> None:
+    resp = _queue(_client(tmp_path), {"recipe": "bogus"})
+    assert resp.status_code == 422
+    assert "ocr_simple" in resp.json()["detail"]  # liste les connues
+
+
+def test_brick_outside_its_role_is_422(tmp_path: Path) -> None:
+    entree = {"recipe": "ocr_simple", "choices": {"ocr": "bogus"}}
+    resp = _queue(_client(tmp_path), entree)
     assert resp.status_code == 422
 
 
 def test_extra_field_on_request_is_422(tmp_path: Path) -> None:
-    assert _post(_client(tmp_path), {"competitors": [], "x": 1}).status_code == 422
+    assert _post(_client(tmp_path), {"entries": [], "x": 1}).status_code == 422
 
 
-def test_extra_field_on_competitor_is_422(tmp_path: Path) -> None:
-    resp = _post(_client(tmp_path), {"competitors": [{"engine": "tesseract", "x": 1}]})
+def test_extra_field_on_entry_is_422(tmp_path: Path) -> None:
+    resp = _queue(_client(tmp_path), {"recipe": "ocr_simple", "x": 1})
     assert resp.status_code == 422
 
 
-def test_invalid_mode_is_422(tmp_path: Path) -> None:
-    # mode hors Literal → rejet net par Pydantic.
-    body = {"competitors": [{"engine": "tesseract", "mode": "bogus"}]}
-    assert _post(_client(tmp_path), body).status_code == 422
+def test_a_queue_needs_a_corpus(tmp_path: Path) -> None:
+    resp = _post(_client(tmp_path), {"entries": [{"recipe": "ocr_simple"}]})
+    assert resp.status_code == 422
+    assert "corpus" in resp.json()["detail"]
 
 
-def test_cloud_engine_without_key_is_409_when_private(tmp_path: Path) -> None:
+def test_cloud_engine_without_key_is_409_when_private(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     # Hors mode public : un moteur cloud sans clé tombe en 409 (indisponible),
     # pas en 403. Avec sa clé, il serait autorisé (modèle « clé posée → marche »).
-    resp = _post(
-        _client(tmp_path, public_mode=False), {"competitors": [{"engine": "openai"}]}
-    )
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    entree = {"recipe": "vlm_seul", "choices": {"vlm": "openai"},
+              "params": {"vlm": {"model": "m"}}}
+    resp = _queue(_client(tmp_path, public_mode=False), entree)
     assert resp.status_code == 409
 
 
@@ -230,19 +253,46 @@ def test_public_mode_blocks_cloud_engine_403(tmp_path: Path) -> None:
     # Mode public (Space exposé) : fail-closed. Un moteur cloud est refusé en 403
     # AVANT toute vérif de clé/dispo — jamais d'appel facturé sur une instance
     # publique, clé présente ou non. (≠ 409 « indisponible » du mode privé.)
-    resp = _post(
-        _client(tmp_path, public_mode=True), {"competitors": [{"engine": "openai"}]}
-    )
+    entree = {"recipe": "ocr_simple", "choices": {"ocr": "mistral_ocr"},
+              "params": {"ocr": {"model": "m"}}}
+    resp = _queue(_client(tmp_path, public_mode=True), entree)
     assert resp.status_code == 403
 
 
 def test_public_mode_blocks_cloud_llm_in_chain_403(tmp_path: Path) -> None:
-    # Le LLM d'une chaîne OCR→LLM est aussi un kind référencé : un LLM cloud y est
-    # gated en mode public, même derrière un moteur OCR gratuit (tesseract).
-    body = {
-        "competitors": [{"engine": "tesseract", "mode": "text_only", "llm": "openai"}]
+    # Le LLM d'une chaîne OCR→LLM est aussi une brique nommée : un LLM cloud y
+    # est gated en mode public, même derrière un moteur OCR gratuit (tesseract).
+    resp = _queue(_client(tmp_path, public_mode=True), _llm())
+    assert resp.status_code == 403
+
+
+def test_public_mode_keeps_the_local_bricks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Segmenter sur la machine, lire chaque bloc par Tesseract, projeter,
+    assembler l'ALTO : rien n'appelle un service, rien n'exige de clé — le
+    composeur le laissait passer en mode public, la recette aussi
+    (``PUBLIC_BRICK_KINDS``). Binaire forcé absent : on atteint la sonde (409),
+    preuve que le verrou public est franchi."""
+    monkeypatch.setattr(
+        "cinoc.interfaces.web.app.engine_statuses",
+        lambda **kw: engine_statuses(has_binary=lambda _name: None, **kw),
+    )
+    entree = {"recipe": "segmentation_puis_lecture", "optional": ["alto"],
+              "choices": {"reco": "tesseract"}}
+    resp = _queue(_client(tmp_path, public_mode=True), entree)
+    assert resp.status_code == 409
+
+
+def test_public_mode_refuses_a_remote_segmenter(tmp_path: Path) -> None:
+    """Le segmenteur distant posterait la page à l'adresse que donne le client :
+    hors du socle public."""
+    entree = {
+        "recipe": "segmentation_puis_lecture",
+        "choices": {"seg": "remote_segmenter"},
+        "params": {"seg": {"endpoint": "https://seg.example"}},
     }
-    resp = _post(_client(tmp_path, public_mode=True), body)
+    resp = _queue(_client(tmp_path, public_mode=True), entree)
     assert resp.status_code == 403
 
 
@@ -250,7 +300,7 @@ def _force_tesseract_available(monkeypatch: pytest.MonkeyPatch) -> None:
     # Stub direct du provider : tesseract « disponible » sans dépendre des sondes
     # réelles (binaire ET module pytesseract) — la CI n'installe pas l'extra
     # [tesseract], donc forcer le seul binaire ne suffisait pas (run 409 au gate
-    # moteur avant d'atteindre le gate NER). Isole bien le gate NER (4bis).
+    # moteur avant d'atteindre le gate NER). Isole bien le gate NER.
     monkeypatch.setattr(
         "cinoc.interfaces.web.app.engine_statuses",
         lambda **kw: (
@@ -266,7 +316,7 @@ def _patch_ner(monkeypatch: pytest.MonkeyPatch, *, available: bool) -> None:
         "prêt (spaCy installé)" if available else "spaCy non installé (extra [ner])"
     )
     monkeypatch.setattr(
-        "cinoc.interfaces.web.app.ner_status",
+        "cinoc.app.recipe_catalog.ner_status",
         lambda **kw: EngineStatus(
             kind="ner", label="NER (spaCy)", available=available, detail=detail
         ),
@@ -276,16 +326,11 @@ def _patch_ner(monkeypatch: pytest.MonkeyPatch, *, available: bool) -> None:
 def test_ner_requested_without_spacy_is_409(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # Étape NER demandée mais spaCy absent → 409 AVANT le lancement (pas d'échec
-    # d'étape en cours de run). tesseract forcé dispo → on atteint bien le gate NER.
+    # Étape NER retenue mais spaCy absent → 409 AVANT le lancement (pas d'échec
+    # d'étape en cours de run) : la sonde du catalogue, celle qui la grise.
     _force_tesseract_available(monkeypatch)
     _patch_ner(monkeypatch, available=False)
-    client = _client(tmp_path)
-    corpus_id = _upload_demo_corpus(client)
-    resp = _post(
-        client,
-        {"competitors": [{"engine": "tesseract", "ner": True}], "corpus_id": corpus_id},
-    )
+    resp = _queue(_client(tmp_path), {"recipe": "ocr_simple", "optional": ["ner"]})
     assert resp.status_code == 409
     assert "[ner]" in resp.json()["detail"]
 
@@ -296,12 +341,7 @@ def test_ner_requested_with_spacy_passes_gate(
     # spaCy dispo → le gate NER passe (le run est lancé : 201).
     _force_tesseract_available(monkeypatch)
     _patch_ner(monkeypatch, available=True)
-    client = _client(tmp_path)
-    corpus_id = _upload_demo_corpus(client)
-    resp = _post(
-        client,
-        {"competitors": [{"engine": "tesseract", "ner": True}], "corpus_id": corpus_id},
-    )
+    resp = _queue(_client(tmp_path), {"recipe": "ocr_simple", "optional": ["ner"]})
     assert resp.status_code == 201
 
 
@@ -315,14 +355,12 @@ def test_public_mode_allows_free_tesseract(
         "cinoc.interfaces.web.app.engine_statuses",
         lambda **kw: engine_statuses(has_binary=lambda _name: None, **kw),
     )
-    resp = _post(
-        _client(tmp_path, public_mode=True), {"competitors": [{"engine": "tesseract"}]}
-    )
+    resp = _queue(_client(tmp_path, public_mode=True), {"recipe": "ocr_simple"})
     assert resp.status_code == 409
 
 
 def test_demo_with_corpus_is_422(tmp_path: Path) -> None:
-    # aucun concurrent (= démo) mais un corpus fourni → incohérent.
+    # aucune entrée (= démo) mais un corpus fourni → incohérent.
     client = _client(tmp_path)
     corpus_id = _upload_demo_corpus(client)
     assert _post(client, {"corpus_id": corpus_id}).status_code == 422
@@ -331,7 +369,7 @@ def test_demo_with_corpus_is_422(tmp_path: Path) -> None:
 def test_unknown_corpus_is_404(tmp_path: Path) -> None:
     resp = _post(
         _client(tmp_path),
-        {"competitors": [{"engine": "tesseract"}], "corpus_id": "nope"},
+        {"entries": [{"recipe": "ocr_simple"}], "corpus_id": "nope"},
     )
     assert resp.status_code == 404
 
@@ -339,46 +377,18 @@ def test_unknown_corpus_is_404(tmp_path: Path) -> None:
 def test_unavailable_engine_is_409(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # binaire forcé absent → tesseract indisponible (déterministe), sans corpus.
+    # binaire forcé absent → tesseract indisponible (déterministe).
     monkeypatch.setattr(
         "cinoc.interfaces.web.app.engine_statuses",
         lambda **kw: engine_statuses(has_binary=lambda _name: None, **kw),
     )
-    resp = _post(_client(tmp_path), {"competitors": [{"engine": "tesseract"}]})
+    resp = _queue(_client(tmp_path), {"recipe": "ocr_simple"})
     assert resp.status_code == 409
 
 
-def test_unknown_normalization_is_422(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    # moteurs forcés disponibles → on atteint le plan ; profil inconnu → 422.
-    monkeypatch.setattr(
-        "cinoc.interfaces.web.app.engine_statuses",
-        lambda **kw: engine_statuses(
-            has_binary=lambda _n: "/usr/bin/tesseract",
-            has_module=lambda _n: True,
-            **kw,
-        ),
-    )
-    client = _client(tmp_path)
-    corpus_id = _upload_demo_corpus(client)
-    resp = _post(
-        client,
-        {
-            "competitors": [{"engine": "tesseract"}],
-            "corpus_id": corpus_id,
-            "normalization": "bogus",
-        },
-    )
-    assert resp.status_code == 422
-
-
-def test_precomputed_as_competitor_is_422(tmp_path: Path) -> None:
-    # precomputed est le moteur de DÉMO, pas un concurrent OCR câblé → 422.
-    client = _client(tmp_path)
-    corpus_id = _upload_demo_corpus(client)
-    resp = _post(
-        client, {"competitors": [{"engine": "precomputed"}], "corpus_id": corpus_id}
+def test_unknown_normalization_is_422(tmp_path: Path) -> None:
+    resp = _queue(
+        _client(tmp_path), {"recipe": "ocr_simple"}, normalization="bogus"
     )
     assert resp.status_code == 422
 
@@ -386,24 +396,46 @@ def test_precomputed_as_competitor_is_422(tmp_path: Path) -> None:
 def test_ocr_llm_chain_reaches_availability_not_preblocked(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # OCR→LLM n'est plus pré-bloqué (ex-422 « LLM non exposé »). tesseract forcé
-    # dispo, openai indispo (pas de clé/SDK en CI) → 409 sur openai : la chaîne
-    # atteint bien la garde de disponibilité.
+    # OCR→LLM n'est pas pré-bloqué. tesseract forcé dispo, openai indispo (pas
+    # de clé/SDK en CI) → 409 sur openai : la chaîne atteint bien la garde de
+    # disponibilité.
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setattr(
         "cinoc.interfaces.web.app.engine_statuses",
         lambda **kw: engine_statuses(
-            has_binary=lambda _name: "/usr/bin/tesseract", **kw
+            has_binary=lambda _name: "/usr/bin/tesseract",
+            has_module=lambda name: name == "pytesseract",
+            **kw,
         ),
     )
-    client = _client(tmp_path)
-    corpus_id = _upload_demo_corpus(client)
-    resp = _post(
-        client,
-        {
-            "competitors": [
-                {"engine": "tesseract", "mode": "text_only", "llm": "openai"}
-            ],
-            "corpus_id": corpus_id,
-        },
-    )
+    resp = _queue(_client(tmp_path), _llm())
     assert resp.status_code == 409
+    assert "openai" in resp.json()["detail"]
+
+
+def test_a_recipe_and_another_shape_share_one_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """La limite que la page affichait — « une recette et un concurrent composé
+    ne partagent pas un run » — tombe : il n'y a plus qu'une forme d'entrée.
+    OCR seul, segmentation puis lecture et presse ancienne : un run."""
+    from cinoc.app import engines
+
+    monkeypatch.setattr(
+        "cinoc.interfaces.web.app.engine_statuses",
+        lambda: engines.engine_statuses(
+            has_binary=lambda _: "/bin/x", has_module=lambda _: True
+        ),
+    )
+    monkeypatch.setattr(
+        "cinoc.interfaces.web.app.segmenter_statuses",
+        lambda: engines.segmenter_statuses(has_module=lambda _: True),
+    )
+    client = _client(tmp_path)
+    resp = _queue(
+        client,
+        {"recipe": "ocr_simple"},
+        {"recipe": "segmentation_puis_lecture", "optional": ["alto"]},
+        {"recipe": "presse_ancienne"},
+    )
+    assert resp.status_code == 201, resp.json()

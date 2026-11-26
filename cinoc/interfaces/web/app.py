@@ -39,9 +39,7 @@ from cinoc.app.corpus_upload import CorpusStore
 from cinoc.app.data_dir import resolve_data_dir
 from cinoc.app.engines import (
     EngineStatus,
-    correction_status,
     engine_statuses,
-    ner_status,
     segmenter_statuses,
     third_party_statuses,
 )
@@ -51,6 +49,7 @@ from cinoc.app.modules import (
     discover_plugins,
     register_default_modules,
 )
+from cinoc.app.recipe_catalog import brick_statuses
 from cinoc.app.segmentation import SegmentationStore, demo_layout, demo_page_image
 from cinoc.interfaces.web.catalog import seed_reports
 from cinoc.interfaces.web.metrics import MetricsMiddleware, RequestMetrics
@@ -251,7 +250,7 @@ def create_app(
 
     # Segmenteurs : catégorie distincte (pas dans le <select> moteur OCR), jamais
     # masquée en public (segmenteur local, pas de clé). Alimente le gate du run de
-    # segmentation, le mode hybride du composeur et l'aperçu de mise en page.
+    # segmentation, l'aperçu de mise en page et, avec les autres sondes, le lanceur.
     def segmenter_status_provider() -> tuple[EngineStatus, ...]:
         return segmenter_statuses()
 
@@ -261,24 +260,11 @@ def create_app(
     def third_party_status_provider() -> tuple[EngineStatus, ...]:
         return third_party_statuses(enabled=not is_public)
 
-    # Étape NER (extra [ner], spaCy) : catégorie distincte (post-traitement, pas
-    # un moteur). Alimente le gate du lanceur et la case « NER » du composeur.
-    def ner_status_provider() -> EngineStatus:
-        return ner_status()
-
-    # Post-correction structurée (extra [saknussemm]) : brique de
-    # post-traitement, sondée comme la NER — refusée avant le lancement
-    # plutôt qu'en plein run.
-    def correction_status_provider() -> EngineStatus:
-        return correction_status()
-
     app.include_router(
         build_home_router(
             runtime_dir,
             templates,
             statuses=engine_status_provider,
-            segmenters=segmenter_status_provider,
-            ner=ner_status_provider,
             third_party=third_party_status_provider,
             history_store=history_store,
             corpus_store=corpus_store,
@@ -300,17 +286,18 @@ def create_app(
             segmenters=segmenter_status_provider,
         )
     )
-    # Le lanceur exécute aussi les concurrents **hybrides** (segmenteur →
-    # reconnaissance par bloc → texte scoré) : pas de second chemin d'exécution.
+    # Le lanceur exécute toute file de recettes — OCR, chaînes LLM/VLM,
+    # segmentation puis lecture, correction d'ALTO — par un seul chemin. Il
+    # sonde **toutes** les briques, comme le catalogue qui les grise (D-298).
     # Les ALTO produits (option) se téléchargent via /reports/{run_id}/alto.zip.
+    def brick_status_provider() -> tuple[EngineStatus, ...]:
+        return brick_statuses(engine_statuses() + segmenter_statuses())
+
     app.include_router(
         build_runs_router(
             runner,
             corpus_store,
-            statuses=engine_status_provider,
-            segmenters=segmenter_status_provider,
-            ner_available=lambda: ner_status_provider().available,
-            correction_available=lambda: correction_status_provider().available,
+            statuses=brick_status_provider,
             public_mode=is_public,
         )
     )

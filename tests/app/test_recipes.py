@@ -267,7 +267,8 @@ def test_an_unreadable_spec_is_named_not_swallowed() -> None:
 def test_referenced_kinds_reads_the_adapter_convention() -> None:
     """``<kind>:<label>`` : c'est ce qui permet de garder une spec arbitraire
     sans avoir à la comprendre."""
-    from cinoc.app.recipes import RecipeEntry, plan_recipe_run, referenced_kinds
+    from cinoc.app.recipe_queue import RecipeEntry, plan_recipe_run
+    from cinoc.app.recipes import referenced_kinds
     from cinoc.domain.corpus import CorpusSpec
     from cinoc.domain.documents import DocumentRef
 
@@ -284,7 +285,7 @@ def test_referenced_kinds_reads_the_adapter_convention() -> None:
 def test_the_evaluation_follows_what_the_pipeline_produces(tmp_path: Path) -> None:
     """Une vue par sortie **notable** : une mise en page se note en structure
     — si le corpus porte de quoi la juger (D-297) ; sinon une vue vide."""
-    from cinoc.app.recipes import RecipeEntry, plan_recipe_run
+    from cinoc.app.recipe_queue import RecipeEntry, plan_recipe_run
     from cinoc.domain.artifacts import ArtifactType
     from cinoc.domain.corpus import CorpusSpec
     from cinoc.domain.documents import DocumentRef, GroundTruthRef

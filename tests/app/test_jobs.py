@@ -363,6 +363,10 @@ def test_run_persists_layout_to_segmentation_store(tmp_path: Path) -> None:
     persisted = seg.get_layout(seg_id)
     assert persisted is not None
     assert persisted.pages[0].regions[0].id == "r1"
+    # …avec la page, que l'aperçu du banc d'essai dessine sous les régions :
+    # sans elle, le SVG pointait vers une image en 404 (vu en S26, D-298).
+    image = seg.image_path(seg_id)
+    assert image is not None and image.read_bytes() == b"\x89PNG stub"
 
 
 def test_run_without_segmentation_store_still_done(tmp_path: Path) -> None:

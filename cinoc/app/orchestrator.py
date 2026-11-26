@@ -420,7 +420,7 @@ def _bind_archaic_metrics(registry: MetricRegistry, spec: RunSpec) -> None:
 
     ``air`` est déjà au registre (liste par défaut) ; on le **relie** à la liste
     effective (no-op si défaut), et on **enregistre ``hcpr``** seulement si une vue
-    le demande (liste configurée au plan — cf. ``run_planning``). Les deux côtés
+    le demande (liste configurée au plan — cf. ``evaluation_views``). Les deux côtés
     lisent la **même** ``metadata["archaic_list"]`` → ils s'accordent.
     """
     resolved = resolve_archaic_list(spec.metadata.get("archaic_list"))

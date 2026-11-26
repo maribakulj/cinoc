@@ -6,11 +6,16 @@ brique *peut* faire sur cette instance (``CLI_ONLY_KINDS``, mode public, sonde d
 disponibilité) — les mêmes règles que le lanceur applique au refus. Une page qui
 proposerait ce que la route refuse en ``403`` enseignerait l'inverse de la règle.
 
-Ce que la page **demande** à l'utilisateur se limite aux réglages **requis** de
-la brique (un modèle, une adresse) : sans eux, la recette ne se construit pas.
-Les autres réglages ont un défaut ; les exposer est le pli de réglages, tranche 5
-de ``PLAN_UI_COMPOSEUR.md``. Le libellé, le mode (``role``) et la source rejouée
-(``source_label``) sont posés par la recette elle-même, jamais demandés.
+Chaque brique porte ses réglages **déclarés** (``PARAMS``) : les requis (un
+modèle, une adresse), que la page demande d'emblée, et les autres, qui ont un
+défaut et vont dans un pli. C'est ce qui rend à la recette tout ce que le
+composeur offrait — prompt curé ou libre, export ALTO de Tesseract, modèle spaCy,
+producteur de la correction — sans une ligne écrite pour l'un d'eux (D-298). Le
+libellé, le mode (``role``) et la source rejouée (``source_label``) sont posés
+par la recette elle-même, jamais demandés.
+
+:func:`brick_statuses` est **la** sonde : le catalogue grise ce qu'elle dit
+indisponible, le lanceur refuse en ``409`` la même chose.
 """
 
 from __future__ import annotations
@@ -19,13 +24,16 @@ from collections.abc import Iterable
 
 from cinoc.app.engines import (
     CLI_ONLY_KINDS,
-    PUBLIC_ENGINE_KINDS,
+    PUBLIC_BRICK_KINDS,
     EngineStatus,
     correction_status,
+    curated_prompts,
     ner_status,
     preprocess_status,
 )
+from cinoc.app.models import model_providers
 from cinoc.app.recipes import describe, load_recipes, plan_from_recipe, roles
+from cinoc.pipeline.params import Param
 
 #: Nom de chaque rôle à l'écran (français, anglais). Écrit à la main pour être
 #: lisible ; confronté à ``roles()`` par un test — un rôle ajouté sans nom
@@ -49,6 +57,9 @@ ROLE_LABELS: dict[str, tuple[str, str]] = {
         "Correction by a model that sees the image",
     ),
     "ner": ("Entités nommées", "Named entities"),
+    "ner_corrige": (
+        "Entités nommées du texte corrigé", "Named entities of the corrected text"
+    ),
     "vote": ("Vote", "Vote"),
 }
 
@@ -62,15 +73,50 @@ _PUBLIC = {
 _PRET = {"fr": "intégré", "en": "built in"}
 
 
-def _statuts(statuses: Iterable[EngineStatus]) -> dict[str, EngineStatus]:
-    """Sondes par ``kind`` de brique — celles du lanceur, plus les briques de
-    pré- et post-traitement qu'il sonde à part. La post-correction se sonde
-    sous le nom de sa catégorie ; sa brique s'appelle ``saknussemm``."""
+def brick_statuses(statuses: Iterable[EngineStatus]) -> tuple[EngineStatus, ...]:
+    """Sondes par brique — celles des moteurs et segmenteurs, plus les briques
+    de pré- et post-traitement sondées à part. La post-correction se sonde sous
+    le nom de sa catégorie ; sa brique s'appelle ``saknussemm``.
+
+    Une seule fonction pour le catalogue (qui grise) et le lanceur (qui refuse
+    en ``409``) : une page qui proposerait ce que la route refuse enseignerait
+    l'inverse de la règle.
+    """
     par_kind = {s.kind: s for s in statuses}
     for statut in (preprocess_status(), ner_status()):
         par_kind.setdefault(statut.kind, statut)
-    par_kind.setdefault("saknussemm", correction_status())
-    return par_kind
+    correction = correction_status()
+    par_kind.setdefault(
+        "saknussemm", correction.model_copy(update={"kind": "saknussemm"})
+    )
+    return tuple(par_kind.values())
+
+
+def _reglage(param: Param, kind: str, langue: str) -> dict[str, object]:
+    """Un réglage tel que la page le rend : requis en clair, les autres au pli.
+
+    Deux enrichissements que la déclaration ne peut pas porter, parce qu'ils
+    dépendent de l'instance : les prompts curés (``prompt_name``) en choix, et
+    l'adresse qui liste les modèles du fournisseur (``model`` d'une brique
+    LLM/VLM) — la page la lit en direct, comme le composeur le faisait.
+    """
+    choix: list[object] = list(param.choices)
+    if param.name == "prompt_name":
+        choix = ["", *curated_prompts()]
+    return {
+        "name": param.name,
+        "type": param.type,
+        "label": param.label(langue),
+        "required": param.required,
+        "default": param.default,
+        "secret": param.secret,
+        "choices": choix,
+        "models_url": (
+            f"/api/models/{kind}"
+            if param.name == "model" and kind in model_providers()
+            else None
+        ),
+    }
 
 
 def _brique(
@@ -78,28 +124,21 @@ def _brique(
 ) -> dict[str, object]:
     from cinoc.app.modules.registry import socle_params  # noqa: PLC0415
 
-    if public_mode and kind not in PUBLIC_ENGINE_KINDS:
+    if public_mode and kind not in PUBLIC_BRICK_KINDS:
         disponible, detail = False, _PUBLIC[langue]
     elif statut is not None:
         disponible, detail = statut.available, statut.detail
     else:
         disponible, detail = True, _PRET[langue]
-    requis = [
-        {
-            "name": p.name,
-            "type": p.type,
-            "label": p.label_en if langue == "en" else p.label_fr,
-            "secret": p.secret,
-            "choices": list(p.choices or ()),
-        }
-        for p in socle_params(kind) or ()
-        if p.required and p.name not in _POSES_PAR_LA_RECETTE
-    ]
     return {
         "kind": kind,
         "available": disponible,
         "detail": detail,
-        "required": requis,
+        "params": [
+            _reglage(p, kind, langue)
+            for p in socle_params(kind) or ()
+            if p.name not in _POSES_PAR_LA_RECETTE
+        ],
     }
 
 
@@ -114,7 +153,7 @@ def recipe_catalog(
     substituer (indisponibles comprises, avec leur raison)."""
     table = roles()
     langue = "en" if lang == "en" else "fr"
-    par_kind = _statuts(statuses)
+    par_kind = {s.kind: s for s in brick_statuses(statuses)}
     sorties: list[dict[str, object]] = []
     for recette in load_recipes():
         pipeline, _ = plan_from_recipe(recette)
@@ -129,6 +168,7 @@ def recipe_catalog(
                     "role": step.role,
                     "role_label": ROLE_LABELS[step.role][langue == "en"],
                     "fanout": role.fanout,
+                    "optional": step.optional,
                     "default": defaut,
                     "bricks": [
                         _brique(k, par_kind.get(k), public_mode, langue)
@@ -149,4 +189,4 @@ def recipe_catalog(
     return sorties
 
 
-__all__ = ["ROLE_LABELS", "recipe_catalog"]
+__all__ = ["ROLE_LABELS", "brick_statuses", "recipe_catalog"]

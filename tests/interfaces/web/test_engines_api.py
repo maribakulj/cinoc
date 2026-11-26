@@ -2,7 +2,7 @@
 
 Les listes de lecture (état des moteurs, profils de métriques/normalisation) sont
 rendues côté serveur et leur logique est couverte par ``tests/app/test_engines``
-+ ``test_run_planning`` — pas d'API JSON dédiée.
++ ``test_recipe_catalog`` — pas d'API JSON dédiée.
 """
 
 from __future__ import annotations

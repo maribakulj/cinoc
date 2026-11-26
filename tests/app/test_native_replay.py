@@ -36,9 +36,9 @@ from cinoc.adapters.ocr.mistral_ocr import _text_from_response
 from cinoc.app import run
 from cinoc.app.modules.registry import ModuleRegistry, register_default_modules
 from cinoc.app.orchestrator import PipelineOutputs
+from cinoc.app.recipe_queue import RecipeEntry, plan_recipe_run
 from cinoc.app.resume import ResumeStore, declared_inputs, unit_key
 from cinoc.app.run_manifest import module_identities
-from cinoc.app.run_planning import Competitor, plan_benchmark_run
 from cinoc.domain.artifacts import ArtifactType, latest_by_type
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.documents import DocumentRef, GroundTruthRef
@@ -62,16 +62,30 @@ _GT = (
     "deux maisons."
 )
 
-_COMPETITORS = (
-    Competitor(model="m", engine="mistral_ocr"),
-    Competitor(engine="azure_di"),
-    Competitor(engine="google_vision"),
-    Competitor(engine="openai", mode="zero_shot", model="gpt-4o-mini"),
-    Competitor(engine="anthropic", mode="zero_shot", model="claude-haiku-4-5"),
-    Competitor(engine="mistral", mode="zero_shot", model="pixtral-12b"),
-    Competitor(engine="ollama", mode="zero_shot", model="qwen2.5vl:3b"),
-    Competitor(ocr_model="m",
-        engine="mistral_ocr", mode="text_only", llm="openai", model="gpt-4o-mini"
+def _ocr(kind: str, **params: str) -> RecipeEntry:
+    return RecipeEntry(
+        recipe="ocr_simple", choices={"ocr": kind}, params={"ocr": params}
+    )
+
+
+def _vlm(kind: str, model: str) -> RecipeEntry:
+    return RecipeEntry(
+        recipe="vlm_seul", choices={"vlm": kind}, params={"vlm": {"model": model}}
+    )
+
+
+_ENTRIES = (
+    _ocr("mistral_ocr", model="m"),
+    _ocr("azure_di"),
+    _ocr("google_vision"),
+    _vlm("openai", "gpt-4o-mini"),
+    _vlm("anthropic", "claude-haiku-4-5"),
+    _vlm("mistral", "pixtral-12b"),
+    _vlm("ollama", "qwen2.5vl:3b"),
+    RecipeEntry(
+        recipe="ocr_puis_llm",
+        choices={"ocr": "mistral_ocr", "correction": "openai"},
+        params={"ocr": {"model": "m"}, "correction": {"model": "gpt-4o-mini"}},
     ),
 )
 
@@ -146,9 +160,9 @@ class _Run1:
         install_fake_sdks(monkeypatch, queues)
         install_fake_http(monkeypatch, queues)
         self.archive = tmp_path / "archive"
-        self.spec = plan_benchmark_run(
-            _COMPETITORS, _corpus(tmp_path / "corpus"), "s8"
-        )(tmp_path)
+        self.spec = plan_recipe_run(
+            _corpus(tmp_path / "corpus"), _ENTRIES, run_id="s8"
+        )
         self.sidecars_in_sink: dict[tuple[str, str, str], bytes] = {}
         self.result = run(
             self.spec,
@@ -284,7 +298,7 @@ def test_the_sidecar_lives_in_the_artifacts_dir_and_nowhere_in_the_run_result(
     # Une réponse par appel utile : 7 pipelines × 2 pages + la chaîne × 2 étapes × 2.
     assert len(archived) == 7 * 2 + 2 * 2
     assert archived.count("ocr.native_json.json") == 4 * 2
-    assert archived.count("llm.native_json.json") == 2
+    assert archived.count("correction.native_json.json") == 2
     dumped = run1.result.model_dump_json()
     assert "native_json" not in dumped
     assert "analyzeResult" not in dumped and "fullTextAnnotation" not in dumped
@@ -299,7 +313,7 @@ def test_the_sidecar_travels_through_by_step_and_the_artifact_sink(run1: _Run1) 
     et ce qu'il lit est ce que l'archive a gardé."""
     chaine = run1.spec.pipelines[-1]
     for doc in run1.spec.corpus.documents:
-        for step in ("ocr", "llm"):
+        for step in ("ocr", "correction"):
             lu = run1.sidecars_in_sink[(chaine.name, doc.id, step)]
             (entry,) = (
                 e for e in run1.archived_steps(chaine, doc) if e["step"] == step

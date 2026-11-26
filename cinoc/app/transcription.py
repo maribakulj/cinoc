@@ -2,7 +2,8 @@
 
 Le run **hybride** (segmentation → OCR par région → assemblage ALTO) part
 d'**images sans vérité-terrain** et produit un ALTO par page. Ce module fournit
-les deux bouts que le transport (CLI / web) câble autour de ``plan_hybrid_run`` :
+les deux bouts que le transport câble autour de la recette hybride
+(``segmentation_puis_lecture``, par ``plan_recipe_run``) :
 
 - ``corpus_from_images`` : un dossier d'images → ``CorpusSpec`` (1 image = 1
   document, id dérivé du nom de fichier, **aucune GT**) ;
@@ -117,8 +118,11 @@ def write_alto_files(out_dir: Path, outputs: PipelineOutputs) -> list[Path]:
 
 def _safe(name: str) -> str:
     """Composant de nom de fichier sûr : ``/`` et ``.`` ne doivent pas creuser
-    d'arborescence ni couper l'extension attendue."""
-    return name.replace("/", "_").replace(".", "_")
+    d'arborescence ni couper l'extension attendue, et un nom de pipeline
+    (``segmentation_puis_lecture · tesseract_layout → tesseract + alto``,
+    D-298) n'a rien à faire d'espaces ni de flèches dans un nom de fichier :
+    chaque suite de caractères hors ``[A-Za-z0-9_-]`` devient un ``_``."""
+    return re.sub(r"[^A-Za-z0-9_-]+", "_", name).strip("_")
 
 
 def write_layout_files(out_dir: Path, outputs: PipelineOutputs) -> list[Path]:

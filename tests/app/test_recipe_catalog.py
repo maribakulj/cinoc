@@ -16,12 +16,11 @@ from cinoc.app.engines import CLI_ONLY_KINDS, EngineStatus
 from cinoc.app.modules import ModuleRegistry, register_default_modules
 from cinoc.app.modules.registry import check_spec_settings, socle_params
 from cinoc.app.recipe_catalog import ROLE_LABELS, recipe_catalog
+from cinoc.app.recipe_queue import RecipeEntry, plan_recipe_run
 from cinoc.app.recipes import (
-    RecipeEntry,
     RecipeError,
     load_recipes,
     plan_from_recipe,
-    plan_recipe_run,
     recipe_by_name,
     roles,
 )
@@ -111,7 +110,10 @@ def test_several_recipes_make_one_compared_run() -> None:
         ),
         run_id="r",
     )
-    assert [p.name for p in spec.pipelines] == ["ocr_simple", "presse_ancienne"]
+    assert [p.name for p in spec.pipelines] == [
+        "ocr_simple · tesseract",
+        "presse_ancienne · tesseract_layout → tesseract_layout",
+    ]
     # Sans vérité terrain, la vue texte seule (le run reste exécutable) : une
     # vue de structure n'aurait rien à quoi comparer (D-297).
     assert [v.name for v in spec.evaluation.views] == ["texte"]
@@ -125,7 +127,10 @@ def test_the_same_step_shared_by_two_recipes_stays_one_instance() -> None:
         (RecipeEntry(recipe="ocr_simple"), RecipeEntry(recipe="ocr_simple")),
         run_id="r",
     )
-    assert [p.name for p in spec.pipelines] == ["ocr_simple", "ocr_simple #2"]
+    assert [p.name for p in spec.pipelines] == [
+        "ocr_simple · tesseract",
+        "ocr_simple · tesseract #2",
+    ]
     assert list(spec.adapter_kwargs) == ["tesseract:ocr"]
 
 
@@ -187,7 +192,7 @@ def test_the_catalogue_describes_each_step_and_its_bricks() -> None:
     kraken = next(b for b in reco["bricks"] if b["kind"] == "kraken")
     assert kraken["available"] is False
     assert kraken["detail"] == "kraken ?"
-    assert any(p["name"] == "model" for p in kraken["required"])
+    assert any(p["name"] == "model" and p["required"] for p in kraken["params"])
 
 
 def test_a_brick_reserved_to_the_cli_is_never_offered() -> None:
@@ -208,10 +213,16 @@ def test_public_mode_greys_out_what_it_would_refuse() -> None:
     briques = {b["kind"]: b for b in simple["steps"][0]["bricks"]}  # type: ignore[index]
     assert briques["kraken"]["available"] is False
     assert "public" in str(briques["kraken"]["detail"])
+    # Une brique **locale** du socle (prétraitement, segmentation sur la
+    # machine, projection) reste offerte : elle n'appelle rien et n'exige
+    # aucune clé (``PUBLIC_BRICK_KINDS``, D-298).
     presse = next(c for c in catalogue if c["name"] == "presse_ancienne")
     prep = presse["steps"][0]  # type: ignore[index]
     assert prep["role_label"] == ROLE_LABELS["preprocess"][1]
-    assert all(not b["available"] for b in prep["bricks"])
+    assert "public" not in str(prep["bricks"][0]["detail"])
+    correction = next(c for c in catalogue if c["name"] == "alto_corrige")
+    corr = next(e for e in correction["steps"] if e["step"] == "correction")  # type: ignore[attr-defined]
+    assert all(not b["available"] for b in corr["bricks"])
 
 
 def test_the_role_and_the_mode_are_never_asked_of_the_user() -> None:
@@ -222,7 +233,7 @@ def test_the_role_and_the_mode_are_never_asked_of_the_user() -> None:
         for c in catalogue
         for e in c["steps"]  # type: ignore[attr-defined]
         for b in e["bricks"]
-        for p in b["required"]
+        for p in b["params"]
     }
     assert not demandes & {"label", "role", "source_label"}
     assert "model" in demandes

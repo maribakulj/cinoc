@@ -14,7 +14,7 @@ import pytest
 from cinoc.adapters.llm._base import LLMCompletion
 from cinoc.app import run
 from cinoc.app.modules.registry import ModuleRegistry, register_default_modules
-from cinoc.app.run_planning import Competitor, plan_benchmark_run
+from cinoc.app.recipe_queue import RecipeEntry, plan_recipe_run
 from cinoc.domain.artifacts import ArtifactType
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.documents import DocumentRef, GroundTruthRef
@@ -48,10 +48,17 @@ def test_zero_shot_runs_and_reports_tokens(
     )
     corpus = CorpusSpec(name="c", documents=(document,))
 
-    build = plan_benchmark_run(
-        (Competitor(model="m", engine="openai", mode="zero_shot"),), corpus, "zs-run"
+    spec = plan_recipe_run(
+        corpus,
+        (
+            RecipeEntry(
+                recipe="vlm_seul",
+                choices={"vlm": "openai"},
+                params={"vlm": {"model": "m"}},
+            ),
+        ),
+        run_id="zs-run",
     )
-    spec = build(tmp_path)
 
     # Topologie : 1 concurrent, 1 étage IMAGE → RAW_TEXT (pas d'OCR amont).
     assert len(spec.pipelines) == 1

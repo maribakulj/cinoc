@@ -1194,6 +1194,11 @@ table.data a { color: var(--fern-deep); font-weight: 500; }
   align-items: center;
 }
 .recipe-step-head { font-size: 13px; }
+.recipe-step-body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.recipe-step-body[hidden] { display: none; }
+.recipe-settings > summary { cursor: pointer; }
+.recipe-settings[open] { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
+.recipe-settings[open] > summary { grid-column: 1 / -1; }
 .recipe-step > .dropzone-meta,
 .recipe-params { grid-column: 2; }
 .recipe-params { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
@@ -1201,6 +1206,7 @@ table.data a { color: var(--fern-deep); font-weight: 500; }
 @media (max-width: 640px) {
   .recipe-step { grid-template-columns: 1fr; }
   .recipe-step > .dropzone-meta, .recipe-params { grid-column: 1; }
+  .recipe-step-body { grid-column: 1; }
 }
 .queue-id {
   color: var(--g-400);

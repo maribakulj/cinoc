@@ -2,18 +2,19 @@
 
 Mode ``precomputed`` (déterministe, CI-safe, sans tesseract ni PIL) : le crop est
 **désactivé** (``crop=False``), le reconnaisseur lit le texte figé par ``region_id``
-sur l'image page entière. Prouve la chaîne CLI → corpus → ``plan_hybrid_run`` →
-orchestrateur → ALTO écrits.
+sur l'image page entière. Prouve la chaîne CLI → corpus → recette
+``segmentation_puis_lecture`` (``plan_recipe_run``) → orchestrateur → ALTO écrits.
 """
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
-from cinoc.app import structure_planning
+from cinoc.app import recipe_queue, structure_planning
 from cinoc.domain.errors import CinocError
 from cinoc.domain.layout import CanonicalLayout, LayoutPage, Region
 from cinoc.interfaces._cli_parser import build_parser
@@ -60,8 +61,12 @@ def test_cli_hybrid_precomputed_end_to_end(tmp_path: Path) -> None:
     )
     assert code == 0
     # Le nom porte le pipeline depuis D-243 : deux chaînes produisant de l'ALTO
-    # ne doivent plus s'écraser l'une l'autre.
-    alto = out / "doc1.hybrid.alto.xml"
+    # ne doivent plus s'écraser l'une l'autre. Le pipeline est la recette
+    # hybride, ses deux briques choisies et l'export retenu (D-298).
+    alto = out / (
+        "doc1.segmentation_puis_lecture_precomputed_layout_precomputed_region"
+        "_alto.alto.xml"
+    )
     assert alto.is_file()
     # L'ALTO tokenise en mots (un ``<String CONTENT=…>`` par mot) ; le texte
     # reconnu par région survit l'assemblage.
@@ -81,23 +86,24 @@ def test_remote_segmenter_endpoint_reaches_the_planner(
 ) -> None:
     """``--segmenter remote_segmenter`` était **annoncé et inutilisable**.
 
-    Le planificateur exige un ``endpoint`` — c'est lui qui porte le modèle de
+    Le segmenteur distant exige un ``endpoint`` — c'est lui qui porte le modèle de
     mise en page — et la CLI n'avait aucun drapeau pour le transmettre, alors
     que le composeur web exposait le champ. La commande échouait donc à tous les
     coups sur une option que sa propre aide propose.
 
-    La sonde s'arrête au planificateur : ce qui est vérifié est le **passage**
-    des deux valeurs, pas un appel réseau.
+    La sonde s'arrête à la file de recettes : ce qui est vérifié est le
+    **passage** des deux valeurs aux réglages de l'étape ``seg``, pas un appel
+    réseau.
     """
     images = tmp_path / "imgs"
     _scene(images, {"r1": "x", "r2": "y"})
     vus: dict[str, object] = {}
 
-    def _sonde(*args: object, **kwargs: object) -> object:
-        vus.update(kwargs)
+    def _sonde(_corpus: object, entries: Any, **_kwargs: object) -> object:
+        vus.update(entries[0].params["seg"])
         raise CinocError("sonde : planification interrompue")
 
-    monkeypatch.setattr(structure_planning, "plan_hybrid_run", _sonde)
+    monkeypatch.setattr(recipe_queue, "plan_recipe_run", _sonde)
     code = main(
         [
             "hybrid",
@@ -183,7 +189,7 @@ def test_segment_only_stops_after_the_layout(
         raise CinocError("le pipeline hybride ne doit pas être planifié")
 
     monkeypatch.setattr(structure_planning, "plan_segmentation_run", _seg)
-    monkeypatch.setattr(structure_planning, "plan_hybrid_run", _hyb)
+    monkeypatch.setattr(recipe_queue, "plan_recipe_run", _hyb)
 
     code = main(
         ["hybrid", str(images), "--out", str(tmp_path / "seg"), "--segment-only"]

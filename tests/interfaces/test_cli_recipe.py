@@ -20,7 +20,8 @@ from fastapi.testclient import TestClient
 
 from cinoc.app.evaluation_views import EvaluationOptions
 from cinoc.app.loader import RunSpecError, load_corpus_spec
-from cinoc.app.recipes import RecipeEntry, RecipeError, plan_recipe_run, recipe_entries
+from cinoc.app.recipe_queue import RecipeEntry, plan_recipe_run, recipe_entries
+from cinoc.app.recipes import RecipeError
 from cinoc.app.results import load_run_result
 from cinoc.interfaces._cli_parser import build_parser
 from cinoc.interfaces._recipe_spec import spec_loader
@@ -90,8 +91,8 @@ def test_a_recipe_runs_to_a_report_from_the_command_line(tmp_path: Path) -> None
     assert code == 0
     result = load_run_result(sortie)
     assert {(p.pipeline, p.view) for p in result.pipelines} == {
-        ("ocr_simple", "texte"),
-        ("ocr_simple", "texte (lignes)"),
+        ("ocr_simple · precomputed", "texte"),
+        ("ocr_simple · precomputed", "texte (lignes)"),
     }
 
 
@@ -133,7 +134,7 @@ def test_the_cli_and_the_page_give_the_same_report(tmp_path: Path) -> None:
         headers={CSRF_HEADER: "1"},
     )
     reponse = client.post(
-        "/api/runs/recipe",
+        "/api/runs",
         headers={CSRF_HEADER: "1"},
         json={
             "corpus_id": depot.json()["corpus_id"],
@@ -148,6 +149,8 @@ def test_the_cli_and_the_page_give_the_same_report(tmp_path: Path) -> None:
     cli = load_run_result(cli_json)
     deltas = compare_runs(cli, web)
     assert deltas
+    # Le même pipeline porte le même nom par les deux entrées (D-298) : chaque
+    # ligne est appariée.
     assert all(d.value_a is not None and d.value_b is not None for d in deltas)
     assert all(d.delta == 0 for d in deltas if d.delta is not None)
     assert {d.view for d in deltas} == {"texte", "texte (lignes)"}
@@ -202,7 +205,8 @@ def test_an_assignment_targets_every_recipe_or_the_nth() -> None:
 
 def test_correct_takes_the_same_scoring_options(tmp_path: Path) -> None:
     """``cinoc correct`` reçoit les options de notation de la page (parité
-    avec ``POST /api/runs/correction``, D-297)."""
+    avec la file de la page, D-297 ; la correction y est la recette
+    ``alto_corrige`` depuis D-298)."""
     from cinoc.interfaces._recipe_spec import scoring_options
 
     args = build_parser().parse_args(
@@ -211,3 +215,17 @@ def test_correct_takes_the_same_scoring_options(tmp_path: Path) -> None:
     assert scoring_options(args) == EvaluationOptions(
         normalization="nfc", char_exclude=","
     )
+
+
+def test_an_optional_step_is_retained_from_the_command_line() -> None:
+    """``--with`` : la case d'une étape facultative, en ligne de commande."""
+    file = recipe_entries(
+        ("ocr_simple", "segmentation_puis_lecture"), optional=("ner", "2:alto")
+    )
+    assert [e.optional for e in file] == [("ner",), ("ner", "alto")]
+    with pytest.raises(RecipeError, match="aucune recette visée"):
+        recipe_entries(("ocr_simple",), optional=("alto",))
+    args = build_parser().parse_args(
+        ["run", "c.yaml", "--recipe", "ocr_simple", "--with", "ner"]
+    )
+    assert args.with_steps == ["ner"]

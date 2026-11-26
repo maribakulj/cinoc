@@ -29,7 +29,7 @@ from cinoc.adapters.llm.ollama import _completion_from_chat as ollama_completion
 from cinoc.adapters.llm.openai import _completion_from_chat as openai_completion
 from cinoc.app import run
 from cinoc.app.modules.registry import ModuleRegistry, register_default_modules
-from cinoc.app.run_planning import Competitor, plan_benchmark_run
+from cinoc.app.recipe_queue import RecipeEntry, plan_recipe_run
 from cinoc.domain.artifacts import ArtifactType
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.documents import DocumentRef, GroundTruthRef
@@ -220,9 +220,17 @@ def _zero_shot_run(tmp_path: Path, provider: str) -> RunResult:
             ),
         ),
     )
-    spec = plan_benchmark_run(
-        (Competitor(engine=provider, mode="zero_shot", model="m"),), corpus, "s7"
-    )(tmp_path)
+    spec = plan_recipe_run(
+        corpus,
+        (
+            RecipeEntry(
+                recipe="vlm_seul",
+                choices={"vlm": provider},
+                params={"vlm": {"model": "m"}},
+            ),
+        ),
+        run_id="s7",
+    )
     registry = ModuleRegistry()
     register_default_modules(registry)
     return run(spec, registry=registry, code_version="1.0", max_workers=1)

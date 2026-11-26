@@ -1,6 +1,6 @@
 """Garde-fou : une capacité se lit là où elle est implémentée, jamais recopiée.
 
-**Le défaut que ce test empêche.** `run_planning` tenait deux littéraux —
+**Le défaut que ce test empêche.** L'ancien composeur tenait deux littéraux —
 `_LLM_ENGINES` et `_VLM_ENGINES` — énumérant les fournisseurs par mode. Quand
 l'adapter `ollama` a gagné ses modes vision en août 2026, personne n'a mis ces
 listes à jour : le planificateur a continué de refuser deux modes que l'adapter
@@ -22,8 +22,11 @@ from typing import get_args
 
 import pytest
 
-from cinoc.app.engines import llm_modes, providers_for_mode
-from cinoc.app.run_planning import _llm_engines, _vlm_engines
+from cinoc.app.engines import CLI_ONLY_KINDS, llm_modes, providers_for_mode
+from cinoc.app.recipe_queue import RecipeEntry, plan_recipe_run
+from cinoc.app.recipes import roles
+from cinoc.domain.corpus import CorpusSpec
+from cinoc.domain.documents import DocumentRef
 from cinoc.domain.pipeline import PipelineMode
 
 CINOC = Path(__file__).resolve().parents[2] / "cinoc"
@@ -51,67 +54,52 @@ def test_every_provider_declares_its_modes() -> None:
         assert not inconnus, f"{nom} déclare des modes inconnus : {inconnus}"
 
 
-#: Modes que le **composeur** expose, et la fonction qui en dresse la liste.
-#: ``refine`` n'y figure pas : chaîner deux correcteurs se décrit en spec,
-#: pas dans le modèle ``Competitor`` (c'est la dette que la tranche *g* du
-#: plan d'intégration ferme, en ouvrant le composeur aux specs).
-PLANIFIES: dict[str, str] = {
-    "text_only": "llm",
-    "text_and_image": "vlm",
-    "zero_shot": "vlm",
-}
+_CORPUS = CorpusSpec(
+    name="c", documents=(DocumentRef(id="d", image_uri="d.png", ground_truths=()),)
+)
 
 
-def test_every_mode_is_either_planned_or_knowingly_spec_only() -> None:
+def _role_du_mode(mode: str) -> str:
+    """Le rôle de recette qui pose ``mode`` sur sa brique."""
+    (nom,) = (n for n, r in roles().items() if r.mode == mode and not r.fanout)
+    return nom
+
+
+def test_every_declared_mode_has_its_role() -> None:
     """Aucun mode ne peut être **inatteignable** sans qu'on l'ait décidé.
 
-    Un mode déclaré par les adapters mais absent du composeur reste utilisable
-    par une spec YAML — ce qui est légitime, et doit être **su**. Ce test
-    interdit qu'un mode tombe entre les deux sans que personne le remarque.
+    Jusqu'à D-295, ``refine`` n'était offert que par une spec écrite à la main
+    et deux modes manquaient aux recettes ; depuis que le composeur à onglets
+    est une file de recettes (D-298), chacun des quatre modes est un rôle.
     """
-    hors_composeur = sorted(set(MODES) - set(PLANIFIES))
-    assert hors_composeur == ["refine"], (
-        f"modes hors composeur : {hors_composeur}. Chacun doit être un choix "
-        "écrit ici, pas un oubli — sinon il est inatteignable en silence."
-    )
-    # Et ceux-là restent construisibles, donc utilisables en spec.
-    from cinoc.app.modules import ModuleRegistry, register_default_modules
-
-    registre = ModuleRegistry()
-    register_default_modules(registre)
-    for mode in hors_composeur:
-        module = registre.build(
-            "openai:x", {"label": "x", "role": mode, "model": "m"}
-        )
-        assert module.input_types, f"{mode} : aucune entrée déclarée"
+    for mode in MODES:
+        _role_du_mode(mode)
 
 
-@pytest.mark.parametrize("mode", sorted(PLANIFIES))
-def test_the_planner_follows_the_declaration_at_runtime(
+@pytest.mark.parametrize("mode", sorted(MODES))
+def test_the_roles_follow_the_declaration_at_runtime(
     mode: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Le planificateur **suit** la déclaration, il n'en garde pas une copie.
+    """Le rôle **suit** la déclaration, il n'en garde pas une copie.
 
     Comparer « déclaré » à « accepté » serait tautologique maintenant que le
     second dérive du premier. Ce qu'on vérifie est plus fort : qu'on retire un
-    mode à un adapter, et le planificateur cesse de l'offrir — donc la lecture
-    est vivante, pas figée à l'import. C'est exactement la situation d'août
-    2026, jouée à l'envers.
+    mode à un adapter, et la recette cesse de l'offrir — donc la lecture est
+    vivante, pas figée à l'import. C'est exactement la situation d'août 2026,
+    jouée à l'envers.
     """
     from cinoc.adapters.llm.ollama import OllamaAdapter
 
-    avant = providers_for_mode(mode)
-    assert "ollama" in avant, "ollama déclare les trois modes depuis la PR #91"
+    assert "ollama" in roles()[_role_du_mode(mode)].briques
 
     monkeypatch.setattr(
         OllamaAdapter, "SUPPORTED_MODES", frozenset(m for m in MODES if m != mode)
     )
-    apres = providers_for_mode(mode)
-    accepte = _llm_engines() if PLANIFIES[mode] == "llm" else _vlm_engines()
-
-    assert "ollama" not in apres, "la capacité est lue trop tard, ou mise en cache"
-    assert "ollama" not in accepte, (
-        f"le planificateur offre encore le mode {mode!r} à ollama alors que "
+    assert "ollama" not in providers_for_mode(mode), (
+        "la capacité est lue trop tard, ou mise en cache"
+    )
+    assert "ollama" not in roles()[_role_du_mode(mode)].briques, (
+        f"la recette offre encore le mode {mode!r} à ollama alors que "
         "l'adapter ne le déclare plus : une liste parallèle a survécu."
     )
 
@@ -122,19 +110,18 @@ def test_a_declared_mode_is_actually_planifiable() -> None:
     C'est le bug d'août vu de face — `ollama` déclarait savoir transcrire, le
     planificateur répondait « n'a pas de VLM ».
     """
-    from pathlib import Path as _P
-
-    from cinoc.app.run_planning import Competitor, plan_benchmark_run
-    from cinoc.domain.corpus import CorpusSpec
-    from cinoc.domain.documents import DocumentRef
-
-    corpus = CorpusSpec(
-        name="c", documents=(DocumentRef(id="d", image_uri="d.png", ground_truths=()),)
-    )
     for fournisseur in sorted(providers_for_mode("zero_shot")):
-        spec = plan_benchmark_run(
-            (Competitor(engine=fournisseur, mode="zero_shot", model="m"),), corpus, "r"
-        )(_P("/tmp"))
+        spec = plan_recipe_run(
+            _CORPUS,
+            (
+                RecipeEntry(
+                    recipe="vlm_seul",
+                    choices={"vlm": fournisseur},
+                    params={"vlm": {"model": "m"}},
+                ),
+            ),
+            run_id="r",
+        )
         assert spec.pipelines, f"{fournisseur} : zero_shot déclaré mais non planifiable"
 
 
@@ -197,66 +184,54 @@ def test_no_hand_written_provider_list_remains() -> None:
     )
 
 
-def test_both_planners_accept_the_same_bricks() -> None:
-    """La même intention ne peut pas recevoir deux réponses selon le mode d'entrée.
+def test_every_segmenter_pairs_with_every_block_reader() -> None:
+    """La même intention ne peut pas recevoir deux réponses selon l'entrée.
 
-    ``plan_benchmark_run`` (un hybride jugé côte à côte avec d'autres) et
-    ``plan_hybrid_run`` (une transcription autonome) décrivent le même montage.
-    Ils tenaient pourtant deux ensembles distincts de segmenteurs et de
-    reconnaisseurs valides : le rejeu manquait au premier, si bien qu'une
-    démonstration exécutable en transcription était refusée en benchmark
-    (D-233).
+    Le composeur (un hybride jugé côte à côte avec d'autres) et la transcription
+    autonome tenaient deux ensembles de segmenteurs et de reconnaisseurs : le
+    rejeu manquait au premier (D-233). Il n'y a plus qu'un constructeur
+    (D-298) ; reste à prouver que **chaque** couple proposé se construit, brique
+    par brique, avec ses réglages.
     """
-    from pathlib import Path as _P
-
-    from cinoc.app.run_planning import Competitor, plan_benchmark_run
-    from cinoc.app.structure_planning import (
-        pipeline_recognizers,
-        pipeline_segmenters,
-        plan_hybrid_run,
+    from cinoc.app.modules.registry import (
+        ModuleRegistry,
+        check_spec_settings,
+        register_default_modules,
     )
-    from cinoc.domain.corpus import CorpusSpec
-    from cinoc.domain.documents import DocumentRef
 
-    corpus = CorpusSpec(
-        name="c", documents=(DocumentRef(id="d", image_uri="d.png", ground_truths=()),)
-    )
+    registre = ModuleRegistry()
+    register_default_modules(registre)
+    segmenteurs = [b for b in roles()["segmenter"].briques if b not in CLI_ONLY_KINDS]
     refus: list[str] = []
-    for segmenteur in sorted(pipeline_segmenters()):
-        for reconnaisseur in sorted(pipeline_recognizers()):
-            options = {"segmenter_endpoint": "https://e.test"} if (
-                segmenteur == "remote_segmenter"
-            ) else {}
+    for segmenteur in segmenteurs:
+        for reconnaisseur in roles()["region_recognizer"].briques:
+            reglages: dict[str, dict[str, str | int | float | bool]] = {}
+            if segmenteur == "remote_segmenter":
+                reglages["seg"] = {"endpoint": "https://e.test"}
+            reglages["reco"] = (
+                {"source_label": "l"}
+                if reconnaisseur == "precomputed_region"
+                else {"model": "m"}
+                if reconnaisseur
+                not in {"tesseract", "tesseract_layout", "google_vision", "azure_di"}
+                else {}
+            )
             try:
-                plan_benchmark_run(
+                spec = plan_recipe_run(
+                    _CORPUS,
                     (
-                        Competitor(
-                            engine=reconnaisseur,
-                            segmenter=segmenteur,
-                            model="m",
-                            **options,
+                        RecipeEntry(
+                            recipe="segmentation_puis_lecture",
+                            choices={"seg": segmenteur, "reco": reconnaisseur},
+                            params=reglages,
                         ),
                     ),
-                    corpus,
-                    "r",
-                )(_P("/tmp"))
+                    run_id="r",
+                )
+                check_spec_settings(spec, registre)
             except Exception as exc:  # noqa: BLE001 — on collecte pour nommer
-                refus.append(f"benchmark {segmenteur}/{reconnaisseur} : {exc}")
-            try:
-                plan_hybrid_run(
-                    corpus,
-                    "h",
-                    segmenter=segmenteur,
-                    ocr=reconnaisseur,
-                    label="l",
-                    source_label="l",
-                    endpoint=options.get("segmenter_endpoint"),
-                )(_P("/tmp"))
-            except Exception as exc:  # noqa: BLE001
-                refus.append(f"autonome {segmenteur}/{reconnaisseur} : {exc}")
-    assert not refus, (
-        "couples valides d'un côté et refusés de l'autre :\n  " + "\n  ".join(refus)
-    )
+                refus.append(f"{segmenteur}/{reconnaisseur} : {exc}")
+    assert not refus, "couples proposés mais refusés :\n  " + "\n  ".join(refus)
 
 
 def test_no_module_level_mode_list_shadows_the_declaration() -> None:

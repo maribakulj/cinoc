@@ -34,7 +34,7 @@ avant d'écrire la moindre ligne.**
   4quinquies », D-260 → D-266) ; P5d (*installable et sûr*), P5e (*une mesure
   qui dit vrai*) et P5f (*une inférence tracée*) sont livrées. La
   **feuille de route session par session** (S1 → S35) de cette section dit
-  laquelle ouvrir ; S1-S25 sont livrées, la suivante est S26, et les arbitrages A1, A2, A3, A6, A9
+  laquelle ouvrir ; S1-S26 sont livrées, la suivante est S27, et les arbitrages A1, A2, A3, A6, A9
   sont rendus (D-271). Née d'un audit sur le produit et non sur la CI : un
   `pip install cinoc` sans extra ne démarrait pas, et plusieurs chiffres
   affichés ne mesuraient pas ce qu'annonçait leur nom. Cette route **remplace**
@@ -45,7 +45,8 @@ avant d'écrire la moindre ligne.**
 - **Un axe hors numérotation P#, livré en août 2026 : la post-correction
   structurée** (`ALTO → ALTO` via `saknussemm`, commande `cinoc correct`).
   L'arbitrage qu'il portait **est rendu** : il a sa surface web depuis D-229
-  (`POST /api/runs/correction` + section au composeur). Ce paragraphe a annoncé
+  — aujourd'hui la recette `alto_corrige`, lancée par `POST /api/runs` comme
+  toute recette (D-298). Ce paragraphe a annoncé
   « absent de l'app web » bien après la livraison — c'est l'exemplaire le plus
   net du statut recopié qui pourrit, et dans le sens rassurant. Voir le roll-up
   §« Axe correction structurée ».
@@ -252,7 +253,8 @@ les sens ». Ils étaient absents de Picarones.
 - **Bibliothèque = hub de préparation des corpus** (D-065, décision produit) :
   upload ZIP (glisser-déposer) + imports distants vivent en **`/library`**
   (renverse D-059) ; le Banc d'essai **sélectionne** un corpus existant ; la
-  construction de specs vit en `app/run_planning` (couche 8 = transport mince,
+  construction de specs vit en `app/recipe_queue` (un seul constructeur, D-298 ;
+  couche 8 = transport mince,
   garde-fou `test_interfaces_thin`) ; stockage runtime via `app/data_dir`
   (≠ dossier rapports baké). Détail : `MIGRATION_PLAN.md` D-065.
 - **Rapport interactif *et* autonome** (D-094, décision d'architecture) :

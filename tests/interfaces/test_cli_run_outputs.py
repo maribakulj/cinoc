@@ -71,11 +71,11 @@ def test_alto_export_survives_the_workspace(
 ) -> None:
     """Un run hybride produit des ALTO ; sans ``--alto-dir`` ils mouraient.
 
-    On passe par ``cinoc hybrid`` pour fabriquer les ALTO, puis on vérifie que
-    ``cinoc run`` sait les garder : c'est le **même écrivain** dans les deux cas
-    (``write_alto_files``), pas une seconde implémentation.
+    La recette hybride, export ALTO retenu (``--with alto``), lancée par
+    ``cinoc run --recipe`` : ``--alto-dir`` garde ses ALTO par le **même
+    écrivain** que ``cinoc hybrid`` (``write_alto_files``), pas une seconde
+    implémentation.
     """
-    from cinoc.app.structure_planning import plan_hybrid_run
     from cinoc.app.transcription import corpus_from_images
     from cinoc.domain.layout import CanonicalLayout, LayoutPage, Region
 
@@ -93,18 +93,10 @@ def test_alto_export_survives_the_workspace(
     (images / "doc1.layout.json").write_bytes(layout.model_dump_json().encode())
     (images / "doc1.eng.regions.json").write_text('{"r1": "bonjour"}', encoding="utf-8")
 
-    spec = plan_hybrid_run(
-        corpus_from_images(images),
-        "hybride",
-        segmenter="precomputed_layout",
-        ocr="precomputed_region",
-        label="eng",
-        source_label="eng",
-    )(tmp_path / "ws")
-    config = tmp_path / "hybride.yaml"
+    config = tmp_path / "corpus.yaml"
     config.write_text(
         yaml.safe_dump(
-            spec.model_dump(mode="json", exclude_defaults=True),
+            {"corpus": corpus_from_images(images).model_dump(mode="json")},
             allow_unicode=True,
             sort_keys=False,
         ),
@@ -116,6 +108,16 @@ def test_alto_export_survives_the_workspace(
         [
             "run",
             str(config),
+            "--recipe",
+            "segmentation_puis_lecture",
+            "--brick",
+            "seg=precomputed_layout",
+            "--brick",
+            "reco=precomputed_region",
+            "--set",
+            "reco.source_label=eng",
+            "--with",
+            "alto",
             "-o",
             str(tmp_path / "r.html"),
             "--alto-dir",

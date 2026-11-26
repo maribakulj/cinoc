@@ -1,83 +1,92 @@
 """Garde-fou **anti-vide** : chaque option du composeur a un backend réel.
 
-Le composeur (Banc d'essai) n'offre que des moteurs du **catalogue**
-(``benchmark_engine_catalog``), regroupés par rôle. Ce test verrouille
-mécaniquement qu'on **ne peut pas afficher une option sans backend** :
+Le composeur (Banc d'essai) est le catalogue de recettes (``recipe_catalog``,
+D-298) : pour chaque étape, les briques que son rôle propose, et leurs réglages
+requis. Ce test verrouille mécaniquement qu'on **ne peut pas afficher une option
+sans backend** :
 
-1. tout moteur offert est un **builder enregistré** (constructible au runtime) ;
-2. tout moteur offert, **dans le mode de son rôle**, produit une spec sans
-   ``RunPlanningError`` (une branche ``plan_benchmark_run`` réelle l'accepte).
+1. toute brique offerte est un **builder enregistré** (constructible au runtime) ;
+2. toute brique offerte, à son étape, les réglages requis remplis comme la page
+   le demande, **se construit** (``check_spec_settings`` : la règle de
+   ``cinoc run --check`` et du lanceur web).
 
-Si un jour le catalogue et le planificateur/registre divergent (option ajoutée
-côté UI sans branche serveur, ou inversement), ce test casse — pas l'UI en prod.
+Si un jour le catalogue et le registre divergent (option ajoutée côté UI sans
+brique, réglage requis que la page ne demande pas), ce test casse — pas l'UI en
+prod.
 """
 
 from __future__ import annotations
 
-import pytest
-
-from cinoc.app.engines import engine_statuses
-from cinoc.app.modules.registry import ModuleRegistry, register_default_modules
-from cinoc.app.run_planning import (
-    Competitor,
-    RunPlanningError,
-    benchmark_engine_catalog,
-    plan_benchmark_run,
+from cinoc.app.modules.registry import (
+    ModuleRegistry,
+    check_spec_settings,
+    register_default_modules,
 )
+from cinoc.app.recipe_catalog import recipe_catalog
+from cinoc.app.recipe_queue import RecipeEntry, plan_recipe_run
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.documents import DocumentRef
 
 
-def _catalog() -> dict[str, list[dict[str, object]]]:
-    # Sondes réelles : la *liste* des moteurs par rôle est déterministe (seule la
-    # disponibilité varie selon l'environnement — ici on ne teste que la liste).
-    return benchmark_engine_catalog(engine_statuses())
-
-
-def _registry_kinds() -> set[str]:
+def _registry() -> ModuleRegistry:
     registry = ModuleRegistry()
     register_default_modules(registry)
-    return set(registry.kinds())
+    return registry
 
 
 def _corpus() -> CorpusSpec:
     return CorpusSpec(name="t", documents=(DocumentRef(id="d", image_uri="d.png"),))
 
 
-def test_catalog_engines_are_registered_builders() -> None:
-    offered = {entry["kind"] for role in _catalog().values() for entry in role}
-    missing = offered - _registry_kinds()
-    assert not missing, f"moteurs offerts au composeur sans builder : {missing}"
+#: Ce qu'un utilisateur saisit dans un champ requis, par nom de réglage.
+_SAISIE = {"endpoint": "https://segmenteur.example"}
 
 
-def _competitor(role: str, kind: str) -> Competitor:
-    if role == "ocr":
-        return Competitor(engine=kind, model="m")
-    if role == "llm":
-        return Competitor(engine="tesseract", mode="text_only", llm=kind, model="m")
-    return Competitor(
-        engine="tesseract", mode="text_and_image", llm=kind, model="m"
-    )  # vlm
+def test_catalog_bricks_are_registered_builders() -> None:
+    offered = {
+        brick["kind"]
+        for recipe in recipe_catalog()
+        for step in recipe["steps"]  # type: ignore[attr-defined]
+        for brick in step["bricks"]
+    }
+    missing = offered - set(_registry().kinds())
+    assert not missing, f"briques offertes au composeur sans builder : {missing}"
 
 
-def test_every_catalog_option_has_a_working_plan_branch() -> None:
-    corpus = _corpus()
-    for role, entries in _catalog().items():
-        for entry in entries:
-            comp = _competitor(role, str(entry["kind"]))
-            # ne doit pas lever : l'option offerte est réellement planifiable.
-            plan_benchmark_run((comp,), corpus, "r")
+def _requis(brick: dict[str, object]) -> dict[str, str]:
+    return {
+        str(p["name"]): _SAISIE.get(str(p["name"]), "m")
+        for p in brick["params"]  # type: ignore[attr-defined]
+        if p["required"]
+    }
 
 
-def test_vlm_engines_also_plan_zero_shot() -> None:
-    corpus = _corpus()
-    for entry in _catalog()["vlm"]:
-        comp = Competitor(engine=str(entry["kind"]), mode="zero_shot", model="m")
-        plan_benchmark_run((comp,), corpus, "r")
-
-
-def test_non_offered_engine_is_refused() -> None:
-    # Contre-épreuve : un moteur **hors catalogue** (precomputed = démo) ne se
-    # planifie pas comme concurrent → le catalogue ne ment pas par omission.
-    with pytest.raises(RunPlanningError):
-        plan_benchmark_run((Competitor(engine="precomputed"),), _corpus(), "r")
+def test_every_catalog_option_builds_with_what_the_page_asks() -> None:
+    """Chaque brique de chaque étape, les autres étapes à leur défaut : les
+    réglages requis remplis partout, comme la page les demande."""
+    registry = _registry()
+    refus: list[str] = []
+    for recipe in recipe_catalog():
+        steps = recipe["steps"]
+        defauts = {
+            s["step"]: next(b for b in s["bricks"] if b["kind"] == s["default"])
+            for s in steps  # type: ignore[attr-defined]
+        }
+        for step in steps:  # type: ignore[attr-defined]
+            for brick in step["bricks"]:
+                choisies = {**defauts, step["step"]: brick}
+                reglages = {k: _requis(b) for k, b in choisies.items() if _requis(b)}
+                entree = RecipeEntry(
+                    recipe=str(recipe["name"]),
+                    choices={step["step"]: brick["kind"]},
+                    params=reglages,
+                    optional=tuple(s["step"] for s in steps if s["optional"]),
+                )
+                try:
+                    spec = plan_recipe_run(_corpus(), (entree,), run_id="r")
+                    check_spec_settings(spec, registry)
+                except Exception as exc:  # noqa: BLE001 — on collecte pour nommer
+                    refus.append(
+                        f"{recipe['name']}/{step['step']}={brick['kind']}: {exc}"
+                    )
+    assert not refus, "options du composeur sans backend :\n  " + "\n  ".join(refus)

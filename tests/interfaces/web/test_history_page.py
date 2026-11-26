@@ -42,7 +42,6 @@ def _seeded_client(tmp_path: Path) -> TestClient:
             tmp_path / "reports",
             templates,
             statuses=lambda: (),
-            segmenters=lambda: (),
             third_party=lambda: (),
             history_store=store,
         )

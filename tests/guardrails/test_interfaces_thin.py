@@ -7,7 +7,7 @@ assembler une spec est un acte de la couche ``app``, jamais d'une feuille de
 transport. Le test d'``layer_dependencies`` autorise (légalement) ``interfaces``
 à importer ``domain`` ; il ne capture donc pas cette fuite d'orchestration.
 
-La construction des specs vit en couche ``app`` (``run_planning``, ``demo``) ;
+La construction des specs vit en couche ``app`` (``recipe_queue``, ``demo``) ;
 les routeurs délèguent. Verrou de non-régression : ce test échoue si un routeur
 se remet à fabriquer une spec d'orchestration.
 

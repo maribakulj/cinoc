@@ -51,6 +51,23 @@ StatusProvider = Callable[[], tuple[EngineStatus, ...]]
 #: moteur réel offert au visiteur du Space public.
 PUBLIC_ENGINE_KINDS: frozenset[str] = frozenset({"precomputed", "tesseract"})
 
+#: Briques exécutables en mode public : les moteurs ci-dessus, plus les briques
+#: **locales** du socle qui n'appellent rien et n'exigent aucune clé — segmenter
+#: sur la machine, projeter, assembler un ALTO, remettre en ordre, voter,
+#: extraire les entités (spaCy), rejouer. Le composeur les laissait passer sans
+#: les nommer (il ne confrontait au socle public que le moteur et le LLM) ; une
+#: recette nomme chaque brique, la règle doit donc les dire (D-298). Hors de la
+#: liste, et refusés : tout moteur cloud, la correction (elle suppose un serveur
+#: LLM), et ``remote_segmenter``, qui posterait la page à l'adresse du client.
+PUBLIC_BRICK_KINDS: frozenset[str] = PUBLIC_ENGINE_KINDS | frozenset(
+    {
+        "tesseract_layout", "doclayout_yolo", "pp_doclayout",
+        "precomputed_layout", "precomputed_region",
+        "layout_to_text", "alto_assembler", "page_assembler", "reading_order",
+        "preprocess", "vote", "ner",
+    }
+)
+
 #: Briques que le **lanceur web ne doit jamais exécuter**, mode public ou non.
 #:
 #: Distinct de ``PUBLIC_ENGINE_KINDS``, et la distinction est le cœur de la
@@ -492,6 +509,7 @@ __all__ = [
     "curated_prompts",
     "EngineStatus",
     "CLI_ONLY_KINDS",
+    "PUBLIC_BRICK_KINDS",
     "PUBLIC_ENGINE_KINDS",
     "StatusProvider",
     "correction_status",

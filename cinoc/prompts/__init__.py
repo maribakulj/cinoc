@@ -7,9 +7,9 @@ texte, sans placeholder, mode ``zero_shot``), par type de document et langue
 
 Lus **dynamiquement** du paquet (jamais une liste statique — la leçon des profils
 de normalisation). La sélection (par nom, ``prompt_name``) est résolue par
-``resolve_prompt`` — au plan du composeur (``app.run_planning``) comme au
-registre pour une spec YAML — et passée comme ``prompt`` à l'adapter LLM/VLM ;
-un prompt libre et un prompt curé s'excluent.
+``resolve_prompt`` — au registre, qu'elle vienne de la page, d'une recette ou
+d'une spec YAML — et passée comme ``prompt`` à l'adapter LLM/VLM ; un prompt
+libre et un prompt curé s'excluent.
 """
 
 from __future__ import annotations
@@ -54,7 +54,7 @@ def load_prompt(name: str) -> str:
 def resolve_prompt(prompt: str | None, prompt_name: str | None) -> str | None:
     """Le texte d'un prompt saisi : libre **ou** curé (par nom), jamais les deux.
 
-    Une seule règle pour le composeur web (``Competitor``) et pour une spec YAML
+    Une seule règle pour toute entrée — la page, une recette, une spec YAML
     (``adapter_kwargs.<brique>.prompt_name``). ``None`` : aucun des deux, la
     brique prend le prompt par défaut de son mode. Les deux à la fois, ou un nom
     inconnu → ``PromptError`` (jamais un choix silencieux).

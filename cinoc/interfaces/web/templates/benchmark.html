@@ -49,95 +49,25 @@
   </div>
   <div class="sec-body">
     <div class="panel composer-shell">
-      <div class="tabs mode-tabs" role="tablist" aria-label="{{ t.bench_mode }}">
-        <button class="on" type="button" role="tab" aria-selected="true"
-                data-mode="ocr_only">{{ t.bench_mode_ocr }}</button>
-        <button type="button" role="tab" aria-selected="false"
-                data-mode="text_only">{{ t.bench_mode_text }}</button>
-        <button type="button" role="tab" aria-selected="false"
-                data-mode="text_and_image">{{ t.bench_mode_image }}</button>
-        <button type="button" role="tab" aria-selected="false"
-                data-mode="zero_shot">{{ t.bench_mode_vlm }}</button>
-        <button type="button" role="tab" aria-selected="false"
-                data-mode="hybrid">{{ t.bench_mode_hybrid }}</button>
-        <button type="button" role="tab" aria-selected="false"
-                data-mode="recipe">{{ t.bench_mode_recipe }}</button>
-      </div>
-
+      {# Le composeur **est** le catalogue de recettes (D-298) : une forme
+         nommée, ses étapes, ses briques, leurs réglages déclarés et ses étapes
+         facultatives. Peuplé par recipes.js depuis GET /api/recipes ; l'entrée
+         choisie rejoint la file, lancée par POST /api/runs. #}
       <div class="composer-draft">
-        {# Couche 1 du composeur : une forme nommée (recette), ses étapes, ses
-           briques. Peuplé par recipes.js depuis GET /api/recipes ; l'entrée
-           choisie rejoint la même file que les concurrents composés. #}
-        <div id="recipe-picker" class="recipe-picker" data-show="recipe" hidden>
-          <fieldset class="recipe-fieldset">
-            <legend class="comp-label">{{ t.bench_recipe_pick }}</legend>
-            <div id="recipe-cards" class="recipe-cards"></div>
-          </fieldset>
-          <div id="recipe-steps" class="recipe-steps"
-               data-fanout="{{ t.bench_recipe_fanout }}"
-               data-unavailable="{{ t.engine_unavailable }}"></div>
-          <p id="recipe-status" class="dropzone-meta" role="status" aria-live="polite"
-             data-loading="{{ t.bench_recipe_loading }}"
-             data-error="{{ t.bench_recipe_error }}"
-             data-missing="{{ t.bench_recipe_missing }}"
-             data-unrunnable="{{ t.bench_recipe_unrunnable }}"
-             data-added="{{ t.bench_recipe_added }}"></p>
-          <span class="dropzone-meta">{{ t.bench_recipe_hint }}</span>
-          <button id="recipe-add" class="btn btn-primary" type="button" disabled>+ {{ t.bench_recipe_add }}</button>
-        </div>
-
-        <label class="comp-field" data-show="ocr_only text_only text_and_image">
-          <span class="comp-label">{{ t.bench_ocr_engine }}</span>
-          <select id="draft-ocr" class="select">
-            {% for e in catalog.ocr %}
-            <option value="{{ e.kind }}"{% if not e.available %} disabled{% endif %}>
-              {{ e.label }}{% if not e.available %} — {{ t.engine_unavailable }}{% endif %}
-            </option>
-            {% endfor %}
-          </select>
-        </label>
-
-        <label class="comp-field" data-show="text_only text_and_image">
-          <span class="comp-label">{{ t.bench_ocr_model }}</span>
-          <input id="draft-ocr-model" class="input" type="text"
-                 placeholder="{{ t.bench_ocr_model_ph }}">
-        </label>
-
-        <label class="comp-field" data-show="hybrid">
-          <span class="comp-label">{{ t.bench_segmenter }}</span>
-          <select id="draft-segmenter" class="select">
-            {% for s in segmenters %}
-            <option value="{{ s.kind }}"{% if not s.available %} disabled{% endif %}>
-              {{ s.label }}{% if not s.available %} — {{ t.engine_unavailable }}{% endif %}
-            </option>
-            {% endfor %}
-          </select>
-          <span class="dropzone-meta">{{ t.bench_segmenter_hint }}</span>
-        </label>
-
-        <label class="comp-field" data-show="hybrid" id="draft-seg-endpoint-field" hidden>
-          <span class="comp-label">{{ t.seg_run_endpoint }}</span>
-          <input id="draft-seg-endpoint" class="input" type="url"
-                 placeholder="{{ t.seg_run_endpoint_ph }}">
-        </label>
-        <label class="comp-field" data-show="hybrid" id="draft-seg-token-field" hidden>
-          <span class="comp-label">{{ t.seg_run_token }}</span>
-          <input id="draft-seg-token" class="input" type="password">
-        </label>
-
-        <label class="comp-field" data-show="hybrid">
-          <span class="comp-label">{{ t.bench_recognizer }}</span>
-          <select id="draft-recognizer" class="select">
-            {% for r in recognizers %}
-            <option value="{{ r.kind }}" data-vlm="{{ '1' if r.vlm else '' }}"{% if not r.available %} disabled{% endif %}>
-              {{ r.label }}{% if r.vlm %} — {{ t.hyb_run_vlm }}{% endif %}{% if not r.available %} — {{ t.engine_unavailable }}{% endif %}
-            </option>
-            {% endfor %}
-          </select>
-          <span class="dropzone-meta">{{ t.bench_recognizer_hint }}</span>
-        </label>
-
-        <div class="comp-field" data-show="hybrid">
+      <div id="recipe-picker" class="recipe-picker">
+        <fieldset class="recipe-fieldset">
+          <legend class="comp-label">{{ t.bench_recipe_pick }}</legend>
+          <div id="recipe-cards" class="recipe-cards"></div>
+        </fieldset>
+        <div id="recipe-steps" class="recipe-steps"
+             data-fanout="{{ t.bench_recipe_fanout }}"
+             data-unavailable="{{ t.engine_unavailable }}"
+             data-settings="{{ t.bench_recipe_settings }}"
+             data-optional="{{ t.bench_recipe_optional }}"
+             data-default="{{ t.bench_recipe_default }}"
+             data-models="{{ t.bench_recipe_models }}"
+             data-models-none="{{ t.bench_recipe_models_none }}"></div>
+        <div id="seg-preview-box" class="comp-field" hidden>
           <span class="comp-label">{{ t.bench_seg_preview }}</span>
           <div class="seg-preview-actions">
             <button id="seg-preview-btn" class="btn btn-sm" type="button"
@@ -148,81 +78,15 @@
           <div id="seg-preview" class="seg-canvas" aria-live="polite"></div>
           <span class="dropzone-meta">{{ t.bench_seg_preview_hint }}</span>
         </div>
-
-        <label class="comp-field" data-show="text_only">
-          <span class="comp-label">{{ t.bench_llm }}</span>
-          <select id="draft-llm" class="select">
-            {% for e in catalog.llm %}
-            <option value="{{ e.kind }}"{% if not e.available %} disabled{% endif %}>
-              {{ e.label }}{% if not e.available %} — {{ t.engine_unavailable }}{% endif %}
-            </option>
-            {% endfor %}
-          </select>
-        </label>
-
-        <label class="comp-field" data-show="text_and_image zero_shot">
-          <span class="comp-label">{{ t.bench_vlm }}</span>
-          <select id="draft-vlm" class="select">
-            {% for e in catalog.vlm %}
-            <option value="{{ e.kind }}"{% if not e.available %} disabled{% endif %}>
-              {{ e.label }}{% if not e.available %} — {{ t.engine_unavailable }}{% endif %}
-            </option>
-            {% endfor %}
-          </select>
-        </label>
-
-        <label class="comp-field"
-               data-show="ocr_only text_only text_and_image zero_shot hybrid">
-          <span class="comp-label">{{ t.bench_model }}</span>
-          <input id="draft-model" class="input" type="text"
-                 placeholder="{{ t.bench_model_ph }}">
-          <span id="model-hint" class="dropzone-meta"></span>
-        </label>
-
-        <label class="comp-field comp-field-prompt"
-               data-show="text_only text_and_image zero_shot hybrid">
-          <span class="comp-label">{{ t.bench_prompt }}</span>
-          {% if curated_prompts %}
-          <select id="draft-prompt-curated" class="select">
-            <option value="">{{ t.bench_prompt_curated_none }}</option>
-            {% for name in curated_prompts %}
-            <option value="{{ name }}">{{ name }}</option>
-            {% endfor %}
-          </select>
-          {% endif %}
-          <textarea id="draft-prompt" class="input comp-prompt" rows="3"
-                    placeholder="{{ t.bench_prompt_ph }}"></textarea>
-          <span class="dropzone-meta">{{ t.bench_prompt_hint }}</span>
-        </label>
-
-        <label class="comp-field comp-field-ner"
-               data-show="ocr_only text_only text_and_image zero_shot hybrid">
-          <span class="comp-label">
-            <input id="draft-ner" type="checkbox"
-                   {% if not ner or not ner.available %}disabled{% endif %}>
-            {{ t.bench_ner }}{% if ner and not ner.available %} — {{ t.engine_unavailable }}{% endif %}
-          </span>
-          <input id="draft-ner-model" class="input" type="text"
-                 placeholder="{{ t.bench_ner_model_ph }}"
-                 {% if not ner or not ner.available %}disabled{% endif %}>
-          <span class="dropzone-meta">{{ t.bench_ner_hint }}</span>
-        </label>
-
-        <label class="comp-field comp-field-alto"
-               data-show="ocr_only text_only text_and_image hybrid">
-          <span class="comp-label">
-            <input id="draft-alto" type="checkbox">
-            {{ t.bench_alto }}
-          </span>
-          <span class="dropzone-meta">{{ t.bench_alto_hint }}</span>
-        </label>
-
-        {# Modèles du fournisseur choisi — peuplée par benchmark.js depuis
-           /api/models/{provider}, demandés en direct (vision si déclarée). #}
-        <datalist id="api-model-list"></datalist>
-
-        <button id="add-competitor" class="btn btn-primary" type="button"
-                data-show="ocr_only text_only text_and_image zero_shot hybrid">+ {{ t.bench_add_competitor }}</button>
+        <p id="recipe-status" class="dropzone-meta" role="status" aria-live="polite"
+           data-loading="{{ t.bench_recipe_loading }}"
+           data-error="{{ t.bench_recipe_error }}"
+           data-missing="{{ t.bench_recipe_missing }}"
+           data-unrunnable="{{ t.bench_recipe_unrunnable }}"
+           data-added="{{ t.bench_recipe_added }}"></p>
+        <span class="dropzone-meta">{{ t.bench_recipe_hint }}</span>
+        <button id="recipe-add" class="btn btn-primary" type="button" disabled>+ {{ t.bench_recipe_add }}</button>
+      </div>
       </div>
     </div>
 
@@ -232,12 +96,6 @@
         <div class="stack-sub">{{ t.bench_queue_hint }}</div>
       </div>
       <div id="queue-list" class="queue-list"
-           data-label-ocr="OCR"
-           data-label-ocr-llm="OCR → LLM"
-           data-label-ocr-vlm="OCR → VLM"
-           data-label-vlm="VLM"
-           data-label-hybrid="{{ t.bench_mode_hybrid }}"
-           data-mixed="{{ t.bench_recipe_mixed }}"
            data-no-corpus="{{ t.bench_recipe_no_corpus }}"></div>
       <p id="queue-empty" class="empty">{{ t.bench_queue_empty }}</p>
     </div>
@@ -274,29 +132,6 @@
       <pre id="norm-result" class="norm-result" aria-live="polite"></pre>
     </div>
     <div class="panel stack-panel">
-      <label class="label">{{ t.bench_correction }}</label>
-      <span class="dropzone-meta">{{ t.bench_correction_hint }}</span>
-      <label class="label" for="correct-producer">{{ t.bench_correction_producer }}</label>
-      <select id="correct-producer" class="select">
-        <option value="rules">{{ t.bench_correction_rules }}</option>
-        <option value="ollama">{{ t.bench_correction_ollama }}</option>
-      </select>
-      <div id="correct-ollama-fields" hidden>
-        <label class="label" for="correct-model">{{ t.bench_correction_model }}</label>
-        <input id="correct-model" class="input" type="text"
-               placeholder="{{ t.bench_correction_model_ph }}">
-        <label class="label" for="correct-host">{{ t.bench_correction_host }}</label>
-        <input id="correct-host" class="input" type="url"
-               placeholder="http://localhost:11434">
-      </div>
-      <button id="correct-launch" class="btn" type="button"
-              data-launching="{{ t.bench_launching }}"
-              data-no-corpus="{{ t.bench_correction_no_corpus }}">
-        {{ t.bench_correction_launch }}
-      </button>
-      <span class="dropzone-meta">{{ t.bench_correction_gt_hint }}</span>
-    </div>
-    <div class="panel stack-panel">
       <label class="label" for="char-exclude">{{ t.bench_char_exclude }}</label>
       <input id="char-exclude" class="input" type="text"
              placeholder="{{ t.bench_char_exclude_ph }}">
@@ -322,8 +157,7 @@
       </div>
       <span id="config-feedback" class="dropzone-meta" aria-live="polite"
             data-loaded="{{ t.bench_config_loaded }}"
-            data-invalid="{{ t.bench_config_invalid }}"
-            data-recipes="{{ t.bench_config_recipes }}"></span>
+            data-invalid="{{ t.bench_config_invalid }}"></span>
       <span class="dropzone-meta">{{ t.bench_config_hint }}</span>
     </div>
   </div>

@@ -14,3 +14,7 @@ description:
 steps:
   - id: vlm
     role: zero_shot
+  # Facultative : les entités nommées du texte lu.
+  - id: ner
+    role: ner
+    optional: true

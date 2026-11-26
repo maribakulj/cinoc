@@ -1,0 +1,33 @@
+# Segmenter, puis lire chaque bloc : la forme « hybride ». Un segmenteur détecte
+# les régions, un moteur — OCR, ou modèle de vision — lit chaque bloc découpé,
+# et le texte se projette par région. À juger côte à côte avec un OCR de la page
+# entière : la segmentation paie-t-elle ce qu'elle coûte ?
+name: segmentation_puis_lecture
+title:
+  fr: Segmenter, puis lire chaque bloc
+  en: Segment, then read each block
+description:
+  fr: >-
+    Un segmenteur détecte les blocs de la page ; un OCR ou un modèle de vision
+    lit chacun d'eux. Lire bloc par bloc fait-il mieux que lire la page
+    entière ? L'export ALTO garde la géométrie de chaque ligne.
+  en: >-
+    A segmenter detects the page's blocks; an OCR engine or a vision model reads
+    each one. Does reading block by block beat reading the whole page? The ALTO
+    export keeps every line's geometry.
+steps:
+  - id: seg
+    role: segmenter
+  - id: reco
+    role: region_recognizer
+  - id: texte
+    role: projection
+  # Facultatives : l'ALTO assemblé depuis la mise en page lue (géométrie et
+  # texte par ligne, ré-importable), et les entités nommées du texte projeté.
+  - id: alto
+    role: alto_export
+    after: reco
+    optional: true
+  - id: ner
+    role: ner
+    optional: true

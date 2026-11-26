@@ -225,6 +225,9 @@ def run_list_recipes(args: argparse.Namespace) -> int:
         ]
         if choisissables:
             print(f"  à choisir : {' · '.join(choisissables)}")
+        facultatives = [e.id for e in recette.steps if e.optional]
+        if facultatives:
+            print(f"  facultatives (--with) : {' · '.join(facultatives)}")
     print(
         "\nUne recette décrit la forme ; tu choisis les briques. "
         "Les rôles à une seule brique ne se choisissent pas."
@@ -239,8 +242,9 @@ def run_list_prompts(args: argparse.Namespace) -> int:
         print(f"  {prompt}")
     print(
         "\nÀ poser en `prompt_name` d'une brique LLM/VLM (adapter_kwargs d'une "
-        "spec) ou d'un concurrent du composeur. Un prompt libre (`prompt`) reste "
-        "possible : l'un ou l'autre, pas les deux."
+        "spec, `--set correction.prompt_name=…` d'une recette, ou le pli de "
+        "réglages de la page). Un prompt libre (`prompt`) reste possible : "
+        "l'un ou l'autre, pas les deux."
     )
     return 0
 

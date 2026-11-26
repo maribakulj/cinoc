@@ -294,14 +294,15 @@ fois**.
 **Ce qu'il faut préserver en basculant**, et qui n'est pas dans les recettes
 aujourd'hui — chacun à traiter explicitement, aucun à perdre en silence :
 
-| À préserver | Où il vit aujourd'hui |
-|---|---|
-| le choix d'un prompt curé + le prompt libre | `Competitor.prompt` / `prompt_name` |
-| l'autocomplétion des modèles par fournisseur | `/api/models/{provider}` + `datalist` |
-| la case NER et son modèle | `Competitor.ner` / `ner_model` |
-| la case « exporter l'ALTO » | `Competitor` → étape `alto_export` |
-| l'aperçu de segmentation | `/api/segmentation/preview` |
-| le segmenteur distant (adresse + jeton) | `Competitor.segmenter_endpoint` / `_token` |
+| À préserver | Où il vivait | Où il vit depuis la bascule (S26, D-298) |
+|---|---|---|
+| le choix d'un prompt curé + le prompt libre | `Competitor.prompt` / `prompt_name` | réglages `prompt` (zone de texte) et `prompt_name` (choix : les prompts curés) de la brique LLM/VLM, au pli |
+| l'autocomplétion des modèles par fournisseur | `/api/models/{provider}` + `datalist` | inchangé côté route ; le catalogue donne au champ `model` d'une brique LLM/VLM son `models_url`, `recipes.js` remplit la `datalist` |
+| la case NER et son modèle | `Competitor.ner` / `ner_model` | étape **facultative** `ner` des recettes à texte (`ner_corrige` sur le texte corrigé), son `model` au pli ; `--with ner` en CLI |
+| la case « exporter l'ALTO » | `Competitor` → étape `alto_export` | Tesseract à plat : son réglage `alto` (au pli) ; l'hybride : étape facultative `alto` (`alto_assembler`) |
+| l'aperçu de segmentation | `/api/segmentation/preview` | inchangé (transport) ; affiché pour toute recette qui segmente, il lit la brique et l'adresse de l'étape |
+| le segmenteur distant (adresse + jeton) | `Competitor.segmenter_endpoint` / `_token` | réglages `endpoint` (requis) et `token` (déclaré `secret`, champ masqué) de `remote_segmenter` ; refusé en mode public |
+| (en plus) le panneau de correction | `POST /api/runs/correction` | la recette `alto_corrige` dans la file ; le refus de la vérité terrain extraite de l'ALTO vaut pour toute entrée (`recipe_queue`) |
 
 Les quatre premiers sont des `params` ou des étapes, donc exprimables en
 recette une fois la déclaration du §5 posée. L'aperçu est un **transport**, il
@@ -322,8 +323,8 @@ verticale, verte de bout en bout, fusionnée avant la suivante.
 | **2** ✅ | Les deux rôles manquants (`zero_shot`, `text_and_image`) | Préalable à toute convergence : sans eux, une recette ne peut pas décrire ce que le formulaire décrit déjà. — *livrée en S23 (D-295) : `Role.mode`, recettes `vlm_seul` et `ocr_puis_vlm`* |
 | **3** ✅ | La déclaration des paramètres au contrat de module | Préalable à la couche 2, et d'enveloppe : on ne l'incrémente pas au besoin. — *livrée en S23 (D-295) : `PARAMS` (`pipeline.params.Param`) sur les 31 briques du socle, appliquée par le registre (CLI et web), décrite par `cinoc list engines <brique>`* |
 | **4** ✅ | Couche 1 — catalogue de recettes branché à la file | La valeur visible la plus vite : cinq formes deviennent atteignables sans une ligne de nouveau pipeline. — *livrée en S24 (D-296) : onglet « Recette » (`recipes.js` ← `GET /api/recipes`), sept formes, briques grisées avec leur raison, réglages **requis** seulement ; l'entrée rejoint la file, lancée par `POST /api/runs/recipe` (N recettes, un run). Recette et concurrent composé ne partagent pas encore un run (tranche 6) : la page le dit. Les options de notation s'appliquent aux recettes depuis S25 (D-297 : une seule politique de vues, `app/evaluation_views.plan_evaluation`), et la CLI instancie une recette par la même fonction (`cinoc run CORPUS --recipe NOM`).* |
-| **5** | Couche 2 — le pli réglages, généré depuis 3 | `--dpi 300` cesse d'être réservé au terminal. — *reste de S23 tranché ici : la déclaration d'un module tiers ne se lit qu'une fois construit ; le pli en sera le premier consommateur (S24 n'en avait pas : le catalogue ne propose que des briques du socle).* |
-| **6** | La bascule : les quatre onglets deviennent des recettes ; l'ancien constructeur meurt | Interdit de traîner deux chemins. Daté ici. |
+| **5** ◐ | Couche 2 — le pli réglages, généré depuis 3 | `--dpi 300` cesse d'être réservé au terminal. — *reste de S23 tranché ici : la déclaration d'un module tiers ne se lit qu'une fois construit ; le pli en sera le premier consommateur (S24 n'en avait pas : le catalogue ne propose que des briques du socle).* — *livrée pour le socle en S26 (D-298), parce que la bascule en avait besoin (prompt, export ALTO, modèle spaCy, producteur de correction) : chaque réglage déclaré d'une brique du socle, requis en clair, les autres au pli « Réglages », prompts curés en choix, modèles du fournisseur en suggestion. **Reste** : un module tiers (déclaration lue après construction), qui n'entre pas encore au catalogue.* |
+| **6** ✅ | La bascule : les quatre onglets deviennent des recettes ; l'ancien constructeur meurt | Interdit de traîner deux chemins. Daté ici. — *livrée en S26 (D-298) : `run_planning` supprimé, l'hybride et la correction devenus les recettes `segmentation_puis_lecture` et `alto_corrige` ; une file (`app/recipe_queue`), une route (`POST /api/runs`), un nommage (la recette, puis la brique de chaque étape à choix et son modèle, puis les étapes facultatives) ; la page n'a plus d'onglets, le catalogue est le composeur. Chaque ligne du tableau du §7 est préservée (voir ce tableau).* |
 | **7** | Couche 3 — le composeur contraint + « enregistrer comme recette » | Dernier : il n'est que l'éditeur de ce que 2→6 rendent réel. |
 | **8** | `standardize_corpus` : une face ou l'autre · la porte « spec complète » tranchée | Indépendants du reste, à glisser où ça tombe. |
 
@@ -348,7 +349,7 @@ enregistrée. La déclaration du §5 doit pouvoir marquer un paramètre comme
 **non sérialisable**, sinon « enregistrer comme recette » exfiltre un jeton
 dans un fichier versionné.
 
-**La page grandit.** `benchmark.html` fait 363 lignes, `benchmark.js` 750. Trois
+**La page grandit.** `benchmark.html` fait 363 lignes, `benchmark.js` 750. *(S26 : la bascule l'a fait maigrir — `benchmark.html` 387 → 221, `benchmark.js` 786 → 407, `recipes.js` 213 → 325.)* Trois
 couches de composeur ne tiennent pas en plus du formulaire actuel sans que la
 bascule (§7) retire l'ancien. C'est une raison de plus pour que l'item 6 ne
 glisse pas.
