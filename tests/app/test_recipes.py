@@ -281,15 +281,23 @@ def test_referenced_kinds_reads_the_adapter_convention() -> None:
     assert "reading_order" in referenced_kinds(spec)
 
 
-def test_the_evaluation_follows_what_the_pipeline_produces() -> None:
-    """Imposer une vue fixe en donnerait une **vide** sur la moitié des recettes,
-    et une vue vide vaut moins que pas de vue."""
+def test_the_evaluation_follows_what_the_pipeline_produces(tmp_path: Path) -> None:
+    """Une vue par sortie **notable** : une mise en page se note en structure
+    — si le corpus porte de quoi la juger (D-297) ; sinon une vue vide."""
     from cinoc.app.recipes import RecipeEntry, plan_recipe_run
+    from cinoc.domain.artifacts import ArtifactType
     from cinoc.domain.corpus import CorpusSpec
-    from cinoc.domain.documents import DocumentRef
+    from cinoc.domain.documents import DocumentRef, GroundTruthRef
 
+    (tmp_path / "d.gt.txt").write_text("texte", encoding="utf-8")
+    (tmp_path / "d.xml").write_text("<alto/>", encoding="utf-8")
+    verites = (
+        GroundTruthRef(type=ArtifactType.RAW_TEXT, uri=str(tmp_path / "d.gt.txt")),
+        GroundTruthRef(type=ArtifactType.LAYOUT, uri=str(tmp_path / "d.xml")),
+    )
     corpus = CorpusSpec(
-        name="c", documents=(DocumentRef(id="d", image_uri="d.png", ground_truths=()),)
+        name="c",
+        documents=(DocumentRef(id="d", image_uri="d.png", ground_truths=verites),),
     )
     texte = plan_recipe_run(corpus, (RecipeEntry(recipe="ocr_simple"),), run_id="r")
     assert [v.name for v in texte.evaluation.views] == ["texte"]
@@ -297,8 +305,7 @@ def test_the_evaluation_follows_what_the_pipeline_produces() -> None:
     structure = plan_recipe_run(
         corpus, (RecipeEntry(recipe="presse_ancienne"),), run_id="r"
     )
-    noms = {v.name for v in structure.evaluation.views}
-    assert {"texte", "structure"} <= noms
+    assert [v.name for v in structure.evaluation.views] == ["texte", "structure"]
 
 
 def test_the_catalogue_is_the_same_for_both_transports() -> None:

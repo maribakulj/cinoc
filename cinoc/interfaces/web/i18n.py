@@ -89,10 +89,9 @@ _STRINGS: dict[str, dict[str, str]] = {
         "bench_recipe_unrunnable": "Aucune brique disponible pour l'étape :",
         "bench_recipe_added": "Ajoutée à la file.",
         "bench_recipe_hint": "Une recette est une forme éprouvée, nommée par ce "
-        "qu'elle cherche à savoir ; tu ne choisis que ses briques. Sa notation "
-        "suit ce qu'elle produit (CER/WER, structure si mise en page) : la "
-        "normalisation, les caractères exclus et le profil de métriques ne s'y "
-        "appliquent pas encore.",
+        "qu'elle cherche à savoir ; tu ne choisis que ses briques. Elle est "
+        "notée comme tout concurrent : mêmes vues, et les options de notation "
+        "ci-dessous s'y appliquent.",
         "bench_recipe_mixed": "Une recette et un concurrent composé ne se "
         "comparent pas encore dans le même run : lance-les séparément.",
         "bench_recipe_no_corpus": "Une recette s'exécute sur un corpus : "
@@ -375,9 +374,8 @@ _STRINGS: dict[str, dict[str, str]] = {
         "bench_recipe_unrunnable": "No brick available for the step:",
         "bench_recipe_added": "Added to the queue.",
         "bench_recipe_hint": "A recipe is a proven shape, named by what it asks; "
-        "you only pick its bricks. It is scored on what it produces (CER/WER, "
-        "structure for a layout): normalisation, excluded characters and the "
-        "metric profile do not apply to it yet.",
+        "you only pick its bricks. It is scored like any competitor: same "
+        "views, and the scoring options below apply to it.",
         "bench_recipe_mixed": "A recipe and a composed competitor cannot share "
         "a run yet: launch them separately.",
         "bench_recipe_no_corpus": "A recipe runs on a corpus: pick one.",

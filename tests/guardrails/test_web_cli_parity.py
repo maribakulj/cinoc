@@ -114,9 +114,11 @@ PARITE: dict[str, str] = {
     # comme la segmentation a la sienne.
     "POST /api/runs/correction": "cli:correct",
     # Le composeur ouvert (D-240). Une recette se lance des deux côtés —
-    # `cinoc list recipes` la montre, `cinoc run` l'exécute via sa spec ; et la
-    # porte « spec complète » donne au web le graphe entier, que la CLI avait
-    # déjà par son YAML.
+    # `cinoc list recipes` la montre, `cinoc run CORPUS --recipe NOM` l'instancie
+    # par la fonction de la page (`plan_recipe_run`, D-297 : jusque-là il
+    # fallait en écrire la spec à la main, pilote D24) ; et la porte « spec
+    # complète » donne au web le graphe entier, que la CLI avait déjà par son
+    # YAML.
     "GET /api/recipes": "cli:list",
     "POST /api/runs/recipe": "cli:run",
     "POST /api/runs/spec": "cli:run",

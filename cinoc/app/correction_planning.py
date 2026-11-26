@@ -34,12 +34,11 @@ from cinoc.adapters.layout.saknussemm_correct import (
     PRODUCERS,
 )
 from cinoc.app.corpus_upload import GT_SOURCE_KEY
-from cinoc.app.text_views import text_views
+from cinoc.app.evaluation_views import EvaluationOptions, plan_evaluation
 from cinoc.domain.artifacts import ArtifactType
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.documents import DocumentRef, GroundTruthRef
 from cinoc.domain.errors import CinocError
-from cinoc.domain.evaluation import EvaluationSpec, EvaluationView
 from cinoc.domain.pipeline import INITIAL_STEP_ID, PipelineSpec, PipelineStep
 from cinoc.domain.run_spec import RunSpec
 
@@ -52,16 +51,6 @@ _IMAGE_EXT = (".png", ".jpg", ".jpeg", ".tif", ".tiff", ".jp2")
 #: existe, cette fonction n'a rien à apprendre — l'appelant nomme le sien.
 DEFAULT_CORRECTOR = "saknussemm"
 
-#: Métriques de la vue structure. ``line_identity_*`` n'ont de sens que
-#: **parce que** cette chaîne préserve l'identité de ligne : elles apparient par
-#: identifiant au lieu de deviner par alignement.
-_STRUCTURE_METRICS = (
-    "region_cer",
-    "line_identity_cer",
-    "line_identity_coverage",
-)
-
-
 def plan_correction_run(
     corpus: CorpusSpec,
     run_id: str,
@@ -72,6 +61,7 @@ def plan_correction_run(
     host: str = "http://localhost:11434",
     corrector_kind: str = DEFAULT_CORRECTOR,
     ocr_sidecar: str = "",
+    options: EvaluationOptions | None = None,
 ) -> RunSpec:
     """Spec d'un run de correction structurée sur un corpus porteur d'ALTO.
 
@@ -80,9 +70,10 @@ def plan_correction_run(
     rien à corriger, et le CER vaut zéro *par construction*. Un zéro
     tautologique ressemble à un excellent résultat.
 
-    La vue « structure » n'est ajoutée que si le corpus porte une GT ``LAYOUT``
-    — sans référence, il n'y a rien à noter, et une vue vide vaut moins que pas
-    de vue.
+    Les vues sont celles de **tout** run (``plan_evaluation``, D-297) : la
+    structure — dont ``line_identity_*``, qui n'ont de sens que **parce que**
+    cette chaîne préserve l'identité de ligne — n'est notée que si le corpus
+    porte une GT ``LAYOUT`` ; le texte, que s'il porte une GT ``RAW_TEXT``.
     """
     if producer not in PRODUCERS:
         raise CinocError(
@@ -135,23 +126,6 @@ def plan_correction_run(
             ),
         ),
     )
-    views = list(
-        text_views(
-            corpus,
-            candidate_types=frozenset(
-                {ArtifactType.RAW_TEXT, ArtifactType.CORRECTED_TEXT}
-            ),
-            metric_names=("cer", "wer"),
-        )
-    )
-    if any(d.gt_for(ArtifactType.LAYOUT) is not None for d in corpus.documents):
-        views.append(
-            EvaluationView(
-                name="structure",
-                candidate_types=frozenset({ArtifactType.LAYOUT}),
-                metric_names=_STRUCTURE_METRICS,
-            )
-        )
     source_kwargs: dict[str, str | int | float | bool] = {}
     if ocr_sidecar:
         source_kwargs["ocr_sidecar"] = ocr_sidecar
@@ -162,10 +136,12 @@ def plan_correction_run(
     }
     if model:
         corrector_kwargs["model"] = model
+    notation = plan_evaluation((pipeline,), corpus, options)
     return RunSpec(
         corpus=corpus,
         pipelines=(pipeline,),
-        evaluation=EvaluationSpec(views=tuple(views)),
+        evaluation=notation.evaluation,
+        metadata=notation.metadata,
         adapter_kwargs={
             "alto_source": source_kwargs,
             projector: {"label": label},

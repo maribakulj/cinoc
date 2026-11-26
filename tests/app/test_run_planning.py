@@ -10,22 +10,18 @@ import pytest
 from cinoc.adapters.llm._base import LLMCompletion
 from cinoc.app import run
 from cinoc.app.engines import EngineStatus
+from cinoc.app.evaluation_views import EvaluationOptions
 from cinoc.app.modules.registry import ModuleRegistry, register_default_modules
 from cinoc.app.run_planning import (
-    DEFAULT_METRIC_PROFILE,
-    METRIC_PROFILES,
     Competitor,
     RunPlanningError,
-    _views_for_corpus,
     benchmark_engine_catalog,
-    metric_profile_catalog,
     plan_benchmark_run,
 )
 from cinoc.domain.artifacts import ArtifactType
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.documents import DocumentRef, GroundTruthRef
 from cinoc.domain.pipeline import INITIAL_STEP_ID
-from cinoc.evaluation.registry import MetricRegistry, register_default_metrics
 
 
 def _corpus(tmp_path: Path) -> CorpusSpec:
@@ -140,7 +136,7 @@ def test_char_exclude_threaded_to_evaluation_views(tmp_path: Path) -> None:
         (Competitor(engine="tesseract"),),
         _corpus(tmp_path),
         "r",
-        char_exclude=",.;",
+        options=EvaluationOptions(char_exclude=",.;"),
     )
     spec = build(tmp_path)
     assert spec.evaluation.views  # au moins la vue texte
@@ -191,7 +187,7 @@ def test_configured_archaic_list_enables_hcpr(tmp_path: Path) -> None:
         (Competitor(engine="tesseract"),),
         _corpus(tmp_path),
         "r",
-        archaic_list="archaic_core",
+        options=EvaluationOptions(archaic_list="archaic_core"),
     )(tmp_path)
     metrics = _text_view_metrics(spec)
     assert "air" in metrics and "hcpr" in metrics
@@ -204,7 +200,7 @@ def test_unknown_archaic_list_refused(tmp_path: Path) -> None:
             (Competitor(engine="tesseract"),),
             _corpus(tmp_path),
             "r",
-            archaic_list="nope",
+            options=EvaluationOptions(archaic_list="nope"),
         )
 
 
@@ -297,8 +293,8 @@ def test_ner_view_added_when_corpus_has_entity_gt(tmp_path: Path) -> None:
         "r",
     )(tmp_path)
     names = {v.name for v in spec.evaluation.views}
-    assert "entités nommées (NER)" in names
-    ner_view = next(v for v in spec.evaluation.views if v.name.startswith("entités"))
+    assert "entites" in names
+    ner_view = next(v for v in spec.evaluation.views if v.name == "entites")
     assert ner_view.metric_names == ("ner_f1", "ner_f1_exact")
     assert ner_view.candidate_types == frozenset({ArtifactType.ENTITIES})
 
@@ -307,7 +303,7 @@ def test_no_ner_view_without_entity_gt(tmp_path: Path) -> None:
     spec = plan_benchmark_run(
         (Competitor(engine="tesseract", ner=True),), _corpus(tmp_path), "r"
     )(tmp_path)
-    assert all(not v.name.startswith("entités") for v in spec.evaluation.views)
+    assert all(v.name != "entites" for v in spec.evaluation.views)
 
 
 def test_curated_prompt_name_resolves_to_text(tmp_path: Path) -> None:
@@ -410,7 +406,7 @@ def test_normalization_profile_set_on_views(tmp_path: Path) -> None:
         (Competitor(engine="tesseract"),),
         _corpus(tmp_path),
         "r",
-        normalization="medieval_french",
+        options=EvaluationOptions(normalization="medieval_french"),
     )
     spec = build(tmp_path)
     assert spec.evaluation.views[0].normalization_profile == "medieval_french"
@@ -422,7 +418,7 @@ def test_unknown_normalization_refused(tmp_path: Path) -> None:
             (Competitor(engine="tesseract"),),
             _corpus(tmp_path),
             "r",
-            normalization="bogus_profile",
+            options=EvaluationOptions(normalization="bogus_profile"),
         )
 
 
@@ -434,7 +430,7 @@ def _plan_metrics(tmp_path: Path, profile: str | None) -> tuple[str, ...]:
         (Competitor(engine="tesseract"),),
         _corpus(tmp_path),
         "r",
-        metric_profile=profile,
+        options=EvaluationOptions(metric_profile=profile),
     )(tmp_path)
     return _text_view_metrics(spec)
 
@@ -466,7 +462,7 @@ def test_unknown_metric_profile_refused(tmp_path: Path) -> None:
             (Competitor(engine="tesseract"),),
             _corpus(tmp_path),
             "r",
-            metric_profile="bidon",
+            options=EvaluationOptions(metric_profile="bidon"),
         )
 
 
@@ -479,71 +475,12 @@ def test_metric_profile_composes_with_hcpr(tmp_path: Path) -> None:
         (Competitor(engine="tesseract"),),
         _corpus(tmp_path),
         "r",
-        metric_profile="essentiel",
-        archaic_list="archaic_core",
+        options=EvaluationOptions(
+            metric_profile="essentiel", archaic_list="archaic_core"
+        ),
     )(tmp_path)
     metrics = _text_view_metrics(spec)
     assert metrics == ("cer", "wer", "mer", "air", "hcpr")
-
-
-def test_metric_profile_catalog_lists_standard_first(tmp_path: Path) -> None:
-    catalog = metric_profile_catalog()
-    assert catalog[0]["name"] == DEFAULT_METRIC_PROFILE == "standard"
-    names = {entry["name"] for entry in catalog}
-    assert names == set(METRIC_PROFILES)  # toutes exposées, aucune fantôme
-    for entry in catalog:
-        assert entry["metrics"] == list(METRIC_PROFILES[entry["name"]])  # ordonné
-
-
-def test_every_profiled_metric_is_registered(tmp_path: Path) -> None:
-    # Garde-fou anti-footgun : une métrique non enregistrée pour (RAW_TEXT,
-    # RAW_TEXT) ferait lever le runner (``EvaluationError``) au moment du run.
-    # On le verrouille ici, à froid, pour TOUS les profils.
-    registry = MetricRegistry()
-    register_default_metrics(registry)
-    applicable = {
-        m.name
-        for m in registry.for_input_types(ArtifactType.RAW_TEXT, ArtifactType.RAW_TEXT)
-    }
-    for name, metrics in METRIC_PROFILES.items():
-        unknown = set(metrics) - applicable
-        assert not unknown, f"profil {name!r} : métriques non enregistrées {unknown}"
-
-
-def test_layout_ground_truth_adds_structure_view(tmp_path: Path) -> None:
-    # Une GT de mise en page (LAYOUT) doit produire une vue « structure » portant
-    # Region-F1 + CER par région (M5 — branchement de la segmentation au rapport).
-    (tmp_path / "d.layout.json").write_text("{}", encoding="utf-8")
-    corpus = CorpusSpec(
-        name="c",
-        documents=(
-            DocumentRef(
-                id="d",
-                ground_truths=(
-                    GroundTruthRef(
-                        type=ArtifactType.LAYOUT,
-                        uri=str(tmp_path / "d.layout.json"),
-                    ),
-                ),
-            ),
-        ),
-    )
-    layout_views = [
-        v for v in _views_for_corpus(corpus) if "region_detection" in v.metric_names
-    ]
-    assert len(layout_views) == 1
-    assert layout_views[0].metric_names == (
-        "region_detection",
-        "region_cer",
-        "line_identity_cer",
-        "line_identity_coverage",
-    )
-    assert ArtifactType.LAYOUT in layout_views[0].candidate_types
-
-
-def test_text_only_corpus_has_no_structure_view(tmp_path: Path) -> None:
-    views = _views_for_corpus(_corpus(tmp_path))
-    assert all("region_detection" not in v.metric_names for v in views)
 
 
 # --- Concurrent hybride (segmenteur → reconnaissance par bloc → texte scoré) ----

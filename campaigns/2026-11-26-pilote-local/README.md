@@ -104,7 +104,7 @@ Gravité : **●** fausse un chiffre ou perd des pages · **◐** trompe ou bloq
 | D21 | ○ | `cinoc corpus import zip` conseille de « coller son bloc `corpus:` dans un fichier de run » : collé ailleurs, il échoue sur « chemin inexistant : '0000.gt.txt' » (chemins relatifs à `corpus.yaml`, message qui ne le dit pas). Et il écrit `id: 0009` sans guillemets (un lecteur YAML 1.2 y lit l'entier 9). | S10b — corrigé en S10b (D-282) |
 | D22 | ○ | `cinoc compare` : rapport français à décimales en point (`0.1042`), et A/B nommés par `run_id` — indiscernables quand il est le même (« A = pilote-bnl-s10 · B = pilote-bnl-s10 »). | S28 (parité i18n) |
 | D23 | — | Conventions de la GT BNL à déclarer dans le protocole, pas à corriger : `ſ` normalisé en `s` (le modèle Fraktur sort `ſ` : CER 0,0915, cer_diplo 0,0763), `⸗` gardé en fin de ligne, `�` (U+FFFD) dans `0003` pour un caractère illisible. Vues de la campagne : `nfc` + diplomatique + sans césure + plate. | S30-S32 |
-| D24 | ◐ | **La CLI ne compose pas de pipeline** : `cinoc list recipes` décrit `ocr_simple`, `ocr_puis_llm`… mais rien ne les instancie en YAML ; le composeur web, lui, construit la spec. Pipelines et vues s'écrivent à la main (règle de parité, `CLAUDE.md` §8.4). | S25-S26 |
+| D24 | ◐ | **La CLI ne compose pas de pipeline** : `cinoc list recipes` décrit `ocr_simple`, `ocr_puis_llm`… mais rien ne les instancie en YAML ; le composeur web, lui, construit la spec. Pipelines et vues s'écrivent à la main (règle de parité, `CLAUDE.md` §8.4). | S25 — corrigé en S25 (D-297) : `cinoc run CORPUS --recipe NOM`, par la fonction de la page |
 
 Hors défauts : le parcours ZIP → `corpus import` → `--check` → `run` →
 `--resume-dir` → `--offline` → `compare` **tient** sur le paquet installé ; la

@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING
 # Les producteurs de correction sont lus en couche `app`, pas recopiés ici :
 # une interface qui énumère est une interface qui dérive.
 from cinoc.app.correction_planning import PRODUCERS
+from cinoc.app.evaluation_views import METRIC_PROFILES
 
 if TYPE_CHECKING:  # pragma: no cover
     # Type de l'objet rendu par ``add_subparsers`` : ``argparse`` n'en publie
@@ -96,6 +97,31 @@ def _add_list(subparsers: _SousCommandes) -> None:
     )
     recettes.add_argument(
         "--lang", default="fr", choices=("fr", "en"), help="Langue des libellés."
+    )
+
+
+def _add_scoring(parser: argparse.ArgumentParser, avec: str) -> None:
+    """Les options de notation du web (une seule politique de vues, D-297)."""
+    parser.add_argument(
+        "--normalization",
+        default=None,
+        metavar="PROFIL",
+        help=f"{avec}profil de normalisation (`cinoc list profiles`) ; défaut : "
+        "flat_text, plus la vue « texte (lignes) » si la GT a des lignes.",
+    )
+    parser.add_argument(
+        "--metric-profile",
+        dest="metric_profile",
+        default=None,
+        choices=tuple(METRIC_PROFILES),
+        help=f"{avec}colonnes de la vue texte (défaut : standard).",
+    )
+    parser.add_argument(
+        "--char-exclude",
+        dest="char_exclude",
+        default=None,
+        metavar="CARACTÈRES",
+        help=f"{avec}caractères retirés de la GT et de l'hypothèse avant calcul.",
     )
 
 
@@ -254,7 +280,38 @@ def build_parser() -> argparse.ArgumentParser:
         "et les liste ; 1 si le run n'a pas pu se faire (spec invalide, archive "
         "incomplète hors ligne…).",
     )
-    run_cmd.add_argument("config", help="Fichier YAML décrivant le run.")
+    run_cmd.add_argument(
+        "config",
+        help="Fichier YAML décrivant le run — avec --recipe, le corpus seul "
+        "(clé `corpus`, tel que l'écrit `cinoc corpus import`).",
+    )
+    run_cmd.add_argument(
+        "--recipe",
+        action="append",
+        default=[],
+        metavar="NOM",
+        help="Instancie une recette (`cinoc list recipes`) sur le corpus de "
+        "CONFIG, comme l'onglet « Recette » du web. Répétable : les recettes "
+        "se comparent dans un seul run.",
+    )
+    run_cmd.add_argument(
+        "--brick",
+        action="append",
+        default=[],
+        metavar="[N:]ÉTAPE=BRIQUE",
+        help="Avec --recipe : la brique d'une étape (ocr=kraken). Sans N:, "
+        "chaque recette qui a l'étape ; N: vise la N-ième.",
+    )
+    run_cmd.add_argument(
+        "--set",
+        action="append",
+        default=[],
+        metavar="[N:]ÉTAPE.RÉGLAGE=VALEUR",
+        help="Avec --recipe : un réglage d'étape (ocr.lang=fra+deu, "
+        "vlm.model=MODÈLE), valeur lue comme en YAML. "
+        "`cinoc list engines <brique>` liste les réglages.",
+    )
+    _add_scoring(run_cmd, "Avec --recipe : ")
     run_cmd.add_argument(
         "--resume-dir",
         default=None,
@@ -475,6 +532,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="L'ALTO est de l'OCR, pas une transcription : aucune vue de "
         "structure n'est ajoutée (il n'y aurait rien à quoi comparer).",
     )
+    _add_scoring(correct_cmd, "")
     correct_cmd.add_argument(
         "--repeat",
         type=int,

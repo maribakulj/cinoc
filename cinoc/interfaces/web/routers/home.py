@@ -40,8 +40,9 @@ from cinoc.app.engines import (
     StatusProvider,
     curated_prompts,
 )
+from cinoc.app.evaluation_views import metric_profile_catalog
 from cinoc.app.history import series_insight
-from cinoc.app.run_planning import benchmark_engine_catalog, metric_profile_catalog
+from cinoc.app.run_planning import benchmark_engine_catalog
 from cinoc.app.structure_planning import hybrid_recognizer_catalog
 from cinoc.formats.text import NORMALIZATION_PROFILES
 from cinoc.interfaces.web._cache import TTLCache

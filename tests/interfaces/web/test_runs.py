@@ -11,8 +11,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 from cinoc.app.engines import EngineStatus, engine_statuses
+from cinoc.app.evaluation_views import EvaluationOptions
 from cinoc.interfaces.web.app import create_app
-from cinoc.interfaces.web.routers.runs import LaunchRequest
+from cinoc.interfaces.web.routers.runs import (
+    CorrectionRequest,
+    LaunchRequest,
+    RecipeRequest,
+)
 from cinoc.interfaces.web.security.csrf import CSRF_HEADER
 
 _CSRF = {CSRF_HEADER: "1"}
@@ -50,6 +55,42 @@ def test_launch_request_accepts_metric_profile() -> None:
     req = LaunchRequest(metric_profile="philologie")
     assert req.metric_profile == "philologie"
     assert LaunchRequest().metric_profile is None  # absent par défaut (= standard)
+
+
+def test_every_launch_takes_the_same_scoring_options() -> None:
+    """Une seule politique de vues (D-297) : composeur, recettes et correction
+    reçoivent les mêmes options de notation, sous les mêmes noms de champ."""
+    choix = {"normalization": "nfc", "char_exclude": ",", "metric_profile": "essentiel"}
+    attendu = EvaluationOptions(**choix)
+    assert LaunchRequest(**choix).options() == attendu
+    assert RecipeRequest(
+        corpus_id="c", entries=({"recipe": "ocr_simple"},), **choix
+    ).options() == attendu
+    assert CorrectionRequest(corpus_id="c", **choix).options() == attendu
+
+
+def test_an_unknown_option_on_a_recipe_is_a_named_422(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("p.png", b"\x89PNG\r\n\x1a\n" + b"0" * 32)
+        zf.writestr("p.gt.txt", "texte")
+    depot = client.post(
+        "/api/corpus",
+        files={"file": ("c.zip", buf.getvalue(), "application/zip")},
+        headers=_CSRF,
+    )
+    reponse = client.post(
+        "/api/runs/recipe",
+        headers=_CSRF,
+        json={
+            "corpus_id": depot.json()["corpus_id"],
+            "entries": [{"recipe": "ocr_simple"}],
+            "metric_profile": "bidon",
+        },
+    )
+    assert reponse.status_code == 422
+    assert "profil de métriques inconnu" in reponse.json()["detail"]
 
 
 # --- Config save/load : POST /api/runs/config (validation stateless) ----------

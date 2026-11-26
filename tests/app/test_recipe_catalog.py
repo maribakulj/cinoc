@@ -112,8 +112,9 @@ def test_several_recipes_make_one_compared_run() -> None:
         run_id="r",
     )
     assert [p.name for p in spec.pipelines] == ["ocr_simple", "presse_ancienne"]
-    noms = {v.name for v in spec.evaluation.views}
-    assert {"texte", "structure"} <= noms
+    # Sans vérité terrain, la vue texte seule (le run reste exécutable) : une
+    # vue de structure n'aurait rien à quoi comparer (D-297).
+    assert [v.name for v in spec.evaluation.views] == ["texte"]
 
 
 def test_the_same_step_shared_by_two_recipes_stays_one_instance() -> None:
@@ -225,3 +226,14 @@ def test_the_role_and_the_mode_are_never_asked_of_the_user() -> None:
     }
     assert not demandes & {"label", "role", "source_label"}
     assert "model" in demandes
+
+
+@pytest.mark.parametrize("recette", [r.name for r in load_recipes()])
+def test_a_recipe_describes_itself_in_plain_text(recette: str) -> None:
+    """Titre et description sont affichés tels quels par la page et par
+    ``cinoc list recipes`` : une marque markdown (``**dans**``) s'y lirait en
+    astérisques (reste de S24)."""
+    r = recipe_by_name(recette)
+    for texte in (*r.title.values(), *r.description.values()):
+        for marque in ("**", "*", "`", "__", "#"):
+            assert marque not in texte, (recette, marque, texte)

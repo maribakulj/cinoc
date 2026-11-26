@@ -70,6 +70,37 @@ def load_run_spec(
     return _secure_paths(spec, base)
 
 
+def load_corpus_spec(path: str | Path) -> CorpusSpec:
+    """Charge le **corpus seul** d'un YAML (clé ``corpus``), chemins sécurisés.
+
+    C'est le fichier qu'écrit ``cinoc corpus import`` : une recette lancée en
+    ligne de commande (``cinoc run CORPUS --recipe NOM``) y prend son corpus,
+    comme le web le prend dans son dépôt. Un fichier qui décrit **aussi** des
+    pipelines ou une évaluation est refusé : deux descriptions d'un même run,
+    dont l'une serait ignorée en silence.
+    """
+    yaml_path = Path(path)
+    try:
+        raw = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError) as exc:
+        raise RunSpecError(f"YAML illisible : {exc}.") from exc
+    if not isinstance(raw, dict) or "corpus" not in raw:
+        raise RunSpecError("YAML : une clé `corpus` est attendue à la racine.")
+    autres = sorted(set(raw) - {"corpus"})
+    if autres:
+        raise RunSpecError(
+            f"{yaml_path.name} décrit aussi {autres} : une recette fournit les "
+            "pipelines et la notation, le fichier ne doit porter que `corpus`."
+        )
+    try:
+        corpus = CorpusSpec.model_validate(raw["corpus"])
+    except ValidationError as exc:
+        raise RunSpecError(f"corpus invalide : {exc}.") from exc
+    base = yaml_path.parent
+    documents = tuple(_secure_document(doc, base) for doc in corpus.documents)
+    return corpus.model_copy(update={"documents": documents})
+
+
 def _secure_paths(spec: RunSpec, base: Path) -> RunSpec:
     documents = tuple(_secure_document(doc, base) for doc in spec.corpus.documents)
     corpus = spec.corpus.model_copy(update={"documents": documents})
@@ -176,4 +207,4 @@ def _portable_uri(uri: str, base: Path) -> str:
         return chemin.as_posix()
 
 
-__all__ = ["RunSpecError", "dump_corpus_spec", "load_run_spec"]
+__all__ = ["RunSpecError", "dump_corpus_spec", "load_corpus_spec", "load_run_spec"]

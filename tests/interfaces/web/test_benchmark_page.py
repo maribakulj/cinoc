@@ -67,7 +67,7 @@ def test_char_exclude_field_present_and_sent(tmp_path: Path) -> None:
     # 3c : champ « caractères à exclure » + le JS le met dans le payload du run.
     body = _client(tmp_path).get("/benchmark").text
     assert 'id="char-exclude"' in body
-    assert "payload.char_exclude" in _JS.read_text(encoding="utf-8")
+    assert "cfg.char_exclude" in _JS.read_text(encoding="utf-8")
 
 
 def test_metric_profile_selector_present_and_sent(tmp_path: Path) -> None:
@@ -77,7 +77,17 @@ def test_metric_profile_selector_present_and_sent(tmp_path: Path) -> None:
     assert 'id="metric-profile"' in body
     assert 'value="standard" selected' in body  # défaut historique coché
     assert 'value="philologie"' in body  # profil alternatif proposé
-    assert "payload.metric_profile" in _JS.read_text(encoding="utf-8")
+    assert "cfg.metric_profile" in _JS.read_text(encoding="utf-8")
+
+
+def test_every_launch_carries_the_scoring_options() -> None:
+    """Une seule politique de vues (D-297) : le composeur, la file de recettes
+    et la correction partent tous par ``withScoring`` — une option choisie à la
+    page n'est plus ignorée selon la forme de run."""
+    js = _JS.read_text(encoding="utf-8")
+    assert js.count("withScoring(") >= 4  # définition + trois départs
+    for route in ('"/api/runs"', '"/api/runs/recipe"', '"/api/runs/correction"'):
+        assert route in js
 
 
 def test_config_io_controls_present_and_wired(tmp_path: Path) -> None:

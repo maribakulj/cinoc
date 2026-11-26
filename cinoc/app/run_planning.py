@@ -28,28 +28,20 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict, Field
 
 from cinoc.app.engines import EngineStatus, providers_for_mode
+from cinoc.app.evaluation_views import EvaluationOptions, plan_evaluation
 from cinoc.app.models import check_spec_models
 from cinoc.app.modules import ModuleRegistry, register_default_modules
 from cinoc.app.modules.registry import check_spec_settings
-from cinoc.app.text_views import text_views
 from cinoc.domain.artifacts import ArtifactType
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.errors import CinocError
-from cinoc.domain.evaluation import (
-    DEFAULT_NORMALIZATION_PROFILE,
-    EvaluationSpec,
-    EvaluationView,
-)
 from cinoc.domain.pipeline import (
     INITIAL_STEP_ID,
     PipelineMode,
     PipelineSpec,
     PipelineStep,
 )
-from cinoc.domain.projection import ProjectionSpec
 from cinoc.domain.run_spec import RunSpec
-from cinoc.evaluation.archaic import resolve_archaic_list
-from cinoc.formats.text import NORMALIZATION_PROFILES
 from cinoc.prompts import PromptError, resolve_prompt
 
 #: Moteurs OCR câblés pour un run réel (amont d'une chaîne ou OCR seul).
@@ -127,178 +119,6 @@ class Competitor(BaseModel):
     #: Réservé à ``tesseract`` (seul moteur du socle à émettre de l'ALTO natif) ;
     #: demandé avec un autre moteur → ``RunPlanningError``. ``False`` par défaut.
     alto: bool = False
-
-
-#: Types de candidat scorés par toute vue benchmark : ``RAW_TEXT`` (OCR/zero-shot)
-#: **et** ``CORRECTED_TEXT`` (OCR→LLM) — la précédence du runner évalue la sortie
-#: la plus aboutie de chaque pipeline (cf. evaluation).
-_CANDIDATES = frozenset({ArtifactType.RAW_TEXT, ArtifactType.CORRECTED_TEXT})
-
-#: **Profils de métriques** : bundles curés de colonnes scalaires pour la vue
-#: ``texte`` (classement par défaut du rapport). Chaque nom ne référence que des
-#: métriques **enregistrées** pour la signature ``(RAW_TEXT, RAW_TEXT)`` — un nom
-#: non enregistré ferait lever le runner (couche 3 ; verrouillé par test). Changer
-#: de profil n'allège **que** les colonnes de classement : les *collecteurs*
-#: (taxonomy, structured_data, NER…) restent indépendants de ``metric_names``, la
-#: donnée n'est jamais perdue. ``standard``, le défaut, n'a **aucune métrique
-#: exploratoire** (D-289 : ``unanchored_trigrams``, ``air`` restent au registre)
-#: ni ``fca`` (1 − CER à plat ; une spec qui garde les lignes peut la nommer).
-DEFAULT_METRIC_PROFILE = "standard"
-METRIC_PROFILES: dict[str, tuple[str, ...]] = {
-    # ``cmer`` = MER caractère **borné [0,1]** (robuste aux modèles génératifs qui
-    # font dépasser le CER ; cf. metrics/conformity) — calculé sur RAW_TEXT comme
-    # CER, donc exposé d'office au socle (≠ réservé HIPE). Groupé « caractère ».
-    "standard": (
-        "cer", "cmer", "char_accuracy", "word_accuracy", "wer", "mer",
-        "bow_precision", "bow_recall", "bow_f1", "searchability",
-    ),
-    "essentiel": ("cer", "wer", "mer"),
-    "philologie": ("cer", "cer_diplo", "mer", "diacritic_err", "mufi_err", "air"),
-}
-
-
-def _text_views(
-    corpus: CorpusSpec,
-    normalization: str | None,
-    char_exclude: str | None,
-    *,
-    with_hcpr: bool = False,
-    base_metrics: tuple[str, ...] = METRIC_PROFILES[DEFAULT_METRIC_PROFILE],
-) -> tuple[EvaluationView, ...]:
-    # ``base_metrics`` vient du **profil de métriques** choisi (défaut
-    # ``standard``). ``air`` (exploratoire, D-289) et ``hcpr`` ne sont **ajoutés**
-    # que sur une liste archaïque **explicitement** configurée — sinon ``hcpr``
-    # doublonnerait ``mufi_err`` sur tout corpus médiéval.
-    # ``numseq_strict``/``numseq_value`` restent **hors** des profils (D-130) :
-    # adaptatifs (``None`` sans séquences) → colonnes vides « — » sur tout corpus
-    # sans dates/folios/montants. Ils restent **enregistrés** (utilisables par une
-    # vue custom qui voudrait classer dessus), et la **section `structured_data`
-    # reste affichée** quand des séquences existent (le collecteur l'observe
-    # indépendamment de ``metric_names``) — la donnée n'est pas perdue, seul le
-    # classement scalaire par défaut s'allège.
-    metric_names = base_metrics
-    if with_hcpr:
-        archaic = (m for m in ("air", "hcpr") if m not in metric_names)
-        metric_names = (*metric_names, *archaic)
-    return text_views(
-        corpus,
-        candidate_types=_CANDIDATES,
-        metric_names=metric_names,
-        normalization=normalization,
-        char_exclude=char_exclude,
-    )
-
-
-def _layout_view() -> EvaluationView:
-    """Vue **structure / mise en page** : note les sorties ``LAYOUT``
-    (segmentation) par **Region-F1** (`region_detection`) + **CER par région**
-    (`region_cer`), sans projection — les métriques prennent le
-    ``CanonicalLayout`` directement. Normalisation/`char_exclude` N/A (géométrie
-    + texte par région). N'est ajoutée que si le corpus porte une GT ``LAYOUT``."""
-    return EvaluationView(
-        name="structure (mise en page)",
-        candidate_types=frozenset({ArtifactType.LAYOUT}),
-        metric_names=(
-            "region_detection",
-            "region_cer",
-            # Appariement par IDENTITÉ, quand les deux côtés portent des
-            # identifiants de ligne : exact là où l'alignement de lignes
-            # devine. Mesuré sur corpus/37-GT-BNL : la devinette diverge sur
-            # 57 lignes de 522 et gonfle le CER par ligne de 58 %.
-            "line_identity_cer",
-            "line_identity_coverage",
-        ),
-    )
-
-
-def _ner_view() -> EvaluationView:
-    """Vue **entités nommées (NER)** : note les sorties ``ENTITIES`` (étape NER)
-    par ``ner_f1`` (empan) et ``ner_f1_exact`` (nom exact, D-288) contre la GT
-    ``ENTITIES``, sans projection (jonction
-    ``(ENTITIES, ENTITIES)``). Normalisation/`char_exclude` N/A (comparaison
-    d'entités, pas de texte). N'est ajoutée que si le corpus porte une GT
-    ``ENTITIES`` (sinon la section NER resterait orpheline)."""
-    return EvaluationView(
-        name="entités nommées (NER)",
-        candidate_types=frozenset({ArtifactType.ENTITIES}),
-        metric_names=("ner_f1", "ner_f1_exact"),
-    )
-
-
-def _reference_view(
-    normalization: str | None, char_exclude: str | None
-) -> EvaluationView:
-    """Vue **référence OCR** (opt-in) : compare le candidat à une référence
-    ``REFERENCE_TEXT`` (ex. OCR Gallica) via une projection identité. Le **nom de
-    la vue porte l'avertissement** : ce n'est PAS une vérité-terrain manuelle, le
-    score mesure l'accord avec un autre OCR."""
-    return EvaluationView(
-        name="référence OCR (pas une vérité-terrain manuelle)",
-        candidate_types=_CANDIDATES,
-        projections_by_source_type={
-            ArtifactType.REFERENCE_TEXT: ProjectionSpec(
-                source_type=ArtifactType.REFERENCE_TEXT,
-                target_type=ArtifactType.RAW_TEXT,
-                projector_name="identity_text",
-            )
-        },
-        metric_names=("cer", "wer", "mer"),
-        ignored_dimensions=("exactitude (la référence est elle-même un OCR)",),
-        # Non choisi → le défaut (D-285), pas la comparaison brute (``None``).
-        normalization_profile=normalization or DEFAULT_NORMALIZATION_PROFILE,
-        char_exclude=char_exclude,
-    )
-
-
-def _views_for_corpus(
-    corpus: CorpusSpec,
-    normalization: str | None = None,
-    char_exclude: str | None = None,
-    *,
-    with_hcpr: bool = False,
-    base_metrics: tuple[str, ...] = METRIC_PROFILES[DEFAULT_METRIC_PROFILE],
-) -> tuple[EvaluationView, ...]:
-    """Vues à évaluer selon les **types de GT présents**, sous ``normalization``.
-
-    GT manuelle ``RAW_TEXT`` → vue ``texte`` ; référence ``REFERENCE_TEXT`` (OCR
-    Gallica) → vue *référence* distincte. Un corpus sans GT → vue ``texte`` par
-    défaut (le run reste exécutable, simplement non scoré). ``char_exclude``
-    filtre des caractères des deux côtés (GT/hyp) avant le calcul (runner couche 3).
-    ``with_hcpr`` ajoute la colonne ``hcpr`` à la vue ``texte`` (liste archaïque
-    configurée). ``base_metrics`` = colonnes scalaires du **profil de métriques**
-    choisi (n'affecte que la vue ``texte``, pas la vue *référence* fixe).
-    """
-    gt_types = {gt.type for doc in corpus.documents for gt in doc.ground_truths}
-    texts = _text_views(
-        corpus, normalization, char_exclude,
-        with_hcpr=with_hcpr, base_metrics=base_metrics,
-    )
-    views = list(texts) if ArtifactType.RAW_TEXT in gt_types else []
-    if ArtifactType.REFERENCE_TEXT in gt_types:
-        views.append(_reference_view(normalization, char_exclude))
-    if ArtifactType.LAYOUT in gt_types:
-        views.append(_layout_view())
-    if ArtifactType.ENTITIES in gt_types:
-        views.append(_ner_view())
-    if not views:
-        views.extend(texts)
-    return tuple(views)
-
-
-def _resolve_metric_profile(name: str | None) -> tuple[str, ...]:
-    """Colonnes scalaires d'un profil nommé (défaut : ``standard``).
-
-    Un nom inconnu → ``RunPlanningError`` (jamais un défaut muet ; le routeur le
-    remonte en 422), comme pour un profil de normalisation inconnu.
-    """
-    if name is None:
-        return METRIC_PROFILES[DEFAULT_METRIC_PROFILE]
-    try:
-        return METRIC_PROFILES[name]
-    except KeyError:
-        raise RunPlanningError(
-            f"profil de métriques inconnu : {name!r}."
-        ) from None
 
 
 def _resolve_prompt(comp: Competitor) -> str | None:
@@ -633,42 +453,20 @@ def plan_benchmark_run(
     corpus: CorpusSpec | None,
     run_id: str,
     *,
-    normalization: str | None = None,
-    char_exclude: str | None = None,
-    archaic_list: str | None = None,
-    metric_profile: str | None = None,
-    detailed_analyses: bool = False,
+    options: EvaluationOptions | None = None,
 ) -> Callable[[Path], RunSpec]:
     """Builder de spec d'un **benchmark** : N concurrents → un ``RunSpec``.
 
     Exhaustif : tout moteur/mode non câblé est refusé (``RunPlanningError``).
     Les noms de pipeline sont rendus **uniques** (suffixe ``#n`` en cas de
-    doublon) pour ne pas se piétiner dans les sorties indexées par nom.
-
-    ``archaic_list`` (nom d'une liste curée, cf. ``ARCHAIC_LISTS``) **active
-    ``hcpr``** (préservation des archaïsmes) et **relie ``air``/``hcpr`` à cette
-    liste** ; sans lui, seul ``air`` reste actif sur la liste par défaut. Le nom
-    et l'empreinte de la liste effective entrent au ``RunManifest.metadata``
-    (reproductibilité) ; un nom inconnu est refusé (``RunPlanningError``).
-
-    ``metric_profile`` (nom d'un :data:`METRIC_PROFILES`) choisit le **bundle de
-    colonnes scalaires** de la vue ``texte`` (défaut ``standard``, byte-identique à
-    l'historique) ; un nom inconnu est refusé (``RunPlanningError`` → 422). Il
-    n'affecte **que** le classement par défaut — les collecteurs restent intacts.
+    doublon) pour ne pas se piétiner dans les sorties indexées par nom. Les vues
+    viennent de la politique unique (``plan_evaluation``, D-297) : une option de
+    notation inconnue est refusée (``RunPlanningError`` → 422).
     """
     if not competitors:
         raise RunPlanningError("benchmark : au moins un concurrent requis.")
     if corpus is None:
         raise RunPlanningError("benchmark : corpus requis.")
-    if normalization is not None and normalization not in NORMALIZATION_PROFILES:
-        raise RunPlanningError(
-            f"profil de normalisation inconnu : {normalization!r}."
-        )
-    base_metrics = _resolve_metric_profile(metric_profile)
-    try:
-        resolved = resolve_archaic_list(archaic_list)
-    except CinocError as exc:
-        raise RunPlanningError(str(exc)) from exc
     pipelines: list[PipelineSpec] = []
     adapter_kwargs: dict[str, dict[str, str | int | float | bool]] = {}
     seen: dict[str, int] = {}
@@ -683,25 +481,17 @@ def plan_benchmark_run(
             seen[pipeline.name] = 1
         pipelines.append(pipeline)
         adapter_kwargs.update(kwargs)
+    try:
+        notation = plan_evaluation(pipelines, corpus, options)
+    except CinocError as exc:
+        raise RunPlanningError(str(exc)) from exc
     spec = RunSpec(
         corpus=corpus,
         pipelines=tuple(pipelines),
-        evaluation=EvaluationSpec(
-            views=_views_for_corpus(
-                corpus, normalization, char_exclude,
-                with_hcpr=archaic_list is not None,
-                base_metrics=base_metrics,
-            ),
-            # Mode rapide par défaut, ici comme en ligne de commande : le
-            # lanceur web ne doit pas offrir un défaut différent (D-224).
-            analyses="toutes" if detailed_analyses else None,
-        ),
+        evaluation=notation.evaluation,
         adapter_kwargs=adapter_kwargs,
         run_id=run_id,
-        metadata={
-            "archaic_list": resolved.name,
-            "archaic_list_hash": resolved.list_hash,
-        },
+        metadata=notation.metadata,
     )
     # Aucun modèle par défaut (listés), puis chaque brique se construit avec
     # ses réglages : refusé ici, nommé (422), pas dans le job (D14).
@@ -748,28 +538,9 @@ def benchmark_engine_catalog(
     }
 
 
-def metric_profile_catalog() -> tuple[dict[str, object], ...]:
-    """Profils de métriques proposables au lanceur — **source unique** de l'UI.
-
-    ``standard`` (défaut) d'abord, puis les autres triés (ordre déterministe).
-    Chaque entrée porte la liste **ordonnée** de ses métriques : le formulaire
-    s'en sert pour un libellé self-documenté (les noms de métriques sont neutres
-    en langue, pas d'i18n par profil). Anti-vide : on n'offre jamais une option
-    sans branche serveur — chaque nom est résolu par ``_resolve_metric_profile``.
-    """
-    others = sorted(name for name in METRIC_PROFILES if name != DEFAULT_METRIC_PROFILE)
-    return tuple(
-        {"name": name, "metrics": list(METRIC_PROFILES[name])}
-        for name in (DEFAULT_METRIC_PROFILE, *others)
-    )
-
-
 __all__ = [
-    "DEFAULT_METRIC_PROFILE",
-    "METRIC_PROFILES",
     "Competitor",
     "RunPlanningError",
     "benchmark_engine_catalog",
-    "metric_profile_catalog",
     "plan_benchmark_run",
 ]

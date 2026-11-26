@@ -619,6 +619,8 @@ _VIEW_LABELS: dict[str, tuple[str, str]] = {
     "texte": ("Texte", "Text"),
     "texte (lignes)": ("Texte (lignes)", "Text (lines)"),
     "text": ("Texte", "Text"),
+    "structure": ("Structure (mise en page)", "Layout structure"),
+    "entites": ("Entités nommées", "Named entities"),
     "diplomatic": ("Transcription diplomatique", "Diplomatic transcription"),
 }
 
