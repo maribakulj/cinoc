@@ -2,11 +2,12 @@
 
 Le **headline** du rapport : les scores standard (CER/WER/FCA/exactitude/cMER)
 par moteur, en table **triable** (colonnes annotées du sens de lecture ↓/↑), un
-**dot plot classé** du CER avec **IC 95 % bootstrap** (calculé en couche
-evaluation — montre l'écart *et* son incertitude), et le **résultat du test**
-inter-moteurs comme **fait** : Wilcoxon (2 moteurs) ou Friedman (≥ 3), p brute
-et p corrigée de Holm, puis les paires que Nemenyi sépare quand le Friedman est
-rejeté — ou le motif pour lequel le test n'a pas été calculé.
+**dot plot classé** du CER avec **IC 95 % bootstrap** du CER micro affiché
+(calculé en couche evaluation — montre l'écart *et* son incertitude), et le
+**résultat du test** inter-moteurs comme **fait** : Wilcoxon (2 moteurs) ou
+Friedman (≥ 3), p brute et p corrigée de Holm, puis les paires que Nemenyi
+sépare quand le Friedman est rejeté — ou le motif pour lequel le test n'a pas
+été calculé.
 
 **Aucun verdict** : pas de « meilleur » déclaré, pas de recommandation. On trie
 par une valeur mesurée, on affiche un fait statistique — l'utilisateur interprète
@@ -171,12 +172,12 @@ class KeyMeasuresSection:
         payload = _inference(result, view)
         if payload is None or not payload.intervals:
             return ""
-        items = sorted(payload.intervals, key=lambda it: (it.mean, it.pipeline))
+        items = sorted(payload.intervals, key=lambda it: (it.value, it.pipeline))
         rows = [
             (
                 engine_letter(order.get(it.pipeline, 0)),
                 engine_accent(order.get(it.pipeline, 0)),
-                it.mean,
+                it.value,
                 it.lower,
                 it.upper,
             )
@@ -189,10 +190,13 @@ class KeyMeasuresSection:
         n = f"{ns[0]}–{ns[-1]}" if len(ns) > 1 else str(ns[0])
         cap = localized(
             lang,
-            f'<span class="muted">CER par moteur — point = moyenne, barre = IC 95 % '
-            f"(bootstrap, n={n}), trié par CER croissant, axe commun.</span>",
-            f'<span class="muted">CER per engine — dot = mean, bar = 95 % CI '
-            f"(bootstrap, n={n}), sorted by CER, shared axis.</span>",
+            f'<span class="muted">CER par moteur — point = CER du tableau (micro : '
+            f"Σ erreurs / Σ caractères de référence), barre = son IC 95 % "
+            f"(bootstrap des documents, n={n}), trié par CER croissant, "
+            f"axe commun.</span>",
+            f'<span class="muted">CER per engine — dot = the table’s CER (micro: '
+            f"Σ errors / Σ reference characters), bar = its 95% CI "
+            f"(document bootstrap, n={n}), sorted by CER, shared axis.</span>",
         )
         return (
             f'<div class="prof-chart"><div class="drill-caption">{cap}</div>'

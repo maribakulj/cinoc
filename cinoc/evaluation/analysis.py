@@ -30,15 +30,23 @@ class PipelineRank(BaseModel):
 
 
 class PipelineInterval(BaseModel):
-    """IC bootstrap (percentile, graine fixe) de la moyenne d'un pipeline."""
+    """IC bootstrap (percentile, graine fixe) de l'agrégat **affiché**.
+
+    ``value`` est le ratio micro Σ(v·w)/Σw du pipeline — le chiffre du
+    tableau, même calcul (``inference.micro_ratio``) — et ``[lower, upper]``
+    l'intervalle de ce même ratio, documents rééchantillonnés. Un intervalle
+    qui porte encore ``mean`` (moyenne macro, et l'IC de celle-ci) est
+    refusé, pas relu comme l'IC du chiffre affiché.
+    """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     pipeline: str = Field(min_length=1, max_length=128)
-    mean: float
+    value: float
     lower: float
     upper: float
-    #: Nombre de documents valides du pipeline (marginal, ≠ cas complets).
+    #: Documents notés de poids non nul (marginal, ≠ cas complets) — ceux qui
+    #: font l'agrégat ; un document à référence vide n'y pèse rien.
     n_documents: int = Field(ge=1)
 
 
@@ -69,8 +77,9 @@ class InferencePayload(BaseModel):
     (``not_computed``). Le post-hoc de Nemenyi (``critical_distance``,
     ``cd_groups``, ``pairwise``) n'existe que si un **Friedman** est rejeté
     **après** correction (``p_holm < alpha``) : à 2 pipelines, le Wilcoxon est
-    lui-même la comparaison de la paire. ``intervals`` (bootstrap) n'est
-    rempli qu'en mode détaillé — son coût, lui, n'est pas négligeable.
+    lui-même la comparaison de la paire. ``intervals`` (bootstrap du ratio
+    micro affiché) n'est rempli qu'en mode détaillé — son coût, lui, n'est
+    pas négligeable.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")

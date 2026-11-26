@@ -34,7 +34,11 @@ from cinoc.evaluation.correction import correction_analysis
 from cinoc.evaluation.decisions import decisions_analysis
 from cinoc.evaluation.economics import economics_analysis
 from cinoc.evaluation.errors import EvaluationError
-from cinoc.evaluation.inference import PerPipeline, inference_analyses
+from cinoc.evaluation.inference import (
+    InferenceEntry,
+    inference_analyses,
+    micro_ratio,
+)
 from cinoc.evaluation.ner import EntitySet
 from cinoc.evaluation.projectors import get_projector
 from cinoc.evaluation.registry import MetricRegistry
@@ -119,7 +123,7 @@ def evaluate_run(
     cross_engine: list[MetricScore] = []
     analyses: list[Analysis] = []
     #: Séries de chaque (vue × métrique) : la famille de Holm est le run entier.
-    tests: list[tuple[str, str, PerPipeline]] = []
+    tests: list[InferenceEntry] = []
     actives = _analyses_actives(evaluation)
     failed = frozenset(
         (u.pipeline, u.document_id) for u in usage if u.outcome == "failed"
@@ -265,14 +269,14 @@ def evaluate_run(
     )
 
 
-def _inference_entries(
-    view: EvaluationView, series: _Series
-) -> list[tuple[str, str, PerPipeline]]:
-    """(vue, métrique, séries alignées) de chaque métrique de la vue.
+def _inference_entries(view: EvaluationView, series: _Series) -> list[InferenceEntry]:
+    """(vue, métrique, séries alignées, poids) de chaque métrique de la vue.
 
     Les **mêmes séries** que la passe inter-moteurs : même index = même
     document, ``None`` = non applicable — un seul calcul des scores, deux
-    lectures (scalaire ``significance_p`` + payload ``inference``).
+    lectures (scalaire ``significance_p`` + payload ``inference``). Les poids
+    (``support`` par document) sont ceux de l'agrégat : l'IC rééchantillonne
+    le ratio que le tableau affiche.
     """
     return [
         (
@@ -280,6 +284,10 @@ def _inference_entries(
             metric_name,
             {
                 pipeline: [score.value for score in scores]
+                for pipeline, scores in series[metric_name].items()
+            },
+            {
+                pipeline: [score.support or 0 for score in scores]
                 for pipeline, scores in series[metric_name].items()
             },
         )
@@ -299,16 +307,12 @@ def _aggregate(name: str, scores: list[MetricScore], missed: int) -> MetricScore
     documents notés ; ``expected`` = ``support`` + les unités en échec qui
     auraient pu l'être (``missed``) — « n notés / n attendus » (arbitrage A3).
     """
-    pairs: list[tuple[float, int]] = []
-    for score in scores:
-        if score.value is not None:
-            pairs.append((score.value, score.support or 0))
-    total_weight = sum(weight for _, weight in pairs)
-    micro = (
-        sum(value * weight for value, weight in pairs) / total_weight
-        if total_weight > 0
-        else None
-    )
+    pairs = [
+        (score.value, score.support or 0)
+        for score in scores
+        if score.value is not None
+    ]
+    micro = micro_ratio([v for v, _ in pairs], [w for _, w in pairs])
     return MetricScore(
         metric=name, value=micro, support=len(pairs), expected=len(pairs) + missed
     )

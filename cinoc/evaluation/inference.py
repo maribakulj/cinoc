@@ -25,16 +25,24 @@ Data Sets*, JMLR 7:1-30 — k pipelines × n documents appariés), par
    chevauchent, et une paire diffère si et seulement si elle n'en partage
    aucune.
 
-Bootstrap : **percentile** (Efron), graine fixe → déterministe (invariant §12) ;
-volontairement pas BCa. Indice de quantile = statistique d'ordre
-``round(q·(n_iter−1))``. Seul coût non négligeable de l'inférence : calculé en
-mode détaillé seulement (analyse ``inference``).
+IC : **bootstrap du chiffre affiché**. L'agrégat d'un pipeline est le ratio
+**micro** Σ(v·w)/Σw (``micro_ratio`` — le runner l'écrit au tableau ; pour un
+taux d'erreur, Σ erreurs / Σ longueurs de référence) : on rééchantillonne les
+**documents** avec remise et on recalcule ce même ratio (Davison & Hinkley
+1997, *Bootstrap Methods and their Application*, ch. 2 et 5 : bootstrap d'un
+estimateur par quotient, unités = documents, pas caractères — les erreurs d'une
+page ne sont pas indépendantes). Intervalle **percentile** (Efron & Tibshirani
+1993, *An Introduction to the Bootstrap*, ch. 13), quantiles à interpolation
+linéaire, ``N_RESAMPLES`` tirages, graine fixe → mêmes octets à chaque run
+(invariant §12). Un document de poids nul ne pèse rien dans le point : il
+n'entre pas non plus dans le rééchantillonnage. Vectorisé par numpy
+(``default_rng``, par lots de mémoire bornée) ; seul coût non négligeable de
+l'inférence, calculé en mode détaillé seulement (analyse ``inference``).
 """
 
 from __future__ import annotations
 
 import math
-import random
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from functools import lru_cache
@@ -65,6 +73,25 @@ ALPHA = 0.05
 #: Séries par pipeline, **alignées** (même index = même document ; ``None`` =
 #: non applicable).
 PerPipeline = Mapping[str, Sequence[float | None]]
+
+#: Poids de micro-agrégation (``MetricScore.support`` par document), alignés
+#: sur ``PerPipeline`` — le dénominateur de la métrique.
+PerWeights = Mapping[str, Sequence[int]]
+
+#: (vue, métrique, valeurs, poids) — une ligne de la famille de Holm.
+InferenceEntry = tuple[str, str, PerPipeline, PerWeights]
+
+#: Rééchantillons du bootstrap. Un intervalle de quantiles à 95 % en demande
+#: de l'ordre de 1 000 à 2 000 (Efron & Tibshirani 1993, contre 25 à 200 pour
+#: une erreur type) : 2 000, que la vectorisation rend bon marché.
+N_RESAMPLES = 2000
+
+#: Graine fixe : mêmes tirages, mêmes octets, à chaque run.
+BOOTSTRAP_SEED = 42
+
+#: Indices tirés par lot (≈ 8 Mo en int64) : la mémoire reste bornée quelle
+#: que soit la taille du corpus.
+_BATCH_ELEMENTS = 1 << 20
 
 
 @dataclass(frozen=True)
@@ -136,27 +163,56 @@ def nemenyi_critical_value(k: int, alpha: float = ALPHA) -> float:
     return float(quantile) / math.sqrt(2.0)
 
 
-def bootstrap_ci(
+def micro_ratio(values: Sequence[float], weights: Sequence[int]) -> float | None:
+    """Σ(v·w)/Σw — l'agrégat **affiché** d'une métrique (``None`` sans poids).
+
+    Une seule définition, lue par le runner (tableau) et par l'IC (son point).
+    """
+    total_weight = sum(weights)
+    if total_weight <= 0:
+        return None
+    return sum(v * w for v, w in zip(values, weights, strict=True)) / total_weight
+
+
+def bootstrap_batch(n_documents: int) -> int:
+    """Rééchantillons tirés par lot : au plus ``_BATCH_ELEMENTS`` indices."""
+    return max(1, _BATCH_ELEMENTS // max(1, n_documents))
+
+
+def micro_ratio_ci(
     values: Sequence[float],
-    n_iter: int = 1000,
+    weights: Sequence[int],
+    *,
+    n_resamples: int = N_RESAMPLES,
     ci: float = 0.95,
-    seed: int = 42,
+    seed: int = BOOTSTRAP_SEED,
 ) -> tuple[float, float]:
-    """IC percentile de la moyenne par bootstrap — déterministe (graine fixe)."""
-    if not values:
-        return (0.0, 0.0)
-    rng = random.Random(seed)
+    """IC percentile du ratio micro, documents rééchantillonnés avec remise.
+
+    ``weights`` doivent être > 0 (un poids nul ne pèse pas dans le point, il
+    n'est pas rééchantillonné : ``_intervals`` l'écarte). Tirages
+    ``default_rng(seed).integers(0, n, (lot, n))`` lot après lot — la forme de
+    ``scipy.stats.bootstrap(paired=True, batch=bootstrap_batch(n))``.
+    """
+    if not values or len(values) != len(weights) or min(weights) <= 0:
+        raise EvaluationError("micro_ratio_ci : poids > 0 alignés sur les valeurs.")
+    weight = np.asarray(weights, dtype=np.float64)
+    errors = np.asarray(values, dtype=np.float64) * weight
     n = len(values)
-    means = sorted(
-        sum(values[rng.randint(0, n - 1)] for _ in range(n)) / n
-        for _ in range(n_iter)
+    rng = np.random.default_rng(seed)
+    batch = bootstrap_batch(n)
+    ratios = np.concatenate(
+        [
+            errors[index].sum(axis=1) / weight[index].sum(axis=1)
+            for index in (
+                rng.integers(0, n, (min(batch, n_resamples - start), n))
+                for start in range(0, n_resamples, batch)
+            )
+        ]
     )
     half_alpha = (1.0 - ci) / 2.0
-
-    def order_stat(q: float) -> float:
-        return means[max(0, min(n_iter - 1, round(q * (n_iter - 1))))]
-
-    return (order_stat(half_alpha), order_stat(1.0 - half_alpha))
+    lower, upper = np.quantile(ratios, [half_alpha, 1.0 - half_alpha])
+    return (float(lower), float(upper))
 
 
 def _cd_groups(
@@ -184,22 +240,32 @@ def _cd_groups(
 
 
 def _intervals(
-    names: Sequence[str], per_pipeline: PerPipeline
+    names: Sequence[str], per_pipeline: PerPipeline, weights: PerWeights
 ) -> tuple[PipelineInterval, ...]:
-    """IC bootstrap **marginaux** : chaque pipeline sur ses valeurs valides."""
+    """IC **marginaux** du ratio micro : chaque pipeline sur ses documents notés
+    de poids non nul — exactement ceux qui font son agrégat."""
     intervals: list[PipelineInterval] = []
     for name in names:
-        valid = [float(v) for v in per_pipeline[name] if v is not None]
-        if not valid:
+        pairs = [
+            (float(value), int(weight))
+            for value, weight in zip(per_pipeline[name], weights[name], strict=True)
+            if value is not None and weight > 0
+        ]
+        if not pairs:
             continue
-        lower, upper = bootstrap_ci(valid)
+        values = [value for value, _ in pairs]
+        positive = [weight for _, weight in pairs]
+        point = micro_ratio(values, positive)
+        if point is None:  # pragma: no cover -- poids > 0 par construction
+            continue
+        lower, upper = micro_ratio_ci(values, positive)
         intervals.append(
             PipelineInterval(
                 pipeline=name,
-                mean=sum(valid) / len(valid),
+                value=point,
                 lower=lower,
                 upper=upper,
-                n_documents=len(valid),
+                n_documents=len(pairs),
             )
         )
     return tuple(intervals)
@@ -208,6 +274,7 @@ def _intervals(
 def _payload(
     metric: str,
     per_pipeline: PerPipeline,
+    weights: PerWeights,
     omnibus: Omnibus,
     p_holm: float | None,
     family_size: int,
@@ -260,20 +327,22 @@ def _payload(
         cd_groups=groups,
         pairwise=pairwise,
         intervals=(
-            _intervals(names, per_pipeline) if with_intervals and supported else ()
+            _intervals(names, per_pipeline, weights)
+            if with_intervals and supported
+            else ()
         ),
     )
 
 
 def inference_analyses(
-    entries: Sequence[tuple[str, str, PerPipeline]],
+    entries: Sequence[InferenceEntry],
     *,
     alpha: float = ALPHA,
     with_intervals: bool = True,
 ) -> list[Analysis]:
     """Une ``Analysis`` par (vue, métrique, séries) — la famille de Holm est
     l'ensemble des tests **calculés** parmi ``entries`` (le run entier)."""
-    tests = [omnibus_test(per_pipeline) for _, _, per_pipeline in entries]
+    tests = [omnibus_test(per_pipeline) for _, _, per_pipeline, _ in entries]
     computed = [i for i, test in enumerate(tests) if test.p_value is not None]
     adjusted = dict(
         zip(
@@ -289,6 +358,7 @@ def inference_analyses(
             payload=_payload(
                 metric,
                 per_pipeline,
+                weights,
                 tests[i],
                 adjusted.get(i),
                 len(computed),
@@ -296,17 +366,22 @@ def inference_analyses(
                 with_intervals,
             ),
         )
-        for i, (view, metric, per_pipeline) in enumerate(entries)
+        for i, (view, metric, per_pipeline, weights) in enumerate(entries)
     ]
 
 
 __all__ = [
     "ALPHA",
+    "BOOTSTRAP_SEED",
     "MIN_SUPPORT",
+    "N_RESAMPLES",
+    "InferenceEntry",
     "Omnibus",
-    "bootstrap_ci",
+    "bootstrap_batch",
     "holm_adjusted",
     "inference_analyses",
+    "micro_ratio",
+    "micro_ratio_ci",
     "nemenyi_critical_value",
     "omnibus_test",
 ]

@@ -11,7 +11,8 @@ sans payload (résultat antérieur au schéma 5) garde sa p brute et le dit
 
 Sous le tableau, la section **lit** (sans recalculer) les payloads
 ``inference`` : rangs moyens, post-hoc de Nemenyi s'il a eu lieu (paires
-significatives, barres CD qui se chevauchent), IC bootstrap en mode détaillé.
+significatives, barres CD qui se chevauchent), IC bootstrap en mode détaillé
+— celui de l'agrégat **micro** du tableau, à côté de ce même agrégat.
 Puis les payloads ``inter_engine`` : complémentarité oracle (borne
 **supérieure** bag-of-words, documentée comme telle — anti-surinterprétation)
 et divergence Jensen-Shannon des profils d'erreurs.
@@ -112,12 +113,12 @@ def _inference_block(
                 if interval is not None
                 else "—"
             )
-            mean = (
-                localize_decimal(f"{interval.mean:.4f}", lang)
+            point = (
+                localize_decimal(f"{interval.value:.4f}", lang)
                 if interval is not None
                 else "—"
             )
-            cells = f'<td class="disp">{mean}</td><td class="disp">{ic}</td>'
+            cells = f'<td class="disp">{point}</td><td class="disp">{ic}</td>'
         badge = engine_cell(rank.pipeline, order.get(rank.pipeline, 0))
         rows.append(
             f'<tr><td class="eng-cell">{badge}</td>'
@@ -136,10 +137,10 @@ def _inference_block(
     th_mean_rank = localized(lang, "rang moyen", "mean rank")
     th_ic = ""
     if intervals:
-        th_mean = localized(lang, "moyenne", "mean")
+        th_point = localized(lang, "agrégat (micro)", "aggregate (micro)")
         th_ci = localized(lang, "IC 95 % (bootstrap)", "95% CI (bootstrap)")
         th_ic = (
-            f'<th class="num-cell">{th_mean}</th>'
+            f'<th class="num-cell">{th_point}</th>'
             f'<th class="num-cell">{th_ci}</th>'
         )
     return (

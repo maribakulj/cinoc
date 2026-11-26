@@ -148,7 +148,7 @@ def _friedman(**update: object) -> InferencePayload:
         ),
         intervals=(
             PipelineInterval(
-                pipeline="alpha", mean=0.1062, lower=0.095, upper=0.1162,
+                pipeline="alpha", value=0.1062, lower=0.095, upper=0.1162,
                 n_documents=10,
             ),
         ),
@@ -164,6 +164,10 @@ def test_inference_block_renders_ranks_posthoc_and_intervals() -> None:
     assert "CD = 1,0482" in html and "q = 2,3437" in html
     assert "rang moyen" in html
     assert "[0,0950 ; 0,1162]" in html
+    # L'IC est à côté du chiffre qu'il encadre : l'agrégat micro, pas une
+    # moyenne des documents.
+    assert "agrégat (micro)" in html and ">moyenne<" not in html
+    assert "0,1062" in html
     # Les paires, pas des groupes disjoints : seule alpha – gamma diffère, et
     # les barres qui se chevauchent le montrent.
     assert "paires significatives : alpha – gamma." in html
@@ -264,6 +268,7 @@ def test_renders_english_labels() -> None:
     assert posthoc is not None
     assert "significant pairs: alpha – gamma." in posthoc
     assert "CD bars" in posthoc and "Barres CD" not in posthoc
+    assert "aggregate (micro)" in posthoc and "agrégat" not in posthoc
     assert ">View<" in html and ">Vue<" not in html
     # Le bloc inter-moteurs (complémentarité + divergence) bascule aussi en EN.
     inter = CrossEngineSection().render(

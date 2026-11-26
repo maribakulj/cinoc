@@ -55,9 +55,9 @@ def _result(*, with_inference: bool = False, p: float | None = None) -> RunResul
                 PipelineRank(pipeline="tesseract", mean_rank=1.9),
             ),
             intervals=() if not with_inference else (
-                PipelineInterval(pipeline="pero", mean=0.045, lower=0.03,
+                PipelineInterval(pipeline="pero", value=0.045, lower=0.03,
                                  upper=0.06, n_documents=20),
-                PipelineInterval(pipeline="tesseract", mean=0.07, lower=0.05,
+                PipelineInterval(pipeline="tesseract", value=0.07, lower=0.05,
                                  upper=0.09, n_documents=20),
             ),
         )),)
@@ -93,8 +93,15 @@ def test_dot_plot_with_ci_when_inference_present() -> None:
     assert html is not None
     assert 'class="dot-svg"' in html  # dot plot rendu
     assert html.count('class="dot-ci"') == 2  # une moustache d'IC par moteur
-    assert html.count('class="dot-pt"') == 2  # un point (moyenne) par moteur
+    assert html.count('class="dot-pt"') == 2  # un point (l'agrégat) par moteur
     assert "IC 95" in html  # légende honnête
+    # Le point est le CER du tableau (micro), et la légende le dit.
+    assert "point = CER du tableau (micro" in html and "moyenne" not in html
+    english = KeyMeasuresSection().render(
+        _result(with_inference=True), SectionContext(lang="en")
+    )
+    assert english is not None
+    assert "dot = the table’s CER (micro" in english and "point =" not in english
 
 
 def test_significance_as_neutral_fact_wilcoxon() -> None:
