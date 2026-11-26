@@ -102,6 +102,10 @@ class EvaluationView(BaseModel):
         return None
 
 
+#: Ce que devient une unité en échec dans les agrégats (cf. ``EvaluationSpec``).
+FailurePolicy = Literal["exclude", "max_error"]
+
+
 class EvaluationSpec(BaseModel):
     """Container de N ``EvaluationView`` qu'un benchmark applique.
 
@@ -128,12 +132,21 @@ class EvaluationSpec(BaseModel):
 
     Le mode détaillé reste **entier** : c'est un choix au lancement, pas une
     version dégradée.
+
+    ``failure_policy`` dit ce que devient une unité **en échec** (aucune sortie)
+    dans les agrégats. ``"exclude"`` (défaut) : elle sort de la moyenne, et
+    chaque agrégat porte « n notés / n attendus » pour le montrer.
+    ``"max_error"`` : elle est notée à l'erreur maximale — 1 pour un taux
+    d'erreur, 0 pour un score —, pondérée par sa référence, comme une page
+    rendue vide. Ni l'une ni l'autre ne touche aux cas « vérité terrain absente »
+    ou « métrique inapplicable », qui restent non notés (``None``).
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     views: tuple[EvaluationView, ...] = Field(default_factory=tuple)
     analyses: tuple[str, ...] | Literal["toutes"] | None = None
+    failure_policy: FailurePolicy = "exclude"
 
 
-__all__ = ["MetricSpec", "EvaluationView", "EvaluationSpec"]
+__all__ = ["EvaluationSpec", "EvaluationView", "FailurePolicy", "MetricSpec"]

@@ -14,7 +14,7 @@ from collections.abc import Iterable
 from cinoc.evaluation.result import MetricScore
 from cinoc.reports._numbers import localize_decimal
 from cinoc.reports.glossary import load_glossary
-from cinoc.reports.html import escape
+from cinoc.reports.html import escape, localized
 
 
 def ordered_unique(values: Iterable[str]) -> tuple[str, ...]:
@@ -30,6 +30,30 @@ def format_value(score: MetricScore, lang: str) -> str:
     """Valeur formatée (``None`` non applicable → tiret), séparateur décimal
     localisé (virgule en français)."""
     return "—" if score.value is None else localize_decimal(f"{score.value:.4f}", lang)
+
+
+def coverage(score: MetricScore, lang: str) -> str:
+    """« n notés / n attendus » d'un **agrégat**, s'il lui manque des unités.
+
+    Rien quand l'agrégat est complet (ou antérieur au schéma 3, qui ne le dit
+    pas) : la marque n'apparaît que là où la moyenne porte sur moins d'unités
+    qu'attendu — c'est-à-dire là où un échec a été retiré (arbitrage A3).
+    """
+    if score.expected is None or score.support is None:
+        return ""
+    if score.support >= score.expected:
+        return ""
+    title = localized(
+        lang,
+        f"{score.support} documents notés sur {score.expected} attendus : les "
+        "unités en échec sont hors de la moyenne (motifs : « Unités en échec »).",
+        f"{score.support} documents scored out of {score.expected} expected: "
+        "failed units are left out of the mean (reasons: “Failed units”).",
+    )
+    return (
+        f' <span class="muted" title="{escape(title)}">'
+        f"{score.support}/{score.expected}</span>"
+    )
 
 
 def col_max(rows: list[tuple[MetricScore, ...]], index: int) -> float:
@@ -73,7 +97,7 @@ def bar_cell(
 
     ``sortable`` ajoute ``data-sort`` (valeur brute) → le tri client de
     ``report.js`` réordonne le DOM par cette clé (aucune donnée reconstruite)."""
-    text = format_value(score, lang)
+    text = format_value(score, lang) + coverage(score, lang)
     sort = (
         f' data-sort="{score.value:.6f}"'
         if sortable and score.value is not None

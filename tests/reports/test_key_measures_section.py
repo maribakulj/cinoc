@@ -94,6 +94,57 @@ def test_significance_as_neutral_fact_wilcoxon() -> None:
     assert html is not None
     assert "Wilcoxon" in html and "p = 0,0020" in html
     assert "significative" in html  # qualifie la DIFFÉRENCE, pas un moteur
+    # Le support du test (cas complets, apparié) est dit : ce n'est pas celui
+    # d'un agrégat quand un moteur a perdu une unité.
+    assert "(20 cas complets)" in html
+
+
+def test_incomplete_aggregate_shows_scored_over_expected() -> None:
+    """A3 : un agrégat qui a perdu une unité en échec porte « n notés / n
+    attendus » ; un agrégat complet ne porte rien."""
+    result = _result()
+    pero = result.pipelines[1].model_copy(
+        update={
+            "aggregate": (
+                MetricScore(metric="cer", value=0.045, support=19, expected=20),
+            )
+        }
+    )
+    tess = result.pipelines[0].model_copy(
+        update={
+            "aggregate": (
+                MetricScore(metric="cer", value=0.07, support=20, expected=20),
+            )
+        }
+    )
+    result = result.model_copy(update={"pipelines": (tess, pero)})
+    html = KeyMeasuresSection().render(result, SectionContext())
+    assert html is not None
+    assert ">19/20</span>" in html
+    assert "20/20" not in html
+    en = KeyMeasuresSection().render(result, SectionContext(lang="en"))
+    assert en is not None and "19 documents scored out of 20 expected" in en
+
+
+def test_dot_plot_says_when_engines_have_different_n() -> None:
+    """L'IC est marginal : un moteur qui a perdu une unité a un n plus petit."""
+    result = _result(with_inference=True)
+    (analysis,) = result.analyses
+    payload = analysis.payload
+    assert isinstance(payload, InferencePayload)
+    shrunk = payload.model_copy(
+        update={
+            "intervals": (
+                payload.intervals[0].model_copy(update={"n_documents": 19}),
+                payload.intervals[1],
+            )
+        }
+    )
+    result = result.model_copy(
+        update={"analyses": (analysis.model_copy(update={"payload": shrunk}),)}
+    )
+    html = KeyMeasuresSection().render(result, SectionContext())
+    assert html is not None and "n=19–20" in html
 
 
 def test_none_without_cer() -> None:

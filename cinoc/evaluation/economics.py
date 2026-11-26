@@ -168,7 +168,11 @@ def economics_analysis(
     specs = {spec.name: spec for spec in manifest.pipeline_specs}
     rows: list[PipelineEconomics] = []
     for name in sorted(specs):
-        entries = [u for u in usage if u.pipeline == name]
+        # Une unité en échec n'a rien produit ni rien mesuré : la compter
+        # gonflerait le débit (des pages « traitées » en zéro seconde).
+        entries = [
+            u for u in usage if u.pipeline == name and u.outcome != "failed"
+        ]
         if not entries:
             continue
         duration = sum(u.usage.duration_seconds or 0.0 for u in entries)

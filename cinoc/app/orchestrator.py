@@ -35,7 +35,7 @@ from cinoc.app.security import safe_stem
 from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.deadline import Deadline
 from cinoc.domain.documents import DocumentRef
-from cinoc.domain.errors import AdapterStepError, CinocError, RunCancelledError
+from cinoc.domain.errors import CinocError, RunCancelledError
 from cinoc.domain.pipeline import PipelineSpec
 from cinoc.domain.run import RunManifest, utcnow
 from cinoc.domain.run_spec import RunSpec
@@ -45,9 +45,14 @@ from cinoc.evaluation.metrics.archaic import make_air_metric, make_hcpr_metric
 from cinoc.evaluation.registry import MetricRegistry, register_default_metrics
 from cinoc.evaluation.result import DocumentUsage, RunResult
 from cinoc.evaluation.runner import evaluate_run
-from cinoc.pipeline.executor import PipelineExecutor, PipelineStepError
+from cinoc.pipeline.executor import (
+    UNIT_FAILURES,
+    PipelineExecutor,
+    failure_reason,
+)
 from cinoc.pipeline.protocols import Module
 from cinoc.pipeline.run_control import RunControl
+from cinoc.pipeline.types import DocumentExecution
 
 logger = logging.getLogger(__name__)
 
@@ -181,16 +186,22 @@ def run(
         )
 
         # 1) Reprise (thread principal) : les unités déjà produites à l'identique
-        #    sont rechargées ; les autres sont mises en file d'exécution.
-        results: dict[tuple[str, str], dict[ArtifactType, Artifact]] = {}
-        usage_by_unit: dict[tuple[str, str], ResourceUsage] = {}
+        #    sont rechargées ; les autres sont mises en file d'exécution. Seules
+        #    les unités réussies sont mises en cache : un échec se retente.
+        # Une ``DocumentExecution`` par unité, **échecs compris** : l'issue est
+        # conservée, jamais remplacée par un dict vide qui se lirait « absent ».
+        results: dict[tuple[str, str], DocumentExecution] = {}
+        secrets = _secret_values(spec.adapter_kwargs)
         pending: list[tuple[PipelineSpec, DocumentRef, str | None]] = []
         for pipeline in spec.pipelines:
             for document in documents:
                 if document.id in unreachable:
                     # Image distante injoignable : unité échouée (comme un échec
                     # d'adapter isolé), le reste du corpus tourne normalement.
-                    results[(pipeline.name, document.id)] = {}
+                    message = _redact(unreachable[document.id], secrets, workspace)
+                    results[(pipeline.name, document.id)] = DocumentExecution.failed(
+                        "infrastructure", message
+                    )
                     progress.tick()
                     continue
                 key = (
@@ -206,8 +217,9 @@ def run(
                 cached = resume_store.load(key) if resume_store and key else None
                 if cached is not None:
                     artifacts, cached_usage = cached
-                    results[(pipeline.name, document.id)] = dict(artifacts)
-                    usage_by_unit[(pipeline.name, document.id)] = cached_usage
+                    results[(pipeline.name, document.id)] = DocumentExecution(
+                        artifacts=dict(artifacts), usage=cached_usage
+                    )
                     progress.tick()
                 else:
                     pending.append((pipeline, document, key))
@@ -244,19 +256,21 @@ def run(
                         unit = (pipeline.name, document.id)
                         try:
                             execution = future.result()
-                        except (AdapterStepError, PipelineStepError) as exc:
+                        except UNIT_FAILURES as exc:
+                            message = _redact(str(exc), secrets, workspace)
                             logger.warning(
                                 "[orchestrator] concurrent %r · document %r "
                                 "échoué : %s",
                                 pipeline.name,
                                 document.id,
-                                exc,
+                                message,
                             )
-                            results[unit] = {}
+                            results[unit] = DocumentExecution.failed(
+                                failure_reason(exc), message
+                            )
                             progress.tick()
                             continue
-                        results[unit] = dict(execution.artifacts)
-                        usage_by_unit[unit] = execution.usage
+                        results[unit] = execution
                         if key is not None:
                             saves.append((key, execution.artifacts, execution.usage))
                         progress.tick()
@@ -278,16 +292,18 @@ def run(
         for pipeline in spec.pipelines:
             per_document: dict[str, dict[ArtifactType, Artifact]] = {}
             for document in documents:
-                unit = (pipeline.name, document.id)
-                per_document[document.id] = results[unit]
-                if unit in usage_by_unit:
-                    usage_records.append(
-                        DocumentUsage(
-                            document_id=document.id,
-                            pipeline=pipeline.name,
-                            usage=usage_by_unit[unit],
-                        )
+                execution = results[(pipeline.name, document.id)]
+                per_document[document.id] = dict(execution.artifacts)
+                usage_records.append(
+                    DocumentUsage(
+                        document_id=document.id,
+                        pipeline=pipeline.name,
+                        usage=execution.usage,
+                        outcome=execution.outcome,
+                        reason=execution.reason,
+                        message=execution.message,
                     )
+                )
             pipeline_outputs[pipeline.name] = per_document
 
         completed_at = utcnow()
@@ -340,7 +356,7 @@ _SAFE_SUFFIX = re.compile(r"\.[A-Za-z0-9]{1,8}$")
 
 def _materialize_remote_images(
     documents: tuple[DocumentRef, ...], images_dir: Path
-) -> tuple[tuple[DocumentRef, ...], frozenset[str]]:
+) -> tuple[tuple[DocumentRef, ...], dict[str, str]]:
     """Télécharge les images **distantes** du corpus dans le workspace du run.
 
     Un corpus **curé** (HF/IIIF) porte des images en *référence* (URL épinglée),
@@ -351,12 +367,12 @@ def _materialize_remote_images(
     dans le workspace temporaire (nettoyé en fin de run) ; la **spec d'origine
     n'est pas réécrite** → le ``RunResult``/rapport garde l'URL de référence.
 
-    Renvoie ``(documents exécutables, ids irrécupérables)`` : une image
+    Renvoie ``(documents exécutables, {id irrécupérable: raison})`` : une image
     injoignable n'abat pas le banc (philosophie « échec isolé d'unité ») — ses
-    unités sont marquées échouées, le reste du corpus tourne.
+    unités sont marquées échouées (motif ``infrastructure``), le reste tourne.
     """
     localized: list[DocumentRef] = []
-    failed: set[str] = set()
+    failed: dict[str, str] = {}
     for document in documents:
         uri = document.image_uri
         if uri is None or not uri.startswith(_REMOTE_SCHEMES):
@@ -375,11 +391,11 @@ def _materialize_remote_images(
                 document.id,
                 exc,
             )
-            failed.add(document.id)
+            failed[document.id] = f"image distante irrécupérable : {exc}"
             localized.append(document)
             continue
         localized.append(document.model_copy(update={"image_uri": str(dest)}))
-    return tuple(localized), frozenset(failed)
+    return tuple(localized), failed
 
 
 def _initial_inputs(document: DocumentRef) -> dict[ArtifactType, Artifact]:
@@ -440,6 +456,7 @@ def _manifest(
         module_versions={name: modules[name].version for name in names},
         system_binaries_lock=system_binaries,
         view_specs=spec.evaluation.views,
+        failure_policy=spec.evaluation.failure_policy,
         code_version=code_version,
         started_at=started_at,
         completed_at=completed_at,
@@ -464,6 +481,41 @@ def _sans_secrets(
     return {
         k: _SECRET_PLACEHOLDER if k in _SECRET_KWARGS else v for k, v in kwargs.items()
     }
+
+
+def _secret_values(
+    adapter_kwargs: Mapping[str, Mapping[str, str | int | float | bool]],
+) -> tuple[str, ...]:
+    """Valeurs secrètes du run — à caviarder dans tout message d'échec."""
+    values = {
+        str(v)
+        for kwargs in adapter_kwargs.values()
+        for k, v in kwargs.items()
+        if k in _SECRET_KWARGS and str(v)
+    }
+    # Le plus long d'abord : un secret qui en contient un autre reste masqué.
+    return tuple(sorted(values, key=lambda v: (-len(v), v)))
+
+
+#: Plafond d'un message d'échec : une explication, pas une trace complète.
+_MESSAGE_MAX = 1000
+
+
+def _redact(message: str, secrets: tuple[str, ...], workspace: str) -> str:
+    """Message d'échec **sans secret**, borné : il voyage avec le ``RunResult``.
+
+    Un moteur peut citer dans son erreur ce qu'il a reçu (une URL à jeton, un
+    en-tête) ; le message suit alors le même chemin que le manifeste, donc la
+    même règle : le fait reste, la valeur non. Le workspace temporaire, lui,
+    change à chaque run : remplacé par ``<workspace>``, il ne rend pas le
+    ``RunResult`` instable (déterminisme).
+    """
+    for secret in secrets:
+        message = message.replace(secret, _SECRET_PLACEHOLDER)
+    message = message.replace(workspace, "<workspace>")
+    if len(message) > _MESSAGE_MAX:
+        message = message[: _MESSAGE_MAX - 1] + "…"
+    return message
 
 
 __all__ = ["ArtifactSink", "OrchestrationError", "PipelineOutputs", "run"]

@@ -21,10 +21,12 @@ supprimé ».
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field
+from typing import Self
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from cinoc.domain.run import RunManifest
-from cinoc.domain.usage import ResourceUsage
+from cinoc.domain.usage import FailureReason, ResourceUsage, UnitOutcome
 from cinoc.evaluation.analysis import Analysis
 
 
@@ -39,6 +41,13 @@ class MetricScore(BaseModel):
     #: métrique (longueur de réf…), qui pondère le micro-agrégat ; en agrégat = le
     #: **nombre de documents** applicables. Deux lectures, même intention (taille).
     support: int | None = Field(default=None, ge=0)
+    #: **Agrégat seulement** — « n attendus » à côté de ``support`` (« n notés ») :
+    #: les documents notés **plus** les unités en échec qui auraient pu l'être
+    #: (vérité terrain présente pour cette métrique). L'écart entre les deux est
+    #: exactement ce que la politique d'échec a retiré de la moyenne ; ses motifs
+    #: sont dans ``RunResult.usage``. ``None`` par-document, et pour un résultat
+    #: antérieur au schéma 3.
+    expected: int | None = Field(default=None, ge=0)
 
 
 class RunDocumentResult(BaseModel):
@@ -71,11 +80,17 @@ class PipelineResult(BaseModel):
 
 
 class DocumentUsage(BaseModel):
-    """Ressources consommées par un pipeline sur un document (hors vues).
+    """Enregistrement d'une unité (pipeline × document) : issue + ressources.
 
     L'exécution a lieu une fois par (pipeline × document) — les vues sont des
     lentilles d'évaluation, sans coût d'exécution propre. Les durées sont du
     wall-clock (mesure d'environnement, comme les horodatages du manifeste).
+
+    ``outcome`` (``ok`` · ``truncated`` · ``failed``) est l'issue **produite par
+    l'exécution** (``DocumentExecution``) et transportée telle quelle : une unité
+    en échec a sa ligne, avec son motif codé (``reason``) et son message — c'est
+    ce qui distingue un échec d'une absence. Une unité en échec n'a pas de
+    consommation mesurée (``usage`` vide).
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -83,6 +98,17 @@ class DocumentUsage(BaseModel):
     document_id: str = Field(min_length=1, max_length=256)
     pipeline: str = Field(min_length=1, max_length=128)
     usage: ResourceUsage
+    outcome: UnitOutcome = "ok"
+    reason: FailureReason | None = None
+    message: str | None = Field(default=None, max_length=2000)
+
+    @model_validator(mode="after")
+    def _reason_iff_failed(self) -> Self:
+        if (self.outcome == "failed") != (self.reason is not None):
+            raise ValueError(
+                "un motif d'échec accompagne une issue « failed », et elle seule."
+            )
+        return self
 
 
 class RunResult(BaseModel):
@@ -90,15 +116,18 @@ class RunResult(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    schema_version: int = 2
+    #: 3 : une ligne d'``usage`` par unité **y compris en échec** (issue + motif)
+    #: et ``expected`` sur les agrégats. Un JSON v2 se recharge (issue ``ok`` par
+    #: défaut, ``expected`` absent) — mais ne distingue pas un échec d'une absence.
+    schema_version: int = 3
     manifest: RunManifest
     pipelines: tuple[PipelineResult, ...] = Field(default_factory=tuple)
     documents: tuple[RunDocumentResult, ...] = Field(default_factory=tuple)
     #: Écrit par la passe inter-moteurs ; vide tant qu'un seul pipeline court.
     cross_engine: tuple[MetricScore, ...] = Field(default_factory=tuple)
-    #: Ressources mesurées par (pipeline × document), triées (pipeline,
-    #: document_id) — ordre déterministe. Vide pour un résultat reconstruit
-    #: sans exécution (ex. chargement d'un JSON v1).
+    #: Une entrée par unité (pipeline × document) exécutée, **en échec compris**,
+    #: triée (pipeline, document_id) — ordre déterministe. Vide pour un résultat
+    #: reconstruit sans exécution (ex. chargement d'un JSON v1).
     usage: tuple[DocumentUsage, ...] = Field(default_factory=tuple)
     #: Canal des résultats **non scalaires** (contrat E2 ci-dessus) : payloads
     #: typés par famille, calculés par le runner, triés (view, kind, métrique)

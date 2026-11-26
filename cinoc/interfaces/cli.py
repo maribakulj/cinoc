@@ -39,6 +39,7 @@ from cinoc.app.variance import run_repeatedly
 from cinoc.domain.errors import CinocError
 from cinoc.domain.run import RunManifest
 from cinoc.domain.run_spec import RunSpec
+from cinoc.domain.usage import ResourceUsage
 from cinoc.evaluation.analysis import EconomicsPayload
 from cinoc.evaluation.result import RunResult
 from cinoc.interfaces._cli_parser import build_parser
@@ -67,7 +68,7 @@ def demo_to_html() -> str:
 
     La démo est la **vitrine du déterminisme** (golden octet-stable entre deux
     exécutions) : on retire du ``RunResult`` les canaux **environnementaux**
-    avant rendu — ``usage`` (durées wall-clock) et l'analyse ``economics`` qui
+    avant rendu — les durées de ``usage`` (wall-clock) et l'analyse ``economics`` qui
     en dérive varient d'un run à l'autre par nature (arbitrage D-068 ; un run
     réel, lui, les rend : le rapport reste une fonction pure du ``RunResult``).
     """
@@ -92,7 +93,11 @@ def demo_to_html() -> str:
                     "completed_at": _DEMO_EPOCH,
                 }
             ),
-            "usage": (),
+            # Durées vidées, **issues gardées** : l'issue d'une unité est une
+            # donnée du run, pas une mesure d'environnement.
+            "usage": tuple(
+                u.model_copy(update={"usage": ResourceUsage()}) for u in result.usage
+            ),
             # Réfs image = chemins du TemporaryDirectory (éphémères) → neutralisés
             # comme les autres canaux environnementaux (golden octet-stable).
             "documents": tuple(

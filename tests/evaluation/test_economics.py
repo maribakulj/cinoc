@@ -163,6 +163,22 @@ def test_throughput_effective_hand_computed() -> None:
     )
 
 
+def test_failed_unit_is_not_counted_as_a_processed_page() -> None:
+    """Une unité en échec n'a rien produit ni rien mesuré : la compter dans le
+    débit inventerait une page traitée en zéro seconde."""
+    failed = DocumentUsage(
+        document_id="d3", pipeline="ocr_seul", usage=ResourceUsage(),
+        outcome="failed", reason="engine", message="boom",
+    )
+    analysis = economics_analysis(
+        "text", "cer", _series(), (*_usage(), failed), _manifest(), pricing=_PRICING
+    )
+    assert analysis is not None and isinstance(analysis.payload, EconomicsPayload)
+    rows = {r.pipeline: r for r in analysis.payload.pipelines}
+    assert rows["ocr_seul"].n_documents == 2
+    assert rows["ocr_seul"].pages_per_hour == pytest.approx(40.0)
+
+
 def test_marginal_cost_vs_cheapest() -> None:
     payload = _payload()
     assert len(payload.marginal) == 1

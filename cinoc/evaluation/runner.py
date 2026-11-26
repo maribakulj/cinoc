@@ -19,6 +19,7 @@ from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.documents import DocumentRef, GroundTruthRef
 from cinoc.domain.evaluation import EvaluationSpec, EvaluationView
+from cinoc.domain.layout import CanonicalLayout
 from cinoc.domain.run import RunManifest
 from cinoc.evaluation._view_collectors import COLLECTEURS, ViewCollectors
 from cinoc.evaluation.calibration import calibration_analysis
@@ -29,6 +30,7 @@ from cinoc.evaluation.decisions import decisions_analysis
 from cinoc.evaluation.economics import economics_analysis
 from cinoc.evaluation.errors import EvaluationError
 from cinoc.evaluation.inference import inference_analysis
+from cinoc.evaluation.ner import EntitySet
 from cinoc.evaluation.projectors import get_projector
 from cinoc.evaluation.registry import MetricRegistry
 from cinoc.evaluation.representations import load_representation, prepare_text
@@ -121,6 +123,10 @@ def evaluate_run(
     cross_engine: list[MetricScore] = []
     analyses: list[Analysis] = []
     actives = _analyses_actives(evaluation)
+    failed = frozenset(
+        (u.pipeline, u.document_id) for u in usage if u.outcome == "failed"
+    )
+    max_error = evaluation.failure_policy == "max_error"
 
     for view in evaluation.views:
         series: _Series = {name: {} for name in view.metric_names}
@@ -129,17 +135,31 @@ def evaluate_run(
             for name in view.metric_names:
                 series[name][pipeline_name] = []
             step_ranks = _step_ranks(manifest, pipeline_name)
+            #: Unités en échec qui **auraient** été notées, par métrique : la
+            #: différence entre « n attendus » et « n notés ».
+            missed = dict.fromkeys(view.metric_names, 0)
             for document in corpus.documents:
-                candidate = _candidate_for(
-                    pipeline_outputs,
-                    pipeline_name,
-                    document.id,
-                    view.candidate_types,
-                    step_ranks,
-                )
-                scores, text_context, entity_context = _score_document(
-                    view, document, candidate, registry
-                )
+                if (pipeline_name, document.id) in failed:
+                    scores = _score_failed(view, document, registry, max_error)
+                    for score in scores:
+                        if score.value is None and _expects(
+                            view, document, registry, score.metric
+                        ):
+                            missed[score.metric] += 1
+                    # Rien n'a été produit : aucune analyse ne s'en nourrit,
+                    # même notée à l'erreur maximale (pas de texte fabriqué).
+                    text_context = entity_context = None
+                else:
+                    candidate = _candidate_for(
+                        pipeline_outputs,
+                        pipeline_name,
+                        document.id,
+                        view.candidate_types,
+                        step_ranks,
+                    )
+                    scores, text_context, entity_context = _score_document(
+                        view, document, candidate, registry
+                    )
                 collectors.observe(
                     pipeline_name,
                     document.id,
@@ -164,7 +184,7 @@ def evaluate_run(
                     pipeline=pipeline_name,
                     view=view.name,
                     aggregate=tuple(
-                        _aggregate(name, series[name][pipeline_name])
+                        _aggregate(name, series[name][pipeline_name], missed[name])
                         for name in view.metric_names
                     ),
                 )
@@ -253,7 +273,7 @@ def _inference_analyses(view: EvaluationView, series: _Series) -> list[Analysis]
     return out
 
 
-def _aggregate(name: str, scores: list[MetricScore]) -> MetricScore:
+def _aggregate(name: str, scores: list[MetricScore], missed: int) -> MetricScore:
     """Agrégat **micro** : Σ(valeur·poids)/Σpoids — la métrique au niveau corpus.
 
     Micro (et non la moyenne *macro* des taux par-document) est la métrique
@@ -262,7 +282,8 @@ def _aggregate(name: str, scores: list[MetricScore]) -> MetricScore:
     reste reconstructible depuis le détail par-document (``RunResult.documents``).
     Les documents à poids nul (référence vide) sont exclus du micro ; ``value``
     vaut ``None`` si aucun poids (toutes réfs vides). ``support`` = nombre de
-    documents applicables.
+    documents notés ; ``expected`` = ``support`` + les unités en échec qui
+    auraient pu l'être (``missed``) — « n notés / n attendus » (arbitrage A3).
     """
     pairs: list[tuple[float, int]] = []
     for score in scores:
@@ -274,7 +295,95 @@ def _aggregate(name: str, scores: list[MetricScore]) -> MetricScore:
         if total_weight > 0
         else None
     )
-    return MetricScore(metric=name, value=micro, support=len(pairs))
+    return MetricScore(
+        metric=name, value=micro, support=len(pairs), expected=len(pairs) + missed
+    )
+
+
+def _empty_hypothesis(hypothesis_type: ArtifactType) -> object | None:
+    """Hypothèse **vide** du type : ce qu'aurait rendu un moteur sans sortie.
+
+    Sert uniquement à demander à la métrique le **poids** de la référence ; la
+    valeur notée, elle, est la borne de l'échelle (cf. ``_score_failed``).
+    """
+    if hypothesis_type in _TEXT_LIKE:
+        return ""
+    if hypothesis_type is ArtifactType.LAYOUT:
+        return CanonicalLayout()
+    if hypothesis_type is ArtifactType.ENTITIES:
+        return EntitySet(text="", entities=())
+    return None
+
+
+def _reference_for(
+    view: EvaluationView, document: DocumentRef, reference_type: ArtifactType
+) -> object | None:
+    """Référence chargée, projetée et préparée comme au scoring, ou ``None``."""
+    resolved = _resolve_ground_truth(document, view, reference_type)
+    if resolved is None:
+        return None
+    ground_truth, gt_native_type = resolved
+    reference = _project_side(ground_truth.uri, gt_native_type, reference_type, view)
+    return None if reference is None else _prepare(reference, view)
+
+
+def _expects(
+    view: EvaluationView, document: DocumentRef, registry: MetricRegistry, name: str
+) -> bool:
+    """Une unité de ce document est-elle **attendue** pour cette métrique ?
+
+    Oui si sa vérité terrain l'alimente : c'est ce qui sépare un échec (l'unité
+    aurait été notée) d'un cas que la métrique ne couvre de toute façon pas.
+    """
+    metric = registry.document_metric(name)
+    if metric is None:
+        raise EvaluationError(f"métrique inconnue : {name!r}.")
+    return _resolve_ground_truth(document, view, metric.input_types[0]) is not None
+
+
+def _score_failed(
+    view: EvaluationView,
+    document: DocumentRef,
+    registry: MetricRegistry,
+    max_error: bool,
+) -> tuple[MetricScore, ...]:
+    """Scores d'une unité **en échec**, selon la politique d'échec.
+
+    ``exclude`` : tout ``None`` — l'unité sort de la moyenne, et « n attendus »
+    le dit. ``max_error`` : la pire valeur de l'échelle — 1 pour un taux
+    d'erreur, 0 pour un score —, avec le **poids** que la métrique donne à la
+    référence face à une sortie vide (la longueur de la référence pour le CER :
+    exactement le CER d'une page rendue vide). Une métrique qui ne sait pas
+    peser une sortie vide reste ``None`` : on ne fabrique pas de poids.
+    """
+    scores: list[MetricScore] = []
+    for name in view.metric_names:
+        metric = registry.document_metric(name)
+        if metric is None:
+            raise EvaluationError(f"métrique inconnue : {name!r}.")
+        if not max_error:
+            scores.append(MetricScore(metric=name))
+            continue
+        reference_type, hypothesis_type = metric.input_types
+        reference = _reference_for(view, document, reference_type)
+        empty = _empty_hypothesis(hypothesis_type)
+        observation = (
+            metric.fn(
+                DocContext(
+                    document_id=document.id, reference=reference, hypothesis=empty
+                )
+            )
+            if reference is not None and empty is not None
+            else None
+        )
+        if observation is None:
+            scores.append(MetricScore(metric=name))
+            continue
+        worst = 0.0 if metric.spec.higher_is_better else 1.0
+        scores.append(
+            MetricScore(metric=name, value=worst, support=observation.weight)
+        )
+    return tuple(scores)
 
 
 def _cross_engine_scores(
@@ -414,17 +523,15 @@ def _context_for(
     reference_type, hypothesis_type = signature
     if candidate is None or candidate.uri is None:
         return None
-    resolved = _resolve_ground_truth(document, view, reference_type)
-    if resolved is None:
+    if _resolve_ground_truth(document, view, reference_type) is None:
         return None
-    ground_truth, gt_native_type = resolved
-    reference = _project_side(ground_truth.uri, gt_native_type, reference_type, view)
+    reference = _reference_for(view, document, reference_type)
     hypothesis = _project_side(candidate.uri, candidate.type, hypothesis_type, view)
     if reference is None or hypothesis is None:
         return None
     return DocContext(
         document_id=document.id,
-        reference=_prepare(reference, view),
+        reference=reference,
         hypothesis=_prepare(hypothesis, view),
     )
 
