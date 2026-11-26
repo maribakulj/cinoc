@@ -26,11 +26,13 @@ from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
 
-_VERSION = "1.0"
+#: 2.0 : ROVER indépendant du nom des sources (D-287) ; 1.0 alignait en étoile
+#: sur la première source par ordre alphabétique de nom.
+_VERSION = "2.0"
 
 
 class TextVoteMerger:
-    """Vote majoritaire par jeton entre N transcriptions d'un même document.
+    """Vote ROVER au mot entre N transcriptions d'un même document.
 
     ``kind`` choisit le type fusionné : ``raw_text`` pour des sorties d'OCR,
     ``corrected_text`` pour des sorties de correcteurs. Le type d'entrée et celui

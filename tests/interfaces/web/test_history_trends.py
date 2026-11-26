@@ -13,7 +13,7 @@ from cinoc.interfaces.web.app import _TEMPLATES_DIR
 from cinoc.interfaces.web.routers.home import build_home_router
 
 
-def _history_body(tmp_path: Path, store: HistoryStore) -> str:
+def _history_body(tmp_path: Path, store: HistoryStore, lang: str = "fr") -> str:
     app = FastAPI()
     app.include_router(
         build_home_router(
@@ -25,7 +25,7 @@ def _history_body(tmp_path: Path, store: HistoryStore) -> str:
             history_store=store,
         )
     )
-    return TestClient(app).get("/history").text
+    return TestClient(app).get(f"/history?lang={lang}").text
 
 
 def _rec(run_id: str, ts: str, value: float) -> HistoryRecord:
@@ -93,3 +93,47 @@ def test_history_renders_significant_change_point(tmp_path: Path) -> None:
     assert "rupture dès r07" in body
     assert "(p=0.031)" in body
     assert "-0.2000" in body  # Δ signé (amélioration)
+
+
+def test_history_says_when_a_slope_is_not_significant(tmp_path: Path) -> None:
+    """Défaut 10 de l'audit D-264 : la pente s'affichait sans test. Six runs
+    qui fluctuent (p = 0,186) : la carte donne la p-value et dit « non
+    significative » — la pente n'est pas présentée comme une tendance."""
+    store = HistoryStore(tmp_path / "h.db")
+    store.add(
+        [
+            _rec(f"r{i + 1}", f"2026-01-{i + 1:02d}T00:00:00", value)
+            for i, value in enumerate([0.30, 0.28, 0.31, 0.26, 0.29, 0.25])
+        ]
+    )
+    body = _history_body(tmp_path, store)
+    assert "p=0.186" in body
+    assert "non significative" in body
+    english = _history_body(tmp_path, store, lang="en")
+    assert "p=0.186 · not significant" in english
+
+
+def test_history_says_when_a_slope_is_significant(tmp_path: Path) -> None:
+    store = HistoryStore(tmp_path / "h.db")
+    store.add(
+        [
+            _rec(f"r{i + 1}", f"2026-01-{i + 1:02d}T00:00:00", value)
+            for i, value in enumerate([0.30, 0.27, 0.25, 0.22, 0.20, 0.17])
+        ]
+    )
+    body = _history_body(tmp_path, store)
+    assert "significative (p ≤ 0,05)" in body
+    assert "non significative" not in body
+
+
+def test_history_says_two_runs_cannot_be_tested(tmp_path: Path) -> None:
+    store = HistoryStore(tmp_path / "h.db")
+    store.add(
+        [
+            _rec("r1", "2026-01-01T00:00:00", 0.30),
+            _rec("r2", "2026-02-01T00:00:00", 0.20),
+        ]
+    )
+    body = _history_body(tmp_path, store)
+    assert "aucun test à 2 runs" in body
+    assert "significative" not in body.split("trend-grid", 1)[1].split("</section>")[0]

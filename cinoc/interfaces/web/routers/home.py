@@ -114,7 +114,8 @@ def _cer_trends(
     """Sparklines CER : une série chronologique par ``(pipeline, vue)``.
 
     Données réelles du store (``history``) — aucune ré-agrégation ici : la
-    tendance OLS et la rupture (Pettitt) viennent d'``app.history`` (couche 6).
+    tendance (pente et son test, ``linregress``) et la rupture (Pettitt)
+    viennent d'``app.history`` (couche 6).
     Ordre stable (première apparition dans ``records``, plus récent d'abord).
     """
     seen: set[tuple[str, str]] = set()
@@ -143,6 +144,14 @@ def _cer_trends(
                 ),
                 "r_squared": (
                     insight.trend.r_squared if insight.trend is not None else None
+                ),
+                # La pente porte son test (``linregress``) : p absente à 2
+                # runs, et « significative » seulement si p ≤ α.
+                "p_value": (
+                    insight.trend.p_value if insight.trend is not None else None
+                ),
+                "significant": (
+                    insight.trend is not None and insight.trend.significant
                 ),
                 # Rupture affichée seulement si significative (p ≤ α) — le
                 # test de Pettitt remplace le max-diff qui « trouvait » toujours.

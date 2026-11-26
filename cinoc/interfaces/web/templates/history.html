@@ -40,6 +40,13 @@
           {% if tr.slope is not none %}
           <span class="mono">{{ t.history_slope }} {{ "%+.4f"|format(tr.slope) }}
             · R² {{ "%.2f"|format(tr.r_squared) }}</span>
+          {% if tr.p_value is none %}
+          <span class="mono">{{ t.history_trend_untested }}</span>
+          {% elif tr.significant %}
+          <span class="mono">p={{ "%.3f"|format(tr.p_value) }} · {{ t.history_trend_significant }}</span>
+          {% else %}
+          <span class="mono">p={{ "%.3f"|format(tr.p_value) }} · {{ t.history_trend_not_significant }}</span>
+          {% endif %}
           {% endif %}
         </div>
         {% if tr.rupture %}

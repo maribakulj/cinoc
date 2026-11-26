@@ -7,6 +7,7 @@ les lettres isolées (R2).
 
 from __future__ import annotations
 
+import itertools
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -44,6 +45,71 @@ def test_roman_to_int_rejects_implausible() -> None:
     assert roman_to_int("VV") is None
     assert roman_to_int("") is None
     assert roman_to_int("bonjour") is None
+
+
+#: Les 3 999 formes canoniques (1 → 3 999), écrites ici par la règle des
+#: chiffres — milliers, centaines, dizaines, unités — sans passer par le module.
+_CHIFFRES = (
+    ("", "M", "MM", "MMM"),
+    ("", "C", "CC", "CCC", "CD", "D", "DC", "DCC", "DCCC", "CM"),
+    ("", "X", "XX", "XXX", "XL", "L", "LX", "LXX", "LXXX", "XC"),
+    ("", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX"),
+)
+
+
+def _canonique(n: int) -> str:
+    return "".join(
+        chiffres[(n // puissance) % 10]
+        for chiffres, puissance in zip(_CHIFFRES, (1000, 100, 10, 1), strict=True)
+    )
+
+
+def test_every_canonical_form_reads_its_value() -> None:
+    for n in range(1, 4000):
+        assert roman_to_int(_canonique(n)) == n
+
+
+def test_malformed_numerals_are_refused() -> None:
+    """Défaut 11 de l'audit D-264 : ``IIV``, ``IXI``, ``VIV``, ``XIIX`` étaient
+    acceptés — chaque paire soustractive était légale prise seule, mais aucune
+    écriture romaine, ni canonique ni médiévale, ne les produit."""
+    for forme in (
+        "IIV", "IXI", "VIV", "XIIX", "IIX", "XXC", "IVI", "IXX", "XCX", "CMC",
+        "VIX", "LXL", "DCD", "IVIV", "XLX", "MMMMM", "DD", "LL",
+    ):
+        assert roman_to_int(forme) is None, forme
+
+
+def test_only_canonical_and_medieval_additive_forms_pass() -> None:
+    """Toute chaîne de ``IVXLCDM`` (jusqu'à 5 lettres, 19 607 chaînes) acceptée
+    est soit canonique, soit la forme additive médiévale d'un chiffre (``IIII``,
+    ``VIIII``, ``XXXX``, ``LXXXX``, ``CCCC``, ``DCCCC``, ``MMMM``) — et vaut
+    alors ce que vaut sa forme canonique."""
+    canoniques = {_canonique(n): n for n in range(1, 4000)}
+    # Le chiffre 9 additif d'abord : ``VIIII`` contient ``IIII``.
+    additives = {"VIIII": "IX", "IIII": "IV", "LXXXX": "XC", "XXXX": "XL",
+                 "DCCCC": "CM", "CCCC": "CD"}
+    for longueur in range(1, 6):
+        for lettres in itertools.product("IVXLCDM", repeat=longueur):
+            forme = "".join(lettres)
+            valeur = roman_to_int(forme)
+            if valeur is None:
+                continue
+            canonique = forme
+            for additive, soustractive in additives.items():
+                canonique = canonique.replace(additive, soustractive)
+            if canonique.startswith("MMMM"):
+                assert valeur == 4000 + canoniques.get(canonique[4:], 0), forme
+                continue
+            assert canoniques.get(canonique) == valeur, forme
+
+
+def test_medieval_additive_forms_are_kept() -> None:
+    """D-121 : l'additif médiéval n'est pas une faute (``xiiij`` = 14)."""
+    assert roman_to_int("xiiij") == 14
+    assert roman_to_int("VIIII") == 9
+    assert roman_to_int("MCCCCLXXXXVIIII") == 1499
+    assert roman_to_int("MMMM") == 4000
 
 
 def test_detect_min_length_two_filters_singletons() -> None:
