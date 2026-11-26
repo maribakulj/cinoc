@@ -71,6 +71,7 @@ def run_region_fanout(
     control: RunControl,
     params: Mapping[str, ParamValue] | None = None,
     cropper: RegionCropper | None = None,
+    truncations: list[str] | None = None,
 ) -> tuple[CanonicalLayout, ResourceUsage]:
     """Remplit ``layout`` (régions seules) par reconnaissance région par région.
 
@@ -79,14 +80,18 @@ def run_region_fanout(
     (un appel par région). Une région dont la reconnaissance échoue reste
     **vide** (texte non produit, avertissement journalisé) — la page n'est pas
     abattue. Avec un ``cropper``, chaque bloc est **découpé** de l'image avant
-    OCR (pipeline réel).
+    OCR (pipeline réel). ``truncations``, si fourni, reçoit une ligne par région
+    dont la reconnaissance est **coupée** (``StepOutput.truncation``) : sa sortie
+    est gardée, et la coupure remonte à l'étape au lieu d'être avalée.
     """
     step_params = dict(params) if params is not None else {}
+    coupures = truncations if truncations is not None else []
     usage = ResourceUsage()
     pages: list[LayoutPage] = []
     for page in layout.pages:
         filled_page, page_usage = _fill_page(
-            page, page_image, recognizer, context, control, step_params, cropper
+            page, page_image, recognizer, context, control, step_params, cropper,
+            coupures,
         )
         pages.append(filled_page)
         usage = usage.merged_with(page_usage)
@@ -102,12 +107,14 @@ def _fill_page(
     control: RunControl,
     params: dict[str, ParamValue],
     cropper: RegionCropper | None,
+    truncations: list[str],
 ) -> tuple[LayoutPage, ResourceUsage]:
     usage = ResourceUsage()
     filled: list[Region] = []
     for region in page.regions:
         filled_region, region_usage = _fill_region(
-            region, page, page_image, recognizer, context, control, params, cropper
+            region, page, page_image, recognizer, context, control, params, cropper,
+            truncations,
         )
         filled.append(filled_region)
         usage = usage.merged_with(region_usage)
@@ -168,6 +175,7 @@ def _fill_region(
     control: RunControl,
     params: dict[str, ParamValue],
     cropper: RegionCropper | None,
+    truncations: list[str] | None = None,
 ) -> tuple[Region, ResourceUsage | None]:
     """Remplit une région de ses lignes — **en descendant** dans ses enfants.
 
@@ -187,7 +195,8 @@ def _fill_region(
         usage = ResourceUsage()
         for enfant in region.regions:
             rempli, usage_enfant = _fill_region(
-                enfant, page, page_image, recognizer, context, control, params, cropper
+                enfant, page, page_image, recognizer, context, control, params,
+                cropper, truncations,
             )
             enfants.append(rempli)
             usage = usage.merged_with(usage_enfant)
@@ -208,6 +217,8 @@ def _fill_region(
             "[fanout] région %r non reconnue (ignorée) : %s", region.id, exc
         )
         return region, None
+    if output.truncation is not None and truncations is not None:
+        truncations.append(f"région {region.id!r} : {output.truncation}")
     return region.model_copy(update={"lines": lignes}), output.usage
 
 
@@ -316,6 +327,7 @@ def execute_region_fanout(
         )
     except (OSError, ValueError) as exc:
         raise AdapterStepError(f"fanout : LAYOUT d'entrée illisible : {exc}") from exc
+    coupures: list[str] = []
     filled, usage = run_region_fanout(
         layout=layout,
         page_image=page_image,
@@ -324,6 +336,7 @@ def execute_region_fanout(
         control=control,
         params=params,
         cropper=cropper,
+        truncations=coupures,
     )
     payload = filled.model_dump_json().encode("utf-8")
     out_dir = (
@@ -342,7 +355,9 @@ def execute_region_fanout(
             content_hash=compute_content_hash(payload),
         )
     }
-    return StepOutput(artifacts=artifacts, usage=usage)
+    return StepOutput(
+        artifacts=artifacts, usage=usage, truncation="; ".join(coupures) or None
+    )
 
 
 __all__ = [

@@ -347,3 +347,53 @@ def test_exactly_eight_crops_go_through(monkeypatch: pytest.MonkeyPatch) -> None
     parts = [_Part(f"L{i}") for i in range(MAX_IMAGES_PER_CALL)]
     _run_vision(monkeypatch, _fake_client(calls=calls), parts)
     assert len(calls) == 1
+
+
+# --------------------------------------------------------------------------- #
+# La troncature — permanente, donc jamais rejouée (P5e 2)
+# --------------------------------------------------------------------------- #
+
+
+def _cut(reason: str, content: str = '{"lines": [{"id": "l1", "text": "le sol') -> dict:
+    return {"choices": [{"message": {"content": content}, "finish_reason": reason}]}
+
+
+@_needs_saknussemm
+@pytest.mark.parametrize("reason", ["length", "model_length"])
+def test_a_truncated_reply_is_permanent_and_sent_once(
+    monkeypatch: pytest.MonkeyPatch, reason: str
+) -> None:
+    """Rejouer une requête coupée au plafond la referait couper à l'identique,
+    et la ferait payer deux fois : ``saknussemm`` ne rejoue pas une erreur
+    permanente (ADR-008). Le message nomme la cause, pas « JSON invalide »."""
+    from saknussemm.core.protocols import ProviderPermanentError
+
+    calls: list[dict[str, Any]] = []
+    with pytest.raises(ProviderPermanentError, match=reason) as capture:
+        _run_text(monkeypatch, _fake_client(payloads=[_cut(reason)], calls=calls))
+    assert len(calls) == 1
+    assert capture.value.retryable is False
+    assert "le sol" in str(capture.value)
+
+
+@_needs_saknussemm
+def test_a_truncation_is_permanent_even_when_the_json_parses() -> None:
+    """La raison d'arrêt tranche, pas la chance d'une coupure sur une accolade."""
+    from saknussemm.core.protocols import ProviderPermanentError
+
+    with pytest.raises(ProviderPermanentError):
+        parse_chat_json(_cut("length", '{"lines": []}'), "m")
+
+
+@_needs_saknussemm
+def test_a_generation_error_stays_transient() -> None:
+    from saknussemm.core.protocols import ProviderTransientError
+
+    with pytest.raises(ProviderTransientError, match="error"):
+        parse_chat_json(_cut("error", ""), "m")
+
+
+@_needs_saknussemm
+def test_a_complete_reply_still_parses() -> None:
+    parsed = parse_chat_json(_cut("stop", '{"lines": []}'), "m")
+    assert parsed == {"lines": []}

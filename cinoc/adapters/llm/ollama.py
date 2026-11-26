@@ -11,6 +11,15 @@ enregistre ``client.close`` via ``RunControl.register_cancel_handle`` ; un
 distinction « annulation vs vraie panne réseau » se fait en sondant
 ``is_cancelled`` (``_fail_or_cancel``) — pas par une heuristique de message
 fragile (dette de l'implémentation source, corrigée au portage).
+
+Réglages (``InferenceSettings``) passés dans ``options`` : ``temperature``,
+``top_p``, ``seed``, ``max_tokens`` → ``num_predict``, et ``num_ctx`` **explicite**.
+Sans lui, c'est le défaut du serveur (2 048 ou 4 096 jetons selon la version)
+qui borne l'**entrée** : une page et son image dépassent, et ollama tronque le
+prompt **en silence** — le modèle répond alors à une page qu'il n'a vue qu'en
+partie. ``done_reason`` (``stop`` · ``length``) est lu : une sortie coupée par
+``num_predict`` se voit. Une entrée rognée par ``num_ctx``, elle, ne laisse
+aucune raison d'arrêt : seul un ``num_ctx`` suffisant la prévient.
 """
 
 from __future__ import annotations
@@ -18,12 +27,18 @@ from __future__ import annotations
 from typing import ClassVar, NoReturn
 
 from cinoc.adapters.llm._base import (
+    DEFAULT_MAX_TOKENS,
+    DEFAULT_SEED,
+    DEFAULT_TEMPERATURE,
+    InferenceSettings,
     LLMCompletion,
+    StopReason,
     default_prompt_for_role,
     llm_input_types,
     llm_output_type,
     normalize_llm_content,
     run_llm_step,
+    stop_reason_from,
     usage_tokens,
     validate_llm_label,
     validate_role,
@@ -36,12 +51,54 @@ from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
 
-_VERSION = "1.0"
+#: 2 : ``options`` explicites (``temperature``, ``seed``, ``num_predict``,
+#: ``num_ctx``) et ``done_reason`` lu — une sortie peut changer.
+_VERSION = "2.0"
 _DEFAULT_MODEL = "llama3"
-#: Les trois modes, comme les fournisseurs distants. ``zero_shot`` a un sens
-#: particulier ici : un modèle d'OCR local (churro, par exemple) transcrit
 
 _DEFAULT_HOST = "http://localhost:11434"
+#: Fenêtre de contexte demandée au serveur : la sortie (``max_tokens`` = 8 192)
+#: plus autant pour l'entrée — prompt, texte OCR et jetons d'image d'une page.
+DEFAULT_NUM_CTX = 16384
+
+#: ``done_reason`` (``stop``, ``length``, ``load``, ``unload``) → raison
+#: normalisée. ``load``/``unload`` ne concernent pas une génération : ``unknown``.
+_STOP_REASONS: dict[str, StopReason] = {"stop": "stop", "length": "length"}
+
+
+def _options(settings: InferenceSettings, num_ctx: int) -> dict[str, float | int]:
+    """``options`` de ``/api/chat`` — **pur** ; un réglage ``None`` n'est pas envoyé."""
+    options: dict[str, float | int] = {}
+    if settings.temperature is not None:
+        options["temperature"] = settings.temperature
+    if settings.top_p is not None:
+        options["top_p"] = settings.top_p
+    if settings.seed is not None:
+        options["seed"] = settings.seed
+    options["num_predict"] = settings.max_tokens
+    options["num_ctx"] = num_ctx
+    return options
+
+
+def _completion_from_chat(data: object, model: str) -> LLMCompletion:
+    """Corps de ``/api/chat`` → ``LLMCompletion`` (texte, jetons, arrêt) — **pur**.
+
+    Ollama peut renvoyer une **erreur en HTTP 200** (modèle introuvable sous ce
+    nom, mémoire insuffisante…) : ``raise_for_status`` ne la voit pas. On la
+    remonte explicitement, sinon la « correction » serait un texte vide silencieux.
+    """
+    if isinstance(data, dict) and data.get("error"):
+        raise AdapterStepError(f"ollama a échoué ({model}) : {data['error']}")
+    counts = data if isinstance(data, dict) else {}
+    message = counts.get("message")
+    content = message.get("content") if isinstance(message, dict) else None
+    # /api/chat expose la consommation : prompt_eval_count / eval_count.
+    return LLMCompletion(
+        normalize_llm_content(content),
+        usage_tokens(counts.get("prompt_eval_count")),
+        usage_tokens(counts.get("eval_count")),
+        stop_reason_from(counts.get("done_reason"), _STOP_REASONS),
+    )
 
 
 def _fail_or_cancel(control: RunControl, model: str, exc: Exception) -> NoReturn:
@@ -64,6 +121,7 @@ def _invoke_ollama(  # pragma: no cover -- réseau (serveur ollama ; cf. marqueu
     host: str,
     deadline: Deadline,
     control: RunControl,
+    options: dict[str, float | int],
     image_b64: str | None = None,
 ) -> LLMCompletion:
     import httpx
@@ -74,7 +132,12 @@ def _invoke_ollama(  # pragma: no cover -- réseau (serveur ollama ; cf. marqueu
     demande: dict[str, object] = {"role": "user", "content": prompt}
     if image_b64 is not None:
         demande["images"] = [image_b64]
-    payload = {"model": model, "messages": [demande], "stream": False}
+    payload = {
+        "model": model,
+        "messages": [demande],
+        "stream": False,
+        "options": options,
+    }
     client = httpx.Client(timeout=deadline.as_sdk_timeout())
     # Annulation câblée : fermer le client interrompt la requête en vol.
     control.register_cancel_handle(client.close)
@@ -90,20 +153,7 @@ def _invoke_ollama(  # pragma: no cover -- réseau (serveur ollama ; cf. marqueu
         _fail_or_cancel(control, model, exc)
     finally:
         client.close()
-    # Ollama peut renvoyer une **erreur en HTTP 200** (modèle introuvable sous ce
-    # nom, mémoire insuffisante…) : ``raise_for_status`` ne la voit pas. On la
-    # remonte explicitement, sinon la « correction » serait un texte vide silencieux.
-    if isinstance(data, dict) and data.get("error"):
-        raise AdapterStepError(f"ollama a échoué ({model}) : {data['error']}")
-    message = data.get("message") if isinstance(data, dict) else None
-    content = message.get("content") if isinstance(message, dict) else None
-    # /api/chat expose la consommation : prompt_eval_count / eval_count.
-    counts = data if isinstance(data, dict) else {}
-    return LLMCompletion(
-        normalize_llm_content(content),
-        usage_tokens(counts.get("prompt_eval_count")),
-        usage_tokens(counts.get("eval_count")),
-    )
+    return _completion_from_chat(data, model)
 
 
 def list_installed_models(
@@ -160,8 +210,22 @@ class OllamaAdapter:
         host: str = _DEFAULT_HOST,
         role: str = "text_only",
         prompt: str | None = None,
+        temperature: float | None = DEFAULT_TEMPERATURE,
+        top_p: float | None = None,
+        seed: int | None = DEFAULT_SEED,
+        max_tokens: int = DEFAULT_MAX_TOKENS,
+        num_ctx: int = DEFAULT_NUM_CTX,
     ) -> None:
         self._label = validate_llm_label(label, "OllamaAdapter")
+        self._settings = InferenceSettings.build(
+            temperature=temperature, top_p=top_p, seed=seed, max_tokens=max_tokens
+        )
+        if isinstance(num_ctx, bool) or not isinstance(num_ctx, int) or num_ctx < 1:
+            raise AdapterStepError(
+                "OllamaAdapter : réglage 'num_ctx' : entier ≥ 1 attendu, "
+                f"reçu {num_ctx!r}."
+            )
+        self._num_ctx = num_ctx
         self._model = model
         self._host = host
         self._role: PipelineMode = validate_role(
@@ -179,6 +243,14 @@ class OllamaAdapter:
     def version(self) -> str:
         return _VERSION
 
+    def inference_settings(self) -> dict[str, float | int | None]:
+        """Réglages **effectifs** (défauts compris), recopiés au manifeste.
+
+        ``max_tokens`` part comme ``options.num_predict`` : le même nom que chez
+        les trois autres fournisseurs, pour que deux manifestes se comparent.
+        """
+        return {**self._settings.as_manifest(), "num_ctx": self._num_ctx}
+
     @property
     def input_types(self) -> frozenset[ArtifactType]:
         return llm_input_types(self._role)
@@ -194,6 +266,8 @@ class OllamaAdapter:
         context: RunContext,
         control: RunControl,
     ) -> StepOutput:
+        options = _options(self._settings, self._num_ctx)
+
         def text_invoke(prompt: str) -> LLMCompletion:
             return _invoke_ollama(
                 model=self._model,
@@ -201,6 +275,7 @@ class OllamaAdapter:
                 host=self._host,
                 deadline=context.deadline,
                 control=control,
+                options=options,
             )
 
         def vision_invoke(
@@ -214,6 +289,7 @@ class OllamaAdapter:
                 host=self._host,
                 deadline=context.deadline,
                 control=control,
+                options=options,
                 image_b64=image_b64,
             )
 
@@ -227,6 +303,7 @@ class OllamaAdapter:
             control=control,
             text_invoke=text_invoke,
             vision_invoke=vision_invoke,
+            max_tokens=self._settings.max_tokens,
         )
 
 

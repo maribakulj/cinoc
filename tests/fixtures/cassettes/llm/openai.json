@@ -1,0 +1,70 @@
+{
+ "scenario": "llm_stop_openai",
+ "sdk": "openai 3.59.0 — openai.types.chat.ChatCompletion",
+ "note": "Réponses **synthétiques** (aucune clé ni réseau dans l'environnement de capture), écrites au format du fil de l'API puis validées contre le modèle de réponse du SDK installé (openai 3.59.0, ChatCompletion.model_validate). « length » : max_completion_tokens atteint ; « content_filter » : sortie retenue par le filtre.",
+ "responses": {
+  "stop": {
+   "id": "chatcmpl-cinoc-stop",
+   "object": "chat.completion",
+   "created": 1764115200,
+   "model": "gpt-4o-mini-2024-07-18",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "Le Petit Journal, 12 mars 1894."
+     },
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 812,
+    "completion_tokens": 11,
+    "total_tokens": 823
+   }
+  },
+  "length": {
+   "id": "chatcmpl-cinoc-length",
+   "object": "chat.completion",
+   "created": 1764115200,
+   "model": "gpt-4o-mini-2024-07-18",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "Le Petit Journal, 12 mars 1894. — On annonce de Boulogne-sur-Mer qu'une partie de la falaise s'est effondrée hier soir, emportant"
+     },
+     "finish_reason": "length"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 812,
+    "completion_tokens": 32,
+    "total_tokens": 844
+   }
+  },
+  "content_filter": {
+   "id": "chatcmpl-cinoc-filter",
+   "object": "chat.completion",
+   "created": 1764115200,
+   "model": "gpt-4o-mini-2024-07-18",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": ""
+     },
+     "finish_reason": "content_filter"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 812,
+    "completion_tokens": 0,
+    "total_tokens": 812
+   }
+  }
+ }
+}

@@ -154,3 +154,28 @@ def test_corrupted_entry_falls_back_to_execution(tmp_path: Path) -> None:
         index.write_text("{corrompu", encoding="utf-8")
     run(spec, registry=_registry(calls), code_version="1.0", resume_store=store)
     assert calls == ["d1", "d1"]
+
+
+class _CutOCR(_CountingOCR):
+    """Comme ``_CountingOCR``, mais sa sortie est coupée (plafond de jetons)."""
+
+    def execute(self, inputs, params, context, control):  # noqa: ANN001, ANN201
+        output = super().execute(inputs, params, context, control)
+        return StepOutput(artifacts=output.artifacts, truncation="plafond atteint")
+
+
+def test_a_truncated_unit_is_reloaded_as_truncated(tmp_path: Path) -> None:
+    """Une coupure se reproduirait à l'identique : on ne la rejoue pas (elle se
+    repayerait), mais la reprise ne doit pas la rendre « complète » pour autant."""
+    calls: list[str] = []
+    registry = ModuleRegistry()
+    registry.register_builder("counting", lambda kwargs: _CutOCR(calls))
+    store = ResumeStore(tmp_path / "cache")
+    spec = _spec(tmp_path)
+    first = run(spec, registry=registry, code_version="1.0", resume_store=store)
+    second = run(spec, registry=registry, code_version="1.0", resume_store=store)
+    assert calls == ["d1"]
+    for result in (first, second):
+        (unit,) = result.usage
+        assert unit.outcome == "truncated"
+        assert unit.message == "étape 'ocr' : plafond atteint"

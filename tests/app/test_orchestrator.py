@@ -266,7 +266,7 @@ def test_pipelines_sharing_a_writer_do_not_contaminate(
     # sortie corrigée diffère par pipeline puisque l'OCR amont diffère.
     monkeypatch.setattr(
         "cinoc.adapters.llm.openai._invoke_openai",
-        lambda *, model, prompt, deadline: LLMCompletion(prompt.rsplit("\n\n", 1)[-1]),
+        lambda *, prompt, **_: LLMCompletion(prompt.rsplit("\n\n", 1)[-1]),
     )
     result = run(
         _shared_writer_spec(tmp_path), registry=_registry(), code_version="9.9"
@@ -282,14 +282,14 @@ def test_manifest_captures_module_versions(
 ) -> None:
     monkeypatch.setattr(
         "cinoc.adapters.llm.openai._invoke_openai",
-        lambda *, model, prompt, deadline: LLMCompletion("x"),
+        lambda **_: LLMCompletion("x"),
     )
     result = run(
         _shared_writer_spec(tmp_path), registry=_registry(), code_version="9.9"
     )
     # R-2 : la version déclarée de chaque module exécuté entre dans l'empreinte.
     assert result.manifest.module_versions == {
-        "openai:gpt": "1.0",
+        "openai:gpt": "2.0",
         "precomputed:engA": "1.0",
         "precomputed:engB": "1.0",
     }
@@ -417,7 +417,7 @@ def test_run_result_carries_sorted_usage(
 ) -> None:
     monkeypatch.setattr(
         "cinoc.adapters.llm.openai._invoke_openai",
-        lambda *, model, prompt, deadline: LLMCompletion("x", 11, 7),
+        lambda **_: LLMCompletion("x", 11, 7),
     )
     result = run(
         _shared_writer_spec(tmp_path), registry=_registry(), code_version="9.9"

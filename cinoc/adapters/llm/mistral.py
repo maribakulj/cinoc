@@ -5,6 +5,9 @@ Implémente le ``Module`` Protocol, trois modes (``PipelineMode``) selon le rôl
 corrigé), ``zero_shot`` (Pixtral : image → texte). Clé ``MISTRAL_API_KEY`` ; SDK
 ``mistralai`` = **extra** importé paresseusement dans ``_invoke_mistral`` /
 ``_invoke_mistral_vision`` (isolés → **mockables**, CI sans clé ni réseau).
+
+Réglages (``InferenceSettings``) : ``temperature``, ``top_p``, ``max_tokens`` et
+``seed`` — ce dernier sous le nom de l'API Mistral, ``random_seed``.
 """
 
 from __future__ import annotations
@@ -14,12 +17,18 @@ from typing import Any, ClassVar
 
 from cinoc.adapters._resilience import call_resilient
 from cinoc.adapters.llm._base import (
+    DEFAULT_MAX_TOKENS,
+    DEFAULT_SEED,
+    DEFAULT_TEMPERATURE,
+    InferenceSettings,
     LLMCompletion,
+    StopReason,
     default_prompt_for_role,
     llm_input_types,
     llm_output_type,
     normalize_llm_content,
     run_llm_step,
+    stop_reason_from,
     usage_tokens,
     validate_llm_label,
     validate_role,
@@ -34,17 +43,29 @@ from cinoc.pipeline.types import RunContext, StepOutput
 
 logger = logging.getLogger(__name__)
 
-_VERSION = "1.0"
+#: 2 : raison d'arrêt lue, réglages d'inférence transmis (``top_p``,
+#: ``random_seed``, ``max_tokens``) — une sortie peut changer.
+_VERSION = "2.0"
 _DEFAULT_MODEL = "mistral-small-latest"
+
+#: ``finish_reason`` (SDK mistralai 1.12 : ``stop``, ``length``,
+#: ``model_length``, ``error``, ``tool_calls``) → raison normalisée.
+#: ``model_length`` = fenêtre du modèle épuisée : une coupure comme ``length``.
+_STOP_REASONS: dict[str, StopReason] = {
+    "stop": "stop",
+    "length": "length",
+    "model_length": "length",
+    "error": "error",
+}
 
 
 def _completion_from_chat(response: Any) -> LLMCompletion:
-    """Réponse SDK ``chat.complete`` → ``LLMCompletion`` (texte + jetons).
+    """Réponse SDK ``chat.complete`` → ``LLMCompletion`` (texte, jetons, arrêt).
 
     **Pur** (aucun réseau, aucun SDK) → la cartographie usage→jetons
-    (``prompt_tokens``/``completion_tokens``) est **testable sur cassette** (étape
-    2d) ; le client live (``# pragma: no cover``) ne le permettrait pas. Jetons →
-    économie (coût cloud réel).
+    (``prompt_tokens``/``completion_tokens``) et ``finish_reason`` est **testable
+    sur cassette** ; le client live (``# pragma: no cover``) ne le permettrait
+    pas. Jetons → économie (coût cloud réel).
     """
     usage = getattr(response, "usage", None)
     tokens_in = usage_tokens(getattr(usage, "prompt_tokens", None))
@@ -52,13 +73,35 @@ def _completion_from_chat(response: Any) -> LLMCompletion:
     choices = getattr(response, "choices", None)
     if not choices:
         return LLMCompletion("", tokens_in, tokens_out)
+    choice = choices[0]
     return LLMCompletion(
-        normalize_llm_content(choices[0].message.content), tokens_in, tokens_out
+        normalize_llm_content(choice.message.content),
+        tokens_in,
+        tokens_out,
+        stop_reason_from(getattr(choice, "finish_reason", None), _STOP_REASONS),
     )
 
 
+def _request_kwargs(
+    model: str, content: object, settings: InferenceSettings
+) -> dict[str, object]:
+    """Arguments de ``chat.complete`` — **pur** ; un ``None`` n'est pas envoyé."""
+    kwargs: dict[str, object] = {
+        "model": model,
+        "messages": [{"role": "user", "content": content}],
+    }
+    if settings.temperature is not None:
+        kwargs["temperature"] = settings.temperature
+    if settings.top_p is not None:
+        kwargs["top_p"] = settings.top_p
+    if settings.seed is not None:
+        kwargs["random_seed"] = settings.seed
+    kwargs["max_tokens"] = settings.max_tokens
+    return kwargs
+
+
 def _mistral_client(  # pragma: no cover -- réseau + clé API (cf. marqueur 'live')
-    model: str, content: object, deadline: Deadline
+    model: str, content: object, deadline: Deadline, settings: InferenceSettings
 ) -> LLMCompletion:
     """Appel ``chat.complete`` partagé (texte ou multimodal)."""
     import os
@@ -83,9 +126,7 @@ def _mistral_client(  # pragma: no cover -- réseau + clé API (cf. marqueur 'li
 
         def _complete() -> Any:
             return client.chat.complete(
-                model=model,
-                messages=[{"role": "user", "content": content}],  # type: ignore[arg-type]
-                temperature=0.0,
+                **_request_kwargs(model, content, settings)  # type: ignore[arg-type]
             )
 
         # Cap de concurrence (≤ N appels Mistral simultanés) + retry borné sur
@@ -99,19 +140,25 @@ def _mistral_client(  # pragma: no cover -- réseau + clé API (cf. marqueur 'li
 
 
 def _invoke_mistral(  # pragma: no cover -- réseau + clé API (cf. marqueur 'live')
-    *, model: str, prompt: str, deadline: Deadline
+    *, model: str, prompt: str, deadline: Deadline, settings: InferenceSettings
 ) -> LLMCompletion:
-    return _mistral_client(model, prompt, deadline)
+    return _mistral_client(model, prompt, deadline, settings)
 
 
 def _invoke_mistral_vision(  # pragma: no cover -- réseau + clé API (cf. 'live')
-    *, model: str, prompt: str, media_type: str, image_b64: str, deadline: Deadline
+    *,
+    model: str,
+    prompt: str,
+    media_type: str,
+    image_b64: str,
+    deadline: Deadline,
+    settings: InferenceSettings,
 ) -> LLMCompletion:
     content = [
         {"type": "text", "text": prompt},
         {"type": "image_url", "image_url": f"data:{media_type};base64,{image_b64}"},
     ]
-    return _mistral_client(model, content, deadline)
+    return _mistral_client(model, content, deadline, settings)
 
 
 class MistralAdapter:
@@ -133,8 +180,15 @@ class MistralAdapter:
         model: str = _DEFAULT_MODEL,
         role: str = "text_only",
         prompt: str | None = None,
+        temperature: float | None = DEFAULT_TEMPERATURE,
+        top_p: float | None = None,
+        seed: int | None = DEFAULT_SEED,
+        max_tokens: int = DEFAULT_MAX_TOKENS,
     ) -> None:
         self._label = validate_llm_label(label, "MistralAdapter")
+        self._settings = InferenceSettings.build(
+            temperature=temperature, top_p=top_p, seed=seed, max_tokens=max_tokens
+        )
         self._model = model
         self._role: PipelineMode = validate_role(
             role, "MistralAdapter", self.SUPPORTED_MODES
@@ -150,6 +204,10 @@ class MistralAdapter:
     @property
     def version(self) -> str:
         return _VERSION
+
+    def inference_settings(self) -> dict[str, float | int | None]:
+        """Réglages **effectifs** (défauts compris), recopiés au manifeste."""
+        return self._settings.as_manifest()
 
     @property
     def input_types(self) -> frozenset[ArtifactType]:
@@ -168,7 +226,10 @@ class MistralAdapter:
     ) -> StepOutput:
         def text_invoke(prompt: str) -> LLMCompletion:
             return _invoke_mistral(
-                model=self._model, prompt=prompt, deadline=context.deadline
+                model=self._model,
+                prompt=prompt,
+                deadline=context.deadline,
+                settings=self._settings,
             )
 
         def vision_invoke(
@@ -180,6 +241,7 @@ class MistralAdapter:
                 media_type=media_type,
                 image_b64=image_b64,
                 deadline=context.deadline,
+                settings=self._settings,
             )
 
         return run_llm_step(
@@ -192,6 +254,7 @@ class MistralAdapter:
             control=control,
             text_invoke=text_invoke,
             vision_invoke=vision_invoke,
+            max_tokens=self._settings.max_tokens,
         )
 
 

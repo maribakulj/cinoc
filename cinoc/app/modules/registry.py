@@ -11,6 +11,7 @@ C'est le **seul** point d'extension du produit : le socle est enregistré
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+from typing import Any
 
 from cinoc.domain.errors import CinocError
 from cinoc.pipeline.protocols import Module, ParamValue
@@ -201,6 +202,16 @@ def _build_tesseract(kwargs: Mapping[str, ParamValue]) -> Module:
     )
 
 
+#: Réglages d'inférence communs aux quatre fournisseurs LLM/VLM, transmis tels
+#: quels : c'est l'adapter qui les valide (type, bornes) et les écrit au
+#: manifeste, défauts compris. Un réglage absent garde le défaut de l'adapter.
+_INFERENCE_KEYS = ("temperature", "top_p", "seed", "max_tokens")
+
+
+def _inference(kwargs: Mapping[str, ParamValue], *extra: str) -> dict[str, Any]:
+    return {k: kwargs[k] for k in (*_INFERENCE_KEYS, *extra) if k in kwargs}
+
+
 def _build_openai(kwargs: Mapping[str, ParamValue]) -> Module:
     label = kwargs.get("label")
     if not isinstance(label, str):
@@ -215,6 +226,7 @@ def _build_openai(kwargs: Mapping[str, ParamValue]) -> Module:
         model=str(kwargs.get("model", "gpt-4o-mini")),
         role=str(kwargs.get("role", "text_only")),
         prompt=prompt if isinstance(prompt, str) else None,
+        **_inference(kwargs),
     )
 
 
@@ -227,13 +239,13 @@ def _build_ollama(kwargs: Mapping[str, ParamValue]) -> Module:
     from cinoc.adapters.llm.ollama import OllamaAdapter
 
     prompt = kwargs.get("prompt")
-    extra = {"prompt": prompt} if isinstance(prompt, str) else {}
     return OllamaAdapter(
         label=label,
         model=str(kwargs.get("model", "llama3")),
         host=str(kwargs.get("host", "http://localhost:11434")),
         role=str(kwargs.get("role", "text_only")),
-        **extra,
+        prompt=prompt if isinstance(prompt, str) else None,
+        **_inference(kwargs, "num_ctx"),
     )
 
 
@@ -251,6 +263,7 @@ def _build_mistral(kwargs: Mapping[str, ParamValue]) -> Module:
         model=str(kwargs.get("model", "mistral-small-latest")),
         role=str(kwargs.get("role", "text_only")),
         prompt=prompt if isinstance(prompt, str) else None,
+        **_inference(kwargs),
     )
 
 
@@ -268,6 +281,7 @@ def _build_anthropic(kwargs: Mapping[str, ParamValue]) -> Module:
         model=str(kwargs.get("model", "claude-haiku-4-5-20251001")),
         role=str(kwargs.get("role", "text_only")),
         prompt=prompt if isinstance(prompt, str) else None,
+        **_inference(kwargs),
     )
 
 
