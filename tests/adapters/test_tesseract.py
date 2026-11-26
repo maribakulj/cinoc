@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -405,3 +406,67 @@ def test_la_deadline_reste_l_autorite() -> None:
     assert deadline.clamp_to_remaining(900.0) <= 5.0
     # Infinie : le réglage de l'étape s'applique tel quel.
     assert Deadline(None).clamp_to_remaining(900.0) == 900.0
+
+
+# --- OpenMP : un fil par binaire (D-282) -------------------------------------
+#
+# Chaque processus ``tesseract`` ouvrait autant de fils OpenMP que de cœurs : à
+# 4 workers sur 4 cœurs, 16 fils en attente active, et 19 pages sur 20 perdues
+# au délai de 120 s (pilote D-281, D1). ``pytesseract`` lance le binaire avec
+# ``env=os.environ`` : c'est donc l'environnement **du processus** que voit le
+# binaire. Le faux binaire ci-dessous écrit ce qu'il y lit à la place du texte.
+
+_FAKE_TESSERACT = """#!/bin/sh
+printf '%s' "${OMP_THREAD_LIMIT:-absent}" > "$2.txt"
+"""
+
+
+def _fake_binary(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    pytesseract = pytest.importorskip("pytesseract")
+    script = tmp_path / "tesseract"
+    script.write_text(_FAKE_TESSERACT, encoding="utf-8")
+    script.chmod(0o755)
+    monkeypatch.setattr(pytesseract.pytesseract, "tesseract_cmd", str(script))
+    image = tmp_path / "page.png"
+    image.write_bytes(b"")
+    return image
+
+
+def _omp_seen_by_binary(image: Path) -> str:
+    from cinoc.adapters.ocr.tesseract import _invoke_tesseract
+
+    return _invoke_tesseract(
+        image_path=str(image), lang="fra", psm=6, oem=3, timeout=10
+    )
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="faux binaire en sh")
+def test_binary_runs_with_one_openmp_thread(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    image = _fake_binary(tmp_path, monkeypatch)
+    # set puis del : la variable absente au départ l'est encore après le test,
+    # même si le code l'a posée entre-temps.
+    monkeypatch.setenv("OMP_THREAD_LIMIT", "x")
+    monkeypatch.delenv("OMP_THREAD_LIMIT")
+    assert _omp_seen_by_binary(image) == "1"
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="faux binaire en sh")
+def test_explicit_openmp_limit_is_kept(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    image = _fake_binary(tmp_path, monkeypatch)
+    monkeypatch.setenv("OMP_THREAD_LIMIT", "3")
+    assert _omp_seen_by_binary(image) == "3"
+
+
+def test_bound_openmp_sets_default_and_keeps_explicit_value() -> None:
+    from cinoc.adapters.ocr.tesseract import bound_openmp
+
+    vide: dict[str, str] = {}
+    bound_openmp(vide)
+    assert vide == {"OMP_THREAD_LIMIT": "1"}
+    pose = {"OMP_THREAD_LIMIT": "4"}
+    bound_openmp(pose)
+    assert pose == {"OMP_THREAD_LIMIT": "4"}

@@ -22,6 +22,7 @@ from pydantic import (
     ConfigDict,
     Field,
     SerializerFunctionWrapHandler,
+    field_serializer,
     field_validator,
     model_serializer,
 )
@@ -56,6 +57,12 @@ class MetricSpec(BaseModel):
     description: str = ""
     higher_is_better: bool = False
     tags: frozenset[str] = Field(default_factory=frozenset)
+
+    @field_serializer("tags", when_used="json")
+    def _tags_sorted(self, value: frozenset[str]) -> list[str]:
+        # Un ``frozenset`` de chaînes s'itère selon le hachage, randomisé d'un
+        # processus à l'autre : trié, le JSON est le même à chaque run (§12).
+        return sorted(value)
 
 
 class EvaluationView(BaseModel):
@@ -114,6 +121,15 @@ class EvaluationView(BaseModel):
                 "lecture en texte qui l'est)."
             )
         return value
+
+    @field_serializer("candidate_types", when_used="json")
+    def _candidates_sorted(
+        self, value: frozenset[ArtifactType]
+    ) -> list[ArtifactType]:
+        """Triés par valeur : l'ordre d'un ``frozenset`` suit le hachage des
+        chaînes, randomisé par processus — deux runs de la même spec sortaient
+        ``[raw_text, corrected_text]`` puis l'inverse (invariant §12)."""
+        return sorted(value, key=lambda t: t.value)
 
     @model_serializer(mode="wrap")
     def _omit_default_target(

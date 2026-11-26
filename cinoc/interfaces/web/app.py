@@ -223,6 +223,9 @@ def create_app(
     # runner y dépose les ``ALTO_XML`` produits ; le routeur des rapports les
     # rezippe à la demande (téléchargement par run).
     alto_store = AltoStore(Path(tempfile.mkdtemp(prefix="cinoc-alto-")))
+    # Dossier des corpus déposés : racine des chemins des ``RunResult`` du web
+    # (écrits relatifs, relus contre elle par la saveur servie).
+    uploads_root = _resolve_uploads_dir(uploads_dir)
     runner = JobRunner(
         store=JobStore(),
         registry=registry,
@@ -237,8 +240,9 @@ def create_app(
         # Archive de chaque run (sorties, sidecars natifs, issues) dans le
         # dossier de données inscriptible : elle survit au workspace du job.
         archive_dir=runtime_dir / "archives",
+        paths_root=uploads_root,
     )
-    corpus_store = CorpusStore(_resolve_uploads_dir(uploads_dir))
+    corpus_store = CorpusStore(uploads_root)
 
     # Un seul fournisseur de statuts moteurs (même mode) partagé par le lanceur
     # et l'onglet Moteurs → pas de closures jumelles qui pourraient diverger.
@@ -283,7 +287,11 @@ def create_app(
             alto_store=alto_store,
         )
     )
-    app.include_router(build_reports_router(runtime_dir, alto_store=alto_store))
+    app.include_router(
+        build_reports_router(
+            runtime_dir, alto_store=alto_store, image_root=uploads_root
+        )
+    )
     app.include_router(
         build_segmentation_router(
             seg_store,

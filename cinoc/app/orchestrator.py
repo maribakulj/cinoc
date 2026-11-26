@@ -30,6 +30,7 @@ from urllib.parse import urlsplit
 from cinoc.adapters.corpus._http import CorpusHttpError, download
 from cinoc.adapters.layout.crop import crop_region
 from cinoc.app.modules.registry import ModuleRegistry
+from cinoc.app.portable_paths import portable_result, relativize_message
 from cinoc.app.resume import ResumeStore, declared_inputs, unit_key
 from cinoc.app.run_manifest import (
     SECRET_PLACEHOLDER,
@@ -143,6 +144,7 @@ def run(
     resume_store: ResumeStore | None = None,
     max_workers: int | None = None,
     offline: bool = False,
+    paths_root: Path | None = None,
 ) -> RunResult:
     """Exécute ``spec`` et renvoie le ``RunResult`` (manifeste + métriques).
 
@@ -173,12 +175,18 @@ def run(
     :class:`ArchiveIncompleteError` au lieu d'être exécutée. Les binaires de
     l'identité sont ceux de l'archive (rien ne tourne, rien n'est sondé).
     L'évaluation, elle, est recalculée comme toujours : c'est tout l'objet.
+
+    ``paths_root`` : racine des chemins locaux de la spec (dossier du fichier de
+    run). Le ``RunResult`` n'en porte alors aucun absolu — images, archive et
+    messages d'échec y sont relatifs (``app.portable_paths``). Absente, les
+    chemins passent tels que la spec les donne.
     """
     if offline and resume_store is None:
         raise OrchestrationError(
             "relecture hors ligne : une archive est requise (--resume-dir)."
         )
     started_at = utcnow()
+    root = paths_root.resolve() if paths_root is not None else None
     needed = sorted(
         {step.adapter_name for pipeline in spec.pipelines for step in pipeline.steps}
     )
@@ -239,7 +247,9 @@ def run(
                 if document.id in unreachable:
                     # Image distante injoignable : unité échouée (comme un échec
                     # d'adapter isolé), le reste du corpus tourne normalement.
-                    message = _redact(unreachable[document.id], secrets, workspace)
+                    message = _redact(
+                        unreachable[document.id], secrets, workspace, root
+                    )
                     results[(pipeline.name, document.id)] = DocumentExecution.failed(
                         "infrastructure", message
                     )
@@ -302,7 +312,7 @@ def run(
                         try:
                             execution = future.result()
                         except UNIT_FAILURES as exc:
-                            message = _redact(str(exc), secrets, workspace)
+                            message = _redact(str(exc), secrets, workspace, root)
                             logger.warning(
                                 "[orchestrator] concurrent %r · document %r "
                                 "échoué : %s",
@@ -325,7 +335,9 @@ def run(
                             # sans secret ni chemin de workspace.
                             execution = replace(
                                 execution,
-                                message=_redact(execution.message, secrets, workspace),
+                                message=_redact(
+                                    execution.message, secrets, workspace, root
+                                ),
                             )
                         results[unit] = execution
                         if key is not None:
@@ -383,7 +395,7 @@ def run(
         # pointent encore dans le workspace vivant. Best-effort côté appelant.
         if artifact_sink is not None:
             artifact_sink(pipeline_outputs, manifest)
-        return evaluate_run(
+        result = evaluate_run(
             corpus=spec.corpus,
             evaluation=spec.evaluation,
             pipeline_outputs=pipeline_outputs,
@@ -391,6 +403,7 @@ def run(
             manifest=manifest,
             usage=tuple(usage_records),
         )
+        return portable_result(result, root) if root is not None else result
 
 
 def _bind_archaic_metrics(registry: MetricRegistry, spec: RunSpec) -> None:
@@ -511,18 +524,26 @@ def _initial_inputs(document: DocumentRef) -> dict[ArtifactType, Artifact]:
 _MESSAGE_MAX = 1000
 
 
-def _redact(message: str, secrets: tuple[str, ...], workspace: str) -> str:
+def _redact(
+    message: str,
+    secrets: tuple[str, ...],
+    workspace: str,
+    root: Path | None = None,
+) -> str:
     """Message d'échec **sans secret**, borné : il voyage avec le ``RunResult``.
 
     Un moteur peut citer dans son erreur ce qu'il a reçu (une URL à jeton, un
     en-tête) ; le message suit alors le même chemin que le manifeste, donc la
     même règle : le fait reste, la valeur non. Le workspace temporaire, lui,
     change à chaque run : remplacé par ``<workspace>``, il ne rend pas le
-    ``RunResult`` instable (déterminisme).
+    ``RunResult`` instable (déterminisme). Un chemin sous ``root`` (l'image du
+    document) y devient relatif, comme la référence d'image du ``RunResult``.
     """
     for secret in secrets:
         message = message.replace(secret, SECRET_PLACEHOLDER)
     message = message.replace(workspace, "<workspace>")
+    if root is not None:
+        message = relativize_message(message, root)
     # Le chemin sous le workspace garde le séparateur du système : sous Windows
     # ``<workspace>\pipeline0/dump.json``. Normalisé en ``/``, le message est le
     # même sur toutes les plateformes, comme le reste du ``RunResult``.

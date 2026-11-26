@@ -234,7 +234,13 @@ def build_parser() -> argparse.ArgumentParser:
         "-o", "--output", default="rapport_demo.html", help="Fichier HTML de sortie."
     )
     run_cmd = subparsers.add_parser(
-        "run", help="Exécute un run décrit dans un fichier YAML."
+        "run",
+        help="Exécute un run décrit dans un fichier YAML.",
+        description="Exécute un run décrit dans un fichier YAML et écrit son "
+        "rapport. Code de sortie : 0 si chaque unité (pipeline × document) a "
+        "produit une sortie ; 3 si au moins une a échoué — le rapport est écrit "
+        "et les liste ; 1 si le run n'a pas pu se faire (spec invalide, archive "
+        "incomplète hors ligne…).",
     )
     run_cmd.add_argument("config", help="Fichier YAML décrivant le run.")
     run_cmd.add_argument(

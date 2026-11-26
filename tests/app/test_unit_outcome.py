@@ -31,7 +31,7 @@ from cinoc.domain.evaluation import EvaluationSpec, EvaluationView
 from cinoc.domain.pipeline import PipelineSpec, PipelineStep
 from cinoc.domain.run_spec import RunSpec
 from cinoc.evaluation.result import MetricScore, RunResult
-from cinoc.interfaces.cli import main
+from cinoc.interfaces.cli import EXIT_UNITS_FAILED, main
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
 from cinoc.reports.renderer import default_report_renderer
@@ -108,11 +108,17 @@ def test_exclude_policy_shows_scored_over_expected(tmp_path: Path) -> None:
     assert result.manifest.failure_policy == "exclude"
 
 
-def test_json_written_by_the_cli_carries_support_and_reason(tmp_path: Path) -> None:
+def test_json_written_by_the_cli_carries_support_and_reason(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     config = _example_copy(tmp_path, pero_folio_002=None)
     sortie = tmp_path / "r.json"
+    # Rapport écrit, mais une unité perdue : code distinct de 0 et de 1, et un
+    # bilan qui le dit (D-282 — le pilote sortait en 0 à 19 échecs sur 20).
     assert main(["run", str(config), "-o", str(tmp_path / "r.html"),
-                 "--json", str(sortie)]) == 0
+                 "--json", str(sortie)]) == EXIT_UNITS_FAILED
+    assert (tmp_path / "r.html").is_file()
+    assert "Bilan : 1 unité(s) en échec / 10 (moteur : 1)" in capsys.readouterr().err
     data = json.loads(sortie.read_text(encoding="utf-8"))
     cer = next(
         s
@@ -128,6 +134,10 @@ def test_json_written_by_the_cli_carries_support_and_reason(tmp_path: Path) -> N
         "folio_002",
         "engine",
     )
+    # Aucun chemin de la machine (D-282, D5) : les images s'écrivent comme la
+    # spec les écrit, relatives à son dossier.
+    assert str(tmp_path) not in sortie.read_text(encoding="utf-8")
+    assert {d["image_ref"] for d in data["documents"]} >= {"corpus/folio_002.png"}
 
 
 @pytest.mark.parametrize(

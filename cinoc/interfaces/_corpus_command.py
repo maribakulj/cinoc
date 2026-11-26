@@ -12,7 +12,8 @@ exactement ce que fait le routeur (choisir le builder, le passer à
   côté un ``corpus.yaml`` — le « store » d'une ligne de commande est un fichier.
 
 Le YAML porte la clé ``corpus``, celle d'un ``RunSpec`` : il se complète de
-``pipelines:`` / ``evaluation:``, ou se colle dans un fichier de run existant.
+``pipelines:`` / ``evaluation:``. Ses chemins sont relatifs à **son** dossier :
+collé dans un fichier de run rangé ailleurs, il ne retrouverait pas ses fichiers.
 
 Ce module reçoit le ``Namespace`` d'``argparse``. C'est délibéré : il est
 lui-même du **transport CLI**, et lui faire traverser six signatures distinctes
@@ -110,8 +111,10 @@ def run_corpus_import(args: argparse.Namespace) -> int:
     )
     print(f"Corpus écrit : {sortie}")
     print(
-        "Complète ce fichier de `pipelines:` et `evaluation:`, ou colle son "
-        "bloc `corpus:` dans un fichier de run, puis : cinoc run <fichier>"
+        f"Ses chemins sont relatifs à son dossier ({sortie.parent}) : "
+        "complète-le sur place de `pipelines:` et `evaluation:`, puis : "
+        "cinoc run <fichier>. Collé dans un fichier de run rangé ailleurs, son "
+        "bloc `corpus:` n'y retrouverait pas ses fichiers."
     )
     return 0
 

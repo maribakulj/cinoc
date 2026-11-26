@@ -74,8 +74,33 @@ def test_path_traversal_rejected(tmp_path: Path) -> None:
 
 def test_missing_ground_truth_rejected(tmp_path: Path) -> None:
     # GT inexistante → erreur typée AU CHARGEMENT (pas un OSError opaque en run).
-    with pytest.raises(PathSecurityError):
+    # Le message dit contre quel dossier le chemin relatif a été cherché : un
+    # bloc `corpus:` collé ailleurs échouait sans le dire (D-281, D21).
+    with pytest.raises(PathSecurityError, match="dossier du fichier de run") as exc:
         load_run_spec(_write(tmp_path, _VALID))
+    assert str(tmp_path) in str(exc.value)
+
+
+def test_written_identifiers_are_always_quoted(tmp_path: Path) -> None:
+    """``id: 0009`` nu se lit 9 en YAML 1.2 (pilote D-281, D21)."""
+    import yaml
+
+    from cinoc.app.loader import dump_corpus_spec
+    from cinoc.domain.corpus import CorpusSpec
+    from cinoc.domain.documents import DocumentRef
+
+    spec = CorpusSpec(
+        name="1850",
+        documents=tuple(DocumentRef(id=i) for i in ("0003", "0009", "page_1")),
+    )
+    texte = dump_corpus_spec(spec, tmp_path / "corpus.yaml").read_text(
+        encoding="utf-8"
+    )
+    for ident in ("0003", "0009", "page_1", "1850"):
+        assert f"'{ident}'" in texte
+    relu = yaml.safe_load(texte)["corpus"]
+    assert [d["id"] for d in relu["documents"]] == ["0003", "0009", "page_1"]
+    assert relu["name"] == "1850"
 
 
 def test_malformed_yaml_rejected(tmp_path: Path) -> None:

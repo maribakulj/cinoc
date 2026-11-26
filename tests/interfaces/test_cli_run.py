@@ -50,6 +50,20 @@ def test_run_command_end_to_end(tmp_path: Path) -> None:
     assert "eng" in html
 
 
+def test_run_command_ends_with_a_unit_tally(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """D-282 : le bilan est dit même quand tout va bien — son absence ne doit
+    plus pouvoir se lire « rien à signaler » (le pilote sortait en 0 à 19/20)."""
+    (tmp_path / "doc1.gt.txt").write_text("abcd", encoding="utf-8")
+    (tmp_path / "doc1.eng.txt").write_text("abxd", encoding="utf-8")
+    config = tmp_path / "run.yaml"
+    config.write_text(_YAML, encoding="utf-8")
+
+    assert main(["run", str(config), "-o", str(tmp_path / "r.html")]) == 0
+    assert "Bilan : 1 unité(s), aucune en échec." in capsys.readouterr().out
+
+
 def test_run_command_writes_json(tmp_path: Path) -> None:
     (tmp_path / "doc1.gt.txt").write_text("abcd", encoding="utf-8")
     (tmp_path / "doc1.eng.txt").write_text("abxd", encoding="utf-8")

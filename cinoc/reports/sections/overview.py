@@ -52,7 +52,7 @@ class OverviewSection:
 
 
 #: Libellé du motif codé d'un échec (``FailureReason``) : ``(fr, en)``.
-_REASON_LABELS: dict[str, tuple[str, str]] = {
+REASON_LABELS: dict[str, tuple[str, str]] = {
     "engine": ("moteur", "engine"),
     "infrastructure": ("infrastructure", "infrastructure"),
     "unsupported": ("pipeline inapplicable", "pipeline not applicable"),
@@ -125,7 +125,7 @@ def _failed_note(result: RunResult, lang: str) -> str:
     title = localized(lang, "Unités en échec", "Failed units")
     items = []
     for unit in failed:
-        fr, en = _REASON_LABELS[str(unit.reason)]
+        fr, en = REASON_LABELS[str(unit.reason)]
         badge = engine_cell(unit.pipeline, order.get(unit.pipeline, 0))
         message = f" : {escape(unit.message)}" if unit.message else ""
         items.append(
@@ -178,4 +178,4 @@ def _table_for_view(
     )
 
 
-__all__ = ["OverviewSection"]
+__all__ = ["REASON_LABELS", "OverviewSection"]

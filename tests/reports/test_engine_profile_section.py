@@ -188,6 +188,44 @@ def test_profile_config_details_from_manifest() -> None:
     )
 
 
+def test_profile_parameters_are_the_effective_module_settings() -> None:
+    """Pilote D-281, D12 : « Paramètres — » à côté d'une composition qui
+    montrait ``lang`` et ``psm`` — les réglages vivent dans ``adapter_kwargs``
+    du manifeste, pas dans ``step.params``. FR et EN lisent la même source."""
+    from cinoc.domain.artifacts import ArtifactType
+    from cinoc.domain.pipeline import PipelineSpec, PipelineStep
+
+    base = _result()
+    spec = PipelineSpec(
+        name="tesseract",
+        steps=(
+            PipelineStep(
+                id="ocr", kind="ocr", adapter_name="tesseract:fra_deu",
+                input_types=(ArtifactType.IMAGE,),
+                output_types=(ArtifactType.RAW_TEXT,),
+            ),
+        ),
+    )
+    manifest = base.manifest.model_copy(
+        update={
+            "pipeline_specs": (spec,),
+            "adapter_kwargs": {
+                "tesseract:fra_deu": {"label": "fra_deu", "lang": "fra+deu", "psm": 6}
+            },
+        }
+    )
+    result = base.model_copy(update={"manifest": manifest})
+    for lang, entete in (("fr", "Paramètres"), ("en", "Parameters")):
+        html = EngineProfileSection().render(result, SectionContext(lang=lang))
+        assert html is not None
+        debut = html.index("<details>")
+        bloc = html[debut : html.index("</details>", debut)]
+        assert f"<th>{entete}</th>" in bloc
+        assert "lang=fra+deu · psm=6" in bloc
+        assert "label=fra_deu" not in bloc  # nom de fichier, pas un réglage
+        assert '<td class="lbl">—</td>' not in bloc
+
+
 def test_none_without_pipelines() -> None:
     manifest = RunManifest(
         run_id="r", corpus_name="demo", n_documents=0,

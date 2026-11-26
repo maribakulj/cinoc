@@ -158,3 +158,54 @@ def test_no_cap_hides_documents(tmp_path: Path) -> None:
 
     assert set(hrefs) == porteurs
     assert json.dumps(hrefs)  # sérialisable, donc pas d'octets déguisés
+
+
+def test_a_relative_image_ref_is_read_against_the_uploads_root(
+    tmp_path: Path,
+) -> None:
+    """Un ``RunResult`` du web n'a plus de chemin du serveur (D-282) : la route
+    relit sa référence relative contre la racine des corpus déposés."""
+    from PIL import Image
+
+    from cinoc.app.modules import ModuleRegistry, register_default_modules
+    from cinoc.app.orchestrator import run as run_orchestrator
+    from cinoc.app.results import dump_run_result
+
+    uploads = tmp_path / "uploads"
+    (uploads / "c1").mkdir(parents=True)
+    corpus = write_demo_corpus(uploads / "c1")
+    for document in corpus.documents:
+        if document.image_uri:
+            Image.new("RGB", (120, 90), "white").save(document.image_uri)
+    registry = ModuleRegistry()
+    register_default_modules(registry)
+    result = run_orchestrator(
+        demo_run_spec(corpus, run_id="relatif"),
+        registry=registry,
+        code_version="test",
+        paths_root=uploads,
+    )
+    reports = tmp_path / "reports"
+    reports.mkdir()
+    dump_run_result(result, str(reports / "relatif.json"))
+    texte = (reports / "relatif.json").read_text(encoding="utf-8")
+    assert str(tmp_path) not in texte
+    assert '"image_ref": "c1/' in texte
+    client = TestClient(
+        create_app(reports_dir=reports, uploads_dir=uploads, rate_limit=1000)
+    )
+
+    resp = client.get("/reports/relatif/image/folio_001")
+
+    assert resp.status_code == 200
+    assert resp.content.startswith(b"\xff\xd8\xff")
+    bundle = client.get("/reports/relatif/bundle.zip")
+    assert bundle.status_code == 200
+    import io
+    import zipfile
+
+    noms = zipfile.ZipFile(io.BytesIO(bundle.content)).namelist()
+    assert any(n.startswith("report-assets/") for n in noms)
+    # Sans la racine, la même référence ne désigne rien : aperçu synthétique.
+    sans_racine = TestClient(create_app(reports_dir=reports, rate_limit=1000))
+    assert sans_racine.get("/reports/relatif/image/folio_001").status_code == 404

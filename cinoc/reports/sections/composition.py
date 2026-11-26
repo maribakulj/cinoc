@@ -25,6 +25,7 @@ lisent nulle part ailleurs :
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from cinoc.evaluation.result import RunResult
@@ -54,7 +55,7 @@ def _valeur(v: object) -> str:
     )
 
 
-def _params(kwargs: dict[str, Any]) -> str:
+def settings_html(kwargs: Mapping[str, Any]) -> str:
     """``model=… psm=6`` — les réglages qui distinguent deux briques jumelles."""
     utiles = {k: v for k, v in sorted(kwargs.items()) if k not in _BRUIT}
     if not utiles:
@@ -87,7 +88,7 @@ def _etape(
     lang: str,
 ) -> str:
     adapter = str(step.get("adapter_name", ""))
-    reglages = _params(kwargs.get(adapter) or {})
+    reglages = settings_html(kwargs.get(adapter) or {})
     marques: list[str] = []
     if step.get("fanout"):
         marques.append(localized(lang, "par région", "per region"))
@@ -188,4 +189,4 @@ class CompositionSection:
         )
 
 
-__all__ = ["CompositionSection"]
+__all__ = ["CompositionSection", "settings_html"]

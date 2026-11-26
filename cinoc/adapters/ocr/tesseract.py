@@ -24,9 +24,11 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import subprocess
-from collections.abc import Callable, Mapping
+import threading
+from collections.abc import Callable, Mapping, MutableMapping
 
 from cinoc.adapters._workspace import workspace_artifact_path
 from cinoc.domain.artifacts import Artifact, ArtifactType, compute_content_hash
@@ -51,6 +53,13 @@ _TIMEOUT_MAX = 3600.0
 #: (``fra+lat``). ``lang`` finit sur la ligne de commande tesseract → on refuse
 #: tout caractère interprétable comme flag/séparateur (anti-injection).
 _LANG_RE = re.compile(r"^[a-zA-Z]{3,}(?:\+[a-zA-Z]{3,})*$")
+
+#: Fils OpenMP d'un processus ``tesseract``. Sans borne, chacun en ouvre autant
+#: que de cœurs : à 4 workers sur 4 cœurs, 16 fils en attente active, et le
+#: pilote BNL perdait 19 pages sur 20 au délai de 120 s pour des pages de 1,4 à
+#: 3,4 s (D-281, D1). Le parallélisme de Cinoc est celui des workers.
+_OMP_ENV = "OMP_THREAD_LIMIT"
+_OMP_LOCK = threading.Lock()
 
 #: Lanceur de sous-processus, injectable → version sondable en test sans binaire.
 BinaryRunner = Callable[..., "subprocess.CompletedProcess[str]"]
@@ -85,6 +94,22 @@ def tesseract_binary_version(*, run: BinaryRunner = subprocess.run) -> str | Non
     return None
 
 
+def bound_openmp(environ: MutableMapping[str, str] | None = None) -> None:
+    """Pose ``OMP_THREAD_LIMIT=1`` pour le binaire, **sauf valeur explicite**.
+
+    ``pytesseract`` lance le binaire avec ``env=os.environ`` et n'offre aucune
+    autre prise : c'est donc l'environnement du processus qui porte la borne.
+    Une valeur déjà posée (``ENV`` de l'image du Space, réglage de l'utilisateur
+    qui lance ``--workers 1`` sur une page géante) est **gardée** : elle est un
+    choix, le défaut n'en est pas un. Appelée juste avant chaque lancement,
+    jamais à l'import ; le verrou évite deux écritures concurrentes de
+    l'environnement depuis les threads du pool.
+    """
+    env = os.environ if environ is None else environ
+    with _OMP_LOCK:
+        env.setdefault(_OMP_ENV, "1")
+
+
 def _config(*, oem: int, psm: int, dpi: int | None) -> str:
     """Options de ligne de commande — ``--dpi`` seulement s'il est demandé.
 
@@ -115,6 +140,7 @@ def _invoke_tesseract(  # pragma: no cover -- binaire requis (cf. marqueur 'live
             "(pip install 'cinoc[tesseract]' + binaire tesseract)."
         ) from exc
     config = _config(oem=oem, psm=psm, dpi=dpi)
+    bound_openmp()
     try:
         text = pytesseract.image_to_string(
             image_path, lang=lang, config=config, timeout=timeout
@@ -147,6 +173,7 @@ def invoke_tesseract_alto(  # pragma: no cover -- binaire requis ('live')
             "tesseract : pytesseract non installé "
             "(pip install 'cinoc[tesseract]' + binaire tesseract)."
         ) from exc
+    bound_openmp()
     try:
         xml = pytesseract.image_to_alto_xml(
             image_path,
@@ -173,6 +200,7 @@ def _invoke_tesseract_confidences(  # pragma: no cover -- binaire requis ('live'
     """Confidences par mot via ``image_to_data`` (TSV natif, conf 0-100)."""
     import pytesseract  # type: ignore[import-not-found]
 
+    bound_openmp()
     data = pytesseract.image_to_data(
         image_path,
         lang=lang,
@@ -429,5 +457,9 @@ class TesseractAdapter:
 
 
 __all__ = [
+    "TesseractAdapter",
+    "bound_openmp",
     "invoke_tesseract_alto",
-    "parse_psm_by_class","TesseractAdapter", "tesseract_binary_version"]
+    "parse_psm_by_class",
+    "tesseract_binary_version",
+]

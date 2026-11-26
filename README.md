@@ -177,6 +177,8 @@ cinoc history runs.db --threshold 0.01           # or: which pipelines regressed
 cinoc serve --port 8080                          # local web app
 ```
 
+`cinoc run` ends with a tally of its units (pipeline × document) and exits **0** when every unit produced an output, **3** when at least one failed — the report is still written and lists them, with their reason — and **1** when the run could not be done at all (invalid spec, incomplete archive offline…). The `RunResult` carries no absolute local path: image references, the archive folder and failure messages are relative to the run config's folder, as the config writes them, and the report reads them back from there. Tesseract runs with `OMP_THREAD_LIMIT=1` unless you set it yourself: parallelism comes from `--workers`, and an unbounded OpenMP per process made parallel runs time out.
+
 ### Recipes — a named shape, not a blank canvas
 
 The typed graph admits hundreds of valid pipeline shapes. They don't fit in a form, and a node editor would be both heavy to build and hostile to use. A **recipe** is the third way: a proven shape, named by its intent — *historic multi-column press* — of which you only fill in the bricks.
@@ -299,7 +301,7 @@ cinoc corpus search "presse"        # the HTR-United catalogue
 cinoc corpus discover               # your own curated datasets on HuggingFace
 ```
 
-The written `corpus.yaml` holds the `corpus:` key of a run config, with **paths relative to itself** — move or archive the folder and it still resolves. Complete it with `pipelines:` and `evaluation:`, or paste its block into an existing config, then `cinoc run` it.
+The written `corpus.yaml` holds the `corpus:` key of a run config, with **paths relative to itself** — move or archive the folder and it still resolves. Complete it in place with `pipelines:` and `evaluation:`, then `cinoc run` it; pasted into a config that lives in another folder, its paths would no longer resolve. Document identifiers are always written quoted (`id: '0009'`), so no YAML reader turns them into numbers.
 
 Two flags carry the honesty of the measurement: `--no-ocr` on Gallica (its OCR is OCR, not a verified transcription — importing it as ground truth changes how every score reads), and `--revision` on a curated dataset (pins the exact data a run was measured against).
 

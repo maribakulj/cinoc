@@ -18,6 +18,7 @@ from cinoc.reports.engine_badges import engine_accent, engine_letter, engine_ord
 from cinoc.reports.html import escape, localized
 from cinoc.reports.section import Html, SectionContext
 from cinoc.reports.sections._tables import ordered_unique
+from cinoc.reports.sections.composition import settings_html
 from cinoc.reports.sections.taxonomy import composition_html
 from cinoc.reports.svg import bar_series, calibration_curve
 
@@ -79,20 +80,28 @@ def _pct(v: float, lang: str) -> str:
 def _config_block(result: RunResult, name: str, lang: str) -> str:
     """Config repliable (reproductibilité) : étapes du pipeline + adapter + version
     déclarée + paramètres, depuis le ``RunManifest``. ``<details>`` natif (zéro JS,
-    imprimable). Omise si le manifeste ne porte pas la spec (ex. données de démo)."""
+    imprimable). Omise si le manifeste ne porte pas la spec (ex. données de démo).
+
+    « Paramètres » = les réglages **effectifs** du module (``adapter_kwargs`` du
+    manifeste, même lecture que la composition des chaînes), puis ceux de
+    l'étape. Ne lire que ``step.params`` affichait « — » à côté d'une
+    composition qui montrait ``lang``, ``model``, ``prompt`` (pilote D-281, D12).
+    """
     spec = next(
         (s for s in result.manifest.pipeline_specs if s.name == name), None
     )
     if spec is None or not spec.steps:
         return ""
     versions = result.manifest.module_versions
+    kwargs = result.manifest.adapter_kwargs
     body = ""
     for step in spec.steps:
         ver = escape(versions.get(step.adapter_name, "—"))
-        params = (
-            " · ".join(f"{escape(k)}={escape(str(v))}" for k, v in step.params.items())
-            or "—"
-        )
+        reglages = [
+            settings_html(kwargs.get(step.adapter_name) or {}),
+            settings_html(step.params),
+        ]
+        params = " · ".join(r for r in reglages if r) or "—"
         body += (
             f'<tr><td class="lbl">{escape(step.kind)}</td>'
             f'<td class="lbl">{escape(step.adapter_name)}</td>'
