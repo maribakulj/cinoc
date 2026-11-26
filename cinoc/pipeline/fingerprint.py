@@ -17,10 +17,12 @@ de chaque module à relever sa ``version`` quand sa sortie peut changer.
 
 ``ProvenanceRecord.parameters_hash`` **est** cette empreinte (estampillée par
 l'exécuteur), et la clé d'unité du cache de reprise (couche 6) en **dérive** :
-un haché des empreintes des étapes, de la forme du pipeline et du contenu de
-l'image. Deux calculs séparés de « ce qui a produit cet artefact » avaient
-divergé (la provenance ne hachait que ``params``, la clé ignorait les binaires) ;
-il n'en reste qu'un.
+un haché des empreintes des étapes, de la forme du pipeline, du contenu de
+l'image et de celui des fichiers que les modules déclarent lire pour l'unité
+(``unit_inputs``) — une entrée par document, donc hors de l'empreinte d'étape,
+qui ne dépend pas du document. Deux calculs séparés de « ce qui a produit cet
+artefact » avaient divergé (la provenance ne hachait que ``params``, la clé
+ignorait les binaires) ; il n'en reste qu'un.
 """
 
 from __future__ import annotations

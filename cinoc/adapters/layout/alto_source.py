@@ -25,6 +25,7 @@ from pathlib import Path
 
 from cinoc.adapters._workspace import workspace_artifact_path
 from cinoc.domain.artifacts import Artifact, ArtifactType, compute_content_hash
+from cinoc.domain.documents import DocumentRef
 from cinoc.domain.errors import AdapterStepError, CinocError
 from cinoc.domain.layout import CanonicalLayout, Line, Region
 from cinoc.formats.alto.layout_map import alto_to_layout
@@ -75,9 +76,20 @@ class AltoLayoutSource:
     def output_types(self) -> frozenset[ArtifactType]:
         return frozenset({ArtifactType.LAYOUT})
 
+    def unit_inputs(self, document: DocumentRef) -> tuple[Path, ...]:
+        """Les fichiers lus pour ``document`` (hook de reprise, facultatif).
+
+        **Chaque** emplacement tenté, pas seulement celui qui existe : qu'un
+        ``.xml`` apparaisse près d'un ``.alto.xml`` change la lecture. Plus le
+        sidecar OCR, dont le chemin est un réglage mais le contenu une entrée.
+        """
+        if document.image_uri is None:
+            return ()
+        sidecar = (Path(self._sidecar),) if self._sidecar else ()
+        return (*_candidates(Path(document.image_uri)), *sidecar)
+
     def _locate(self, image_path: Path) -> Path:
-        for suffix in _SUFFIXES:
-            candidate = image_path.with_name(image_path.stem + suffix)
+        for candidate in _candidates(image_path):
             if candidate.is_file():
                 return candidate
         attendus = " ou ".join(repr(image_path.stem + s) for s in _SUFFIXES)
@@ -182,6 +194,11 @@ class AltoLayoutSource:
                 )
             }
         )
+
+
+def _candidates(image_path: Path) -> tuple[Path, ...]:
+    """Les ALTO cherchés près de l'image, dans l'ordre où ils sont tentés."""
+    return tuple(image_path.with_name(image_path.stem + s) for s in _SUFFIXES)
 
 
 def _all_regions(regions: tuple[Region, ...]) -> Iterator[Region]:

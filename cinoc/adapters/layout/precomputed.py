@@ -18,6 +18,7 @@ import json
 from pathlib import Path
 
 from cinoc.domain.artifacts import Artifact, ArtifactType, compute_content_hash
+from cinoc.domain.documents import DocumentRef
 from cinoc.domain.errors import AdapterStepError
 from cinoc.domain.layout import CanonicalLayout
 from cinoc.pipeline.protocols import ParamValue
@@ -32,6 +33,10 @@ def _require_image(inputs: dict[ArtifactType, Artifact], who: str) -> Path:
     if image is None or image.uri is None:
         raise AdapterStepError(f"{who} : artefact IMAGE manquant ou sans URI.")
     return Path(image.uri)
+
+
+def _layout_path(image_path: Path) -> Path:
+    return image_path.parent / f"{image_path.stem}.layout.json"
 
 
 class PrecomputedLayoutSource:
@@ -53,6 +58,12 @@ class PrecomputedLayoutSource:
     def output_types(self) -> frozenset[ArtifactType]:
         return frozenset({ArtifactType.LAYOUT})
 
+    def unit_inputs(self, document: DocumentRef) -> tuple[Path, ...]:
+        """Le fichier lu pour ``document`` (hook de reprise, facultatif)."""
+        if document.image_uri is None:
+            return ()
+        return (_layout_path(Path(document.image_uri)),)
+
     def execute(
         self,
         inputs: dict[ArtifactType, Artifact],
@@ -62,7 +73,7 @@ class PrecomputedLayoutSource:
     ) -> StepOutput:
         control.raise_if_cancelled()
         image_path = _require_image(inputs, self.name)
-        layout_path = image_path.parent / f"{image_path.stem}.layout.json"
+        layout_path = _layout_path(image_path)
         if not layout_path.is_file():
             raise AdapterStepError(
                 f"{self.name} : mise en page pré-calculée introuvable — "
@@ -118,6 +129,19 @@ class PrecomputedRegionRecognizer:
     def output_types(self) -> frozenset[ArtifactType]:
         return frozenset({ArtifactType.RAW_TEXT})
 
+    def _regions_path(self, image_path: Path) -> Path:
+        return image_path.parent / f"{image_path.stem}.{self._label}.regions.json"
+
+    def unit_inputs(self, document: DocumentRef) -> tuple[Path, ...]:
+        """Le fichier lu pour ``document`` (hook de reprise, facultatif).
+
+        Le fan-out passe à chaque région l'image **de la page** (sans découpe) :
+        le fichier est donc celui de la page, le même pour toutes ses régions.
+        """
+        if document.image_uri is None:
+            return ()
+        return (self._regions_path(Path(document.image_uri)),)
+
     def execute(
         self,
         inputs: dict[ArtifactType, Artifact],
@@ -133,9 +157,7 @@ class PrecomputedRegionRecognizer:
                 "région attend une entrée déjà cadrée par le fan-out."
             )
         image_path = _require_image(inputs, self.name)
-        regions_path = (
-            image_path.parent / f"{image_path.stem}.{self._label}.regions.json"
-        )
+        regions_path = self._regions_path(image_path)
         if not regions_path.is_file():
             raise AdapterStepError(
                 f"{self.name} : textes par région introuvables — "

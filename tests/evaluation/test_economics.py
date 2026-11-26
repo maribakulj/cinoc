@@ -372,3 +372,142 @@ def test_azure_di_priced_from_packaged_table() -> None:
     rows = {r.pipeline: r for r in analysis.payload.pipelines}  # type: ignore[union-attr]
     assert rows["ocr_seul"].cost_eur == pytest.approx(0.004 + 2 / 1000 * per_1k)
     assert "pages" in rows["ocr_seul"].basis
+
+
+# --------------------------------------------------------------------------- #
+# Instantané daté : le tarif de l'alias demandé, dit comme tel
+# --------------------------------------------------------------------------- #
+
+
+def _llm_row(
+    requested: str, served: str, pricing: dict[str, object] | None = None
+) -> tuple[float | None, str]:
+    """``(coût, basis)`` du pipeline ``ocr_llm`` : ``requested`` demandé,
+    ``served`` servi selon la réponse du fournisseur."""
+    manifest = _manifest().model_copy(
+        update={
+            "adapter_kwargs": {"openai:gpt": {"model": requested}},
+            "served_models": {"openai:gpt": (served,)},
+        }
+    )
+    analysis = economics_analysis(
+        "text", "cer", _series(), _usage(), manifest,
+        pricing=pricing if pricing is not None else _PRICING,
+    )
+    assert analysis is not None
+    rows = {r.pipeline: r for r in analysis.payload.pipelines}  # type: ignore[union-attr]
+    return rows["ocr_llm"].cost_eur, rows["ocr_llm"].basis
+
+
+@pytest.mark.parametrize(
+    "served",
+    [
+        "gpt-4o-mini-2024-07-18",  # forme OpenAI (-AAAA-MM-JJ)
+        "gpt-4o-mini-20240718",  # forme Anthropic (-AAAAMMJJ)
+    ],
+)
+def test_a_dated_snapshot_of_the_requested_alias_takes_the_alias_price(
+    served: str,
+) -> None:
+    cost, basis = _llm_row("gpt-4o-mini", served)
+    # Même calcul que ``test_token_cost_hand_computed`` : 0.015 + 0.16 €.
+    assert cost == pytest.approx(0.175)
+    assert basis == (
+        f"machine+jetons — tarif de l'alias demandé : openai/gpt-4o-mini "
+        f"pour {served}"
+    )
+
+
+def test_a_snapshot_of_another_alias_stays_unknown() -> None:
+    """``gpt-4o`` demandé, ``gpt-4o-mini-…`` servi : un préfixe commun n'est pas
+    une correspondance."""
+    pricing = {
+        **_PRICING,
+        "cloud_models": {
+            **_PRICING["cloud_models"],  # type: ignore[dict-item]
+            "openai/gpt-4o": {"input_eur_per_mtok": 2.0, "output_eur_per_mtok": 8.0},
+        },
+    }
+    cost, basis = _llm_row("gpt-4o", "gpt-4o-mini-2024-07-18", pricing)
+    assert cost is None
+    assert basis == "tarif inconnu : openai/gpt-4o-mini-2024-07-18"
+
+
+@pytest.mark.parametrize(
+    "served",
+    [
+        # Attesté dans le SDK openai 3.59 (``ChatModel``) : un autre modèle,
+        # pas un instantané de ``gpt-4o-mini``.
+        "gpt-4o-mini-search-preview-2025-03-11",
+        "gpt-4o-mini-2024-13-40",  # pas une date
+        "gpt-4o-mini-2024-07",  # forme non attestée
+        "gpt-4o-mini-latest",
+    ],
+)
+def test_only_a_date_suffix_falls_back_to_the_alias(served: str) -> None:
+    cost, basis = _llm_row("gpt-4o-mini", served)
+    assert cost is None
+    assert basis == f"tarif inconnu : openai/{served}"
+
+
+def test_a_served_model_listed_in_the_table_keeps_its_own_price() -> None:
+    pricing = {
+        **_PRICING,
+        "cloud_models": {
+            **_PRICING["cloud_models"],  # type: ignore[dict-item]
+            "openai/gpt-4o-mini-2024-07-18": {
+                "input_eur_per_mtok": 1.0,
+                "output_eur_per_mtok": 0.0,
+            },
+        },
+    }
+    cost, basis = _llm_row("gpt-4o-mini", "gpt-4o-mini-2024-07-18", pricing)
+    # Machine 0.015 € + 0.5 MTok × 1.0 € = 0.515 € : son tarif, pas l'alias.
+    assert cost == pytest.approx(0.515)
+    assert basis == "machine+jetons"
+
+
+def test_mistral_latest_to_yymm_is_not_taken_for_a_snapshot() -> None:
+    """Forme écartée, faute d'attestation : la cassette Mistral (synthétique)
+    sert ``mistral-small-2506`` à qui demande ``mistral-small-latest``, mais le
+    SDK mistralai 1.12.4 montre la réponse qui **reprend** l'alias demandé
+    (``model="mistral-large-latest"``, ``extra/tests/test_struct_chat.py``). Et
+    ``-AAMM`` remplace ``-latest`` au lieu de le suivre : ce n'est pas un
+    suffixe de date de l'alias."""
+    pricing = {
+        **_PRICING,
+        "cloud_models": {
+            "mistral/mistral-small-latest": {
+                "input_eur_per_mtok": 0.1,
+                "output_eur_per_mtok": 0.3,
+            }
+        },
+        "default_models": {"mistral": "mistral-small-latest"},
+    }
+    step = PipelineStep(
+        id="llm",
+        kind="post_correction",
+        adapter_name="mistral:c0",
+        input_types=(ArtifactType.RAW_TEXT,),
+        output_types=(ArtifactType.CORRECTED_TEXT,),
+        inputs_from={ArtifactType.RAW_TEXT: "ocr"},
+    )
+    base = _manifest()
+    ocr_llm = base.pipeline_specs[1]
+    manifest = base.model_copy(
+        update={
+            "pipeline_specs": (
+                base.pipeline_specs[0],
+                ocr_llm.model_copy(update={"steps": (ocr_llm.steps[0], step)}),
+            ),
+            "adapter_kwargs": {"mistral:c0": {"model": "mistral-small-latest"}},
+            "served_models": {"mistral:c0": ("mistral-small-2506",)},
+        }
+    )
+    analysis = economics_analysis(
+        "text", "cer", _series(), _usage(), manifest, pricing=pricing
+    )
+    assert analysis is not None
+    rows = {r.pipeline: r for r in analysis.payload.pipelines}  # type: ignore[union-attr]
+    assert rows["ocr_llm"].cost_eur is None
+    assert rows["ocr_llm"].basis == "tarif inconnu : mistral/mistral-small-2506"

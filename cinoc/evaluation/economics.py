@@ -11,8 +11,13 @@ jamais en exécutant la source). Modèle de coût simple et auditable :
   dit avoir **servi** (``RunManifest.served_models``) quand il est connu, le
   modèle **demandé** sinon (réponse muette, JSON antérieur) : un alias
   (``gpt-4o-mini``) peut désigner un autre modèle, à un autre prix, d'un mois à
-  l'autre. Modèle absent de la table → coût ``None`` + motif dans ``basis``
-  (jamais un zéro silencieux — et l'alias ne remplace pas un servi inconnu) ;
+  l'autre. Servi absent de la table mais **instantané daté de l'alias
+  demandé** — l'alias exact suivi de ``-AAAA-MM-JJ`` (OpenAI :
+  ``gpt-4o-mini-2024-07-18``) ou ``-AAAAMMJJ`` (Anthropic :
+  ``claude-haiku-4-5-20251001``), date valide — → tarif de l'alias, et
+  ``basis`` le dit. Jamais par simple préfixe (``gpt-4o`` demandé,
+  ``gpt-4o-mini-…`` servi : inconnu). Sinon coût ``None`` + motif dans
+  ``basis`` (jamais un zéro silencieux) ;
 - **débit effectif** : pages/h corrigé du temps de relecture des erreurs
   résiduelles (Σ cer·poids erreurs estimées × ``time_per_error_seconds``) ;
 - **péremption** : ``valid_until`` de la table comparé à ``completed_at`` du
@@ -25,6 +30,7 @@ whitelist archi de cette couche). C'est de la **donnée datée**, pas du code.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Mapping, Sequence
 from datetime import date
 from importlib import resources
@@ -85,13 +91,39 @@ def _page_rate(
     return sum(rates) if rates else None
 
 
+#: Suffixes de date d'un instantané, **attestés** : ``-AAAA-MM-JJ`` (SDK openai
+#: 3.59, ``gpt-4o-mini`` / ``gpt-4o-mini-2024-07-18``) et ``-AAAAMMJJ`` (SDK
+#: anthropic 2.14, ``claude-haiku-4-5`` / ``claude-haiku-4-5-20251001``). Pas
+#: ``-AAMM`` de Mistral : seule la cassette synthétique le sert pour
+#: ``…-latest``, le SDK mistralai 1.12.4 montre la réponse qui reprend l'alias,
+#: et ``-AAMM`` y **remplace** ``-latest`` au lieu de le suivre.
+_DATE_SUFFIX = re.compile(r"-(\d{4})-?(\d{2})-?(\d{2})")
+
+
+def _is_dated_snapshot(served: str, alias: str) -> bool:
+    """``served`` = exactement ``alias`` + un suffixe de date valide."""
+    if not alias or not served.startswith(alias):
+        return False
+    match = _DATE_SUFFIX.fullmatch(served[len(alias):])
+    if match is None or match.group(0).count("-") not in (1, 3):
+        return False
+    try:
+        date(*(int(part) for part in match.groups()))
+    except ValueError:
+        return False
+    return True
+
+
 def _cloud_model_keys(
     spec: PipelineSpec,
     adapter_kwargs: Mapping[str, Mapping[str, object]],
     pricing: Mapping[str, Any],
     served_models: Mapping[str, Sequence[str]] | None = None,
-) -> list[str]:
-    """Clés ``kind/modèle`` des étages cloud du pipeline (déduplication triée).
+) -> dict[str, str]:
+    """Clés ``kind/modèle`` des étages cloud du pipeline → clé **demandée**.
+
+    La valeur est la clé du modèle demandé (saisi, sinon défaut de la table) :
+    elle ne sert qu'à reconnaître un servi qui en est l'instantané daté.
 
     Un *kind cloud* (facturé au jeton) = un fournisseur listé dans
     ``default_models`` de la table — la source datée fait foi (pas de liste
@@ -105,45 +137,58 @@ def _cloud_model_keys(
     """
     defaults = pricing.get("default_models", {})
     served = served_models or {}
-    keys: set[str] = set()
+    keys: dict[str, str] = {}
     for step in spec.steps:
         kind = step.adapter_name.split(":", 1)[0]
         if kind not in defaults:
-            continue
-        servis = served.get(step.adapter_name) or ()
-        if servis:
-            keys.update(f"{kind}/{model}" for model in servis)
             continue
         kwargs = adapter_kwargs.get(step.adapter_name, {})
         model = kwargs.get("model")
         if not isinstance(model, str) or not model:
             model = str(defaults.get(kind, ""))
-        keys.add(f"{kind}/{model}")
-    return sorted(keys)
+        requested = f"{kind}/{model}"
+        for servi in served.get(step.adapter_name) or (model,):
+            keys.setdefault(f"{kind}/{servi}", requested)
+    return dict(sorted(keys.items()))
 
 
 def _token_cost(
-    keys: Sequence[str],
+    keys: Mapping[str, str],
     tokens_in: int | None,
     tokens_out: int | None,
     pricing: Mapping[str, Any],
-) -> tuple[float | None, str]:
-    """``(coût jetons, basis)`` — ``None`` si un modèle est hors table."""
+) -> tuple[float | None, str, str | None]:
+    """``(coût jetons, basis, note)`` — ``None`` si un modèle est hors table.
+
+    ``note`` nomme l'alias dont le tarif a été appliqué à un instantané daté.
+    """
     if not keys:
-        return 0.0, "machine"
+        return 0.0, "machine", None
     models = pricing.get("cloud_models", {})
-    unknown = [key for key in keys if key not in models]
+    priced: dict[str, str] = {}
+    for key, requested in keys.items():
+        if key in models:
+            priced[key] = key
+        elif requested in models and _is_dated_snapshot(key, requested):
+            priced[key] = requested
+    unknown = [key for key in keys if key not in priced]
     if unknown:
-        return None, f"tarif inconnu : {', '.join(unknown)}"
+        return None, f"tarif inconnu : {', '.join(unknown)}", None
     if len(keys) > 1:
         # Les jetons E1 sont agrégés par document : à plusieurs étages cloud
         # on ne peut pas les ventiler par modèle → coût non attribuable.
-        return None, f"jetons non ventilables : {', '.join(keys)}"
-    entry = models[keys[0]]
+        return None, f"jetons non ventilables : {', '.join(keys)}", None
+    ((key, tarif),) = priced.items()
+    entry = models[tarif]
     cost = (tokens_in or 0) / 1e6 * float(entry["input_eur_per_mtok"]) + (
         tokens_out or 0
     ) / 1e6 * float(entry["output_eur_per_mtok"])
-    return cost, "machine+jetons"
+    note = (
+        None
+        if tarif == key
+        else f"tarif de l'alias demandé : {tarif} pour {key.split('/', 1)[1]}"
+    )
+    return cost, "machine+jetons", note
 
 
 def _estimated_errors(scores: Sequence[MetricScore]) -> float | None:
@@ -197,13 +242,15 @@ def economics_analysis(
         keys = _cloud_model_keys(
             specs[name], manifest.adapter_kwargs, table, manifest.served_models
         )
-        token_cost, basis = _token_cost(keys, tokens_in, tokens_out, table)
+        token_cost, basis, note = _token_cost(keys, tokens_in, tokens_out, table)
         page_rate = _page_rate(specs[name], table)
         page_cost = (
             n_documents / 1000.0 * page_rate if page_rate is not None else 0.0
         )
         if page_rate is not None:
             basis = basis + "+pages" if token_cost is not None else basis
+        if note is not None:
+            basis = f"{basis} — {note}"
         cost = (
             duration / 3600.0 * rate + token_cost + page_cost
             if token_cost is not None

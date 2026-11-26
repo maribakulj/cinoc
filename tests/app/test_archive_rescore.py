@@ -452,13 +452,16 @@ def _economics(result: RunResult, pricing: dict[str, Any] | None = None) -> Any:
 def test_pricing_is_indexed_on_the_served_model(
     archived: tuple[RunSpec, ResumeStore, RunResult, _Local],
 ) -> None:
-    """La table s'indexe sur le modèle **servi** ; absent de la table, le coût
-    est inconnu et le dit — l'alias demandé ne le remplace pas."""
+    """La table s'indexe sur le modèle **servi**. Absent de la table, mais
+    instantané daté de l'alias demandé (``gpt-4o-mini`` → ``gpt-4o-mini-
+    2024-07-18``, la cassette) : le tarif de l'alias, **dit comme tel** (D-280 ;
+    D-279 rendait « tarif inconnu » à tout run OpenAI)."""
     _spec_, _store, first, _state = archived
     rows = _economics(first)
-    assert rows["openai (zero-shot)"].cost_eur is None
+    assert rows["openai (zero-shot)"].cost_eur is not None
     assert rows["openai (zero-shot)"].basis == (
-        "tarif inconnu : openai/gpt-4o-mini-2024-07-18"
+        "machine+jetons — tarif de l'alias demandé : openai/gpt-4o-mini "
+        "pour gpt-4o-mini-2024-07-18"
     )
     table = load_pricing()
     table["cloud_models"]["openai/gpt-4o-mini-2024-07-18"] = {

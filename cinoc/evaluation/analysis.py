@@ -100,7 +100,9 @@ class PipelineEconomics(BaseModel):
     tokens_in: int | None = Field(default=None, ge=0)
     tokens_out: int | None = Field(default=None, ge=0)
     cost_eur: float | None = Field(default=None, ge=0)
-    #: « machine » · « machine+jetons » · « tarif inconnu : <kind:model> ».
+    #: « machine » · « machine+jetons » · « tarif inconnu : <kind:model> » ;
+    #: suivi de « — tarif de l'alias demandé : <kind/alias> pour <servi> » quand
+    #: un instantané daté absent de la table prend le tarif de son alias.
     basis: str = Field(min_length=1, max_length=256)
     cer: float | None = None
     #: Erreurs estimées sur la vue : Σ (cer_doc × poids_doc) — auditable.

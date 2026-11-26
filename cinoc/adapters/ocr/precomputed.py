@@ -11,6 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from cinoc.domain.artifacts import Artifact, ArtifactType, compute_content_hash
+from cinoc.domain.documents import DocumentRef
 from cinoc.domain.errors import AdapterStepError
 from cinoc.pipeline.protocols import ParamValue
 from cinoc.pipeline.run_control import RunControl
@@ -48,6 +49,20 @@ class PrecomputedTextAdapter:
     def output_types(self) -> frozenset[ArtifactType]:
         return frozenset({ArtifactType.RAW_TEXT})
 
+    def _text_path(self, image_path: Path) -> Path:
+        return image_path.parent / f"{image_path.stem}.{self._label}.txt"
+
+    def unit_inputs(self, document: DocumentRef) -> tuple[Path, ...]:
+        """Le fichier lu pour ``document`` (hook de reprise, facultatif).
+
+        La sortie ne dépend pas de l'image mais de ce fichier : sans cette
+        déclaration, la clé d'unité ne hachait que l'image, et un texte corrigé
+        sous la même image était resservi périmé par l'archive.
+        """
+        if document.image_uri is None:
+            return ()
+        return (self._text_path(Path(document.image_uri)),)
+
     def execute(
         self,
         inputs: dict[ArtifactType, Artifact],
@@ -62,7 +77,7 @@ class PrecomputedTextAdapter:
                 f"{self.name} : artefact IMAGE manquant ou sans URI."
             )
         image_path = Path(image.uri)
-        text_path = image_path.parent / f"{image_path.stem}.{self._label}.txt"
+        text_path = self._text_path(image_path)
         if not text_path.is_file():
             raise AdapterStepError(
                 f"{self.name} : texte pré-calculé introuvable — "
