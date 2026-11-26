@@ -20,7 +20,12 @@ import json
 import time
 from collections.abc import Mapping
 
-from cinoc.domain.artifacts import Artifact, ArtifactType, compute_content_hash
+from cinoc.domain.artifacts import (
+    Artifact,
+    ArtifactType,
+    compute_content_hash,
+    latest_by_type,
+)
 from cinoc.domain.deadline import Deadline
 from cinoc.domain.errors import AdapterStepError, CinocError, DeadlineExceeded
 from cinoc.domain.pipeline import INITIAL_STEP_ID, PipelineSpec, PipelineStep
@@ -82,18 +87,23 @@ class PipelineExecutor:
         workspace_uri: str | None = None,
         cropper: RegionCropper | None = None,
     ) -> DocumentExecution:
-        """Exécute ``spec`` ; renvoie artefacts (dernier par type) + ``usage``.
+        """Exécute ``spec`` ; renvoie les sorties et la consommation **par étape**.
 
         ``cropper`` (couche 5, injecté par l'app) active le découpage réel des
         blocs dans les étapes ``fanout`` (pipeline hybride seg→OCR par bloc).
         La **durée** de chaque étape est mesurée ici (horloge monotone, source
         unique) puis fusionnée avec les jetons remontés par les modules.
+
+        ``by_step`` est la seule structure tenue : les entrées initiales y
+        figurent sous ``INITIAL_STEP_ID``, et le pool (« dernière version par
+        type ») s'en déduit à la demande (``latest_by_type``).
         """
         ctrl = control if control is not None else RunControl()
         dl = deadline if deadline is not None else Deadline.infinite()
-        pool: dict[ArtifactType, Artifact] = dict(initial_inputs)
-        by_step: dict[str, dict[ArtifactType, Artifact]] = {}
-        usage = ResourceUsage()
+        by_step: dict[str, dict[ArtifactType, Artifact]] = {
+            INITIAL_STEP_ID: dict(initial_inputs)
+        }
+        step_usage: dict[str, ResourceUsage] = {}
 
         for step in spec.steps:
             ctrl.raise_if_cancelled()
@@ -106,7 +116,7 @@ class PipelineExecutor:
             inputs = (
                 {}
                 if step.merge_from
-                else self._resolve_inputs(step, pool, by_step)
+                else self._resolve_inputs(step, by_step)
             )
             context = RunContext(
                 document_id=document_id,
@@ -122,15 +132,13 @@ class PipelineExecutor:
                 output = self._run_fanout(step, module, inputs, context, ctrl, cropper)
             else:
                 output = module.execute(inputs, dict(step.params), context, ctrl)
-            step_usage = ResourceUsage(
+            step_usage[step.id] = ResourceUsage(
                 duration_seconds=time.monotonic() - started
             ).merged_with(output.usage)
-            usage = usage.merged_with(step_usage)
             stamped = self._stamp(output.artifacts, step)
             self._check_outputs(step, stamped)
             by_step[step.id] = stamped
-            pool.update(stamped)
-        return DocumentExecution(artifacts=pool, usage=usage)
+        return DocumentExecution(by_step=by_step, step_usage=step_usage)
 
     def _run_merge(
         self,
@@ -142,7 +150,6 @@ class PipelineExecutor:
     ) -> StepOutput:
         """Réunit les sorties de plusieurs étapes en une seule.
 
-        Le pool est indexé par type : deux sorties du même type s'y écrasent, et
         ``inputs_from`` ne nomme qu'une source par type. Les avis sont donc pris
         dans ``by_step``, qui les garde **tous** — la donnée existait déjà, seule
         la façon de la demander manquait.
@@ -203,9 +210,12 @@ class PipelineExecutor:
     def _resolve_inputs(
         self,
         step: PipelineStep,
-        pool: Mapping[ArtifactType, Artifact],
         by_step: Mapping[str, dict[ArtifactType, Artifact]],
     ) -> dict[ArtifactType, Artifact]:
+        # ``INITIAL_STEP_ID`` lit le pool (dernière version du type), comme
+        # avant : une recette qui prétraite l'image puis nomme ``__initial__``
+        # pour l'OCR reçoit l'image prétraitée. Le changer changerait des sorties.
+        pool = latest_by_type(by_step)
         resolved: dict[ArtifactType, Artifact] = {}
         for t in step.input_types:
             src = step.inputs_from.get(t)

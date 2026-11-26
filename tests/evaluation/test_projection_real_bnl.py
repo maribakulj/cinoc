@@ -82,7 +82,9 @@ def test_real_alto_scored_through_runner() -> None:
                 ),
             )
         ),
-        pipeline_outputs={"abbyy": {"waeschfra_p2": {ArtifactType.LAYOUT: candidate}}},
+        pipeline_outputs={
+            "abbyy": {"waeschfra_p2": {"ocr": {ArtifactType.LAYOUT: candidate}}}
+        },
         registry=registry,
         manifest=RunManifest(
             run_id="r",

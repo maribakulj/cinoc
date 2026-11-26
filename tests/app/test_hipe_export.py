@@ -51,10 +51,16 @@ def test_single_pipeline_records(tmp_path: Path, caplog) -> None:
     outputs = {
         "chain": {
             "doc1": {
-                ArtifactType.RAW_TEXT: _artifact("doc1", ArtifactType.RAW_TEXT, raw),
-                ArtifactType.CORRECTED_TEXT: _artifact(
-                    "doc1", ArtifactType.CORRECTED_TEXT, corrected
-                ),
+                "ocr": {
+                    ArtifactType.RAW_TEXT: _artifact(
+                        "doc1", ArtifactType.RAW_TEXT, raw
+                    )
+                },
+                "llm": {
+                    ArtifactType.CORRECTED_TEXT: _artifact(
+                        "doc1", ArtifactType.CORRECTED_TEXT, corrected
+                    )
+                },
             }
             # doc2 : aucune sortie → R-1.8 (chaîne vide + warning).
         }
@@ -86,9 +92,9 @@ def test_mono_stage_uses_raw_as_system_output(tmp_path: Path) -> None:
     raw.write_text("sortie ocr", encoding="utf-8")
     outputs = {
         "ocr": {
-            "doc1": {
+            "doc1": {"ocr": {
                 ArtifactType.RAW_TEXT: _artifact("doc1", ArtifactType.RAW_TEXT, raw)
-            }
+            }}
         }
     }
     target = tmp_path / "out.jsonl"
@@ -101,7 +107,11 @@ def test_two_pipelines_two_files(tmp_path: Path) -> None:
     raw = tmp_path / "doc1.raw.txt"
     raw.write_text("a", encoding="utf-8")
     artifact = {
-        "doc1": {ArtifactType.RAW_TEXT: _artifact("doc1", ArtifactType.RAW_TEXT, raw)}
+        "doc1": {
+            "ocr": {
+                ArtifactType.RAW_TEXT: _artifact("doc1", ArtifactType.RAW_TEXT, raw)
+            }
+        }
     }
     outputs = {"ocr": artifact, "ocr+llm": artifact}
     target = tmp_path / "out.jsonl"
@@ -119,9 +129,11 @@ def test_sink_writes_on_invocation(tmp_path: Path) -> None:
         {
             "ocr": {
                 "doc1": {
-                    ArtifactType.RAW_TEXT: _artifact(
-                        "doc1", ArtifactType.RAW_TEXT, raw
-                    )
+                    "ocr": {
+                        ArtifactType.RAW_TEXT: _artifact(
+                            "doc1", ArtifactType.RAW_TEXT, raw
+                        )
+                    }
                 }
             }
         },

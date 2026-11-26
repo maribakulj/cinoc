@@ -15,7 +15,12 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from cinoc.domain.artifacts import Artifact, ArtifactType
+from cinoc.domain.artifacts import (
+    Artifact,
+    ArtifactType,
+    StepArtifacts,
+    latest_by_type,
+)
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.documents import DocumentRef, GroundTruthRef
 from cinoc.domain.evaluation import EvaluationSpec, EvaluationView
@@ -43,21 +48,12 @@ from cinoc.evaluation.result import (
     RunResult,
 )
 
-#: { pipeline_name: { document_id: { ArtifactType: Artifact } } }
-PipelineOutputs = Mapping[str, Mapping[str, Mapping[ArtifactType, Artifact]]]
+#: { pipeline_name: { document_id: { step_id: { ArtifactType: Artifact } } } } —
+#: les sorties de **chaque** étape (``by_step``), dans l'ordre d'exécution.
+PipelineOutputs = Mapping[str, Mapping[str, StepArtifacts]]
 
 #: Signature d'entrée d'une métrique : ``(type_référence, type_hypothèse)``.
 _Signature = tuple[ArtifactType, ArtifactType]
-
-#: Précédence de **repli**, quand l'étape productrice est inconnue : du plus
-#: aval (corrigé) au plus brut. Elle ne vaut que comme approximation — c'est
-#: l'ordre des étapes du pipeline qui fait foi (cf. ``_candidate_for``). Jamais
-#: l'ordre alphabétique des valeurs d'enum (qui ne coïncide avec l'intention
-#: que par hasard).
-_CANDIDATE_PRECEDENCE: tuple[ArtifactType, ...] = (
-    ArtifactType.CORRECTED_TEXT,
-    ArtifactType.RAW_TEXT,
-)
 
 #: { métrique : { pipeline : [score par doc, aligné, ``None`` inclus] } }
 _Series = dict[str, dict[str, list[MetricScore]]]
@@ -127,6 +123,15 @@ def evaluate_run(
         (u.pipeline, u.document_id) for u in usage if u.outcome == "failed"
     )
     max_error = evaluation.failure_policy == "max_error"
+    # Les analyses qui lisent la sortie **finale** d'un pipeline (calibration,
+    # correction, décisions) en lisent le pool : une lecture de ``by_step``.
+    pools = {
+        pipeline: {
+            document_id: latest_by_type(by_step)
+            for document_id, by_step in by_document.items()
+        }
+        for pipeline, by_document in pipeline_outputs.items()
+    }
 
     for view in evaluation.views:
         series: _Series = {name: {} for name in view.metric_names}
@@ -134,7 +139,6 @@ def evaluate_run(
         for pipeline_name in pipeline_order:
             for name in view.metric_names:
                 series[name][pipeline_name] = []
-            step_ranks = _step_ranks(manifest, pipeline_name)
             #: Unités en échec qui **auraient** été notées, par métrique : la
             #: différence entre « n attendus » et « n notés ».
             missed = dict.fromkeys(view.metric_names, 0)
@@ -151,11 +155,9 @@ def evaluate_run(
                     text_context = entity_context = None
                 else:
                     candidate = _candidate_for(
-                        pipeline_outputs,
+                        view,
                         pipeline_name,
-                        document.id,
-                        view.candidate_types,
-                        step_ranks,
+                        pipeline_outputs.get(pipeline_name, {}).get(document.id, {}),
                     )
                     scores, text_context, entity_context = _score_document(
                         view, document, candidate, registry
@@ -203,7 +205,7 @@ def evaluate_run(
         # pipeline_outputs / usage directement, hors du cycle observe→build.
         calibration = None
         if actives is None or "calibration" in actives:
-            calibration = calibration_analysis(view.name, corpus, pipeline_outputs)
+            calibration = calibration_analysis(view.name, corpus, pools)
         if calibration is not None:
             analyses.append(calibration)
         if "cer" in view.metric_names and (actives is None or "economics" in actives):
@@ -214,14 +216,14 @@ def evaluate_run(
                 analyses.append(economics)
         correction = None
         if actives is None or "correction" in actives:
-            correction = correction_analysis(view, corpus, pipeline_outputs)
+            correction = correction_analysis(view, corpus, pools)
         if correction is not None:
             analyses.append(correction)
         # Ce qu'un correcteur a **refusé** de changer : invisible dans le texte
         # de sortie, donc invisible partout ailleurs.
         decisions = None
         if actives is None or "decisions" in actives:
-            decisions = decisions_analysis(view.name, pipeline_outputs)
+            decisions = decisions_analysis(view.name, pools)
         if decisions is not None:
             analyses.append(decisions)
 
@@ -411,73 +413,39 @@ def _cross_engine_scores(
     return scores
 
 
-def _step_ranks(manifest: RunManifest, pipeline_name: str) -> Mapping[str, int]:
-    """``{id d'étape: rang}`` du pipeline — vide s'il n'est pas au manifeste."""
-    for spec in manifest.pipeline_specs:
-        if spec.name == pipeline_name:
-            return {step.id: rank for rank, step in enumerate(spec.steps)}
-    return {}
-
-
 def _candidate_for(
-    pipeline_outputs: PipelineOutputs,
-    pipeline_name: str,
-    document_id: str,
-    candidate_types: frozenset[ArtifactType],
-    step_ranks: Mapping[str, int],
+    view: EvaluationView, pipeline_name: str, by_step: StepArtifacts
 ) -> Artifact | None:
-    """L'artefact à noter : la sortie de l'étape la plus **aval** du pipeline.
+    """L'artefact à noter : la sortie candidate de l'étape que la vue **vise**.
 
-    Choisir par *type* d'artefact note un intermédiaire dès qu'une étape en aval
-    reproduit un type plus « brut ». Cas réel : ``segmentation → OCR par région
-    → correction VLM → ordre de lecture → projection`` publie un
-    ``CORRECTED_TEXT`` au milieu et finit sur un ``RAW_TEXT`` ; la précédence par
-    type notait le texte corrigé, donc **avant** l'ordre de lecture — mêmes mots,
-    mauvaise séquence, et un CER de 0,8842 au lieu de 0,8079.
-
-    L'ordre des étapes du pipeline tranche sans ambiguïté, et ``produced_by_step``
-    le rattache à l'artefact. La précédence par type ne sert plus que de repli,
-    pour les artefacts dont l'étape est inconnue — ceux du fan-out, qui la
-    laissent à ``None``, et les entrées initiales.
+    ``view.target_step`` nommée → cette étape. Sinon, l'étape la plus **aval**
+    (``by_step`` est dans l'ordre d'exécution) qui produit un type candidat.
+    Choisir par *type* notait un intermédiaire dès qu'une étape en aval
+    reproduisait un type plus « brut » (``… → correction VLM → ordre de lecture
+    → projection`` : texte corrigé noté **avant** la remise en ordre, CER 0,8842
+    au lieu de 0,8079) — et rendait l'étape amont d'un type répété impossible à
+    noter. Il n'y a plus de précédence par type : une étape qui publie plusieurs
+    types candidats rend la vue ambiguë (refusée au chargement pour les types
+    déclarés, ici pour ceux qu'un module publierait sans les déclarer).
     """
-    by_document: Mapping[str, Mapping[ArtifactType, Artifact]] = (
-        pipeline_outputs.get(pipeline_name, {})
-    )
-    outputs: Mapping[ArtifactType, Artifact] = by_document.get(document_id, {})
-    présents = [(t, a) for t, a in outputs.items() if t in candidate_types]
-    if not présents:
-        return None
-
-    #: Départage deux artefacts d'une **même** étape (un module peut en publier
-    #: plusieurs) : on retombe alors sur la précédence par type.
-    def rang_de_type(artifact_type: ArtifactType) -> int:
-        if artifact_type in _CANDIDATE_PRECEDENCE:
-            return _CANDIDATE_PRECEDENCE.index(artifact_type)
-        return len(_CANDIDATE_PRECEDENCE)
-
-    datés = [
-        (step_ranks[a.produced_by_step], -rang_de_type(t), t.value, a)
-        for t, a in présents
-        if a.produced_by_step is not None and a.produced_by_step in step_ranks
-    ]
-    if datés:
-        # Trier sur les trois premiers champs seulement : le quatrième est un
-        # ``Artifact``, qui n'a pas d'ordre. Ils ne peuvent pas s'égaliser
-        # aujourd'hui (``outputs`` est indexé par type, donc ``t.value`` est
-        # unique) — mais c'est un invariant implicite, et le laisser décider
-        # ferait lever un ``TypeError`` obscur le jour où il cesse de tenir.
-        return max(datés, key=lambda entrée: entrée[:3])[3]
-
-    ordered = [t for t in _CANDIDATE_PRECEDENCE if t in candidate_types]
-    ordered.extend(
-        sorted(
-            (t for t in candidate_types if t not in _CANDIDATE_PRECEDENCE),
-            key=lambda t: t.value,
+    if view.target_step is not None:
+        steps: list[Mapping[ArtifactType, Artifact]] = [
+            by_step.get(view.target_step, {})
+        ]
+    else:
+        steps = list(reversed(list(by_step.values())))
+    for outputs in steps:
+        présents = sorted(
+            (t for t in outputs if t in view.candidate_types), key=lambda t: t.value
         )
-    )
-    for artifact_type in ordered:
-        if artifact_type in outputs:
-            return outputs[artifact_type]
+        if len(présents) > 1:
+            raise EvaluationError(
+                f"vue {view.name!r}, pipeline {pipeline_name!r} : une même étape "
+                f"publie plusieurs types candidats ({', '.join(présents)}) — "
+                "restreignez 'candidate_types' à celui qui doit être noté."
+            )
+        if présents:
+            return outputs[présents[0]]
     return None
 
 

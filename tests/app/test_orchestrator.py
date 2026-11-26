@@ -10,7 +10,7 @@ from cinoc.adapters.llm._base import LLMCompletion
 from cinoc.app import run
 from cinoc.app.modules.registry import ModuleRegistry, register_default_modules
 from cinoc.app.orchestrator import OrchestrationError, PipelineOutputs
-from cinoc.domain.artifacts import ArtifactType
+from cinoc.domain.artifacts import ArtifactType, latest_by_type
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.documents import DocumentRef, GroundTruthRef
 from cinoc.domain.evaluation import EvaluationSpec, EvaluationView
@@ -385,8 +385,8 @@ def test_artifact_sink_receives_readable_layout(tmp_path: Path) -> None:
 
     def sink(outputs: PipelineOutputs, manifest: RunManifest) -> None:
         for pipeline_name, per_doc in outputs.items():
-            for doc_id, artifacts in per_doc.items():
-                art = artifacts.get(ArtifactType.LAYOUT)
+            for doc_id, by_step in per_doc.items():
+                art = latest_by_type(by_step).get(ArtifactType.LAYOUT)
                 assert art is not None and art.uri is not None
                 # URI lisible PENDANT le run (avant nettoyage du workspace)
                 got = CanonicalLayout.model_validate_json(Path(art.uri).read_bytes())

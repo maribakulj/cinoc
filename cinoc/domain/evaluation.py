@@ -15,9 +15,15 @@ commune, et le rapport explicite ce que la vue ignore.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SerializerFunctionWrapHandler,
+    model_serializer,
+)
 
 from cinoc.domain.artifacts import ArtifactType
 from cinoc.domain.projection import ProjectionSpec
@@ -62,6 +68,14 @@ class EvaluationView(BaseModel):
     par type source. ``char_exclude`` filtre des caractères APRÈS
     ``normalization_profile``. ``ignored_dimensions`` est affiché pour
     signaler ce que la comparaison ne dit pas.
+
+    ``target_step`` nomme l'**étape** dont la sortie est notée. ``None``
+    (défaut) : l'étape la plus aval qui produit un type candidat — la règle
+    d'avant, devenue explicite. Nommer une étape intermédiaire note un préfixe
+    du pipeline **dans le même run**, sans le réexécuter (ablation : OCR seul /
+    OCR + correction). Une étape inconnue d'un pipeline du run est refusée au
+    chargement de la spec (``RunSpec``). Absente du JSON quand elle vaut
+    ``None`` : le résultat d'une spec sans cible reste celui d'avant.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -78,6 +92,16 @@ class EvaluationView(BaseModel):
     metric_names: tuple[str, ...] = Field(default_factory=tuple)
     ignored_dimensions: tuple[str, ...] = Field(default_factory=tuple)
     warnings: tuple[str, ...] = Field(default_factory=tuple)
+    target_step: str | None = Field(default=None, min_length=1, max_length=128)
+
+    @model_serializer(mode="wrap")
+    def _omit_default_target(
+        self, handler: SerializerFunctionWrapHandler
+    ) -> dict[str, Any]:
+        data: dict[str, Any] = handler(self)
+        if self.target_step is None:
+            data.pop("target_step", None)
+        return data
 
     def accepts(self, artifact_type: ArtifactType) -> bool:
         """Vrai si cette vue peut consommer un artefact du type donné."""

@@ -200,12 +200,14 @@ def test_region_cer_end_to_end_over_alto_gt(tmp_path: Path) -> None:
     outputs = {
         "seg": {
             "doc1": {
-                ArtifactType.LAYOUT: Artifact(
-                    id="doc1:assemble:layout",
-                    document_id="doc1",
-                    type=ArtifactType.LAYOUT,
-                    uri=str(hyp),
-                )
+                "ocr": {
+                    ArtifactType.LAYOUT: Artifact(
+                        id="doc1:assemble:layout",
+                        document_id="doc1",
+                        type=ArtifactType.LAYOUT,
+                        uri=str(hyp),
+                    )
+                }
             }
         }
     }

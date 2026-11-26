@@ -64,12 +64,14 @@ def test_through_evaluate_run(tmp_path: Path) -> None:
     outputs = {
         "eng": {
             "doc1": {
-                ArtifactType.RAW_TEXT: Artifact(
-                    id="doc1:raw",
-                    document_id="doc1",
-                    type=ArtifactType.RAW_TEXT,
-                    uri=str(hyp),
-                )
+                "ocr": {
+                    ArtifactType.RAW_TEXT: Artifact(
+                        id="doc1:raw",
+                        document_id="doc1",
+                        type=ArtifactType.RAW_TEXT,
+                        uri=str(hyp),
+                    )
+                }
             }
         }
     }

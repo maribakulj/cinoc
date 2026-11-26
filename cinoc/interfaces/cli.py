@@ -199,7 +199,9 @@ def _print_plan(spec: RunSpec) -> int:
         print(f"  {pipeline.name}\n    {etapes or '(aucune étape)'}")
     print(f"Évaluation : {len(spec.evaluation.views)} vue(s)")
     for view in spec.evaluation.views:
-        print(f"  {view.name} — {', '.join(view.metric_names) or '(aucune métrique)'}")
+        cible = f" (étape notée : {view.target_step})" if view.target_step else ""
+        metriques = ", ".join(view.metric_names) or "(aucune métrique)"
+        print(f"  {view.name} — {metriques}{cible}")
     print("\nSpec valide. Rien n'a été exécuté (--check).")
     return 0
 

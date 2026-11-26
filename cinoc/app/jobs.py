@@ -31,7 +31,7 @@ from cinoc.app.orchestrator import PipelineOutputs
 from cinoc.app.orchestrator import run as run_orchestrator
 from cinoc.app.results import dump_run_result
 from cinoc.app.segmentation import SegmentationStore
-from cinoc.domain.artifacts import Artifact, ArtifactType
+from cinoc.domain.artifacts import Artifact, ArtifactType, latest_by_type
 from cinoc.domain.errors import CinocError, RunCancelledError
 from cinoc.domain.layout import CanonicalLayout
 from cinoc.domain.run import RunManifest
@@ -174,7 +174,8 @@ class JobRunner:
         capte ici avant nettoyage. Sans store dédié, ou run sans l'artefact → no-op.
         Un échec n'abat pas le run (son ``RunResult`` est l'output)."""
         for pipeline_name, per_document in outputs.items():
-            for document_id, artifacts in per_document.items():
+            for document_id, by_step in per_document.items():
+                artifacts = latest_by_type(by_step)
                 self._persist_layout(pipeline_name, document_id, artifacts)
                 self._persist_alto(
                     manifest.run_id, pipeline_name, document_id, artifacts

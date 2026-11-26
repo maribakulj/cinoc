@@ -154,12 +154,14 @@ def _evaluate(tmp_path: Path, filled: CanonicalLayout) -> object:
     outputs = {
         "seg": {
             "doc1": {
-                ArtifactType.LAYOUT: Artifact(
-                    id="doc1:assemble:layout",
-                    document_id="doc1",
-                    type=ArtifactType.LAYOUT,
-                    uri=str(hyp_path),
-                )
+                "ocr": {
+                    ArtifactType.LAYOUT: Artifact(
+                        id="doc1:assemble:layout",
+                        document_id="doc1",
+                        type=ArtifactType.LAYOUT,
+                        uri=str(hyp_path),
+                    )
+                }
             }
         }
     }

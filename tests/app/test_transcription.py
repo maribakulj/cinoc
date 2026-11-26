@@ -51,20 +51,24 @@ def test_write_alto_files_copies_per_document(tmp_path: Path) -> None:
     outputs = {
         "hybrid": {
             "doc1": {
-                ArtifactType.ALTO_XML: Artifact(
-                    id="doc1:assemble:alto_xml",
-                    document_id="doc1",
-                    type=ArtifactType.ALTO_XML,
-                    uri=str(src),
-                ),
+                "ocr": {
+                    ArtifactType.ALTO_XML: Artifact(
+                        id="doc1:assemble:alto_xml",
+                        document_id="doc1",
+                        type=ArtifactType.ALTO_XML,
+                        uri=str(src),
+                    ),
+                }
             },
-            "doc2": {  # pas d'ALTO → ignoré
-                ArtifactType.RAW_TEXT: Artifact(
-                    id="doc2:ocr:raw_text",
-                    document_id="doc2",
-                    type=ArtifactType.RAW_TEXT,
-                    uri=str(src),
-                ),
+            "doc2": {
+                "ocr": {  # pas d'ALTO → ignoré
+                    ArtifactType.RAW_TEXT: Artifact(
+                        id="doc2:ocr:raw_text",
+                        document_id="doc2",
+                        type=ArtifactType.RAW_TEXT,
+                        uri=str(src),
+                    ),
+                }
             },
         }
     }
@@ -91,12 +95,14 @@ def test_two_pipelines_do_not_overwrite_each_other(tmp_path: Path) -> None:
     def _sortie(chemin: Path) -> dict:
         return {
             "doc1": {
-                ArtifactType.ALTO_XML: Artifact(
-                    id="doc1:assemble:alto_xml",
-                    document_id="doc1",
-                    type=ArtifactType.ALTO_XML,
-                    uri=str(chemin),
-                )
+                "assemble": {
+                    ArtifactType.ALTO_XML: Artifact(
+                        id="doc1:assemble:alto_xml",
+                        document_id="doc1",
+                        type=ArtifactType.ALTO_XML,
+                        uri=str(chemin),
+                    )
+                }
             }
         }
 
@@ -124,12 +130,14 @@ def test_a_pipeline_name_cannot_dig_a_path(tmp_path: Path) -> None:
         {
             "a/b.c": {
                 "doc1": {
-                    ArtifactType.ALTO_XML: Artifact(
-                        id="i",
-                        document_id="doc1",
-                        type=ArtifactType.ALTO_XML,
-                        uri=str(src),
-                    )
+                    "assemble": {
+                        ArtifactType.ALTO_XML: Artifact(
+                            id="i",
+                            document_id="doc1",
+                            type=ArtifactType.ALTO_XML,
+                            uri=str(src),
+                        )
+                    }
                 }
             }
         },

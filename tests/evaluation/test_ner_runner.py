@@ -88,12 +88,14 @@ def test_ner_f1_and_payload_through_evaluate_run(tmp_path: Path) -> None:
     outputs = {
         "alpha": {
             "d0": {
-                ArtifactType.ENTITIES: Artifact(
-                    id="d0:alpha:entities",
-                    document_id="d0",
-                    type=ArtifactType.ENTITIES,
-                    uri=str(hyp),
-                )
+                "ocr": {
+                    ArtifactType.ENTITIES: Artifact(
+                        id="d0:alpha:entities",
+                        document_id="d0",
+                        type=ArtifactType.ENTITIES,
+                        uri=str(hyp),
+                    )
+                }
             }
         }
     }

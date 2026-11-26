@@ -11,7 +11,7 @@ from cinoc.domain.errors import (
     DeadlineExceeded,
     RunCancelledError,
 )
-from cinoc.domain.pipeline import PipelineSpec, PipelineStep
+from cinoc.domain.pipeline import INITIAL_STEP_ID, PipelineSpec, PipelineStep
 from cinoc.domain.usage import ResourceUsage
 from cinoc.pipeline.executor import (
     UNIT_FAILURES,
@@ -331,8 +331,92 @@ def test_document_execution_outcome_invariants() -> None:
     assert (failed.outcome, failed.reason) == ("failed", "engine")
     assert failed.message == "boom"
     assert dict(failed.artifacts) == {}
-    assert DocumentExecution(artifacts={}).outcome == "ok"
+    assert dict(failed.by_step) == {}
+    assert DocumentExecution().outcome == "ok"
     with pytest.raises(CinocError):
-        DocumentExecution(artifacts={}, outcome="failed")
+        DocumentExecution(outcome="failed")
     with pytest.raises(CinocError):
-        DocumentExecution(artifacts={}, reason="engine")
+        DocumentExecution(reason="engine")
+    with pytest.raises(CinocError):
+        DocumentExecution(
+            by_step={"ocr": {ArtifactType.IMAGE: _image()}},
+            outcome="failed",
+            reason="engine",
+        )
+
+
+class _OtherEchoModule(_EchoModule):
+    """Second OCR : même type de sortie que ``_EchoModule``, autre contenu."""
+
+    name = "fake:echo2"
+
+    def execute(self, inputs, params, context, control):  # noqa: ANN001, ANN201
+        return StepOutput(
+            artifacts={
+                ArtifactType.RAW_TEXT: Artifact(
+                    id=f"{context.document_id}:{self.name}:raw_text",
+                    document_id=context.document_id,
+                    type=ArtifactType.RAW_TEXT,
+                    uri="mem://raw2",
+                )
+            },
+            usage=ResourceUsage(tokens_in=7, tokens_out=3),
+        )
+
+
+def _two_ocr_execution() -> DocumentExecution:
+    spec = PipelineSpec(
+        name="p1",
+        initial_inputs=(ArtifactType.IMAGE,),
+        steps=(
+            PipelineStep(
+                id="ocr1",
+                kind="ocr",
+                adapter_name="fake:tokens",
+                input_types=(ArtifactType.IMAGE,),
+                output_types=(ArtifactType.RAW_TEXT,),
+            ),
+            PipelineStep(
+                id="ocr2",
+                kind="ocr",
+                adapter_name="fake:echo2",
+                input_types=(ArtifactType.IMAGE,),
+                output_types=(ArtifactType.RAW_TEXT,),
+            ),
+        ),
+    )
+    return PipelineExecutor(CODE_VERSION).execute_document(
+        spec,
+        {"fake:tokens": _TokenModule(), "fake:echo2": _OtherEchoModule()},
+        {ArtifactType.IMAGE: _image()},
+        document_id="doc1",
+    )
+
+
+def test_two_steps_of_the_same_type_both_stay_observable() -> None:
+    """Le défaut d'origine : deux étapes de même type s'écrasaient dans le pool,
+    seul objet rendu. ``by_step`` les garde toutes deux, dans l'ordre."""
+    execution = _two_ocr_execution()
+
+    assert list(execution.by_step) == [INITIAL_STEP_ID, "ocr1", "ocr2"]
+    assert execution.by_step["ocr1"][ArtifactType.RAW_TEXT].uri == "mem://raw"
+    assert execution.by_step["ocr2"][ArtifactType.RAW_TEXT].uri == "mem://raw2"
+    assert execution.by_step[INITIAL_STEP_ID] == {ArtifactType.IMAGE: _image()}
+    # Le pool se **déduit** : dernier artefact par type, entrées initiales comprises.
+    assert execution.artifacts[ArtifactType.RAW_TEXT].uri == "mem://raw2"
+    assert execution.artifacts[ArtifactType.IMAGE] == _image()
+
+
+def test_usage_is_kept_per_step_and_the_total_derives_from_it() -> None:
+    execution = _two_ocr_execution()
+
+    assert list(execution.step_usage) == ["ocr1", "ocr2"]
+    assert execution.step_usage["ocr1"].tokens_in == 120
+    assert execution.step_usage["ocr2"].tokens_in == 7
+    assert execution.usage.tokens_in == 127
+    assert execution.usage.tokens_out == 33
+    durations = [u.duration_seconds for u in execution.step_usage.values()]
+    assert all(d is not None for d in durations)
+    assert execution.usage.duration_seconds == pytest.approx(
+        sum(d for d in durations if d is not None)
+    )

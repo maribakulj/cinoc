@@ -41,8 +41,9 @@ N_BINS = 10
 
 _TOKENS = TypeAdapter(list[ConfidenceToken])
 
-#: { pipeline: { document_id: { ArtifactType: Artifact } } } (forme du runner).
-PipelineOutputs = Mapping[str, Mapping[str, Mapping[ArtifactType, Artifact]]]
+#: { pipeline: { document_id: { ArtifactType: Artifact } } } — le **pool** de
+#: chaque unité (sortie finale par type), que le runner déduit de ``by_step``.
+_Pools = Mapping[str, Mapping[str, Mapping[ArtifactType, Artifact]]]
 
 
 def load_confidence_tokens(artifact: Artifact) -> list[ConfidenceToken]:
@@ -105,7 +106,7 @@ def _reference_words(document_id: str, corpus: CorpusSpec) -> Counter[str] | Non
 def calibration_analysis(
     view: str,
     corpus: CorpusSpec,
-    pipeline_outputs: PipelineOutputs,
+    pipeline_outputs: _Pools,
 ) -> Analysis | None:
     """``Analysis`` calibration de la vue ; ``None`` sans jeton de confiance."""
     rows: list[PipelineCalibration] = []

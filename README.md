@@ -222,6 +222,22 @@ It needs **no engine and no network**: it replays frozen outputs through `precom
 
 Two flags worth knowing. `--check` validates the file and prints what would run without executing it — a benchmark spec commits billed API calls and hours of compute, so reading it first is not a luxury. `--alto-dir` keeps the ALTO a run produced: without it, an ALTO your spec asked for dies with the temporary workspace.
 
+**Scoring an intermediate step.** A view scores the output of the most downstream step that produces one of its `candidate_types`. Name a step with `target_step` to score an earlier one — every step's output is kept, so an ablation (OCR alone vs. OCR + correction) is measured **in one run, without re-executing the prefix**:
+
+```yaml
+evaluation:
+  views:
+  - name: ocr_only            # the OCR step, before correction
+    candidate_types: [raw_text, corrected_text]
+    target_step: ocr
+    metric_names: [cer]
+  - name: corrected           # no target: the last step that produces text
+    candidate_types: [raw_text, corrected_text]
+    metric_names: [cer]
+```
+
+A target that some pipeline of the run does not have is refused when the spec is loaded, and the report's methodology says which step a targeted view scores.
+
 ### Scoring OCR that Cinoc did not produce
 
 `precomputed` is not only a fixture device. It reads `<page>.<label>.txt` sitting
