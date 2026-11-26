@@ -1,0 +1,215 @@
+corpus:
+  name: bnl-pilote
+  documents:
+  - id: '0000'
+    image_uri: 0000.png
+    ground_truths:
+    - type: raw_text
+      uri: 0000.gt.txt
+    metadata:
+      gt_source: layout
+  - id: '0003'
+    image_uri: 0003.png
+    ground_truths:
+    - type: raw_text
+      uri: 0003.gt.txt
+    metadata:
+      gt_source: layout
+  - id: '0006'
+    image_uri: 0006.png
+    ground_truths:
+    - type: raw_text
+      uri: 0006.gt.txt
+    metadata:
+      gt_source: layout
+  - id: 0009
+    image_uri: 0009.png
+    ground_truths:
+    - type: raw_text
+      uri: 0009.gt.txt
+    metadata:
+      gt_source: layout
+  - id: '0011'
+    image_uri: 0011.png
+    ground_truths:
+    - type: raw_text
+      uri: 0011.gt.txt
+    metadata:
+      gt_source: layout
+  - id: '0012'
+    image_uri: 0012.png
+    ground_truths:
+    - type: raw_text
+      uri: 0012.gt.txt
+    metadata:
+      gt_source: layout
+  - id: '0015'
+    image_uri: 0015.png
+    ground_truths:
+    - type: raw_text
+      uri: 0015.gt.txt
+    metadata:
+      gt_source: layout
+  - id: '0022'
+    image_uri: 0022.png
+    ground_truths:
+    - type: raw_text
+      uri: 0022.gt.txt
+    metadata:
+      gt_source: layout
+  - id: '0023'
+    image_uri: 0023.png
+    ground_truths:
+    - type: raw_text
+      uri: 0023.gt.txt
+    metadata:
+      gt_source: layout
+  - id: '0031'
+    image_uri: 0031.png
+    ground_truths:
+    - type: raw_text
+      uri: 0031.gt.txt
+    metadata:
+      gt_source: layout
+pipelines:
+- name: tesseract_fra_deu
+  initial_inputs:
+  - image
+  steps:
+  - id: ocr
+    kind: ocr
+    adapter_name: tesseract:fra_deu
+    input_types:
+    - image
+    output_types:
+    - raw_text
+- name: tesseract_fraktur_fra
+  initial_inputs:
+  - image
+  steps:
+  - id: ocr
+    kind: ocr
+    adapter_name: tesseract:fraktur_fra
+    input_types:
+    - image
+    output_types:
+    - raw_text
+- name: qwen25vl_3b_zero_shot
+  initial_inputs:
+  - image
+  steps:
+  - id: vlm
+    kind: llm
+    adapter_name: ollama:qwen_vlm
+    input_types:
+    - image
+    output_types:
+    - raw_text
+- name: tesseract_fraktur_fra_qwen_corr
+  initial_inputs:
+  - image
+  steps:
+  - id: ocr
+    kind: ocr
+    adapter_name: tesseract:fraktur_fra
+    input_types:
+    - image
+    output_types:
+    - raw_text
+  - id: corr
+    kind: llm
+    adapter_name: ollama:qwen_corr
+    input_types:
+    - raw_text
+    output_types:
+    - corrected_text
+evaluation:
+  views:
+  - name: texte
+    candidate_types:
+    - raw_text
+    - corrected_text
+    normalization_profile: nfc
+    metric_names:
+    - cer
+    - wer
+    - cer_diplo
+    - mer
+    - hallucination
+  - name: sans_cesure
+    candidate_types:
+    - raw_text
+    - corrected_text
+    normalization_profile: dehyphenated
+    metric_names:
+    - cer
+    - wer
+adapter_kwargs:
+  tesseract:fra_deu:
+    label: fra_deu
+    lang: fra+deu+ltz
+  tesseract:fraktur_fra:
+    label: fraktur_fra
+    lang: Fraktur+fra
+  ollama:qwen_vlm:
+    label: qwen_vlm
+    model: qwen2.5vl:3b
+    host: http://127.0.0.1:11434
+    role: zero_shot
+    max_tokens: 2048
+  ollama:qwen_corr:
+    label: qwen_corr
+    model: qwen2.5vl:3b
+    host: http://127.0.0.1:11434
+    role: text_only
+    max_tokens: 2048
+    prompt: 'Tu es un expert en presse européenne du XIXe siècle et en transcription de journaux multilingues
+      (1800–1914), couvrant notamment le français, l''anglais, l''allemand, l''italien, l''espagnol et
+      le néerlandais.
+
+
+      On te fournit la sortie brute d''un moteur OCR appliqué à une page de presse ancienne pouvant mêler
+      plusieurs langues : titres, dépêches télégraphiques étrangères, annonces, citations, sections bilingues.
+
+      Ta tâche est de corriger les erreurs de transcription en te basant sur :
+
+      - L''identification de la langue de CHAQUE segment, sans jamais traduire ni uniformiser : chaque
+      passage reste dans sa langue d''origine
+
+      - Les conventions typographiques propres à chaque aire : ſ long et Fraktur pour l''allemand, accents
+      romans (à/è/ì/ò/ù, ñ, ç), tréma néerlandais, guillemets variables (« », „ ", " ")
+
+      - Les contraintes matérielles de la presse XIXe : encre passée, transparence du verso, caractères
+      cassés, bruit du microfilm
+
+      - La mise en page multi-colonnes et la césure de fin de ligne/colonne à recoller, langue par langue
+
+      - Les changements de langue en cours d''article (citations, dépêches) : ne pas « corriger » un mot
+      étranger vers la langue dominante de la page
+
+
+      RÈGLES IMPÉRATIVES :
+
+      1. Retourne UNIQUEMENT le texte corrigé — sans commentaire, sans explication, sans balise, sans
+      annotation de langue
+
+      2. Conserve FIDÈLEMENT l''orthographe d''époque de CHAQUE langue : ne modernise ni ne traduis aucun
+      passage
+
+      3. Recolle les mots coupés par césure en respectant la langue du mot ; ne supprime pas les traits
+      d''union légitimes
+
+      4. Conserve la ponctuation, les guillemets, les capitales et la casse propres à chaque langue
+
+      5. N''harmonise PAS les langues entre elles et n''invente aucun texte pour combler une coupe de
+      colonne
+
+      6. En cas de doute sur un passage ou sa langue, conserve la forme OCR plutôt que d''inventer
+
+
+      OCR BRUT :
+
+      {ocr_text}
+
+      '
+run_id: pilote-bnl-s10
