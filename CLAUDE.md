@@ -28,10 +28,11 @@ avant d'écrire la moindre ligne.**
   tranche, est dans le roll-up — **pas ici**.
 - **Le plan qu'exécutent les sessions est [`PLAN_FIN_MIGRATION.md`](PLAN_FIN_MIGRATION.md)**
   (P0→P5i), pas les axes `T#`/`S#` : ceux-ci décrivent comment on est arrivé là.
-  **Étapes 1→4 + P0→P4 + P5a + P5d livrées.**
-- **Prochaine étape = P5e** — *une mesure qui dit vrai*, deuxième phase de la
+  **Étapes 1→4 + P0→P4 + P5a + P5d + P5e livrées.**
+- **Prochaine étape = P5f** — *une inférence tracée*, troisième phase de la
   route **P5d → P5i** vers une 1.0 publiable (`PLAN_FIN_MIGRATION.md` §« Étape
-  4quinquies », D-260 → D-266) ; P5d (*installable et sûr*) est livrée. La
+  4quinquies », D-260 → D-266) ; P5d (*installable et sûr*) et P5e (*une mesure
+  qui dit vrai*) sont livrées. La
   **feuille de route session par session** (S1 → S35) de cette section dit
   laquelle ouvrir ; S1-S18 sont livrées, la suivante est S19, et les arbitrages A1, A2, A3, A6, A9
   sont rendus (D-271). Née d'un audit sur le produit et non sur la CI : un

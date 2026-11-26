@@ -64,7 +64,8 @@ serve = ["fastapi", "uvicorn", "jinja2", "python-multipart"]
 images = ["Pillow"]  # vignettes réelles du rapport (redimensionnement) — dégradé gracieux sans
 # Oracle de conformité HIPE (golden test, jamais en runtime — SPEC_HIPE §5).
 # Extra DÉDIÉ (pas dans dev) : le scorer exige Python >= 3.12, l'inclure dans
-# dev casserait l'installation 3.11. Installé par le seul job CI 3.12.
+# dev casserait l'installation 3.11. Aucun job CI ne l'installe : le golden
+# HIPE est vendorisé, l'extra sert à le régénérer en local.
 hipe-oracle = ["hipe-ocrepair-scorer==0.9.9"]
 # Oracles de test EXÉCUTÉS (P5e 10, D-290 ; jamais en runtime) : le paquet
 # `roman` et dinglehopper, installés par le seul job CI `oracle` — les tests
