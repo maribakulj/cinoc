@@ -52,7 +52,11 @@ from cinoc.app.recipes import (
     spec_for_corpus,
 )
 from cinoc.app.run_planning import Competitor, RunPlanningError, plan_benchmark_run
-from cinoc.app.security import HostNotAllowedError, check_ollama_host
+from cinoc.app.security import (
+    HostNotAllowedError,
+    check_endpoint_settings,
+    check_model_host,
+)
 from cinoc.app.spec_coherence import SpecCoherenceError
 from cinoc.app.spec_coherence import check as coherence_check
 from cinoc.domain.corpus import CorpusSpec
@@ -139,7 +143,7 @@ class CorrectionRequest(BaseModel):
     #: producteur en interroge un.
     model: str | None = Field(default=None, max_length=128)
     #: Serveur ollama — **confronté à la liste blanche de l'opérateur**
-    #: (``CINOC_OLLAMA_HOSTS``) avant tout lancement : venu d'un client, il
+    #: (``CINOC_MODEL_HOSTS``) avant tout lancement : venu d'un client, il
     #: ferait sinon poster le serveur vers l'adresse de son choix.
     host: str = Field(default="http://localhost:11434", max_length=2048)
 
@@ -335,14 +339,15 @@ def build_runs_router(
             )
 
     def _hote_autorise(host: str) -> None:
-        """Refuse en 403 un hôte ollama hors de la liste blanche de l'opérateur.
+        """Refuse en 403 un hôte de serveur de modèles hors de la liste blanche
+        de l'opérateur.
 
-        Une seule fonction pour les deux portes qui reçoivent un ``host`` (la
-        route de correction, la spec déposée) : la règle vit en couche ``app``,
-        ici on ne fait que la traduire en HTTP.
+        Une seule fonction pour toutes les portes qui reçoivent une cible (la
+        route de correction, le ``host`` et le ``base_url`` d'une spec déposée) :
+        la règle vit en couche ``app``, ici on ne fait que la traduire en HTTP.
         """
         try:
-            check_ollama_host(host)
+            check_model_host(host)
         except HostNotAllowedError as exc:
             raise HTTPException(status_code=403, detail=str(exc)) from exc
 
@@ -366,12 +371,14 @@ def build_runs_router(
             coherence_check(spec)
         except SpecCoherenceError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
-        # ``adapter_kwargs`` est libre : un ``host`` y ferait poster le serveur
-        # vers l'adresse du choix du client, comme par la route de correction.
+        # ``adapter_kwargs`` est libre : un ``host`` (ollama) ou un ``base_url``
+        # (instance OpenAI-compatible) y ferait poster le serveur vers l'adresse
+        # du choix du client, comme par la route de correction.
         for reglages in spec.adapter_kwargs.values():
-            host = reglages.get("host")
-            if isinstance(host, str):
-                _hote_autorise(host)
+            try:
+                check_endpoint_settings(reglages, public_mode=public_mode)
+            except HostNotAllowedError as exc:
+                raise HTTPException(status_code=403, detail=str(exc)) from exc
         sts = statuses()
         registre = ModuleRegistry()
         register_default_modules(registre)

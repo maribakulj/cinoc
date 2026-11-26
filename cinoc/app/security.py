@@ -5,9 +5,10 @@ répertoires : tout chemin venant d'une entrée utilisateur (corpus, sortie) pas
 par lui. La couche 8 (web) réutilisera ce **même** helper — la sécurité chemin
 n'est pas un détail web.
 
-``check_ollama_host`` est son pendant réseau pour l'hôte d'un serveur ollama
-reçu par HTTP : une liste blanche **de l'opérateur**, et non une adresse au
-choix du client.
+``check_model_host`` est son pendant réseau pour l'hôte d'un **serveur de
+modèles** reçu par HTTP — ``host`` d'ollama, ``base_url`` d'une instance
+OpenAI-compatible (vLLM, SGLang) : une liste blanche **de l'opérateur**, et non
+une adresse au choix du client. Une seule liste pour toutes les cibles.
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ from __future__ import annotations
 import hashlib
 import os
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -73,29 +74,29 @@ def validated_path(user_path: str, base: Path, *, must_exist: bool = False) -> P
     return resolved
 
 
-#: Hôtes ollama autorisés, séparés par des virgules (noms d'hôte ou IP, sans
-#: schéma ni port). **Remplace** le défaut quand elle est posée : vide, elle
-#: n'autorise plus rien.
-OLLAMA_HOSTS_ENV = "CINOC_OLLAMA_HOSTS"
+#: Hôtes de serveurs de modèles autorisés (ollama, OpenAI-compatibles), séparés
+#: par des virgules (noms d'hôte ou IP, sans schéma ni port). **Remplace** le
+#: défaut quand elle est posée : vide, elle n'autorise plus rien.
+MODEL_HOSTS_ENV = "CINOC_MODEL_HOSTS"
 
-#: Défaut : la machine elle-même, et elle seule — c'est là qu'un serveur ollama
-#: écoute quand personne n'a rien configuré.
-_DEFAULT_OLLAMA_HOSTS = ("localhost", "127.0.0.1")
+#: Défaut : la machine elle-même, et elle seule — c'est là qu'un serveur local
+#: (ollama, vLLM) écoute quand personne n'a rien configuré.
+_DEFAULT_MODEL_HOSTS = ("localhost", "127.0.0.1")
 
 
 class HostNotAllowedError(CinocError):
     """Un hôte reçu d'un client n'est pas dans la liste blanche de l'opérateur."""
 
 
-def _allowed_ollama_hosts(get_env: Callable[[str], str | None]) -> frozenset[str]:
-    """Les hôtes ollama que l'opérateur autorise (``CINOC_OLLAMA_HOSTS``)."""
-    raw = get_env(OLLAMA_HOSTS_ENV)
+def _allowed_model_hosts(get_env: Callable[[str], str | None]) -> frozenset[str]:
+    """Les hôtes que l'opérateur autorise (``CINOC_MODEL_HOSTS``)."""
+    raw = get_env(MODEL_HOSTS_ENV)
     if raw is None:
-        return frozenset(_DEFAULT_OLLAMA_HOSTS)
+        return frozenset(_DEFAULT_MODEL_HOSTS)
     return frozenset(h.strip().lower() for h in raw.split(",") if h.strip())
 
 
-def check_ollama_host(
+def check_model_host(
     host: str, *, get_env: Callable[[str], str | None] = os.environ.get
 ) -> None:
     """Lève si ``host`` ne désigne pas un serveur que l'opérateur autorise.
@@ -103,37 +104,84 @@ def check_ollama_host(
     Un ``host`` reçu dans un corps HTTP partait tel quel au correcteur, qui y
     postait ses requêtes : sur une instance privée, le serveur devenait un
     relais vers l'adresse du choix du client — service de métadonnées d'un
-    nuage, machine du réseau interne (SSRF). La comparaison porte sur le **nom
-    d'hôte exact** : ``localhost.evil.example`` n'est pas ``localhost``. Le port
-    reste libre, comme l'est déjà celui du défaut.
+    nuage, machine du réseau interne (SSRF). Un ``base_url`` d'instance
+    OpenAI-compatible est la même porte sous un autre nom (D-293). La
+    comparaison porte sur le **nom d'hôte exact** : ``localhost.evil.example``
+    n'est pas ``localhost``. Le port reste libre, comme l'est déjà celui du
+    défaut.
+
+    Ce n'est pas le filtre d'adresses publiques des imports de corpus
+    (``adapters/corpus/_http``) : un serveur de modèles auto-hébergé est
+    précisément une adresse privée (boucle locale, réseau du labo). Le contrôle
+    est le nom que l'opérateur a écrit ; la résolution de ce nom est la sienne.
 
     Les transports qui reçoivent une adresse d'un tiers l'appellent ; la ligne
     de commande non — celui qui la lance **est** l'opérateur.
     """
-    allowed = _allowed_ollama_hosts(get_env)
+    allowed = _allowed_model_hosts(get_env)
     parts = urlsplit(host.strip())
     hostname = (parts.hostname or "").lower()
     if parts.scheme not in {"http", "https"} or not hostname:
         raise HostNotAllowedError(
-            f"hôte ollama illisible : {host!r} (attendu http(s)://hôte[:port])."
+            "hôte de serveur de modèles illisible (attendu http(s)://hôte[:port])."
         )
     if parts.username is not None or parts.password is not None:
         raise HostNotAllowedError(
-            f"hôte ollama refusé : {host!r} porte des identifiants."
+            "hôte de serveur de modèles refusé : l'URL porte des identifiants."
         )
     if hostname not in allowed:
         raise HostNotAllowedError(
-            f"hôte ollama refusé : {hostname!r} n'est pas dans la liste blanche "
-            f"de l'opérateur ({OLLAMA_HOSTS_ENV} = "
+            f"hôte de serveur de modèles refusé : {hostname!r} n'est pas dans la "
+            f"liste blanche de l'opérateur ({MODEL_HOSTS_ENV} = "
             f"{', '.join(sorted(allowed)) or 'vide'})."
         )
 
 
+#: Réglages d'``adapter_kwargs`` qui désignent une **cible réseau** ou sa clé.
+ENDPOINT_KWARGS = ("api_key_env", "base_url", "host")
+
+
+def check_endpoint_settings(
+    settings: Mapping[str, object],
+    *,
+    public_mode: bool,
+    get_env: Callable[[str], str | None] = os.environ.get,
+) -> None:
+    """Les gardes d'un transport HTTP sur les réglages de cible d'un module.
+
+    - **mode public** (Space) : *fail-closed* — aucune cible réglable, même
+      l'hôte par défaut de la liste ; aucun serveur de modèles n'y est joignable ;
+    - ``api_key_env`` : refusé. Nommer une variable du serveur la ferait envoyer
+      à l'hôte de la spec — une autre clé, un jeton —, et le message d'erreur
+      d'une API (401) en rend un fragment au client. C'est un réglage
+      d'opérateur, que la ligne de commande garde ;
+    - ``host`` et ``base_url`` : confrontés à la liste blanche (``check_model_host``).
+    """
+    targets = [k for k in ENDPOINT_KWARGS if k in settings]
+    if public_mode and targets:
+        raise HostNotAllowedError(
+            f"réglage refusé en mode public : {', '.join(targets)} (aucun "
+            "serveur de modèles n'est joignable d'une instance publique)."
+        )
+    if "api_key_env" in settings:
+        raise HostNotAllowedError(
+            "réglage refusé par HTTP : api_key_env (il ferait envoyer une "
+            "variable du serveur à l'hôte de la spec) — réglage d'opérateur, par "
+            "la ligne de commande."
+        )
+    for key in ("host", "base_url"):
+        value = settings.get(key)
+        if isinstance(value, str):
+            check_model_host(value, get_env=get_env)
+
+
 __all__ = [
-    "OLLAMA_HOSTS_ENV",
+    "ENDPOINT_KWARGS",
+    "MODEL_HOSTS_ENV",
     "HostNotAllowedError",
     "PathSecurityError",
-    "check_ollama_host",
+    "check_endpoint_settings",
+    "check_model_host",
     "safe_stem",
     "validated_path",
 ]

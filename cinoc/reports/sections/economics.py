@@ -57,6 +57,11 @@ def _block(
                 f" ({row.billed_pages} p. facturée(s))",
                 f" ({row.billed_pages} billed p.)",
             )
+        if row.self_hosted:
+            served = ", ".join(escape(m) for m in row.self_hosted)
+            basis += localized(
+                lang, f" — auto-hébergé : {served}", f" — self-hosted: {served}"
+            )
         pph = _fmt(row.pages_per_hour, lang, "{:.1f}")
         pph_eff = _fmt(row.pages_per_hour_effective, lang, "{:.1f}")
         rows.append(
@@ -129,6 +134,19 @@ def _block(
             "duration and tokens are those of their first execution, not a "
             "measurement of this run.</p>\n",
         )
+    self_hosted = (
+        localized(
+            lang,
+            '<p class="muted">Auto-hébergé : servi par un serveur que '
+            "l'opérateur fait tourner — aucun tarif de fournisseur appliqué ; "
+            "coût = temps machine seul, jetons mesurés sans être facturés.</p>\n",
+            '<p class="muted">Self-hosted: served by a server the operator '
+            "runs — no provider price applied; cost = machine time only, tokens "
+            "measured but not billed.</p>\n",
+        )
+        if any(r.self_hosted for r in payload.pipelines)
+        else ""
+    )
     pareto = ""
     if payload.pareto_cost or payload.pareto_speed:
         cost_names = ", ".join(escape(n) for n in payload.pareto_cost) or "—"
@@ -197,6 +215,7 @@ def _block(
         f'<th class="num-cell">{th_pages_per_hour_eff}</th></tr></thead>\n'
         f"<tbody>{''.join(rows)}</tbody>\n</table>\n"
         + inherited
+        + self_hosted
         + pareto
         + marginal
     )

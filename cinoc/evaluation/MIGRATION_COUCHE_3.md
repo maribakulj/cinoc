@@ -354,6 +354,8 @@ métriques structurelles PAGE-natives ; découpes des fichiers >400 LOC ; coutur
 
 > **P5f 7 (D-292)** : `DocumentUsage.resumed` (relue de l'archive ; `False` par défaut) ; `PipelineEconomics.billed_pages` et `.n_resumed` ; `economics_analysis` : coût à la page sur Σ `billed_pages` (une page par unité produite si non comptées), plusieurs étages à la page → « pages non ventilables » (coût `None`), et la consommation facturée des unités **en échec** entre au coût (pas au débit ni à la durée). `RunResult` v5 conservée (non publiée). *Preuve : `tests/evaluation/test_economics.py`, `tests/app/test_resumed_units.py`.*
 
+> **P5f 6 (D-293)** : `pricing.json` `endpoints` (OpenAI, Anthropic) — un tarif vaut à l'endpoint du fournisseur ; `economics._off_table_endpoint` : un `base_url` écrit au manifeste et différent → étape hors table : `self_hosted: true` → `PipelineEconomics.self_hosted` (`kind/modèle servi`, champ additif, `RunResult` v5 conservée), temps machine seul, jetons affichés non facturés ; sinon clé `kind/modèle @ hôte:port`, « tarif inconnu » — jamais le prix d'OpenAI, jamais 0. Manifeste sans `base_url` : lecture inchangée. *Preuve : `tests/evaluation/test_economics_self_hosted.py` (6).*
+
 **Enveloppe (plein-scope dès T1) :**
 - [x] `RunResult` (`evaluation/result.py`) dimensionné plein-scope (scalaires texte/structure/NER/taxonomy + par-doc + `schema_version` ; clés stables ; `cross_engine` réservé). — *preuve : `test_result` (sérialisation déterministe) + `evaluate_run` le produit*
 - [x] Registre **type-driven** unique (sélection par `input_types`) ; 0 ancien registre. — *preuve : `test_registry::test_get_and_select_by_input_types` + `test_no_forbidden_tokens` vert*

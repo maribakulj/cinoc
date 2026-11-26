@@ -13,9 +13,12 @@ jusqu'à 15 appels, invisibles.
   les segmenteurs ; la deadline d'une étape est la plus proche de celle du run
   et de ce délai. Aucun appelant ne passait de deadline : Ollama, Azure et
   Google tournaient sans aucun délai.
-- **Cap de concurrence par fournisseur** (``network_slot``) : un sémaphore
-  borné *par fournisseur* → au plus N appels simultanés. L'attente d'un
-  créneau est bornée par la deadline (sous contention, elle ne bloque plus).
+- **Cap de concurrence par serveur** (``network_slot``) : un sémaphore borné
+  *par serveur* (``hôte:port`` de l'endpoint, ``endpoint_slot_key``) quand
+  l'appelant le connaît, *par fournisseur* sinon → au plus N appels
+  simultanés. Deux instances OpenAI-compatibles sur deux serveurs ne se
+  bloquent pas ; deux sur le même serveur partagent ses créneaux (P5f 6). L'attente
+  d'un créneau est bornée par la deadline (sous contention, elle ne bloque plus).
 - **Retry borné** (``call_resilient``) : sur 429/5xx **et** erreur de
   transport, attend ``Retry-After`` si le serveur l'indique, sinon un backoff
   exponentiel borné + gigue — sans jamais attendre au-delà de la deadline, et
@@ -45,6 +48,7 @@ import threading
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from typing import TypeVar
+from urllib.parse import urlsplit
 
 from cinoc.domain.deadline import Deadline
 from cinoc.domain.errors import AdapterStepError, DeadlineExceeded, RunCancelledError
@@ -66,7 +70,7 @@ DEFAULT_OCR_TIMEOUT = 120.0
 #: Borne haute d'un délai réglé : au-delà, ce n'est plus un délai.
 _TIMEOUT_MAX = 3600.0
 
-#: Plafond par défaut d'appels réseau concurrents **par fournisseur** (anti-429).
+#: Plafond par défaut d'appels réseau concurrents **par serveur** (anti-429).
 _DEFAULT_LIMIT = 3
 _LIMIT_ENV = "CINOC_NETWORK_CONCURRENCY"
 #: Politique de retry : tentatives + backoff exponentiel borné (secondes).
@@ -151,18 +155,40 @@ def _network_limit() -> int:
     return max(1, value)
 
 
-def network_slot(provider: str) -> threading.BoundedSemaphore:
-    """Sémaphore borné **du fournisseur** : ``with network_slot("mistral"): …``.
+_DEFAULT_PORTS = {"http": 80, "https": 443}
 
-    Au plus ``_network_limit()`` détenteurs simultanés par fournisseur. Chaque
-    fournisseur a son quota propre (un run OpenAI + Mistral ne les fait pas se
-    partager le budget). Le plafond est figé à la première création du fournisseur
-    (lecture d'environnement unique, déterministe pour la durée du process)."""
+
+def endpoint_slot_key(url: str) -> str:
+    """Le serveur qu'une URL désigne : ``hôte:port``, port par défaut du schéma.
+
+    C'est la clé du créneau réseau : le quota protège un **serveur**, pas un
+    fournisseur. Deux chemins vers le même serveur (``…:11434`` et
+    ``…:11434/v1``) partagent sa clé ; deux ports, deux serveurs. Une clé de
+    serveur porte toujours ``:`` — un nom de fournisseur jamais : elles ne se
+    confondent pas.
+    """
+    parts = urlsplit(url)
+    host = (parts.hostname or "").lower()
+    try:
+        port = parts.port
+    except ValueError:  # validé à la construction : ne devrait pas arriver
+        port = None
+    return f"{host}:{port if port is not None else _DEFAULT_PORTS.get(parts.scheme, 0)}"
+
+
+def network_slot(key: str) -> threading.BoundedSemaphore:
+    """Sémaphore borné d'un serveur ou d'un fournisseur : ``with network_slot(k): …``.
+
+    Au plus ``_network_limit()`` détenteurs simultanés par clé. Chaque clé a son
+    quota propre (un run OpenAI + Mistral ne les fait pas se partager le budget,
+    ni deux serveurs OpenAI-compatibles). Le plafond est figé à la première
+    création de la clé (lecture d'environnement unique, déterministe pour la
+    durée du process)."""
     with _REGISTRY_LOCK:
-        sem = _SEMAPHORES.get(provider)
+        sem = _SEMAPHORES.get(key)
         if sem is None:
             sem = threading.BoundedSemaphore(_network_limit())
-            _SEMAPHORES[provider] = sem
+            _SEMAPHORES[key] = sem
     return sem
 
 
@@ -252,6 +278,7 @@ def call_resilient(
     fn: Callable[[], T],
     *,
     deadline: Deadline,
+    endpoint: str | None = None,
     control: RunControl | None = None,
     meter: BillingMeter | None = None,
     is_retryable: Callable[[BaseException], bool] = is_transient,
@@ -260,7 +287,10 @@ def call_resilient(
     sleep: Callable[[float], None] | None = None,
     jitter: Callable[[], float] = _default_jitter,
 ) -> T:
-    """Exécute ``fn`` sous le quota du fournisseur, borné par ``deadline``.
+    """Exécute ``fn`` sous le quota de son serveur, borné par ``deadline``.
+
+    ``endpoint`` (l'URL appelée) choisit le créneau du **serveur** ; sans lui,
+    celui du fournisseur ``provider`` (un SDK à endpoint fixe).
 
     ``deadline`` est **exigée** : aucun appel distant ne part sans. Avant chaque
     tentative : annulation sondée, deadline vérifiée, créneau acquis **dans le
@@ -281,6 +311,7 @@ def call_resilient(
     valeur renvoyée.**
     """
     ctrl = control if control is not None else RunControl()
+    slot_key = endpoint_slot_key(endpoint) if endpoint is not None else provider
 
     def wait(seconds: float) -> None:
         if sleep is not None:
@@ -292,7 +323,7 @@ def call_resilient(
         ctrl.raise_if_cancelled()
         if deadline.is_expired():
             raise _expired(provider, f"avant la tentative {attempt + 1}", meter)
-        slot = network_slot(provider)
+        slot = network_slot(slot_key)
         if not slot.acquire(timeout=request_timeout(deadline)):
             raise _expired(provider, "en attendant un créneau réseau", meter)
         delay = 0.0
@@ -347,6 +378,7 @@ __all__ = [
     "BillingMeter",
     "attempt_billed",
     "call_resilient",
+    "endpoint_slot_key",
     "http_is_retryable",
     "http_retry_after",
     "is_transient",

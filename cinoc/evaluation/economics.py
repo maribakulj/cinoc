@@ -18,6 +18,13 @@ jamais en exécutant la source). Modèle de coût simple et auditable :
   ``basis`` le dit. Jamais par simple préfixe (``gpt-4o`` demandé,
   ``gpt-4o-mini-…`` servi : inconnu). Sinon coût ``None`` + motif dans
   ``basis`` (jamais un zéro silencieux) ;
+- **endpoint** : un tarif de la table vaut **à l'endpoint du fournisseur**
+  (``endpoints`` de la table). Une étape dont le manifeste écrit un autre
+  ``base_url`` (instance OpenAI-compatible : vLLM, SGLang, serveur local) n'en
+  reçoit aucun : déclarée ``self_hosted``, elle coûte son temps machine et le
+  rapport dit « auto-hébergé » ; sinon « tarif inconnu », l'hôte nommé —
+  jamais le prix d'OpenAI pour un serveur qui n'est pas OpenAI, jamais un 0
+  pour une passerelle qui facture peut-être ;
 - **pages facturées** : la somme des ``billed_pages`` des unités — chaque
   tentative facturable (fan-out par région, tentative coupée après envoi) —,
   et une page par unité produite quand elle n'est pas comptée (JSON antérieur) ;
@@ -44,6 +51,7 @@ from collections.abc import Mapping, Sequence
 from datetime import date
 from importlib import resources
 from typing import Any
+from urllib.parse import urlsplit
 
 from cinoc.domain.pipeline import PipelineSpec
 from cinoc.domain.run import RunManifest
@@ -133,13 +141,32 @@ def _is_dated_snapshot(served: str, alias: str) -> bool:
     return True
 
 
+def _off_table_endpoint(
+    kind: str, kwargs: Mapping[str, object], pricing: Mapping[str, Any]
+) -> str | None:
+    """``hôte:port`` d'un endpoint que la table ne tarife pas, sinon ``None``.
+
+    Un manifeste sans ``base_url`` (fournisseur à endpoint fixe, JSON
+    antérieur) reste à l'endpoint du fournisseur. Un kind sans endpoint dans la
+    table n'en a aucun de tarifé : tout ``base_url`` y est hors table.
+    """
+    base_url = kwargs.get("base_url")
+    if not isinstance(base_url, str):
+        return None
+    official = str(pricing.get("endpoints", {}).get(kind, ""))
+    if official and base_url.rstrip("/") == official.rstrip("/"):
+        return None
+    return urlsplit(base_url).netloc or base_url
+
+
 def _cloud_model_keys(
     spec: PipelineSpec,
     adapter_kwargs: Mapping[str, Mapping[str, object]],
     pricing: Mapping[str, Any],
     served_models: Mapping[str, Sequence[str]] | None = None,
-) -> dict[str, str]:
-    """Clés ``kind/modèle`` des étages cloud du pipeline → clé **demandée**.
+) -> tuple[dict[str, str], tuple[str, ...]]:
+    """Clés ``kind/modèle`` des étages cloud du pipeline → clé **demandée**, et
+    les modèles servis par un serveur **auto-hébergé** déclaré.
 
     La valeur est la clé du modèle demandé (saisi, sinon défaut de la table) :
     elle ne sert qu'à reconnaître un servi qui en est l'instantané daté.
@@ -152,11 +179,14 @@ def _cloud_model_keys(
 
     Modèle : le(s) **servi(s)** quand le manifeste les connaît — plusieurs si un
     alias a changé de cible en cours de run, et le coût devient alors non
-    ventilable —, sinon le **demandé**, sinon le défaut de la table.
+    ventilable —, sinon le **demandé**, sinon le défaut de la table. Une étape
+    à un endpoint hors table : auto-hébergée déclarée → second élément (aucun
+    tarif) ; sinon une clé ``kind/modèle @ hôte:port``, absente de la table.
     """
     defaults = pricing.get("default_models", {})
     served = served_models or {}
     keys: dict[str, str] = {}
+    self_hosted: set[str] = set()
     for step in spec.steps:
         kind = step.adapter_name.split(":", 1)[0]
         if kind not in defaults:
@@ -166,9 +196,15 @@ def _cloud_model_keys(
         if not isinstance(model, str) or not model:
             model = str(defaults.get(kind, ""))
         requested = f"{kind}/{model}"
+        host = _off_table_endpoint(kind, kwargs, pricing)
         for servi in served.get(step.adapter_name) or (model,):
-            keys.setdefault(f"{kind}/{servi}", requested)
-    return dict(sorted(keys.items()))
+            if host is None:
+                keys.setdefault(f"{kind}/{servi}", requested)
+            elif kwargs.get("self_hosted") is True:
+                self_hosted.add(f"{kind}/{servi}")
+            else:
+                keys.setdefault(f"{kind}/{servi} @ {host}", requested)
+    return dict(sorted(keys.items())), tuple(sorted(self_hosted))
 
 
 def _token_cost(
@@ -258,7 +294,7 @@ def economics_analysis(
         tokens_in = sum(u.usage.tokens_in or 0 for u in paid) or None
         tokens_out = sum(u.usage.tokens_out or 0 for u in paid) or None
         n_documents = len(entries)
-        keys = _cloud_model_keys(
+        keys, self_hosted = _cloud_model_keys(
             specs[name], manifest.adapter_kwargs, table, manifest.served_models
         )
         token_cost, basis, note = _token_cost(keys, tokens_in, tokens_out, table)
@@ -308,6 +344,7 @@ def economics_analysis(
                 tokens_out=tokens_out,
                 billed_pages=pages,
                 n_resumed=sum(u.resumed for u in paid),
+                self_hosted=self_hosted,
                 cost_eur=cost,
                 basis=basis,
                 cer=cer,

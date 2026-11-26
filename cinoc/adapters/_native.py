@@ -108,6 +108,49 @@ def public_endpoint(url: str) -> str:
     return urlunsplit((parts.scheme, host, parts.path, "", "")) or url
 
 
+def validate_endpoint(value: object, owner: str) -> str:
+    """Un endpoint saisi **par instance** (``base_url``) : une URL ``http(s)``
+    qui ne porte rien d'autre que la cible.
+
+    Refusés : un autre schéma (``file:``, ``ftp:``), l'absence d'hôte, un port
+    illisible, des **identifiants** (``user:pw@``), une *query string* ou un
+    fragment — l'un et l'autre peuvent porter un jeton, et ni le manifeste ni
+    l'empreinte de l'étape ne doivent en recevoir (les messages ne citent pas
+    l'URL refusée, pour la même raison). Une URL acceptée est donc
+    égale à sa forme publique (``public_endpoint``) : celle qu'on appelle est
+    celle qu'on écrit. La clé, elle, se nomme à part (``api_key_env``).
+    """
+    if not isinstance(value, str):
+        raise AdapterStepError(
+            f"{owner} : base_url (str) attendu, reçu {type(value).__name__}."
+        )
+    url = value.strip()
+    parts = urlsplit(url)
+    if parts.scheme not in {"http", "https"}:
+        raise AdapterStepError(
+            f"{owner} : base_url illisible (attendu http(s)://hôte[:port]/…)."
+        )
+    if parts.username is not None or parts.password is not None:
+        raise AdapterStepError(
+            f"{owner} : base_url refusé, il porte des identifiants — nommer la "
+            "variable de la clé par api_key_env."
+        )
+    if not parts.hostname:
+        raise AdapterStepError(f"{owner} : base_url sans hôte.")
+    try:
+        parts.port  # noqa: B018 — lecture qui valide
+    except ValueError as exc:
+        raise AdapterStepError(f"{owner} : base_url, port illisible.") from exc
+    if parts.query:
+        raise AdapterStepError(
+            f"{owner} : base_url refusé, il porte une query string (un jeton "
+            "peut y voyager)."
+        )
+    if parts.fragment:
+        raise AdapterStepError(f"{owner} : base_url refusé, il porte un fragment.")
+    return url
+
+
 def endpoint_from_env(env: str, default: str) -> tuple[str, str]:
     """``(URL à appeler, URL à écrire)`` pour un endpoint réglable par
     l'environnement (``OPENAI_BASE_URL``…).
@@ -126,4 +169,5 @@ __all__ = [
     "public_endpoint",
     "sdk_native",
     "served_model",
+    "validate_endpoint",
 ]

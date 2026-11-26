@@ -152,8 +152,13 @@ class PipelineEconomics(BaseModel):
     #: Unités **relues de l'archive** : leur durée et leurs jetons sont ceux de
     #: leur première exécution, pas une mesure de ce run (D10).
     n_resumed: int = Field(default=0, ge=0)
+    #: Modèles (``kind/modèle``) servis par un serveur **auto-hébergé** déclaré
+    #: (``self_hosted``) : aucun tarif de fournisseur ne leur est appliqué, leur
+    #: coût est le temps machine ; leurs jetons restent mesurés et affichés.
+    self_hosted: tuple[str, ...] = ()
     cost_eur: float | None = Field(default=None, ge=0)
-    #: « machine » · « machine+jetons » · « tarif inconnu : <kind:model> » ;
+    #: « machine » · « machine+jetons » · « tarif inconnu : <kind:model> » (un
+    #: endpoint hors de la table : « <kind/model> @ <hôte:port> ») ;
     #: suivi de « — tarif de l'alias demandé : <kind/alias> pour <servi> » quand
     #: un instantané daté absent de la table prend le tarif de son alias.
     basis: str = Field(min_length=1, max_length=256)

@@ -179,7 +179,7 @@ def test_an_ollama_host_outside_the_allowlist_is_refused(
     Sur une instance privée, c'était une requête POST du serveur vers l'adresse
     de son choix. Refus en 403, **avant** le lancement : aucune requête ne part.
     """
-    monkeypatch.delenv("CINOC_OLLAMA_HOSTS", raising=False)
+    monkeypatch.delenv("CINOC_MODEL_HOSTS", raising=False)
     client = _client(tmp_path)
     corpus_id = _upload(client, transcription=True)
 
@@ -189,7 +189,7 @@ def test_an_ollama_host_outside_the_allowlist_is_refused(
     )
 
     assert resp.status_code == 403, resp.json()
-    assert "CINOC_OLLAMA_HOSTS" in resp.json()["detail"]
+    assert "CINOC_MODEL_HOSTS" in resp.json()["detail"]
 
 
 @pytest.mark.skipif(not _a_saknussemm, reason="extra [saknussemm] absent")
@@ -197,7 +197,7 @@ def test_the_operator_can_allow_another_ollama_host(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """La liste blanche est celle de l'opérateur, pas une interdiction figée."""
-    monkeypatch.setenv("CINOC_OLLAMA_HOSTS", "gpu.lan")
+    monkeypatch.setenv("CINOC_MODEL_HOSTS", "gpu.lan")
     client = _client(tmp_path)
     corpus_id = _upload(client, transcription=True)
 

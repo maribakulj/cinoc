@@ -3,7 +3,8 @@
 Implémente le ``Module`` Protocol. Trois modes (``PipelineMode``) selon le rôle
 passé à la construction : ``text_only`` (``RAW_TEXT`` → ``CORRECTED_TEXT``),
 ``text_and_image`` (image + texte → corrigé), ``zero_shot`` (image → texte). La
-clé vient de ``OPENAI_API_KEY`` ; le SDK ``openai`` est un **extra** importé
+clé vient de ``OPENAI_API_KEY`` (ou de ``api_key_env``, ci-dessous) ; le SDK
+``openai`` est un **extra** importé
 paresseusement dans ``_invoke_openai`` / ``_invoke_openai_vision`` (isolés →
 **mockables**, CI sans clé ni réseau). La ``Deadline`` borne l'appel.
 
@@ -16,11 +17,27 @@ répond 400, le SDK lève ``BadRequestError`` (un ``OpenAIError``), traduit en
 ``engine``), le run continue, et ``call_resilient`` ne rejoue pas un 400.
 ``temperature=None`` (API Python) ne l'envoie pas.
 
-Cible : ``OPENAI_BASE_URL`` (le contournement d'aujourd'hui pour un serveur
-OpenAI-compatible, vLLM…) est lue **à la construction**, transmise au client et
-écrite dans les réglages effectifs (``base_url``) — donc au manifeste et dans
-l'empreinte de l'étape : un autre endpoint n'est plus pris pour le même modèle.
-Sans elle, l'URL par défaut du SDK, écrite aussi.
+Cible **par instance** (P5f 6) : ``base_url`` — un serveur OpenAI-compatible
+(vLLM, SGLang, Ollama ``/v1``, serveur local) — et ``api_key_env``, le **nom**
+de la variable qui porte sa clé, jamais la valeur. Deux instances d'un même run
+visent donc deux serveurs ; ``OPENAI_BASE_URL``, variable du processus qui les
+redirigeait toutes, n'est plus lue. ``base_url`` est validé à la construction
+(``validate_endpoint`` : http(s), ni identifiants, ni *query string*), écrit dans
+les réglages effectifs — donc au manifeste et dans l'empreinte de l'étape : un
+autre serveur n'est pas pris pour le même modèle. Sans saisie, l'endpoint
+d'OpenAI, écrit aussi.
+
+Clé : à l'endpoint d'OpenAI, ``OPENAI_API_KEY`` par défaut ; à tout autre, **aucune
+par défaut** — la clé d'OpenAI ne part chez un tiers que si on la nomme. Un serveur
+local sans authentification (vLLM ou SGLang sans ``--api-key``, Ollama) reçoit
+alors ``_NO_KEY``, que le SDK exige et que le serveur ignore. Une variable
+nommée mais absente ou vide est une erreur nommée, avant tout appel.
+
+``self_hosted: true`` déclare un serveur que l'opérateur fait tourner lui-même :
+l'économie ne lui applique aucun tarif de fournisseur (« auto-hébergé ») ; un
+endpoint tiers non déclaré reste « tarif inconnu » — jamais le prix d'OpenAI.
+Le créneau réseau est celui du **serveur** (``endpoint_slot_key``), pas du
+fournisseur.
 
 Délai fini (``timeout``, défaut 600 s, retries compris), passé à **chaque**
 appel ; client construit avec ``max_retries=0`` — le SDK retentait deux fois
@@ -30,9 +47,12 @@ sous chacune des cinq tentatives de Cinoc —, la seule politique de retry est
 
 from __future__ import annotations
 
+import logging
+import os
+import re
 from typing import Any, ClassVar
 
-from cinoc.adapters._native import endpoint_from_env, sdk_native, served_model
+from cinoc.adapters._native import sdk_native, served_model, validate_endpoint
 from cinoc.adapters._resilience import (
     DEFAULT_LLM_TIMEOUT,
     call_resilient,
@@ -75,9 +95,19 @@ from cinoc.pipeline.types import RunContext, StepOutput
 #: ne change pas.
 _VERSION = "2.1"
 _DEFAULT_MODEL = "gpt-4o-mini"
-#: Endpoint lu dans l'environnement par le SDK openai ; défaut = celui du SDK.
-_BASE_URL_ENV = "OPENAI_BASE_URL"
+#: L'endpoint d'OpenAI — celui de la table de tarifs (``pricing.json``).
 _DEFAULT_BASE_URL = "https://api.openai.com/v1"
+_DEFAULT_KEY_ENV = "OPENAI_API_KEY"
+#: Variable que le SDK lisait pour **toutes** les instances ; plus lue.
+_RETIRED_BASE_URL_ENV = "OPENAI_BASE_URL"
+#: Clé envoyée à un serveur sans authentification : le SDK en exige une, le
+#: serveur l'ignore. Jamais une vraie clé, jamais lue dans l'environnement.
+_NO_KEY = "cinoc-no-key"
+#: Un nom de variable d'environnement — un nom, pas une valeur (``sk-…`` a un
+#: tiret : refusé).
+_KEY_ENV_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,127}")
+
+logger = logging.getLogger(__name__)
 
 #: ``finish_reason`` (SDK openai 3.59 : ``stop``, ``length``, ``tool_calls``,
 #: ``content_filter``, ``function_call``) → raison normalisée. Les appels
@@ -143,13 +173,18 @@ def _openai_client(
     settings: InferenceSettings,
     base_url: str = _DEFAULT_BASE_URL,
     control: RunControl | None = None,
+    api_key_env: str | None = _DEFAULT_KEY_ENV,
 ) -> LLMCompletion:
     """Appel ``chat.completions`` partagé (texte ou multimodal)."""
-    import os
-
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        raise AdapterStepError("openai : OPENAI_API_KEY manquante.")
+    if api_key_env is None:
+        api_key = _NO_KEY
+    else:
+        api_key = os.environ.get(api_key_env, "")
+        if not api_key:
+            raise AdapterStepError(
+                f"openai : {api_key_env} manquante (variable de la clé, "
+                "api_key_env) — absente ou vide."
+            )
     try:
         from openai import OpenAI, OpenAIError  # type: ignore[import-not-found]
     except ImportError as exc:
@@ -169,10 +204,10 @@ def _openai_client(
                 **kwargs, timeout=request_timeout(deadline)
             )
 
-        # Cap de concurrence (≤ N appels OpenAI simultanés) + retry borné sur
+        # Cap de concurrence (≤ N appels simultanés **par serveur**) + retry borné sur
         # 429/5xx/transport (Retry-After respecté), dans le délai de l'étape.
         response = call_resilient(
-            "openai", _create, deadline=deadline, control=control
+            "openai", _create, deadline=deadline, endpoint=base_url, control=control
         )
     except CinocError:
         raise  # délai, annulation : déjà typés
@@ -191,6 +226,7 @@ def _invoke_openai(
     settings: InferenceSettings,
     base_url: str = _DEFAULT_BASE_URL,
     control: RunControl | None = None,
+    api_key_env: str | None = _DEFAULT_KEY_ENV,
 ) -> LLMCompletion:
     return _openai_client(
         model,
@@ -199,6 +235,7 @@ def _invoke_openai(
         settings,
         base_url,
         control,
+        api_key_env,
     )
 
 
@@ -212,6 +249,7 @@ def _invoke_openai_vision(
     settings: InferenceSettings,
     base_url: str = _DEFAULT_BASE_URL,
     control: RunControl | None = None,
+    api_key_env: str | None = _DEFAULT_KEY_ENV,
 ) -> LLMCompletion:
     content = [
         {"type": "text", "text": prompt},
@@ -227,7 +265,36 @@ def _invoke_openai_vision(
         settings,
         base_url,
         control,
+        api_key_env,
     )
+
+
+def _endpoint(base_url: object, api_key_env: object) -> tuple[str, str | None]:
+    """``(endpoint, variable de la clé)`` d'une instance, validés.
+
+    Sans ``base_url`` : l'endpoint d'OpenAI et ``OPENAI_API_KEY``. Avec : aucune
+    clé par défaut — celle d'OpenAI n'a pas à partir chez un tiers.
+    """
+    if base_url is None:
+        if os.environ.get(_RETIRED_BASE_URL_ENV, "").strip():
+            logger.warning(
+                "[openai] %s n'est plus lue : la cible se déclare par instance "
+                "(base_url dans adapter_kwargs) — appel à %s.",
+                _RETIRED_BASE_URL_ENV,
+                _DEFAULT_BASE_URL,
+            )
+        url = _DEFAULT_BASE_URL
+    else:
+        url = validate_endpoint(base_url, "OpenAIAdapter")
+    if api_key_env is None:
+        return url, _DEFAULT_KEY_ENV if url == _DEFAULT_BASE_URL else None
+    if not isinstance(api_key_env, str) or not _KEY_ENV_NAME.fullmatch(api_key_env):
+        raise AdapterStepError(
+            "OpenAIAdapter : api_key_env doit être le **nom** d'une variable "
+            "d'environnement (lettres, chiffres, _ ; 128 au plus) — la valeur "
+            "reçue n'est pas citée : ce pourrait être la clé elle-même."
+        )
+    return url, api_key_env
 
 
 class OpenAIAdapter:
@@ -254,6 +321,9 @@ class OpenAIAdapter:
         seed: int | None = DEFAULT_SEED,
         max_tokens: int = DEFAULT_MAX_TOKENS,
         timeout: object = DEFAULT_LLM_TIMEOUT,
+        base_url: object = None,
+        api_key_env: object = None,
+        self_hosted: object = False,
     ) -> None:
         self._label = validate_llm_label(label, "OpenAIAdapter")
         self._timeout = validate_timeout(timeout, "OpenAIAdapter")
@@ -267,9 +337,16 @@ class OpenAIAdapter:
         self._prompt = (
             prompt if prompt is not None else default_prompt_for_role(self._role)
         )
-        self._base_url, self._public_base_url = endpoint_from_env(
-            _BASE_URL_ENV, _DEFAULT_BASE_URL
-        )
+        self._base_url, self._api_key_env = _endpoint(base_url, api_key_env)
+        if not isinstance(self_hosted, bool):
+            raise AdapterStepError(
+                f"OpenAIAdapter : self_hosted (booléen) attendu, reçu {self_hosted!r}."
+            )
+        if self_hosted and self._base_url == _DEFAULT_BASE_URL:
+            raise AdapterStepError(
+                "OpenAIAdapter : self_hosted exige un base_url — l'endpoint "
+                "d'OpenAI n'est pas un serveur auto-hébergé."
+            )
 
     @property
     def name(self) -> str:
@@ -287,7 +364,7 @@ class OpenAIAdapter:
             role=self._role,
             prompt=self._prompt,
             settings=self._settings,
-            base_url=self._public_base_url,
+            base_url=self._base_url,
         )
 
     @property
@@ -315,6 +392,7 @@ class OpenAIAdapter:
                 settings=self._settings,
                 base_url=self._base_url,
                 control=control,
+                api_key_env=self._api_key_env,
             )
 
         def vision_invoke(
@@ -329,6 +407,7 @@ class OpenAIAdapter:
                 settings=self._settings,
                 base_url=self._base_url,
                 control=control,
+                api_key_env=self._api_key_env,
             )
 
         return run_llm_step(

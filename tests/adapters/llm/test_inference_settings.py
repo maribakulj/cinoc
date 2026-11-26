@@ -295,7 +295,6 @@ def test_the_manifest_carries_the_effective_settings_defaults_included(
     monkeypatch.setattr(
         "cinoc.adapters.llm.openai._invoke_openai", lambda **_: LLMCompletion("alpha")
     )
-    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
     result = run(_llm_spec(tmp_path, {}), registry=_registry(), code_version="1")
     assert result.manifest.adapter_kwargs["openai:gpt"] == {
         "label": "gpt",

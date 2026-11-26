@@ -363,7 +363,7 @@ def test_a_spec_cannot_point_ollama_at_a_private_host(
     ``adapter_kwargs`` est libre : sans la garde, un ``host`` y envoyait le
     serveur poster vers n'importe quelle adresse (P5d 4, D-269).
     """
-    monkeypatch.delenv("CINOC_OLLAMA_HOSTS", raising=False)
+    monkeypatch.delenv("CINOC_MODEL_HOSTS", raising=False)
     client = _client(tmp_path)
     corpus_id = _corpus(client)
     spec = yaml.safe_load(_spec_minimale())
@@ -393,4 +393,124 @@ def test_a_spec_cannot_point_ollama_at_a_private_host(
     )
 
     assert reponse.status_code == 403, reponse.json()
-    assert "CINOC_OLLAMA_HOSTS" in reponse.json()["detail"]
+    assert "CINOC_MODEL_HOSTS" in reponse.json()["detail"]
+
+
+# --------------------------------------------------------------------------- #
+# Endpoint OpenAI-compatible par instance (P5f 6, D-293)
+# --------------------------------------------------------------------------- #
+
+
+def _spec_openai(reglages: dict[str, object]) -> str:
+    spec = yaml.safe_load(_spec_minimale())
+    spec["pipelines"][0]["steps"].append(
+        {
+            "id": "llm",
+            "kind": "post_correction",
+            "adapter_name": "openai:local",
+            "input_types": ["raw_text"],
+            "output_types": ["corrected_text"],
+        }
+    )
+    spec["evaluation"]["views"][0]["candidate_types"] = [
+        "raw_text",
+        "corrected_text",
+    ]
+    spec["adapter_kwargs"]["openai:local"] = {"label": "local", **reglages}
+    return yaml.safe_dump(spec)
+
+
+def test_a_spec_cannot_point_an_openai_instance_at_a_private_host(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``base_url`` est un ``host`` sous un autre nom : sans la garde, le
+    serveur postait vers l'adresse du choix du client (SSRF)."""
+    monkeypatch.delenv("CINOC_MODEL_HOSTS", raising=False)
+    client = _client(tmp_path)
+    corpus_id = _corpus(client)
+
+    reponse = client.post(
+        "/api/runs/spec",
+        headers=_CSRF,
+        json={
+            "corpus_id": corpus_id,
+            "spec": _spec_openai({"base_url": "http://169.254.169.254/v1"}),
+        },
+    )
+
+    assert reponse.status_code == 403, reponse.json()
+    assert "CINOC_MODEL_HOSTS" in reponse.json()["detail"]
+
+
+def test_an_allowed_openai_endpoint_passes_the_host_guard(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("CINOC_MODEL_HOSTS", "gpu.lan")
+    client = _client(tmp_path)
+    corpus_id = _corpus(client)
+
+    reponse = client.post(
+        "/api/runs/spec",
+        headers=_CSRF,
+        json={
+            "corpus_id": corpus_id,
+            "spec": _spec_openai({"base_url": "http://gpu.lan:8000/v1"}),
+        },
+    )
+
+    # Plus loin que la garde d'hôte : refusé (ou lancé) pour une autre raison.
+    assert reponse.status_code != 403 or "CINOC_MODEL_HOSTS" not in str(
+        reponse.json()
+    ), reponse.json()
+
+
+def test_a_client_cannot_name_a_server_variable_as_the_key(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``api_key_env`` ferait envoyer **n'importe quelle** variable du serveur
+    — une autre clé, un jeton — à l'hôte de la spec, et le message d'erreur de
+    l'API en rend un fragment au client. Réglage d'opérateur : CLI seulement."""
+    monkeypatch.setenv("CINOC_MODEL_HOSTS", "gpu.lan")
+    client = _client(tmp_path)
+    corpus_id = _corpus(client)
+
+    reponse = client.post(
+        "/api/runs/spec",
+        headers=_CSRF,
+        json={
+            "corpus_id": corpus_id,
+            "spec": _spec_openai(
+                {"base_url": "http://gpu.lan:8000/v1", "api_key_env": "MISTRAL_API_KEY"}
+            ),
+        },
+    )
+
+    assert reponse.status_code == 403, reponse.json()
+    assert "api_key_env" in reponse.json()["detail"]
+
+
+@pytest.mark.parametrize(
+    "reglages",
+    [
+        {"base_url": "http://localhost:8000/v1"},
+        {"host": "http://localhost:11434"},
+        {"api_key_env": "OPENAI_API_KEY"},
+    ],
+)
+def test_public_mode_accepts_no_endpoint_at_all(
+    tmp_path: Path, reglages: dict[str, object]
+) -> None:
+    """Mode public : *fail-closed*, même sur l'hôte par défaut de la liste."""
+    client = _client(tmp_path, public_mode=True)
+    corpus_id = _corpus(client)
+    spec = yaml.safe_load(_spec_minimale())
+    spec["adapter_kwargs"]["precomputed:ocr"].update(reglages)
+
+    reponse = client.post(
+        "/api/runs/spec",
+        headers=_CSRF,
+        json={"corpus_id": corpus_id, "spec": yaml.safe_dump(spec)},
+    )
+
+    assert reponse.status_code == 403, reponse.json()
+    assert "mode public" in reponse.json()["detail"]
