@@ -296,6 +296,10 @@ suivantes ne les répètent pas.
 
 ### Corrigé
 
+- **Un run coupé garde ce qu'il a déjà produit** : l'archive de reprise
+  (`--resume-dir`) n'était écrite qu'après la dernière unité, et un Ctrl-C
+  faisait rejouer — et, sur une API facturée, repayer — tout le run ; chaque
+  unité est désormais archivée dès sa fin, d'un seul renommage.
 - **`cinoc correct` notait un ALTO contre lui-même** : sur un ALTO d'OCR, il
   affichait `F1 1,0 · CER 0,0` — la sortie comparée à sa propre entrée — et
   ignorait le `<nom>.gt.txt` posé à côté.

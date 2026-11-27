@@ -303,7 +303,22 @@ def run(
         #    speedup réel sans sérialiser les artefacts. Un échec isolé d'unité
         #    (`AdapterStepError`/`PipelineStepError`) n'abat pas le banc ; seule
         #    l'annulation (`RunCancelledError`) arrête tout le run.
-        saves: list[tuple[str, DocumentExecution]] = []
+        # Chaque unité est archivée **dès sa fin** (thread principal) : un run
+        # coupé garde ce qu'il a produit — et payé. Les binaires d'abord, une
+        # fois : sans eux, la relecture hors ligne ne retrouverait pas la clé.
+        binaries_recorded = False
+
+        def archive(key: str, execution: DocumentExecution) -> None:
+            nonlocal binaries_recorded
+            if resume_store is None:
+                return
+            if not binaries_recorded:
+                resume_store.record_binaries(
+                    {name: identity.binaries for name, identity in identities.items()}
+                )
+                binaries_recorded = True
+            resume_store.save(key, execution)
+
         if pending:
             workers = _resolve_workers(max_workers, len(pending))
             with ThreadPoolExecutor(max_workers=workers) as pool:
@@ -349,7 +364,7 @@ def run(
                             if key is not None:
                                 # Archivé (l'archive dit ce qui a échoué), mais
                                 # une reprise normale le retentera.
-                                saves.append((key, results[unit]))
+                                archive(key, results[unit])
                             progress.tick(*unit, "failed")
                             continue
                         if execution.message is not None:
@@ -364,7 +379,7 @@ def run(
                             )
                         results[unit] = execution
                         if key is not None:
-                            saves.append((key, execution))
+                            archive(key, execution)
                         progress.tick(*unit, execution.outcome)
                 except RunCancelledError:
                     # Annulation coopérative : on cesse de planifier (les unités
@@ -372,16 +387,7 @@ def run(
                     pool.shutdown(wait=False, cancel_futures=True)
                     raise
 
-        # 3) Reprise : persistance des unités exécutées (thread principal, post-pool),
-        #    et des binaires sous lesquels elles l'ont été (relecture hors ligne).
-        if resume_store is not None and saves:
-            for saved_key, saved in saves:
-                resume_store.save(saved_key, saved)
-            resume_store.record_binaries(
-                {name: identity.binaries for name, identity in identities.items()}
-            )
-
-        # 4) Assemblage **déterministe** : ordre du spec, indépendant de l'ordre
+        # 3) Assemblage **déterministe** : ordre du spec, indépendant de l'ordre
         #    d'achèvement des threads → `RunResult` byte-identique au séquentiel.
         pipeline_outputs: dict[str, dict[str, StepArtifacts]] = {}
         usage_records: list[DocumentUsage] = []

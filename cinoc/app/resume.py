@@ -307,10 +307,19 @@ class ResumeStore:
         Une entrée par étape, **dans l'ordre d'exécution** (une liste : l'ordre
         est ce qui désigne l'étape la plus aval). Les fichiers sont nommés par
         étape et par type — deux étapes de même type ne s'écrasent plus.
+
+        **Atomique** : l'unité est écrite dans un dossier temporaire voisin
+        (``.<clé>.partiel``, même parent, donc mêmes noms relatifs vers
+        ``../images/``), puis renommée. Une écriture coupée ne laisse jamais,
+        sous le nom qui fait foi, un index ancien et des fichiers neufs à moitié
+        copiés — l'unité d'avant reste entière, ou rien n'y est.
         """
         unit_dir = self._base / key
+        partial = self._base / f".{key}.partiel"
         try:
-            unit_dir.mkdir(parents=True, exist_ok=True)
+            if partial.exists():
+                shutil.rmtree(partial)  # reste d'une écriture coupée
+            partial.mkdir(parents=True)
             steps: list[dict[str, object]] = []
             for step_id, outputs in execution.by_step.items():
                 stored: dict[str, object] = {}
@@ -322,7 +331,7 @@ class ResumeStore:
                         else:
                             suffix = Path(artifact.uri).suffix
                             name = f"{step_id}.{artifact_type.value}{suffix}"
-                            shutil.copyfile(artifact.uri, unit_dir / name)
+                            shutil.copyfile(artifact.uri, partial / name)
                         # Relatif au dossier de l'unité : l'archive se déplace,
                         # se télécharge, se re-note ailleurs (P5h).
                         entry = artifact.model_copy(update={"uri": name})
@@ -351,12 +360,30 @@ class ResumeStore:
                     else None
                 ),
             }
-            (unit_dir / "index.json").write_text(
+            (partial / "index.json").write_text(
                 json.dumps(payload, ensure_ascii=False, sort_keys=True),
                 encoding="utf-8",
             )
+            self._publish(partial, unit_dir)
         except OSError as exc:
             logger.warning("[resume] persistance dégradée (unité %s) : %s", key, exc)
+
+    @staticmethod
+    def _publish(partial: Path, unit_dir: Path) -> None:
+        """Met l'unité écrite sous son nom. Un dossier ne se remplace pas d'un
+        seul renommage s'il n'est pas vide : l'ancien est d'abord écarté (un
+        renommage), puis le neuf prend sa place, puis l'ancien est effacé. Coupé
+        entre les deux renommages, l'archive n'a plus l'unité : elle sera
+        ré-exécutée (ou, hors ligne, refusée) — jamais lue à moitié."""
+        if unit_dir.exists():
+            aside = unit_dir.with_name(f".{unit_dir.name}.ancien")
+            if aside.exists():
+                shutil.rmtree(aside)
+            unit_dir.replace(aside)
+            partial.replace(unit_dir)
+            shutil.rmtree(aside)
+        else:
+            partial.replace(unit_dir)
 
     def _store_image(self, source: Path) -> str:
         """Range une image par son contenu, une fois ; renvoie son nom relatif
