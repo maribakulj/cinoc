@@ -33,7 +33,7 @@ from cinoc.adapters.storage.history_store import (
 )
 from cinoc.app import resolve_code_version
 from cinoc.app.alto_store import AltoStore
-from cinoc.app.corpus_upload import CorpusStore
+from cinoc.app.corpus_upload import CorpusStore, upload_zip_limit
 from cinoc.app.engines import StatusProvider
 from cinoc.app.evaluation_views import metric_profile_catalog
 from cinoc.app.history import series_insight
@@ -184,6 +184,7 @@ def build_home_router(
     """Construit le routeur des vues de la coquille (monté par ``create_app``)."""
     router = APIRouter()
     app_version = resolve_code_version()
+    zip_cap_mb = upload_zip_limit(public_mode=public_mode) // 2**20
     # Caches TTL partagés par toutes les requêtes /library (F1) : fin du fetch
     # réseau à chaque chargement. HTR-United (index, indépendant de la requête)
     # et HuggingFace (par requête ``q``).
@@ -294,6 +295,11 @@ def build_home_router(
         context["n_htr"] = len(htr)
         context["n_hf"] = len(hf)
         context["n_pages"] = sum(int(c["n_documents"]) for c in corpora)  # type: ignore[call-overload]
+        # Le plafond que le dépôt applique ici (D-310) — la page le dit, le refus
+        # le redit dans sa langue.
+        t = strings_for(lang)
+        context["zip_meta"] = t["library_zip_meta"].format(max_mb=zip_cap_mb)
+        context["zip_too_large"] = t["library_zip_too_large"].format(max_mb=zip_cap_mb)
         return templates.TemplateResponse(request, "library.html", context)
 
     @router.get("/history", response_class=HTMLResponse)

@@ -52,7 +52,7 @@ def _upload(tmp_path: Path, entries: dict[str, bytes]) -> CorpusSpec:
     with zipfile.ZipFile(buffer, "w") as archive:
         for name, payload in entries.items():
             archive.writestr(name, payload)
-    return extract_corpus_zip(buffer.getvalue(), tmp_path / "c", name="c")
+    return extract_corpus_zip(buffer, tmp_path / "c", name="c")
 
 
 def _views(corpus: CorpusSpec, *recipes: str) -> set[str]:

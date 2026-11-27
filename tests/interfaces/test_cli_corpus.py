@@ -200,9 +200,12 @@ def test_a_local_zip_is_not_held_to_the_public_upload_quota(
     with zipfile.ZipFile(archive, "w") as zf:
         zf.writestr("page_1.png", b"\x89PNG\r\n\x1a\n stub")
         zf.writestr("page_1.txt", "bonjour")
-    monkeypatch.setattr(upload, "MAX_ZIP_BYTES", 64)
-    with pytest.raises(upload.CorpusUploadError, match="trop volumineuse"):
-        upload.extract_corpus_zip(archive.read_bytes(), tmp_path / "w", name="w")
+    monkeypatch.setattr(upload, "PUBLIC_MAX_ZIP_BYTES", 64)
+    with (
+        archive.open("rb") as source,
+        pytest.raises(upload.ArchiveTooLargeError, match="trop volumineuse"),
+    ):
+        upload.extract_corpus_zip(source, tmp_path / "w", name="w")
 
     code = main(
         ["corpus", "import", "zip", str(archive), "--dest", str(tmp_path / "c")]

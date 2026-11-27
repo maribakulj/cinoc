@@ -7,8 +7,12 @@ couche 6 (même seam ``CorpusStore.materialize``). ``curated`` rapatrie un **dat
 curé Cinoc publié sur HF** (manifeste + GT seulement, images en réfs IIIF pinnées).
 ``GET /api/corpus/{id}`` restitue le résumé. Tout corpus stocké est une cible de run.
 
-La taille de l'archive est plafonnée **deux fois** : lecture bornée ici (``413``),
-puis quotas fins dans ``extract_corpus_zip`` (``422``).
+La taille de l'archive est plafonnée **selon le déploiement** — serrée en mode
+public, celle d'une archive locale ailleurs — par la seule règle de la couche 6
+(``upload_zip_limit``), lue ici une fois : au-delà, ``413`` avant tout dézippage ;
+les quotas fins (entrées, décompressé, chemins) donnent ``422``. Le dépôt n'est
+jamais recopié en mémoire : l'analyseur multipart l'a déjà versé dans un fichier
+temporaire (au-delà de 1 Mo), que ``extract_corpus_zip`` lit en place.
 
 **Mode public** : les imports distants **fetchent une URL côté serveur** (surface
 SSRF) → **refusés en mode public** (``403``), comme les moteurs cloud. L'``_http``
@@ -39,7 +43,12 @@ from cinoc.app.corpus_import import (
     import_hf_corpus,
     import_iiif_corpus,
 )
-from cinoc.app.corpus_upload import MAX_ZIP_BYTES, CorpusStore, CorpusUploadError
+from cinoc.app.corpus_upload import (
+    ArchiveTooLargeError,
+    CorpusStore,
+    CorpusUploadError,
+    upload_zip_limit,
+)
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.interfaces.web.security.csrf import csrf_protect
 
@@ -116,6 +125,7 @@ class CuratedImportRequest(BaseModel):
 def build_corpus_router(store: CorpusStore, *, public_mode: bool = False) -> APIRouter:
     """Construit le routeur corpus (upload + imports distants)."""
     router = APIRouter()
+    max_zip_bytes = upload_zip_limit(public_mode=public_mode)
 
     def _summary(corpus_id: str, spec: CorpusSpec) -> dict[str, object]:
         """Résumé d'un corpus créé : la réponse de création **est** le résumé
@@ -220,14 +230,17 @@ def build_corpus_router(store: CorpusStore, *, public_mode: bool = False) -> API
     @router.post(
         "/api/corpus", status_code=201, dependencies=[Depends(csrf_protect)]
     )
-    async def upload_corpus(
+    def upload_corpus(
         file: Annotated[UploadFile, File()],
     ) -> dict[str, object]:
-        data = await file.read(MAX_ZIP_BYTES + 1)
-        if len(data) > MAX_ZIP_BYTES:
-            raise HTTPException(status_code=413, detail="archive trop volumineuse.")
+        # Synchrone : FastAPI l'exécute hors de la boucle — dézipper 200 Mo ne
+        # fige pas les autres requêtes (progression SSE d'un run en cours).
         try:
-            corpus_id, spec = store.save(file.filename or "corpus", data)
+            corpus_id, spec = store.save(
+                file.filename or "corpus", file.file, max_zip_bytes=max_zip_bytes
+            )
+        except ArchiveTooLargeError as exc:
+            raise HTTPException(status_code=413, detail=str(exc)) from exc
         except CorpusUploadError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         return _summary(corpus_id, spec)

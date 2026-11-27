@@ -19,12 +19,12 @@ from cinoc.domain.artifacts import ArtifactType
 _PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32  # en-tête PNG valide + remplissage
 
 
-def _zip(entries: dict[str, bytes]) -> bytes:
+def _zip(entries: dict[str, bytes]) -> io.BytesIO:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
         for name, payload in entries.items():
             zf.writestr(name, payload)
-    return buf.getvalue()
+    return buf
 
 
 # --- Nominal -----------------------------------------------------------------
@@ -105,7 +105,7 @@ def test_zip_bomb_total_capped(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
 
 def test_bad_zip_rejected(tmp_path: Path) -> None:
     with pytest.raises(CorpusUploadError, match="ZIP invalide"):
-        extract_corpus_zip(b"not a zip", tmp_path / "c", name="c")
+        extract_corpus_zip(io.BytesIO(b"not a zip"), tmp_path / "c", name="c")
 
 
 def test_empty_archive_rejected(tmp_path: Path) -> None:
@@ -141,7 +141,7 @@ def test_invalid_stem_is_clean_reject(tmp_path: Path) -> None:
 
 def test_store_save_and_get(tmp_path: Path) -> None:
     store = CorpusStore(tmp_path)
-    corpus_id, spec = store.save("c", _zip({"a.png": _PNG}))
+    corpus_id, spec = store.save("c", _zip({"a.png": _PNG}), max_zip_bytes=2**20)
     assert store.get(corpus_id) is spec
     assert store.get("absent") is None
     assert (tmp_path / corpus_id / "a.png").exists()
@@ -221,3 +221,43 @@ def test_unreadable_xml_ground_truth_clean_reject(tmp_path: Path) -> None:
             tmp_path / "c",
             name="c",
         )
+
+
+# --- Plafond de l'archive selon le déploiement (D-310) -----------------------
+
+
+def test_the_archive_cap_is_resolved_from_public_mode() -> None:
+    """Un dépôt sur un serveur exposé (mode public) garde le plafond serré d'un
+    Space ; hors mode public, le plafond est celui d'une archive locale — le
+    même que la CLI. Une seule règle, en couche app."""
+    from cinoc.app.corpus_upload import (
+        LOCAL_MAX_ZIP_BYTES,
+        PUBLIC_MAX_ZIP_BYTES,
+        upload_zip_limit,
+    )
+
+    assert upload_zip_limit(public_mode=True) == PUBLIC_MAX_ZIP_BYTES == 25 * 2**20
+    assert upload_zip_limit(public_mode=False) == LOCAL_MAX_ZIP_BYTES
+    assert LOCAL_MAX_ZIP_BYTES > PUBLIC_MAX_ZIP_BYTES
+
+
+def test_an_archive_over_its_cap_is_refused_with_the_cap_named(tmp_path: Path) -> None:
+    from cinoc.app.corpus_upload import ArchiveTooLargeError
+
+    data = _zip({"a.png": _PNG})
+    with pytest.raises(ArchiveTooLargeError, match="1 Mo au plus"):
+        extract_corpus_zip(
+            io.BytesIO(data.getvalue() + b"\x00" * 2**20), tmp_path / "c", name="c",
+            max_zip_bytes=2**20,
+        )
+    assert not (tmp_path / "c").exists()  # refusé avant tout dézippage
+
+
+def test_an_archive_is_read_from_a_file_not_from_memory(tmp_path: Path) -> None:
+    """L'archive est lue **en place** (un fichier, comme celui où le serveur a
+    déjà recopié le dépôt) : rien ne la recopie en mémoire d'un bloc."""
+    archive = tmp_path / "c.zip"
+    archive.write_bytes(_zip({"a.png": _PNG, "a.txt": b"gt"}).getvalue())
+    with archive.open("rb") as source:
+        spec = extract_corpus_zip(source, tmp_path / "c", name="c")
+    assert spec.documents[0].ground_truths
