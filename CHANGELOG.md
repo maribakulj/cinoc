@@ -70,7 +70,10 @@ publier, et son moment, appartiennent au mainteneur.
   entière au lieu d'en rogner les bords ; le journal d'un run nomme chaque
   unité (`[1/2] ocr_simple · tesseract · page_002 — fait`, la ligne de `cinoc
   run`) et traduit les états ; chaque champ de réglage a un `id`, un `name` et
-  son `label for`.
+  son `label for`. *Ruptures* : un corpus déposé `x.zip` s'appelle
+  `x` (il gardait l'extension) ; `cinoc corpus import zip` d'une archive sans
+  `.zip` garde son nom entier (il était coupé au dernier point) ; l'état d'un
+  job (`GET /api/runs/<id>`, SSE) gagne `pipeline`, `document_id`, `outcome`.
 
 - **`docs/PLUGINS.md` suffit pour écrire un module.** L'exemple s'arrêtait sur
   `StepOutput(artifacts={ArtifactType.RAW_TEXT: ...})`. La page, désormais en
