@@ -153,3 +153,81 @@ La plupart des corrections tiennent en une phrase : R2, R3, R5, R6, R7, R8, R11 
    Sans cela, I5 n'est pas atteignable par un tiers.
 
 Le point de méthode le plus transversal est R5 : un support macro qui dépend du dénominateur de l'hypothèse rend le Δ macro aveugle aux hallucinations. Le corriger, en fixant D^M par la référence, renforce K2 sans le changer.
+
+---
+
+## 6. Clôture de la révision n° 2
+
+Objet : `CONTRATS.md` révisé une deuxième fois par son auteur. La table « Révision n° 2 » répond aux 31 points ; aucun n'est rejeté. Pour chacun, j'ai :
+- rejoué mon contre-exemple contre la nouvelle spécification quand c'était mécanisable (scripts `r2_*.py`) ;
+- sinon, relu la clause ;
+- cherché une contradiction nouvelle introduite par la correction.
+
+Les scripts sont dans `/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/ce-review2/`. `run_all.sh` rejoue les 23 + 10 scripts (33/33 reproduits). J'ai aussi exécuté le script P1 de l'auteur (« 3000 cas ») : il passe.
+
+Les scripts `k*.py` de la revue reproduisent toujours, ce qui est attendu : ils visent le code, qui n'a pas changé. Les scripts `r2_*.py` visent la spécification révisée.
+
+**Comptes** : **25 levés**, **6 partiellement** (R4, R5, R11, P4, P10, P11), **0 non levé**. **8 contradictions nouvelles** (N1 à N8), toutes corrigibles par une clause.
+
+### 6.1 Point par point
+
+| Point | Verdict | Une ligne |
+|---|---|---|
+| R1 | **levé** | `Fraction` : le contre-exemple donne poolé == par document. La partition en 7 et l'ordre mélangé donnent une égalité exacte. Coût : 0,36 s pour 200 000 jetons, dénominateur de 52 bits (`r2_r1_fraction.py`). |
+| R2 | **levé** | Le texte de référence non apparié est au numérateur (§ 2.1 a, M4). |
+| R3 | **levé** | Ordre partiel en domain ; le τ ne compte que les paires ordonnées. Voir N7 pour la projection texte. |
+| R4 | **partiellement** | Le niveau est bon à n ≥ 30. À n = 5 et 10 (le régime des 5 grappes BNL et des 10 pages Dresden), l'inversion du bootstrap rejette à **0,188 et 0,117**, au-delà de la borne d'A3 (0,071). Voir N1 et N2. |
+| R5 | **partiellement** | Le support est désormais symétrique. Mais A4 affirme « il voit l'hallucination d'un document sans référence », ce qui est faux : ce document a tp + fn = 0 et sort de D^M par définition, donc Δ macro = 0 (N3). |
+| R6 | **levé** | `partial_output` et `truncated_output` à l'axe 3, exclus par défaut : P et Q sont tous deux exclus, la non-monotonie disparaît. |
+| R7 | **levé** | Écart à jiwer écrit (« S+D+I quand Σ n_réf > 0 »). |
+| R8 | **levé** | L'oracle est l'énumération ; NER passe sous l'appariement unique. |
+| R9 | **levé** | Instantané du processus entier, indépendant de l'historique, pour l'**environnement**. Voir N5 pour la **définition**. |
+| R10 | **levé** | Bibliothèques du binaire (`ld.so --list`) et `--version` ; la limite `dlopen` est écrite (O4). |
+| R11 | **partiellement** | L'admissibilité exigée lève mon contre-exemple (repère changé, IoU 0). Elle ne prouve pas l'homologie quand des régions de VT se recouvrent : un échange d'ids passe (N6). |
+| P1 | **levé** | max S, vérifié (DP, 3000 cas). MER s'écarte de jiwer sur les ex æquo (« a b »/« b a » : 1,0 contre 0,667), comme le document l'écrit. Les tests de parité MER/cMER existants n'utilisent que des paires non ambiguës et restent verts (`r2_p1_mer_parite_jiwer.py`). |
+| P2 | **levé** | Réplicats écartés et comptés ; ε = 1 % ; percentile (BCa est indéfini avec des réplicats infinis, c'est exact). Pour T1, la probabilité qu'un réplicat soit dégénéré est de 2,4·10⁻⁴, très en dessous de ε. |
+| P3 | **levé** | On tire des documents (A13). |
+| P4 | **partiellement** | `Fraction`, k ≥ 3 et « non calculé » sont réglés. Mais B5 décrit mal `method="auto"` de scipy 1.18.1 en présence d'ex æquo (N8). |
+| P5 | **levé** | Grappes triées par leur plus petit id : singletons = documents, bit à bit. |
+| P6 | **levé** | Une répétition n'est jamais une unité d'inférence ; rangs sur moyennes par grappe. |
+| P7 | **levé** | `not_transcribed` est déclaré par l'importeur, hors des attendus. |
+| P8 | **levé** | Seul le support global trie. |
+| P9 | **levé** | `partial` et `failed` sont retentés. `truncated` n'est réutilisé que parce que sa cause, `stop_reason="length"` (`adapters/llm/_base.py:543`), dépend de `max_tokens`, qui est dans la clé. |
+| P10 | **partiellement** | La clé en deux temps est posée, mais recherche et validation divergent sans détection dans deux cas (N4). |
+| P11 | **partiellement** | La séparation définition / environnement est faite. Mais la définition hache les sources « **chargées** », ce qui réintroduit la dépendance à l'historique (N5). |
+| P12 | **levé** | L'`ObservationId` ne contient que la VT de son document ; `CorpusIdentity` est séparée. |
+| P13 | **levé** | Tout est sous `data/` ; tout fichier non listé est refusé ; `st_nlink > 1` est refusé hors option ; 0444 n'est plus présenté comme une protection. |
+| P14 | **levé** | Ordre de durabilité imposé ; F5 est testé par panne simulée. |
+| P15 | **levé** | Les poids chargés sont hachés dans la définition. Pour leur rôle dans la réutilisation, voir N4 (a). |
+| P16 | **levé** | 3ᵉ critère (Σ distance d'édition) : l'exemple « Zurich » retient la bonne hypothèse. |
+| P17 | **levé** | Admissibilité exacte en entiers. Remarque de coût (`r2_p17_poids_entier_cout.py`) : si le ppcm est pris sur **toutes** les unions d'une page, il atteint 14 588 bits à n = 40 et 63 334 bits à n = 100, soit environ 2 s × la constante du hongrois par page. Il faut le restreindre aux paires admissibles, ou départager par passes ou par composantes connexes. |
+| P18 | **levé** | Justification retirée ; `ref_overlap` est `not_applicable` et compté. |
+| P19 | **levé** | `line_identity_*` seulement sous filiation des lignes. |
+| P20 | **levé** | Une seule règle (inclusive, O2) pour les boîtes et les empans. |
+
+### 6.2 Contradictions nouvelles
+
+| # | Phrase visée | Contre-exemple minimal | Script | Correction minimale |
+|---|---|---|---|---|
+| **N1** | § 2.1 d « inversion du bootstrap apparié » ; A3 « taux de rejet ≤ α + 3 erreurs Monte-Carlo pour chaque famille » | Scénario F1 de la revue (R_A = R_B = 0,5), 1000 simulations. Taux de rejet : **0,188 (n = 5)**, **0,117 (n = 10)**, 0,036 (n = 30). La borne est 0,071. L'auteur n'a mesuré que n = 30 et 100. | `r2_r4_inversion_bootstrap.py` (1) | En dessous d'un n minimal à chiffrer (unités de rééchantillonnage, donc grappes), p « non estimable » ; ou permutation studentisée, dont l'auteur a mesuré 0,067 et 0,063, à mesurer aussi à n = 5 et 10. |
+| **N2** | § 2.1 d, ligne « Taux d'édition » : p par changement de signe, IC par bootstrap apparié | n = 10, B un peu pire que A. Dans **50 %** des jeux de données, la p et l'IC se contredisent. Exemple : 5 différences non nulles, toutes négatives, donnent p = 2·2⁻⁵ = 0,0625, alors que l'IC à 95 % [−19 ; −3] exclut 0. | `r2_r4_inversion_bootstrap.py` (2) | Une seule procédure par Δ : l'IC obtenu en inversant le test de changement de signe, ou la p tirée du même bootstrap. Sinon, écrire laquelle des deux décide. |
+| **N3** | A4 « il voit l'hallucination d'un document sans référence » | Contre-exemple R5 rejoué : D^M = {d1}, Δ macro = 0 ; micro : A 0,667, B 1,0. | `r2_r5_support_reference.py` | A4 : « le macro ne voit pas l'hallucination d'un document sans référence ; le micro la voit. » |
+| **N4** | § 2.2 `lookup_key` (partie **déclarée**) et `validation` (re-hachage des fichiers de `record.environment`) ; I1 « modifier un fichier de poids interdit la réutilisation » | (a) Les poids et les sources de la brique sont dans `StepDefinition`, ni dans la clé ni dans la validation : un `fra.traineddata` remplacé est relu (clé identique, validation vraie). (b) La validation re-hache les chemins **enregistrés**. Si le processus courant résout le module ailleurs (autre venv, homonyme plus tôt dans `sys.path`), l'ancien fichier, intact, valide une exécution dont le code a changé. | `r2_p10_recherche_validation.py` | La validation porte sur toute la partie **calculée** de la définition (poids, sources) en plus de l'environnement, et résout chaque module **par son nom** dans le processus courant (`importlib.util.find_spec`) avant de hacher. |
+| **N5** | § 2.3 d `ProtocolDefinition` ⊃ « sources .py de cinoc.evaluation et cinoc.formats **chargées** » ; I3, I5 | Même CER, même copie, trois processus : re-notation seule, empreinte `a41e…` (68 modules) ; plus validation d'images, `6564…` (69) ; plus analyse longitudinale, `5bd8…` (69). Trois définitions pour un même protocole. | `r2_p11_definition_chargee.py` | Hacher toutes les sources des deux paquets sur disque, pas les modules chargés. |
+| **N6** | § 2.4 a 1 : filiation vérifiée par « la paire (même id) est admissible », « retenue en priorité » ; M8 « optimum égal à l'énumération » | VT r1 = page entière, r2 = ses 60 % supérieurs. Une brique `preserves_region_ids` échange les deux ids. Chaque paire par id est admissible (IoU 3/5), donc retenue : `region_cer` = **1,2**, alors que l'optimum (IoU 1 et 1) donne 0,0. | `r2_r11_filiation_permutee.py` | Sous héritage, exiger une géométrie **identique** à celle de la VT (empreinte des coordonnées), ou ne retenir une paire par id que si elle appartient à un optimum lexicographique. |
+| **N7** | § 2.4 b « la projection en texte linéarise un groupe non ordonné dans l'ordre de déclaration du fichier » ; M5 ; M7 | Deux marginalia d'un `UnorderedGroup`, hypothèse dans l'ordre inverse. Le τ ne pénalise pas, mais le CER de la vue texte vaut **0,919** ou **0,0** selon l'ordre de déclaration dans le XML d'une VT identique. | `r2_r3_groupe_non_ordonne_cer.py` | Écrire la convention (la vue texte impose l'ordre de déclaration, publiée comme telle), ou apparier les membres d'un groupe non ordonné avant de les concaténer. |
+| **N8** | § 6 B5 « `method="auto"` (exact si n ≤ 50 sans zéro ni ex æquo, sinon approximation) » | scipy 1.18.1, n = 7 avec des ex æquo : `auto` rend p = 0,266, `exact` 0,219, `approx` 0,161. `auto` ne fait aucune des deux choses annoncées. Les ex æquo exacts sont précisément ce que P4 préserve. La p reste déterministe (vérifié). | `r2_p4_wilcoxon_auto.py` | Passer `method` explicitement et écrire la méthode réellement appliquée avec la version tracée. |
+
+Remarque de forme : la table de la révision n° 2 renvoie à `scratchpad/ce-contrats-r2/`, alors que les scripts de l'auteur sont aussi dans `tests/adversarial/rapports/revision2_verifications/`. Mieux vaut un seul chemin.
+
+### 6.3 Avis de clôture
+
+La révision n° 2 lève 25 points sur 31 et n'en laisse aucun entièrement debout. Les six levées partielles et les huit contradictions nouvelles se corrigent chacune par une clause, sans toucher aux contrats. Deux d'entre elles sont à régler **avant la tranche 1a** :
+- **N1, N2** : niveau aux petits n, et cohérence entre p et IC pour un même Δ ;
+- **N3** : formulation d'A4.
+
+Deux autres sont à régler avant la tranche 3 :
+- **N4** : la validation doit couvrir la partie calculée de la définition et résoudre par nom ;
+- **N5** : sources sur disque, pas modules chargés.
+
+N6 est à régler avant la tranche 4. Aucun contrat n'est à repenser.
