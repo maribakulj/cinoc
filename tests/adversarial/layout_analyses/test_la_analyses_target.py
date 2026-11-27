@@ -139,6 +139,7 @@ def test_calibration__lit_les_confiances_de_l_etape_ciblee(tmp_path: Path) -> No
 
 # --- correction : pool final au lieu de la cible -----------------------------
 
+@pytest.mark.valide
 def test_correction_vue_cible_ocr__pas_de_bilan_hors_du_prefixe_evalue(tmp_path: Path) -> None:
     """Vue « OCR seul » (ablation : le préfixe s'arrête à l'OCR) : aucun étage de
     correction n'y est évalué, donc pas de bilan de correction sous cette vue."""
@@ -146,6 +147,7 @@ def test_correction_vue_cible_ocr__pas_de_bilan_hors_du_prefixe_evalue(tmp_path:
     assert _payload(result, "ocr_seul", CorrectionPayload) is None
 
 
+@pytest.mark.valide
 def test_correction_vue_cible_correction__lit_la_sortie_de_cette_etape(tmp_path: Path) -> None:
     """Vue ciblant ``correction`` (CER 0) : le bilan doit juger cette sortie
     (amélioration 1/1, 0 erreur de mot après), pas celle de ``refine``."""
@@ -155,6 +157,7 @@ def test_correction_vue_cible_correction__lit_la_sortie_de_cette_etape(tmp_path:
     assert (row.improvement_rate, row.regression_rate, row.errors_after) == (1.0, 0.0, 0)
 
 
+@pytest.mark.valide
 def test_correction_etape_brute_en_aval__le_brut_est_l_entree_du_correcteur(tmp_path: Path) -> None:
     """Chaîne réelle documentée par ``runner._scored_step`` : ``ocr → correction →
     projection`` (un RAW_TEXT **après** le CORRECTED_TEXT). Le « brut » du bilan doit
@@ -170,12 +173,14 @@ def test_correction_etape_brute_en_aval__le_brut_est_l_entree_du_correcteur(tmp_
 
 # --- décisions : pool final au lieu de la cible ------------------------------
 
+@pytest.mark.valide
 def test_decisions_vue_cible_ocr__pas_de_decisions_hors_du_prefixe(tmp_path: Path) -> None:
     """Vue « OCR seul » : les décisions d'un correcteur en aval n'y ont pas lieu."""
     result = _run(tmp_path, _chain(tmp_path), OCR_SEUL)
     assert _payload(result, "ocr_seul", DecisionsPayload) is None
 
 
+@pytest.mark.valide
 def test_decisions_vue_cible_correction__lit_les_decisions_de_cette_etape(tmp_path: Path) -> None:
     """Deux étapes publient des DECISIONS ; la vue cible la première : l'échantillon
     doit montrer sa ligne (``correction.l1``), pas celle de ``refine``."""
@@ -186,6 +191,7 @@ def test_decisions_vue_cible_correction__lit_les_decisions_de_cette_etape(tmp_pa
 
 # --- économie : coût du pipeline entier sous une vue de préfixe ---------------
 
+@pytest.mark.discutable("C12-granularite-etape")
 def test_economie_vue_cible_ocr__ne_facture_pas_l_etage_llm(tmp_path: Path) -> None:
     """Sous « OCR seul », le coût mis en regard du CER de l'OCR ne doit pas porter
     les jetons de l'étage LLM (l'OCR n'en consomme aucun)."""

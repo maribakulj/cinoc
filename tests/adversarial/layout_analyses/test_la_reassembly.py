@@ -67,6 +67,7 @@ def _extract(tmp_path: Path, layout: CanonicalLayout) -> str:
     return Path(out.artifacts[ArtifactType.RAW_TEXT].uri or "").read_text(encoding="utf-8")
 
 
+@pytest.mark.valide
 def test_ordre_de_lecture_imbrique__la_projection_d_evaluation_le_respecte() -> None:
     """Ordre plat c2 → c1 sur des régions imbriquées : la projection de couche 3
     (celle qu'on applique à la VT) doit rendre « beta » avant « alpha »."""
@@ -74,6 +75,7 @@ def test_ordre_de_lecture_imbrique__la_projection_d_evaluation_le_respecte() -> 
     assert text.index("beta") < text.index("alpha"), text
 
 
+@pytest.mark.valide
 def test_deux_projections__meme_layout_meme_texte(tmp_path: Path) -> None:
     """Le même ``CanonicalLayout`` projeté par la couche 3 (VT) et par l'étape
     ``projection`` de couche 5 (candidat) doit donner le même texte — sinon un
@@ -91,6 +93,7 @@ def test_deux_projections__meme_layout_meme_texte(tmp_path: Path) -> None:
     assert str(layout_to_text(layout, {})) == _extract(tmp_path, layout)
 
 
+@pytest.mark.valide
 def test_deux_projections__ordre_imbrique_identique(tmp_path: Path) -> None:
     """Même comparaison sur le bloc composé à ordre plat c2 → c1."""
     layout = _composed_page()
@@ -150,6 +153,7 @@ def test_fanout__ordre_de_lecture_preserve_au_reassemblage(tmp_path: Path) -> No
     assert text.index("T_a") < text.index("T_b")
 
 
+@pytest.mark.discutable("C16-fanout-multipage")
 def test_fanout_multipage__une_page_n_est_pas_lue_dans_l_image_d_une_autre(tmp_path: Path) -> None:
     """Layout de 2 pages, une seule IMAGE de document : le fan-out doit refuser
     (ou recevoir une image par page) plutôt que reconnaître les régions de la
@@ -173,6 +177,7 @@ def test_fanout_multipage__une_page_n_est_pas_lue_dans_l_image_d_une_autre(tmp_p
     assert lus["p2a"] != lus["p1a"], f"page 2 lue dans l'image de la page 1 : {lus}"
 
 
+@pytest.mark.valide
 def test_deux_projections__candidat_parfait_cer_nul_vue_lignes(tmp_path: Path) -> None:
     """VT = layout (projetée par la vue), candidat = le même layout projeté par
     l'étape ``projection`` des recettes ; vue « garde les sauts de ligne ». Le

@@ -45,15 +45,15 @@ def _blank_page_bench(tmp_path: Path) -> Bench:
     ("metric", "expected"),
     [
         # Σ éditions / Σ longueurs de référence = (0 + 44) / (10 + 0)
-        ("cer", 44 / 10),
+        pytest.param("cer", 44 / 10, marks=pytest.mark.valide),
         # Σ éditions mot / Σ mots de référence = (0 + 7) / (1 + 0)
-        ("wer", 7 / 1),
+        pytest.param("wer", 7 / 1, marks=pytest.mark.valide),
         # Σ insertions mot / Σ mots de référence = (0 + 7) / 1
-        ("ins_rate", 7 / 1),
+        pytest.param("ins_rate", 7 / 1, marks=pytest.mark.valide),
         # max(0, 1 − CER corpus) — la définition déclarée par la métrique
-        ("char_accuracy", 0.0),
+        pytest.param("char_accuracy", 0.0, marks=pytest.mark.discutable("C02-plancher-exactitudes")),
         # max(0, 1 − Σ erreurs / Σ car. de réf.) = max(0, 1 − 44/10)
-        ("fca", 0.0),
+        pytest.param("fca", 0.0, marks=pytest.mark.discutable("C02-plancher-exactitudes")),
     ],
 )
 def test_reference_vide__hallucination_comptee_au_numerateur(
@@ -77,6 +77,7 @@ def test_reference_vide__metriques_a_denominateur_hypothese_penalisent(
     assert worse
 
 
+@pytest.mark.valide
 def test_reference_vide__pipeline_qui_hallucine_est_classe_apres(tmp_path: Path) -> None:
     """H invente 44 car. sur la page blanche et lit « a » parfaitement ; S se tait sur la blanche et fait 1 erreur sur « a » : H doit avoir le pire CER."""
     bench = Bench(tmp_path)
@@ -109,6 +110,7 @@ def _ner_bench(tmp_path: Path) -> Bench:
     return bench
 
 
+@pytest.mark.valide
 @pytest.mark.parametrize("metric", ["ner_f1", "ner_f1_exact"])
 def test_ner_f1__micro_sur_tp_fp_fn(tmp_path: Path, metric: str) -> None:
     """Comptes déséquilibrés (d1 : TP1 FP9 ; d2 : TP10) : le F1 corpus est F1(ΣTP=11, ΣFP=9, ΣFN=0)."""
@@ -126,6 +128,7 @@ def test_ner_payload__micro_sur_tp_fp_fn(tmp_path: Path) -> None:
     assert row.f1 == pytest.approx(prf_f1(11, 9, 0))
 
 
+@pytest.mark.valide
 def test_ner_f1__faux_positifs_sur_document_sans_entite_gt(tmp_path: Path) -> None:
     """d1 : 2 entités GT trouvées ; d2 : GT sans entité, 8 entités inventées : F1 corpus = F1(2, 8, 0) = 1/3."""
     bench = Bench(tmp_path, gt_type=ArtifactType.ENTITIES)
@@ -140,6 +143,7 @@ def test_ner_f1__faux_positifs_sur_document_sans_entite_gt(tmp_path: Path) -> No
     assert aggregate(result, "p", "ner_f1").value == pytest.approx(prf_f1(2, 8, 0))
 
 
+@pytest.mark.valide
 def test_ner_payload__label_absent_de_la_gt__ne_plante_pas(tmp_path: Path) -> None:
     """Un extracteur qui émet un label (LOC) absent de la GT : le mode détaillé doit compter un FP, pas lever."""
     bench = Bench(tmp_path, gt_type=ArtifactType.ENTITIES)
@@ -156,6 +160,7 @@ def _box(i: int) -> tuple[int, int, int, int]:
     return (10 + 90 * (i % 10), 10 + 90 * (i // 10), 80, 80)
 
 
+@pytest.mark.valide
 def test_region_detection__micro_sur_tp_fp_fn(tmp_path: Path) -> None:
     """d1 : 1 région GT trouvée + 9 fantômes ; d2 : 10 régions GT trouvées : F1 corpus = F1(11, 9, 0)."""
     bench = Bench(tmp_path, gt_type=ArtifactType.LAYOUT)
@@ -174,6 +179,7 @@ def test_region_detection__micro_sur_tp_fp_fn(tmp_path: Path) -> None:
     )
 
 
+@pytest.mark.discutable("C03-poids-reading-order-tau")
 def test_reading_order_tau__micro_sur_paires(tmp_path: Path) -> None:
     """d1 : 2 blocs inversés (1 paire discordante sur 1) ; d2 : 10 blocs en ordre (0 sur 45) : τ corpus = 1/46."""
     bench = Bench(tmp_path, gt_type=ArtifactType.LAYOUT)
@@ -188,6 +194,7 @@ def test_reading_order_tau__micro_sur_paires(tmp_path: Path) -> None:
     assert aggregate(result, "p", "reading_order_tau").value == pytest.approx(1 / 46)
 
 
+@pytest.mark.valide
 def test_bow_f1__micro_sur_tp_hyp_ref(tmp_path: Path) -> None:
     """d1 : 1 mot GT retrouvé + 9 mots parasites ; d2 : 10 mots GT retrouvés : F1 = F1(Σtp=11, Σ|hyp|−tp=9, Σ|réf|−tp=0)."""
     bench = Bench(tmp_path)
@@ -216,6 +223,7 @@ def test_bow_precision_recall__micro_sur_comptes(tmp_path: Path) -> None:
 # --- Bornes ---------------------------------------------------------------
 
 
+@pytest.mark.discutable("C02-plancher-exactitudes")
 def test_char_accuracy__vaut_un_moins_cer_corpus(tmp_path: Path) -> None:
     """d1 : réf « ab », hyp de 6 car. faux (CER 3) ; d2 : 10 car. parfaits : CER corpus 6/12 = 0,5, donc exactitude 0,5."""
     bench = Bench(tmp_path)
@@ -279,6 +287,7 @@ def test_preservation__micro_sur_comptes(tmp_path: Path) -> None:
     assert aggregate(result, "p", "diacritic_err").value == pytest.approx(1 / 5)
 
 
+@pytest.mark.discutable("C04-lignes-fantomes")
 def test_line_identity_cer__ligne_fantome_comptee_en_insertion(tmp_path: Path) -> None:
     """Réf : l1 (10 car.) ; hyp : l1 identique + l2 fantôme de 10 car. : comme region_cer (D-288), CER = 10/10."""
     bench = Bench(tmp_path, gt_type=ArtifactType.LAYOUT)

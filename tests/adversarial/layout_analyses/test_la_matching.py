@@ -110,6 +110,7 @@ def _box(rid: str, iv: tuple[int, int], text: str | None = None) -> Region:
     return _reg(rid, iv[0], iv[1] - iv[0], text)
 
 
+@pytest.mark.discutable("C10-appariement-detection")
 def test_glouton_vs_optimal__la_detection_atteint_l_optimum_global() -> None:
     """2 réf × 2 hyp où le glouton n'apparie qu'une paire : le F1 doit valoir
     l'optimum de ``linear_sum_assignment`` (1,0), pas 0,5."""
@@ -124,6 +125,7 @@ def test_glouton_vs_optimal__la_detection_atteint_l_optimum_global() -> None:
     assert _value(region_detection, ref, hyp) == pytest.approx(f1_card)
 
 
+@pytest.mark.discutable("C10-appariement-detection")
 def test_glouton_vs_optimal__region_cer_suit_l_appariement_optimal() -> None:
     """Même géométrie, identifiants étrangers, textes parfaits sous l'appariement
     optimal (A↔Y, B↔X) : le CER par région doit valoir 0."""
@@ -133,6 +135,7 @@ def test_glouton_vs_optimal__region_cer_suit_l_appariement_optimal() -> None:
     assert _value(region_cer, ref, hyp) == pytest.approx(0.0)
 
 
+@pytest.mark.valide
 def test_ordre_des_regions_de_reference__la_detection_n_en_depend_pas() -> None:
     """Permuter les régions de la **référence** (même ensemble) ne doit pas
     changer le F1 ; le glouton parcourt la référence dans l'ordre du fichier."""
@@ -155,6 +158,7 @@ def test_ordre_des_regions_hypothese__la_detection_n_en_depend_pas_hors_egalites
     assert len(valeurs) == 1, valeurs
 
 
+@pytest.mark.valide
 def test_ordre_des_regions_hypothese__egalite_d_iou_sans_effet_d_ordre() -> None:
     """A a la même IoU (9/11, exacte en dyadique) avec X=[1,11] et Y=[-1,9] ; B=[4,14]
     ne recouvre que X au seuil. Permuter l'hypothèse ne doit pas changer le F1
@@ -194,6 +198,7 @@ def test_permutation_regions_hypothese__detection_inchangee_ordre_de_lecture_mes
 
 # --- identifiants identiques mais non homologues ----------------------------
 
+@pytest.mark.valide
 def test_ids_identiques_non_homologues__appariement_par_geometrie() -> None:
     """VT r1=haut « alpha », r2=bas « beta » ; un détecteur numérote r1=bas « beta »,
     r2=haut « alpha » (même page, transcription parfaite, ordre de lecture identique
@@ -213,6 +218,7 @@ def test_ids_identiques_non_homologues__appariement_par_geometrie() -> None:
     assert _value(reading_order_tau, ref, hyp) == pytest.approx(0.0)
 
 
+@pytest.mark.valide
 def test_ids_partiellement_partages__la_region_non_nommee_reste_appariee() -> None:
     """VT {r1 haut, r2 bas} ; hypothèse {r1 haut, x9 bas}, textes parfaits. Un seul id
     commun suffit à désactiver la géométrie : attendu CER par région 0, couverture

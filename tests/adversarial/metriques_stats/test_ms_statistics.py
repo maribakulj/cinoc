@@ -42,6 +42,7 @@ def _simpson_bench(tmp_path: Path) -> Bench:
     return bench
 
 
+@pytest.mark.discutable("C05-estimande-tests")
 def test_test_omnibus__meme_sens_que_le_cer_micro_affiche(tmp_path: Path) -> None:
     """Contre-exemple de Simpson : le test « inter-moteurs (CER) » déclaré significatif doit départager dans le sens du CER micro du tableau."""
     result = _simpson_bench(tmp_path).run(view(["cer"]))
@@ -57,6 +58,7 @@ def test_test_omnibus__meme_sens_que_le_cer_micro_affiche(tmp_path: Path) -> Non
     assert best_by_test == best_by_micro
 
 
+@pytest.mark.discutable("C05-estimande-tests")
 def test_test_omnibus__p_du_ratio_micro_par_permutation_appariee(tmp_path: Path) -> None:
     """Même corpus : la p d'un test de permutation appariée (échange A/B par document) de ΔCER micro diffère du Wilcoxon affiché — le test ne teste pas le chiffre."""
     result = _simpson_bench(tmp_path).run(view(["cer"]))
@@ -106,6 +108,7 @@ def _find_difference_interval(payload: object) -> dict[str, object] | None:
     return None
 
 
+@pytest.mark.discutable("C06-ic-apparies-support")
 def test_intervalles__ic_apparie_sur_la_difference_micro(tmp_path: Path) -> None:
     """B = A + 1 erreur sur chaque page : IC marginaux qui se chevauchent, IC apparié de ΔCER micro = [0,01 ; 0,01] ; le payload doit porter ce dernier."""
     result = _correlated_bench(tmp_path).run(view(["cer"]))
@@ -139,6 +142,7 @@ def _failure_bench(tmp_path: Path) -> Bench:
     return bench
 
 
+@pytest.mark.discutable("C07-politique-echec-classement")
 def test_echec_non_aleatoire__classement_sur_documents_communs(tmp_path: Path) -> None:
     """A échoue sur la page difficile (politique par défaut) et B est meilleur sur chaque page commune : les agrégats comparés ne doivent pas classer A devant B."""
     result = _failure_bench(tmp_path).run(view(["cer"]))
@@ -158,6 +162,7 @@ def test_echec_non_aleatoire__politique_max_error_penalise(tmp_path: Path) -> No
     assert aggregate(result, "B", "cer").value == pytest.approx(528 / 1700)
 
 
+@pytest.mark.discutable("C06-ic-apparies-support")
 def test_intervalles__meme_documents_que_le_test(tmp_path: Path) -> None:
     """Même corpus : le test porte sur 7 cas complets ; les IC qui l'accompagnent doivent porter sur les mêmes documents."""
     result = _failure_bench(tmp_path).run(view(["cer"]))
@@ -172,6 +177,7 @@ def test_bootstrap__unite_de_reechantillonnage_le_document() -> None:
     assert (lower, upper) == (pytest.approx(0.1), pytest.approx(0.5))
 
 
+@pytest.mark.discutable("C09-grappes-documentaires")
 def test_bootstrap__grappes_documentaires_declarables() -> None:
     """Pages d'un même manuscrit : le contrat doit permettre de déclarer la grappe (corpus et IC), sans quoi l'IC suppose des pages indépendantes."""
     params = set(inspect.signature(micro_ratio_ci).parameters)

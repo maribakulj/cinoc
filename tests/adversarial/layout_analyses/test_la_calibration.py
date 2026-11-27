@@ -63,6 +63,7 @@ def _cinoc_ece(tmp: Path, reference: str, tokens: list[tuple[str, float]]) -> fl
     return analysis.payload.pipelines[0].ece  # type: ignore[union-attr]
 
 
+@pytest.mark.discutable("C11-calibration-jugement-jetons")
 def test_calibration_mots_permutes__correct_par_alignement(tmp_path: Path) -> None:
     """VT « un deux », jetons « deux »(0,95) « un »(0,95) : un seul mot alignable
     (exactitude 0,5) → ECE attendu 0,45, pas 0,05 (multi-ensemble : tout « juste »)."""
@@ -72,6 +73,7 @@ def test_calibration_mots_permutes__correct_par_alignement(tmp_path: Path) -> No
     assert _cinoc_ece(tmp_path, "un deux", tokens) == pytest.approx(expected)
 
 
+@pytest.mark.discutable("C11-calibration-jugement-jetons")
 def test_calibration_mot_repete_deplace__correct_par_alignement(tmp_path: Path) -> None:
     """VT « de la ville de paris » ; l'OCR perd le 2ᵉ « de » et en insère un en fin :
     « de la ville paris de », tous à 0,99. Par alignement 4/5 justes → ECE 0,19 ;

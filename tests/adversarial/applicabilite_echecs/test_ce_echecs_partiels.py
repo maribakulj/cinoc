@@ -95,6 +95,7 @@ def test_echec_partiel__le_type_interdit_bien_les_artefacts_dune_unite_failed() 
         )
 
 
+@pytest.mark.discutable("C12-granularite-etape")
 def test_echec_partiel__lamont_reussi_reste_observable(corpus_dir: Path) -> None:
     """Après l'échec de la correction sur ``b``, la vue ``target_step: ocr`` doit
     noter le texte OCR qui a été produit (et payé) : CER = d(REF, OCR)/|REF|."""
@@ -108,6 +109,7 @@ def test_echec_partiel__lamont_reussi_reste_observable(corpus_dir: Path) -> None
     )
 
 
+@pytest.mark.valide
 def test_echec_partiel__le_cout_amont_reste_compte_a_lunite(corpus_dir: Path) -> None:
     """L'unité ``b`` a payé l'OCR (500/200 jetons, 1 page) puis le refus LLM
     (300 jetons) : sa ligne d'``usage`` doit porter les deux."""
@@ -122,6 +124,7 @@ def test_echec_partiel__le_cout_amont_reste_compte_a_lunite(corpus_dir: Path) ->
     ), f"usage de l'unité en échec : {unit.usage}"
 
 
+@pytest.mark.valide
 def test_echec_partiel__le_bilan_economique_compte_lamont_paye(corpus_dir: Path) -> None:
     """Bilan du run : ``a`` = 800 jetons d'entrée, ``b`` = 500 (OCR) + 300 (refus)
     = 800 ; total 1600 (les pages ne sont comptées qu'à un moteur tarifé à la
@@ -137,6 +140,7 @@ def test_echec_partiel__le_bilan_economique_compte_lamont_paye(corpus_dir: Path)
     assert row.tokens_in == 1600, f"bilan : tokens_in={row.tokens_in}"
 
 
+@pytest.mark.valide
 def test_echec_partiel__pipeline_tout_en_echec_garde_sa_facture(corpus_dir: Path) -> None:
     """Si la correction échoue sur **toutes** les pages, ce que le pipeline a fait
     facturer ne disparaît pas du bilan économique."""
@@ -160,6 +164,7 @@ def test_echec_partiel__pipeline_tout_en_echec_garde_sa_facture(corpus_dir: Path
     )
 
 
+@pytest.mark.discutable("C12-granularite-etape")
 def test_echec_partiel__la_reprise_ne_repaie_pas_lamont(corpus_dir: Path) -> None:
     """Panne transitoire du correcteur sur ``b`` ; on relance avec la même
     archive (``--resume-dir``). Seule l'étape aval doit être rejouée : l'OCR de

@@ -66,6 +66,7 @@ def _three_engines(tmp_path: Path, metrics: tuple[str, ...]):  # type: ignore[no
     )
 
 
+@pytest.mark.discutable("C08-imputation-echec-max-error")
 def test_max_error__un_echec_ne_note_jamais_mieux_quune_reponse(tmp_path: Path) -> None:
     """CER non borné : le moteur qui répond n'importe quoi sur ``b`` obtient un
     CER > 1 (calculé à la main) ; « erreur maximale » doit noter l'échec au moins
@@ -89,7 +90,7 @@ def test_max_error__un_echec_ne_note_jamais_mieux_quune_reponse(tmp_path: Path) 
         "mer",
         "cmer",
         "del_rate",
-        "ins_rate",
+        pytest.param("ins_rate", marks=pytest.mark.discutable("C08-imputation-echec-max-error")),
         "char_accuracy",
         "word_accuracy",
         "bow_recall",
@@ -111,6 +112,7 @@ def test_max_error__echec_note_comme_une_page_vide(tmp_path: Path, metric: str) 
     )
 
 
+@pytest.mark.valide
 def test_max_error__un_echec_compte_comme_note_deplace_lagregat(tmp_path: Path) -> None:
     """``bow_precision`` pèse par la taille de l'**hypothèse** : l'échec noté 0
     a un poids nul. S'il est compté dans « n notés » (3/3), l'agrégat doit en

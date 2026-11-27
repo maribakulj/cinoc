@@ -228,6 +228,7 @@ class _Sink:
 # =========================================================================== #
 
 
+@pytest.mark.valide
 def test_a5_meme_adaptateur_deux_etapes__fichier_de_chaque_etape_conserve(
     tmp_path: Path,
 ) -> None:
@@ -248,6 +249,7 @@ def test_a5_meme_adaptateur_deux_etapes__fichier_de_chaque_etape_conserve(
     assert disk_a == hash_a, "le fichier de l'étape a porte le contenu de b"
 
 
+@pytest.mark.valide
 def test_a5_meme_adaptateur_deux_etapes__chaque_vue_notee_sur_sa_sortie(
     tmp_path: Path,
 ) -> None:
@@ -279,6 +281,7 @@ def test_a5_temoin_deux_adaptateurs_distincts__aucun_ecrasement(tmp_path: Path) 
     assert sink.files["a"][1] == sink.files["a"][2]
 
 
+@pytest.mark.valide
 def test_a5_archive__empreinte_de_chaque_fichier_archive_egale_hash_enregistre(
     tmp_path: Path,
 ) -> None:
@@ -303,6 +306,7 @@ def test_a5_archive__empreinte_de_chaque_fichier_archive_egale_hash_enregistre(
     assert not mismatches, f"empreinte enregistrée ≠ fichier archivé : {mismatches}"
 
 
+@pytest.mark.valide
 def test_a5_relecture_offline__chaque_etape_relit_son_propre_fichier(
     tmp_path: Path,
 ) -> None:
@@ -368,6 +372,7 @@ def test_a7_temoin_relecture_intacte__meme_score(
     assert _cer(_replay(spec, archive), "texte") == pytest.approx(0.1)
 
 
+@pytest.mark.discutable("C14-archive-scellee")
 def test_a7_octet_change_dans_une_sortie__corruption_detectee(
     archived: tuple[RunSpec, Path, RunResult],
 ) -> None:
@@ -401,6 +406,7 @@ def test_a7_index_json_illisible__unite_refusee(
         _replay(spec, archive)
 
 
+@pytest.mark.discutable("C14-archive-scellee")
 def test_a7_index_json_valide_mais_altere__alteration_detectee(
     archived: tuple[RunSpec, Path, RunResult],
 ) -> None:
@@ -425,6 +431,7 @@ def test_a7_index_json_valide_mais_altere__alteration_detectee(
     )
 
 
+@pytest.mark.discutable("C14-archive-scellee")
 def test_a7_image_partagee_corrompue__corruption_detectee(
     archived: tuple[RunSpec, Path, RunResult],
 ) -> None:
@@ -468,6 +475,7 @@ def test_a7_archive__aucun_chemin_absolu_de_la_machine_d_origine(
     assert not leaks, f"chemins absolus d'origine dans : {leaks}"
 
 
+@pytest.mark.valide
 def test_a7_uri_absolue_hors_archive__refusee(
     archived: tuple[RunSpec, Path, RunResult],
     tmp_path: Path,
@@ -506,6 +514,7 @@ def test_a7_temoin_uri_relative_en_point_point__refusee(
         _replay(spec, archive)
 
 
+@pytest.mark.valide
 def test_a7_lien_symbolique_hors_archive__refuse(
     archived: tuple[RunSpec, Path, RunResult],
     tmp_path: Path,
@@ -616,6 +625,7 @@ def _fake_server(monkeypatch: pytest.MonkeyPatch, *, up: bool) -> list[str]:
     return calls
 
 
+@pytest.mark.discutable("C15-archive-portable-images")
 def test_a7_relecture_offline_image_distante__aucun_telechargement(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -638,6 +648,7 @@ def test_a7_relecture_offline_image_distante__aucun_telechargement(
     assert calls == [], f"téléchargé pendant la relecture hors ligne : {calls}"
 
 
+@pytest.mark.discutable("C15-archive-portable-images")
 def test_a7_relecture_offline_serveur_d_images_eteint__unite_relue_de_l_archive(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -667,6 +678,7 @@ def test_a7_relecture_offline_serveur_d_images_eteint__unite_relue_de_l_archive(
 # --------------------------------------------------------------------------- #
 
 
+@pytest.mark.valide
 @pytest.mark.skipif(
     __import__("shutil").which("tesseract") is None, reason="binaire tesseract absent"
 )
@@ -754,6 +766,7 @@ def test_a5_socle_tesseract_avant_apres_redressement__chaque_etape_garde_son_fic
     )
 
 
+@pytest.mark.discutable("C15-archive-portable-images")
 def test_a7_archive_seule_sans_images_du_corpus__reevaluable(
     archived: tuple[RunSpec, Path, RunResult],
     tmp_path: Path,
@@ -766,6 +779,7 @@ def test_a7_archive_seule_sans_images_du_corpus__reevaluable(
     assert _cer(_replay(spec, archive), "texte") == pytest.approx(0.1)
 
 
+@pytest.mark.discutable("C14-archive-scellee")
 def test_a7_archive_publiee__une_reprise_normale_ne_la_modifie_pas(
     tmp_path: Path,
 ) -> None:

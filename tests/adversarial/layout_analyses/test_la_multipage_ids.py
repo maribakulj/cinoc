@@ -55,6 +55,7 @@ def _weight(metric, ref, hyp):
     return None if obs is None else obs.weight
 
 
+@pytest.mark.valide
 def test_multipage_detection__pas_d_appariement_entre_pages() -> None:
     """VT : p1 bloc en haut, p2 bloc en bas ; hypothèse : p1 bloc en bas, p2 bloc en
     haut. Aucune région n'est retrouvée sur sa page : F1 attendu 0."""
@@ -63,6 +64,7 @@ def test_multipage_detection__pas_d_appariement_entre_pages() -> None:
     assert _value(region_detection, ref, hyp) == pytest.approx(0.0)
 
 
+@pytest.mark.valide
 def test_multipage_mise_en_page_repetee__region_cer_nul_pour_une_hypothese_parfaite() -> None:
     """Deux pages de même gabarit (un bloc en haut), identifiants étrangers,
     transcription parfaite : CER par région attendu 0 (chaque page avec elle-même)."""
@@ -73,6 +75,7 @@ def test_multipage_mise_en_page_repetee__region_cer_nul_pour_une_hypothese_parfa
     assert _value(reading_order_tau, ref, hyp) in (None, pytest.approx(0.0))
 
 
+@pytest.mark.valide
 def test_multipage_ids_locaux_a_la_page__toutes_les_regions_comptent() -> None:
     """Ids locaux à la page (``r1`` sur p1 et p2, que le domaine n'interdit pas) ;
     l'hypothèse se trompe entièrement sur p1 (« XXXXX » pour « alpha ») et réussit
@@ -101,6 +104,7 @@ def _alto(*blocks: tuple[int, str]) -> bytes:
     ).encode()
 
 
+@pytest.mark.valide
 def test_alto_sans_id__appariement_par_geometrie_et_ordre_inverse_detecte() -> None:
     """Deux colonnes. VT (sans ID) : gauche « alpha » puis droite « beta ». Sortie
     (sans ID) : droite « beta » d'abord, puis gauche « alpha » — texte parfait, ordre

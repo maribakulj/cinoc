@@ -160,6 +160,7 @@ def _cer(result: RunResult) -> float | None:
 # --------------------------------------------------------------------------
 
 
+@pytest.mark.valide
 def test_identite_gt__deux_gt_differentes_donnent_deux_manifestes(
     tmp_path: Path,
 ) -> None:
@@ -176,6 +177,7 @@ def test_identite_gt__deux_gt_differentes_donnent_deux_manifestes(
     assert _manifest_sans_horloge(first) != _manifest_sans_horloge(second)
 
 
+@pytest.mark.valide
 def test_identite_gt__resultat_porte_empreinte_de_chaque_gt(tmp_path: Path) -> None:
     """Le ``RunResult`` doit contenir, pour chaque document, le SHA-256 du
     fichier de vérité terrain réellement noté (calculé ici par ``hashlib``)."""
@@ -185,6 +187,7 @@ def test_identite_gt__resultat_porte_empreinte_de_chaque_gt(tmp_path: Path) -> N
     assert digest in result.model_dump_json()
 
 
+@pytest.mark.valide
 def test_identite_image__resultat_porte_empreinte_de_chaque_image(
     tmp_path: Path,
 ) -> None:
@@ -196,6 +199,7 @@ def test_identite_image__resultat_porte_empreinte_de_chaque_image(
     assert digest in result.model_dump_json()
 
 
+@pytest.mark.valide
 def test_identite_gt__renotation_hors_ligne_contre_autre_gt_signalee(
     tmp_path: Path,
 ) -> None:
@@ -220,6 +224,7 @@ def test_identite_gt__renotation_hors_ligne_contre_autre_gt_signalee(
     assert _manifest_sans_horloge(original) != _manifest_sans_horloge(renote)
 
 
+@pytest.mark.valide
 def test_identite_gt__run_result_publie_porte_les_gt_et_leurs_empreintes() -> None:
     """Le ``RunResult`` publié de la campagne (BNL, 37 pages) doit nommer chaque
     GT notée et son empreinte : on y cherche au moins un nom ``*.gt.txt``."""
@@ -249,6 +254,7 @@ def test_alias_modele__manifeste_enregistre_le_modele_servi(tmp_path: Path) -> N
     assert result.manifest.served_models == {"fake:ocr": ("m-2506",)}
 
 
+@pytest.mark.discutable("C18-provenance-par-unite")
 def test_alias_modele__reprise_apres_bascule_attribue_le_modele_par_unite(
     tmp_path: Path,
 ) -> None:
@@ -416,6 +422,7 @@ def _saknussemm_identity(kwargs: dict[str, Any]) -> str:
 # --------------------------------------------------------------------------
 
 
+@pytest.mark.discutable("C17-identite-etape")
 def test_version_manuelle__brique_modifiee_sans_relever_sa_version_reexecutee(
     tmp_path: Path,
 ) -> None:
@@ -442,6 +449,7 @@ def test_version_manuelle__brique_modifiee_sans_relever_sa_version_reexecutee(
     )
 
 
+@pytest.mark.valide
 def test_version_manuelle__identite_saknussemm_porte_la_version_de_la_bibliotheque(
     tmp_path: Path,
 ) -> None:
@@ -452,6 +460,7 @@ def test_version_manuelle__identite_saknussemm_porte_la_version_de_la_bibliotheq
     assert saknussemm.__version__ in hashed, hashed
 
 
+@pytest.mark.discutable("C17-identite-etape")
 def test_identite_saknussemm__prompt_et_temperature_envoyes_au_llm_sont_traces() -> None:
     """``saknussemm:mistral`` (E3 de la campagne) : le prompt système et la
     température que la bibliothèque envoie à Mistral doivent figurer dans
@@ -464,6 +473,7 @@ def test_identite_saknussemm__prompt_et_temperature_envoyes_au_llm_sont_traces()
     assert {"prompt", "temperature"} <= set(hashed["settings"]), hashed
 
 
+@pytest.mark.valide
 def test_identite_saknussemm__poids_du_scoreur_qe_epingles() -> None:
     """``saknussemm:mistral_qe`` (E4) route par D'AlemBERT (``pjox/dalembert``,
     chargé sans révision) : une révision ou un digest des poids doit entrer
@@ -488,6 +498,7 @@ def test_identite_saknussemm__poids_du_scoreur_qe_epingles() -> None:
 # --------------------------------------------------------------------------
 
 
+@pytest.mark.discutable("C18-provenance-par-unite")
 def test_reprise_autre_code__resultat_dit_la_version_de_chaque_unite(
     tmp_path: Path,
 ) -> None:

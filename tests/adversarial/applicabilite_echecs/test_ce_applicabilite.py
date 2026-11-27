@@ -106,6 +106,7 @@ def test_troncature__notee_attendue_et_signalee(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------
 
 
+@pytest.mark.valide
 def test_applicabilite__artefact_sans_contenu_dune_unite_reussie_reste_attendu(
     tmp_path: Path,
 ) -> None:
@@ -128,6 +129,7 @@ def test_applicabilite__artefact_sans_contenu_dune_unite_reussie_reste_attendu(
     )
 
 
+@pytest.mark.valide
 def test_applicabilite__artefact_reference_mais_absent_du_disque_nabat_que_son_unite(
     tmp_path: Path,
 ) -> None:
@@ -151,6 +153,7 @@ def test_applicabilite__artefact_reference_mais_absent_du_disque_nabat_que_son_u
     assert aggregate(result, "p").expected == 2
 
 
+@pytest.mark.discutable("C13-non-mesure-typee")
 def test_applicabilite__gt_referencee_mais_absente_refusee_avant_de_payer(
     tmp_path: Path,
 ) -> None:
@@ -273,6 +276,7 @@ def _fanout_run(tmp_path: Path):  # type: ignore[no-untyped-def]
     )
 
 
+@pytest.mark.discutable("C13-non-mesure-typee")
 def test_applicabilite__fanout_sans_aucune_region_reconnue_reste_attendu(
     tmp_path: Path,
 ) -> None:
@@ -289,6 +293,7 @@ def test_applicabilite__fanout_sans_aucune_region_reconnue_reste_attendu(
     )
 
 
+@pytest.mark.valide
 def test_applicabilite__fanout_entierement_en_echec_nest_pas_une_unite_ok(
     tmp_path: Path,
 ) -> None:
@@ -320,6 +325,7 @@ def _paired_corpus(tmp_path: Path, n: int = 8) -> tuple[dict[str, str | None], d
     return refs, a, b
 
 
+@pytest.mark.valide
 def test_applicabilite__pipeline_non_applicable_nannule_pas_le_test_des_autres(
     tmp_path: Path,
 ) -> None:
@@ -385,6 +391,7 @@ def _blank_pages_run(tmp_path: Path):  # type: ignore[no-untyped-def]
     return result, cer_a, cer_b
 
 
+@pytest.mark.valide
 def test_applicabilite__reference_vide_nest_pas_comptee_notee(tmp_path: Path) -> None:
     """Une page blanche (GT vide) ne pèse rien dans l'agrégat micro ; elle ne
     doit donc pas gonfler « n notés » : 6 pages notées, pas 12."""
@@ -394,6 +401,7 @@ def test_applicabilite__reference_vide_nest_pas_comptee_notee(tmp_path: Path) ->
     assert agg.support == 6, f"n notés = {agg.support} pour un agrégat sur 6 pages"
 
 
+@pytest.mark.discutable("C01-reference-vide")
 def test_applicabilite__reference_vide_nentre_pas_dans_le_test_apparie(
     tmp_path: Path,
 ) -> None:
@@ -409,6 +417,7 @@ def test_applicabilite__reference_vide_nentre_pas_dans_le_test_apparie(
     )
 
 
+@pytest.mark.valide
 def test_applicabilite__sortie_incompatible_refusee_ou_attendue(tmp_path: Path) -> None:
     """La vue accepte ``raw_text`` **et** ``layout`` mais note un CER texte sans
     projection ``layout → raw_text`` : le pipeline ``seg`` (réussi, sortie

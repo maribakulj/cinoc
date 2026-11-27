@@ -77,6 +77,7 @@ def _model(spec: RunSpec, adapter_name: str) -> object:
 # --------------------------------------------------------------------------
 
 
+@pytest.mark.discutable("C19-plan-experience-campagne")
 @pytest.mark.parametrize("corpus", CORPUS)
 def test_ablation_saknussemm__un_temoin_correction_libre_sur_la_meme_lecture(
     corpus: str,
@@ -175,6 +176,7 @@ def test_ablation_segmentation_ocr__meme_reglages_tesseract_page_et_region(
     assert _brick(spec, "tesseract:lecture") == _brick(spec, "tesseract:reco")
 
 
+@pytest.mark.discutable("C19-plan-experience-campagne")
 @pytest.mark.parametrize("corpus", CORPUS)
 def test_ablation_segmentation_vlm__meme_reglages_vlm_page_et_region(
     corpus: str,
