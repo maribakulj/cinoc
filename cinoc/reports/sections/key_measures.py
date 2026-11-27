@@ -30,6 +30,7 @@ from cinoc.evaluation.result import (
     RunResult,
 )
 from cinoc.reports._numbers import localize_decimal
+from cinoc.reports.composition_diff import homonym_hints
 from cinoc.reports.engine_badges import (
     engine_accent,
     engine_cell,
@@ -157,7 +158,10 @@ class KeyMeasuresSection:
                 head += convention_html(spec, lang)
             blocks.append(
                 head
-                + self._table(pipes, cols, durations, order, lang)
+                + self._table(
+                    pipes, cols, durations, order, lang,
+                    homonym_hints(result.manifest),
+                )
                 + self._dotplot(result, view, order, lang)
                 + self._significance(result, view, lang)
             )
@@ -195,6 +199,7 @@ class KeyMeasuresSection:
         durations: dict[str, _Durations],
         order: dict[str, int],
         lang: str,
+        hints: dict[str, str],
     ) -> str:
         th_engine = localized(lang, "Moteur", "Engine")
         headers = "".join(
@@ -250,7 +255,9 @@ class KeyMeasuresSection:
                         f'<td class="disp" data-sort="{seconds:.6f}">'
                         f"{disp}{mark}</td>"
                     )
-            badge = engine_cell(p.pipeline, order.get(p.pipeline, 0))
+            badge = engine_cell(
+                p.pipeline, order.get(p.pipeline, 0), hints.get(p.pipeline, "")
+            )
             body.append(f'<tr><td class="eng-cell">{badge}</td>{cells}</tr>')
         return (
             '<table class="data sortable">\n<thead><tr>'

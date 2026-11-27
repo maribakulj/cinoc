@@ -54,11 +54,15 @@ def engine_order(names: Iterable[str]) -> dict[str, int]:
     return order
 
 
-def engine_cell(name: str, index: int) -> Html:
-    """Contenu d'une cellule moteur : **badge** (lettre + accent) + nom échappé."""
+def engine_cell(name: str, index: int, hint: str = "") -> Html:
+    """Contenu d'une cellule moteur : **badge** (lettre + accent) + nom échappé.
+
+    ``hint`` (``ocr.lang=fra``) : ce qui distingue la chaîne d'un homonyme
+    (``composition_diff.homonym_hints``), écrit à côté du nom ; vide sinon."""
+    note = f' <span class="eng-hint muted">{escape(hint)}</span>' if hint else ""
     return Html(
         f'<span class="eng-badge" style="--badge:{engine_accent(index)}">'
-        f"{engine_letter(index)}</span>{escape(name)}"
+        f"{engine_letter(index)}</span>{escape(name)}{note}"
     )
 
 

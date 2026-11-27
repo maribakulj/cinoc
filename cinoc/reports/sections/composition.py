@@ -29,6 +29,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from cinoc.evaluation.result import RunResult
+from cinoc.reports.composition_diff import homonym_hints
 from cinoc.reports.engine_badges import engine_cell, engine_order
 from cinoc.reports.html import escape, localized
 from cinoc.reports.section import Html, SectionContext
@@ -134,6 +135,7 @@ class CompositionSection:
         # qui fait que le badge « A » désigne la même chaîne d'une section à
         # l'autre. Le recalculer autrement ici ferait mentir les lettres.
         ordre = engine_order(p.pipeline for p in result.pipelines)
+        hints = homonym_hints(result.manifest)
         titres = (
             localized(lang, "étape", "step"),
             localized(lang, "brique", "module"),
@@ -160,7 +162,7 @@ class CompositionSection:
             )
             libelle = localized(lang, "entrée du run", "run input")
             blocs.append(
-                f"<h3>{engine_cell(nom, ordre.get(nom, 0))}</h3>\n"
+                f"<h3>{engine_cell(nom, ordre.get(nom, 0), hints.get(nom, ''))}</h3>\n"
                 + (
                     f'<p class="muted">{libelle} : {depart}</p>\n'
                     if depart

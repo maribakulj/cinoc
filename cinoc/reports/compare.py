@@ -11,6 +11,7 @@ from dataclasses import dataclass
 
 from cinoc.evaluation.result import RunResult
 from cinoc.reports._numbers import fmt
+from cinoc.reports.composition_diff import PairedDifference, paired_differences
 from cinoc.reports.html import escape, localized, render_document
 from cinoc.reports.section import Html
 
@@ -77,6 +78,33 @@ def _side(result: RunResult, source: str | None) -> str:
     return f"{escape(result.manifest.run_id)} ({escape(detail)})"
 
 
+def _composition_warning(paires: tuple[PairedDifference, ...], lang: str) -> str:
+    """Les chaînes appariées par leur nom qui ne sont pas composées pareil :
+    leur delta mêle l'effet de ces réglages au changement qu'on croit lire."""
+    if not paires:
+        return ""
+    items = "".join(
+        f"<li><strong>{escape(p.pipeline)}</strong> — "
+        + " · ".join(
+            f"<code>{escape(d.label())}</code> : {escape(d.value_a or '—')} → "
+            f"{escape(d.value_b or '—')}"
+            for d in p.differences
+        )
+        + "</li>"
+        for p in paires
+    )
+    chapeau = localized(
+        lang,
+        "Attention : ces chaînes sont appariées par leur nom, mais n'ont pas la "
+        "même composition dans A et B ; leur Δ mêle l'effet de ces différences "
+        "(A → B) :",
+        "Warning: these pipelines are paired by name, but do not have the same "
+        "composition in A and B; their Δ mixes in the effect of these "
+        "differences (A → B):",
+    )
+    return f"<p><strong>{chapeau}</strong></p>\n<ul>{items}</ul>\n"
+
+
 def render_comparison(
     run_a: RunResult,
     run_b: RunResult,
@@ -113,9 +141,10 @@ def render_comparison(
     body = Html(
         f'<p class="muted">A = {_side(run_a, source_a)} · '
         f"B = {_side(run_b, source_b)} · Δ = B − A ({note}).</p>\n"
-        f"<table>\n<thead><tr>{head}"
-        "<th>A</th><th>B</th><th>Δ</th></tr></thead>\n"
-        f"<tbody>{rows}</tbody>\n</table>\n"
+        + _composition_warning(paired_differences(run_a.manifest, run_b.manifest), lang)
+        + f"<table>\n<thead><tr>{head}"
+        + "<th>A</th><th>B</th><th>Δ</th></tr></thead>\n"
+        + f"<tbody>{rows}</tbody>\n</table>\n"
     )
     title = localized(
         lang, "Cinoc — comparaison de runs", "Cinoc — run comparison"

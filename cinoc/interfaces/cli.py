@@ -61,6 +61,7 @@ from cinoc.interfaces._recipe_spec import scoring_options, spec_loader
 from cinoc.interfaces._run_summary import print_progress, unit_summary
 from cinoc.interfaces._serve_command import serve_command
 from cinoc.reports import default_report_renderer, render_comparison
+from cinoc.reports.composition_diff import paired_differences
 from cinoc.reports.csv_export import run_result_csv
 
 if TYPE_CHECKING:
@@ -442,6 +443,18 @@ def _compare_command(path_a: str, path_b: str, output: str, lang: str) -> int:
     runs = load_run_result(a := Path(path_a)), load_run_result(b := Path(path_b))
     html = render_comparison(*runs, lang=lang, source_a=a.name, source_b=b.name)
     Path(output).write_text(html, encoding="utf-8")
+    # Le rapport le dit aussi ; la console, parce qu'un delta s'y lit d'abord.
+    # ASCII (« -> ») : une console Windows redirigée est en cp1252.
+    for paire in paired_differences(runs[0].manifest, runs[1].manifest):
+        ecarts = " ; ".join(
+            f"{d.label()} : {d.value_a or '—'} -> {d.value_b or '—'}"
+            for d in paire.differences
+        )
+        print(
+            f"Attention : « {paire.pipeline} » n'a pas la même composition "
+            f"dans A et B ({ecarts}) ; son delta mêle l'effet de ces réglages.",
+            file=sys.stderr,
+        )
     print(f"Comparaison écrite : {output}")
     return 0
 

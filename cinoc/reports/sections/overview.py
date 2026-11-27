@@ -11,6 +11,7 @@ des métriques.
 from __future__ import annotations
 
 from cinoc.evaluation.result import PipelineResult, RunResult
+from cinoc.reports.composition_diff import homonym_hints
 from cinoc.reports.engine_badges import engine_cell, engine_order
 from cinoc.reports.html import escape, localized, view_label
 from cinoc.reports.metric_categories import category_legend, category_mark
@@ -145,6 +146,7 @@ def _table_for_view(
 ) -> str:
     pipelines = [p for p in result.pipelines if p.view == view_name]
     order = engine_order(p.pipeline for p in result.pipelines)
+    hints = homonym_hints(result.manifest)
     rows = [p.aggregate for p in pipelines]
     keep = nonempty_metric_indices(rows)  # masque les colonnes tout-« — »
     if not keep:
@@ -165,7 +167,11 @@ def _table_for_view(
             bar_cell(pipeline.aggregate[i], maxes[j], lang=lang)
             for j, i in enumerate(keep)
         )
-        badge = engine_cell(pipeline.pipeline, order.get(pipeline.pipeline, 0))
+        badge = engine_cell(
+            pipeline.pipeline,
+            order.get(pipeline.pipeline, 0),
+            hints.get(pipeline.pipeline, ""),
+        )
         body_rows.append(f'<tr><td class="eng-cell">{badge}</td>{cells}</tr>')
     # Libellé de vue affiché **seulement** s'il y a plusieurs vues à distinguer
     # (sinon « Métriques par vue » + la ligne corpus suffisent — pas de ressassage).

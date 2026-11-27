@@ -48,6 +48,16 @@ publier, et son moment, appartiennent au mainteneur.
 
 ### Corrigé
 
+- **Deux chaînes de même nom disent ce qui les distingue.** `ocr_simple ·
+  tesseract` et `… #2` ne différaient que par `lang`, qui ne se lisait que dans
+  « Composition des chaînes » ; le rapport l'écrit à côté du nom
+  (`ocr.lang=fra`), dans les classements et la composition. `cinoc compare`
+  avertit — sur la sortie d'erreur et en tête de la comparaison, FR/EN — quand
+  deux chaînes appariées par leur nom n'ont pas la même composition (brique,
+  réglage, version de module, lus aux deux manifestes) et nomme l'écart
+  (`ocr.lang : fra -> eng`). Les noms ne changent pas : ils entrent dans la
+  clé d'archive.
+
 - **`cinoc run` n'est plus muet.** Un run VLM de sept minutes ne disait rien
   jusqu'au rapport. Une ligne par unité terminée (`[3/16] pipeline · document —
   fait`), sur la sortie d'erreur, aussi pour `cinoc correct` et `cinoc hybrid` ;
