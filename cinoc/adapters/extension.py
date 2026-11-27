@@ -73,7 +73,7 @@ from cinoc.adapters.layout._base import (
     to_canonical_layout,
 )
 from cinoc.domain.artifacts import Artifact, ArtifactType, compute_content_hash
-from cinoc.domain.errors import AdapterStepError, CinocError
+from cinoc.domain.errors import AdapterStepError, CinocError, DeadlineExceeded
 from cinoc.domain.layout import CanonicalLayout
 from cinoc.pipeline.params import Param
 from cinoc.pipeline.protocols import Module, ParamValue
@@ -86,6 +86,7 @@ __all__ = [
     "AdapterStepError",
     "CanonicalLayout",
     "CinocError",
+    "DeadlineExceeded",
     "DetectedRegion",
     "LayoutDetection",
     "Module",

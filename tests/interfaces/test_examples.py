@@ -62,3 +62,26 @@ def test_every_example_explains_itself(config: Path) -> None:
     entete = "\n".join(commentaires)
     for bloc in ("corpus", "pipelines", "evaluation", "adapter_kwargs"):
         assert bloc in entete, f"{config.name} : le bloc {bloc!r} n'est pas expliqué"
+
+
+@pytest.mark.parametrize("config", _configs(), ids=lambda p: p.name)
+def test_an_example_citing_absent_images_says_so(config: Path) -> None:
+    """S34b, n° 17 : ``corpus/folio_001.png`` cité, absent, et le run passait
+    sans un mot — le lecteur cherchait les images."""
+    spec = load_run_spec(config)
+    absentes = [
+        d.image_uri
+        for d in spec.corpus.documents
+        if d.image_uri and not (config.parent / d.image_uri).exists()
+        and not Path(d.image_uri).exists()
+    ]
+    if absentes:
+        assert "ne sont pas livrées" in config.read_text(encoding="utf-8")
+
+
+def test_the_guide_says_the_examples_come_from_a_clone() -> None:
+    """``pip install`` ne livre pas ``examples/`` : le guide le dit."""
+    guide = (EXAMPLES.parent / "docs" / "guide.md").read_text(encoding="utf-8")
+    section = guide[guide.index("### The run config"):]
+    section = section[: section.index("\n### ", 5)]
+    assert "clone" in section and "pip" in section

@@ -13,6 +13,7 @@ ce qui a été **refusé**, et pourquoi.
 from __future__ import annotations
 
 import argparse
+import sys
 from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -33,7 +34,7 @@ from cinoc.app.recipe_queue import RecipeEntry, plan_recipe_run
 from cinoc.app.report_images import build_facsimiles, build_thumbnails
 from cinoc.app.variance import VarianceSummary, run_repeatedly
 from cinoc.evaluation.result import RunResult
-from cinoc.interfaces._run_summary import print_progress, unit_summary
+from cinoc.interfaces._run_summary import console_safe, print_progress, unit_summary
 from cinoc.reports import default_report_renderer
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -123,17 +124,23 @@ def write_variance(output: Path, variance: VarianceSummary) -> None:
     if not pires:
         print("  aucune métrique applicable sur plusieurs runs.")
     for spread in pires:
-        print(
-            f"  {spread.pipeline} · {spread.metric} : "
+        # La vue est nommée : un même ``cer`` existe en ``texte`` et en
+        # ``texte (lignes)``, deux fourchettes qu'on ne distinguait pas (S34b).
+        ligne = (
+            f"  {spread.pipeline} · {spread.view} · {spread.metric} : "
             f"{spread.minimum:.4f} – {spread.maximum:.4f} "
             f"(médiane {spread.median_value:.4f}, étendue {spread.spread:.1%})"
         )
+        print(console_safe(ligne, sys.stdout))
     if pires:
         print(
             "  Toute comparaison plus serrée que l'étendue la plus large "
             "est du bruit sur ce corpus."
         )
-    print(f"Bilan de variance écrit : {chemin}")
+    print(
+        f"Bilan de variance écrit : {chemin} — le rapport HTML porte le dernier "
+        "run ; la fourchette vit dans ce fichier."
+    )
 
 
 def run_correction(

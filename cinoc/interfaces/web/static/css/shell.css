@@ -20,18 +20,23 @@
   font-family: 'Fluxisch Else';
   src: url('/static/fonts/FluxischElse-Light.woff2') format('woff2');
   font-weight: 300;
+  /* Le ' de Fluxisch est un accent espacé (« l ’ instant ») : il retombe
+     sur la police suivante. */
+  unicode-range: U+0000-0026, U+0028-10FFFF;
   font-display: swap;
 }
 @font-face {
   font-family: 'Fluxisch Else';
   src: url('/static/fonts/FluxischElse-Regular.woff2') format('woff2');
   font-weight: 400;
+  unicode-range: U+0000-0026, U+0028-10FFFF;
   font-display: swap;
 }
 @font-face {
   font-family: 'Fluxisch Else';
   src: url('/static/fonts/FluxischElse-Bold.woff2') format('woff2');
   font-weight: 700;
+  unicode-range: U+0000-0026, U+0028-10FFFF;
   font-display: swap;
 }
 @font-face {

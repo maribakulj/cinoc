@@ -199,12 +199,15 @@
       if (step.optional) {
         var toggle = el("input");
         toggle.type = "checkbox";
+        toggle.id = "recipe-optional-" + (++fieldSeq);
+        toggle.name = "optional." + step.step;
         toggle.setAttribute("data-optional", step.step);
         toggle.addEventListener("change", function () {
           body.hidden = !toggle.checked;
           sync();
         });
         var wrap = el("label", "recipe-step-head");
+        wrap.htmlFor = toggle.id;
         wrap.appendChild(toggle);
         wrap.appendChild(document.createTextNode(
           " " + text("optional") + " " + step.role_label));
@@ -255,6 +258,11 @@
         var field = el("label", "comp-field");
         field.appendChild(el("span", "comp-label", param.label));
         var input = paramInput(param);
+        // id + name : un champ sans eux est signalé (remplissage, lecteurs
+        // d'écran) ; le libellé le désigne par `for`, pas seulement en l'englobant.
+        input.id = "recipe-param-" + (++fieldSeq);
+        input.name = step.step + "." + param.name;
+        field.htmlFor = input.id;
         input.setAttribute("data-param", param.name);
         input.setAttribute("data-type", param.type);
         input.setAttribute("data-step", step.step);

@@ -33,12 +33,18 @@ _FONTS: tuple[tuple[str, str, str], ...] = (
 )
 
 
+#: Fluxisch Else dessine l'apostrophe droite comme un accent espacé
+#: (« l ’ instant ») : U+0027 retombe sur la police suivante de la pile.
+_SANS_APOSTROPHE = "unicode-range:U+0000-0026,U+0028-10FFFF;"
+
+
 def _face(family: str, weight: str, filename: str) -> str:
     data = (files("cinoc.reports").joinpath("_assets", filename)).read_bytes()
     b64 = base64.b64encode(data).decode("ascii")
+    plage = _SANS_APOSTROPHE if family == "Fluxisch Else" else ""
     return (
         f"@font-face{{font-family:'{family}';font-weight:{weight};"
-        f"font-style:normal;font-display:swap;"
+        f"font-style:normal;font-display:swap;{plage}"
         f"src:url(data:font/woff2;base64,{b64}) format('woff2');}}"
     )
 

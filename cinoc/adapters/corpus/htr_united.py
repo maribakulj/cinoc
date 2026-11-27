@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from urllib.parse import urlsplit
 
 import yaml
 
@@ -83,12 +84,18 @@ def _as_languages(raw: object) -> tuple[str, ...]:
     return ()
 
 
+def _last_path_segment(url: str) -> str:
+    """Le dernier segment du **chemin** d'une URL : un fragment de suivi
+    (``record/3333627#.YhN1G1vMLUQ``) ou une requête n'est pas un identifiant."""
+    return urlsplit(url).path.rstrip("/").rsplit("/", 1)[-1]
+
+
 def _entry_from_dict(item: dict[str, object]) -> HTRUnitedEntry | None:
     url = str(item.get("url", "") or "")
     title = str(item.get("title", "") or "")
     if not url and not title:
         return None
-    entry_id = str(item.get("id") or "") or url.rstrip("/").rsplit("/", 1)[-1] or title
+    entry_id = str(item.get("id") or "") or _last_path_segment(url) or title
     return HTRUnitedEntry(
         id=entry_id,
         title=title or entry_id,

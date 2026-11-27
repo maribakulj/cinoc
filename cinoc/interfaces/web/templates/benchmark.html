@@ -151,6 +151,13 @@
       <span class="dropzone-meta">{{ t.bench_metric_profile_hint }}</span>
     </div>
     <div class="panel stack-panel">
+      <label class="label" for="detailed-analyses">
+        <input id="detailed-analyses" name="detailed_analyses" type="checkbox">
+        {{ t.bench_detailed }}
+      </label>
+      <span class="dropzone-meta">{{ t.bench_detailed_hint }}</span>
+    </div>
+    <div class="panel stack-panel">
       <label class="label">{{ t.bench_config_io }}</label>
       <div class="config-io">
         <button id="config-export" class="btn btn-sm" type="button">{{ t.bench_config_export }}</button>
@@ -226,7 +233,11 @@
 
       <details class="run-log-shell" id="run-log-shell" hidden>
         <summary>{{ t.bench_log }}</summary>
-        <pre id="run-log" class="run-log" aria-live="polite"></pre>
+        <pre id="run-log" class="run-log" aria-live="polite"
+             data-outcome-ok="{{ t.bench_outcome_ok }}"
+             data-outcome-truncated="{{ t.bench_outcome_truncated }}"
+             data-outcome-failed="{{ t.bench_outcome_failed }}"
+             data-outcome-resumed="{{ t.bench_outcome_resumed }}"></pre>
       </details>
     </div>
   </div>

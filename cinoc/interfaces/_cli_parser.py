@@ -19,6 +19,7 @@ import argparse
 from typing import TYPE_CHECKING
 
 from cinoc.app.evaluation_views import METRIC_PROFILES
+from cinoc.app.recipes import roles
 from cinoc.interfaces._corpus_command import add_standardize_parser
 from cinoc.interfaces._correction_command import add_correct_parser
 
@@ -96,6 +97,16 @@ def _add_list(subparsers: _SousCommandes) -> None:
     )
     recettes.add_argument(
         "--lang", default="fr", choices=("fr", "en"), help="Langue des libellés."
+    )
+
+
+def _add_report_lang(parser: argparse.ArgumentParser) -> None:
+    """La langue du rapport écrit — une option, la même pour ``demo``, ``run``
+    et ``compare`` ; la console, elle, parle français."""
+    parser.add_argument(
+        "--lang", default="fr", choices=("fr", "en"),
+        help="Langue du rapport (libellés et séparateur décimal) ; la console "
+        "reste en français.",
     )
 
 
@@ -271,6 +282,7 @@ def build_parser() -> argparse.ArgumentParser:
     demo.add_argument(
         "-o", "--output", default="rapport_demo.html", help="Fichier HTML de sortie."
     )
+    _add_report_lang(demo)
     run_cmd = subparsers.add_parser(
         "run",
         help="Exécute un run décrit dans un fichier YAML.",
@@ -321,6 +333,7 @@ def build_parser() -> argparse.ArgumentParser:
         "comme sa case dans la page. `cinoc list recipes` les liste.",
     )
     _add_scoring(run_cmd, "Avec --recipe : ")
+    _add_report_lang(run_cmd)
     run_cmd.add_argument(
         "--resume-dir",
         default=None,
@@ -434,10 +447,10 @@ def build_parser() -> argparse.ArgumentParser:
     compare_cmd.add_argument(
         "-o", "--output", default="comparaison.html", help="Fichier HTML de sortie."
     )
-    compare_cmd.add_argument(
-        "--lang", default="fr", choices=("fr", "en"),
-        help="Langue du rapport (libellés et séparateur décimal).",
-    )
+    _add_report_lang(compare_cmd)
+    # Les briques que ``hybrid`` accepte sont celles des rôles de la recette
+    # qu'il exécute — lues là, pas recopiées (l'aide oubliait ``ollama``).
+    table = roles()
     hybrid_cmd = subparsers.add_parser(
         "hybrid",
         help="Transcription hybride : segmente → OCR par bloc → ALTO/page "
@@ -450,15 +463,14 @@ def build_parser() -> argparse.ArgumentParser:
     hybrid_cmd.add_argument(
         "--segmenter",
         default="pp_doclayout",
-        help="Segmenteur (pp_doclayout, tesseract_layout, doclayout_yolo, "
-        "remote_segmenter ; precomputed_layout en démo).",
+        help="Segmenteur — ceux de la recette segmentation_puis_lecture : "
+        + ", ".join(table["segmenter"].briques) + ".",
     )
     hybrid_cmd.add_argument(
         "--ocr",
         default="tesseract",
-        help="Reconnaisseur par bloc : OCR réel (tesseract, mistral_ocr, "
-        "google_vision, azure_di, kraken, pero, calamari) ou VLM zero-shot "
-        "(openai, anthropic, mistral) ; precomputed_region en démo.",
+        help="Reconnaisseur par bloc, OCR ou VLM — ceux de la recette : "
+        + ", ".join(table["region_recognizer"].briques) + ".",
     )
     hybrid_cmd.add_argument(
         "--source-label",

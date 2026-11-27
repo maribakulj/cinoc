@@ -30,6 +30,7 @@ from cinoc.evaluation.result import (
     RunResult,
 )
 from cinoc.reports._numbers import localize_decimal
+from cinoc.reports.composition_diff import homonym_hints
 from cinoc.reports.engine_badges import (
     engine_accent,
     engine_cell,
@@ -157,13 +158,29 @@ class KeyMeasuresSection:
                 head += convention_html(spec, lang)
             blocks.append(
                 head
-                + self._table(pipes, cols, durations, order, lang)
+                + self._table(
+                    pipes, cols, durations, order, lang,
+                    homonym_hints(result.manifest),
+                )
                 + self._dotplot(result, view, order, lang)
-                + self._significance(result, view, lang)
+                + self._significance(
+                    result, view, lang, view_label(view, lang) if multi else None
+                )
             )
         if not blocks:
             return None
         title = localized(lang, "Mesures clés", "Key measures")
+        par_vue = (
+            localized(
+                lang,
+                " Chaque vue a son test : un verdict ne vaut que pour sa vue "
+                "(sa normalisation, ses unités).",
+                " Each view has its own test: a verdict holds for its view only "
+                "(its normalisation, its units).",
+            )
+            if multi
+            else ""
+        )
         time_fr = " — et durée par page" if durations else ""
         time_en = " — and duration per page" if durations else ""
         caption = localized(
@@ -174,13 +191,13 @@ class KeyMeasuresSection:
             "(↓ = plus bas est meilleur · ↑ = plus haut est meilleur). "
             "<strong>Triez</strong> par n'importe quelle colonne. Aucun gagnant "
             "n'est déclaré : les chiffres et le test sont fournis, "
-            "l'interprétation vous revient.",
+            f"l'interprétation vous revient.{par_vue}",
             "Scores of the <strong>established</strong> metrics per engine — the "
             "only ones ranked and tested; adapted and exploratory metrics are "
             f"diagnostic (“Engine comparison”){time_en} (↓ = lower is better · "
             "↑ = higher is better). <strong>Sort</strong> by any column. No "
             "winner is declared: figures and the test are provided; "
-            "interpretation is yours.",
+            f"interpretation is yours.{par_vue}",
         )
         return Html(
             f"<h2>{title}</h2>\n<p class=\"muted\">{caption}</p>\n"
@@ -195,6 +212,7 @@ class KeyMeasuresSection:
         durations: dict[str, _Durations],
         order: dict[str, int],
         lang: str,
+        hints: dict[str, str],
     ) -> str:
         th_engine = localized(lang, "Moteur", "Engine")
         headers = "".join(
@@ -250,7 +268,9 @@ class KeyMeasuresSection:
                         f'<td class="disp" data-sort="{seconds:.6f}">'
                         f"{disp}{mark}</td>"
                     )
-            badge = engine_cell(p.pipeline, order.get(p.pipeline, 0))
+            badge = engine_cell(
+                p.pipeline, order.get(p.pipeline, 0), hints.get(p.pipeline, "")
+            )
             body.append(f'<tr><td class="eng-cell">{badge}</td>{cells}</tr>')
         return (
             '<table class="data sortable">\n<thead><tr>'
@@ -297,17 +317,31 @@ class KeyMeasuresSection:
         )
 
     @staticmethod
-    def _significance(result: RunResult, view: str, lang: str) -> str:
+    def _significance(
+        result: RunResult, view: str, lang: str, label: str | None = None
+    ) -> str:
         """Le test de la métrique principale, tel que le payload le dit.
 
         Toujours une phrase : le test et ses p (brute, corrigée), le post-hoc
         s'il a eu lieu — ou le motif pour lequel rien n'a été calculé.
+        ``label`` (plusieurs vues) : la vue que le test juge, nommée à côté du
+        verdict — une différence peut être significative dans une vue et
+        absente d'une autre (S34b).
         """
-        head = localized(
-            lang,
-            "<strong>Test inter-moteurs (CER)</strong> — ",
-            "<strong>Inter-engine test (CER)</strong> — ",
-        )
+        if label is None:
+            head = localized(
+                lang,
+                "<strong>Test inter-moteurs (CER)</strong> — ",
+                "<strong>Inter-engine test (CER)</strong> — ",
+            )
+        else:
+            head = localized(
+                lang,
+                f"<strong>Test inter-moteurs (CER, vue « {escape(label)} »)"
+                "</strong> — ",
+                f"<strong>Inter-engine test (CER, “{escape(label)}” view)"
+                "</strong> — ",
+            )
         payload = _inference(result, view)
         if payload is None:
             txt = localized(lang, "test non calculé.", "test not computed.")

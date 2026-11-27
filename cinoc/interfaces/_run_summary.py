@@ -12,6 +12,7 @@ from __future__ import annotations
 import sys
 from collections import Counter
 from collections.abc import Sequence
+from typing import TextIO
 
 from cinoc.app.orchestrator import UnitProgress
 from cinoc.evaluation.result import RunResult
@@ -67,13 +68,18 @@ def print_progress(unit: UnitProgress) -> None:
     """
     issue = _ISSUES.get(unit.outcome, unit.outcome)
     ligne = f"[{unit.done}/{unit.total}] {unit.pipeline} · {unit.document_id} — {issue}"
+    print(console_safe(ligne, sys.stderr), file=sys.stderr, flush=True)
+
+
+def console_safe(ligne: str, stream: TextIO) -> str:
+    """``ligne`` telle que ``stream`` sait l'écrire : une console cp1252
+    (Windows) n'a pas le « → » d'un nom de recette — il s'y écrirait
+    échappé, ou lèverait —, la flèche ASCII se lit."""
     try:
-        ligne.encode(sys.stderr.encoding or "utf-8")
+        ligne.encode(getattr(stream, "encoding", None) or "utf-8")
     except (UnicodeEncodeError, LookupError):
-        # Console cp1252 (Windows) : le « → » d'un nom de recette s'y écrirait
-        # « \u2192 » ; la flèche ASCII se lit.
-        ligne = ligne.replace("→", "->")
-    print(ligne, file=sys.stderr, flush=True)
+        return ligne.replace("→", "->")
+    return ligne
 
 
-__all__ = ["EXIT_UNITS_FAILED", "print_progress", "unit_summary"]
+__all__ = ["EXIT_UNITS_FAILED", "console_safe", "print_progress", "unit_summary"]

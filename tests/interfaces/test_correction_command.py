@@ -99,6 +99,24 @@ def test_the_spread_is_written_next_to_the_report_and_printed(
     assert "est du bruit" in affiche
 
 
+def test_each_range_names_its_view_and_where_it_lives(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """S34b, n° 12 : ``cer : 0.0051 – 0.0051`` deux fois — une par vue — sans
+    dire laquelle ; et rien ne disait que la fourchette n'est pas au rapport."""
+    lignes = (
+        _spread("cer", 0.25),
+        _spread("cer", 0.25).model_copy(update={"view": "texte (lignes)"}),
+    )
+    write_variance(
+        tmp_path / "r.html", VarianceSummary(runs=3, corpus="c", spreads=lignes)
+    )
+    affiche = capsys.readouterr().out
+    assert "alto→rules · texte · cer :" in affiche
+    assert "alto→rules · texte (lignes) · cer :" in affiche
+    assert "le rapport HTML porte le dernier run" in affiche
+
+
 def test_without_a_measurable_spread_the_summary_says_so(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

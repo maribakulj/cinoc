@@ -28,7 +28,7 @@ import threading
 import uuid
 import zipfile
 from collections.abc import Callable, Mapping
-from pathlib import Path
+from pathlib import Path, PurePath
 
 from pydantic import ValidationError
 
@@ -80,6 +80,14 @@ _SAFE_NAME = re.compile(r"^[A-Za-z0-9_.\-]+$")
 
 class CorpusUploadError(CinocError):
     """Archive rejetée (non sûre, hors quota, vide, ou mal formée)."""
+
+
+def archive_corpus_name(filename: str) -> str:
+    """Le nom d'un corpus importé d'une archive : le nom du fichier, sans
+    dossier ni ``.zip`` (``pages.zip`` → ``pages``). Une règle pour le dépôt
+    web et ``cinoc corpus import zip``."""
+    base = PurePath(filename.replace("\\", "/")).name
+    return base[:-4] if base.lower().endswith(".zip") else base
 
 
 def extract_corpus_zip(
@@ -313,9 +321,14 @@ class CorpusStore:
             self._corpora[corpus_id] = spec
 
     def save(self, name: str, data: bytes) -> tuple[str, CorpusSpec]:
-        """Extrait l'archive dans un dossier neuf et enregistre la ``CorpusSpec``."""
+        """Extrait l'archive dans un dossier neuf et enregistre la ``CorpusSpec``.
+
+        ``name`` : le nom du fichier déposé — le corpus prend son radical
+        (``archive_corpus_name``), comme ``cinoc corpus import zip``."""
         corpus_id = uuid.uuid4().hex
-        spec = extract_corpus_zip(data, self._base / corpus_id, name=name or corpus_id)
+        spec = extract_corpus_zip(
+            data, self._base / corpus_id, name=archive_corpus_name(name) or corpus_id
+        )
         self._register(corpus_id, spec)
         return corpus_id, spec
 
@@ -367,6 +380,7 @@ __all__ = [
     "MAX_ZIP_BYTES",
     "CorpusStore",
     "CorpusUploadError",
+    "archive_corpus_name",
     "extract_corpus_zip",
     "truths_beside",
 ]

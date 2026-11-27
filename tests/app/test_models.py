@@ -349,6 +349,19 @@ def test_a_spec_without_model_is_refused_with_the_available_list(
     assert "gpt-test-a, gpt-test-b" in message
 
 
+def test_a_missing_model_is_told_in_the_syntax_of_both_contexts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """S34b, n° 16 : le refus ne nommait que ``adapter_kwargs.…`` (spec YAML),
+    alors qu'avec une recette il faut ``--set vlm.model=…`` — l'étape."""
+    _listing(monkeypatch, _TWO)
+    with pytest.raises(ModelChoiceError) as refus:
+        check_spec_models(_spec("openai", {}), live=False)
+    message = str(refus.value)
+    assert "--set vlm.model=<modèle>" in message
+    assert "adapter_kwargs" in message and "spec YAML" in message
+
+
 def test_a_spec_without_model_says_why_the_list_is_missing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

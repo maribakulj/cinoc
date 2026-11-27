@@ -55,6 +55,10 @@ _STRINGS: dict[str, dict[str, str]] = {
         "bench_state_done": "Terminé",
         "bench_state_failed": "Échoué",
         "bench_state_cancelled": "Arrêté",
+        "bench_outcome_ok": "fait",
+        "bench_outcome_truncated": "tronquée",
+        "bench_outcome_failed": "échec",
+        "bench_outcome_resumed": "relue de l'archive",
         "bench_cancelled_result": "Run arrêté à ta demande. Aucun rapport : un "
         "run interrompu n'en écrit pas de partiel, et les pages déjà lues ne "
         "sont pas gardées.",
@@ -115,6 +119,10 @@ _STRINGS: dict[str, dict[str, str]] = {
         "bench_char_exclude_ph": "ex : ,.;:!? — exclus des deux côtés",
         "bench_char_exclude_hint": "Filtrés de la GT ET de l'hypothèse avant le "
         "calcul (ne mesure plus ces caractères).",
+        "bench_detailed": "Mode détaillé (toutes les analyses)",
+        "bench_detailed_hint": "Calcule aussi les analyses : bilan de "
+        "correction, décisions du correcteur, intervalles, taxonomie… Plus "
+        "lent ; le mode rapide ne calcule que les métriques.",
         "bench_metric_profile": "Profil de métriques",
         "bench_metric_profile_hint": "Choisit les colonnes de classement du "
         "rapport ; n'allège pas la donnée collectée (sections inchangées).",
@@ -219,7 +227,7 @@ _STRINGS: dict[str, dict[str, str]] = {
         "ne disent ni corpus ni profil de normalisation, elles ne sont pas "
         "affichées. Déplacez le fichier history.db pour en commencer une "
         "nouvelle.",
-        "library_eyebrow": "VIEW · LIBRARY",
+        "library_eyebrow": "Vitrine · bibliothèque",
         "library_title": "Bibliothèque de corpus",
         "library_desc": "Corpus locaux et catalogues distants — toute la matière "
         "en un seul endroit.",
@@ -309,6 +317,10 @@ _STRINGS: dict[str, dict[str, str]] = {
         "bench_state_done": "Done",
         "bench_state_failed": "Failed",
         "bench_state_cancelled": "Stopped",
+        "bench_outcome_ok": "done",
+        "bench_outcome_truncated": "truncated",
+        "bench_outcome_failed": "failed",
+        "bench_outcome_resumed": "read from the archive",
         "bench_cancelled_result": "Run stopped at your request. No report: an "
         "interrupted run writes no partial one, and pages already read are not "
         "kept.",
@@ -373,6 +385,10 @@ _STRINGS: dict[str, dict[str, str]] = {
         "bench_config_hint": "Saves the form state (recipe queue + options) as "
         "JSON; reloadable later. No server persistence. A secret (token) is "
         "never written to it: it is asked again on import.",
+        "bench_detailed": "Detailed mode (every analysis)",
+        "bench_detailed_hint": "Also computes the analyses: correction "
+        "balance, corrector decisions, intervals, taxonomy… Slower; the fast "
+        "mode computes the metrics only.",
         "bench_metric_profile": "Metric profile",
         "bench_metric_profile_hint": "Picks the report's ranking columns; does not "
         "drop collected data (sections unchanged).",
@@ -466,7 +482,7 @@ _STRINGS: dict[str, dict[str, str]] = {
         "history_legacy": "History database in an earlier format: its series "
         "name neither corpus nor normalisation profile, so they are not "
         "shown. Move the history.db file aside to start a new one.",
-        "library_eyebrow": "VIEW · LIBRARY",
+        "library_eyebrow": "Showcase · library",
         "library_title": "Corpus library",
         "library_desc": "Local corpora and remote catalogues — all your material "
         "in one place.",

@@ -336,7 +336,7 @@ background-color:var(--paper);background-image:repeating-linear-gradient(
 180deg,transparent 0 6px,rgba(26,25,23,0.10) 6px 7px);}
 /* Vignette réelle : couvre la zone d'aperçu (objet centré, recadré). */
 .doc-preview-img{background:var(--g-50);overflow:hidden;padding:0;}
-.doc-preview-img img{width:100%;height:100%;object-fit:cover;display:block;}
+.doc-preview-img img{width:100%;height:100%;object-fit:contain;display:block;}
 .doc-card .dc-id{font-family:var(--mono);font-size:12px;font-weight:600;
 color:var(--ink);word-break:break-all;}
 .dc-anom{margin-left:5px;color:var(--clay,#a23b3b);font-weight:400;}
@@ -550,6 +550,7 @@ letter-spacing:0.06em;text-transform:uppercase;}
 width:9px;height:9px;border-radius:50%;background:var(--badge,var(--ink));
 color:transparent;font-size:0;flex:0 0 auto;
 margin-right:8px;vertical-align:middle;}
+.eng-hint{font-size:11.5px;margin-left:6px;}
 /* Widget « comparer un run » (client-side) — bouton + bandeau sticky des deltas. */
 .compare-bar{display:flex;justify-content:flex-end;margin-top:2px;}
 .compare-btn{font-family:var(--mono);font-size:12px;background:var(--ink);

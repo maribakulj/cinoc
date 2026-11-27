@@ -23,6 +23,11 @@
 #                Deux vues sur le même run = deux lectures des mêmes sorties.
 #   adapter_kwargs  les paramètres de construction d'un adapter, par nom.
 #
+# Les images citées (`corpus/folio_001.png`…) ne sont pas livrées : `precomputed`
+# ne lit pas l'image, il rejoue `<page>.<label>.txt`, et le rapport montre un
+# aperçu synthétique à la place de la vignette. Un vrai moteur lit les images :
+# celles de ton corpus doivent exister.
+#
 # Ce fichier est vérifié par `tests/interfaces/test_examples.py` : il ne peut pas
 # se périmer en silence.
 

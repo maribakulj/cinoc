@@ -48,6 +48,71 @@ publier, et son moment, appartiennent au mainteneur.
 
 ### Corrigé
 
+- **Ce que promettent les recettes de correction est atteignable.**
+  `ocr_puis_llm` et `alto_corrige` annonçaient que le rapport dit ce qui a été
+  amélioré, dégradé ou refusé : ces bilans sont des analyses, que le mode
+  rapide (le défaut) ne calcule pas. Les descriptions disent « en mode
+  détaillé » ; la page du banc d'essai reçoit la case *Mode détaillé*, que
+  `POST /api/runs` acceptait déjà (`detailed_analyses`) mais qu'aucune page
+  n'offrait. `cinoc hybrid --help` lit ses briques sur les rôles de la recette
+  qu'il exécute (il oubliait `ollama`). Le refus d'un modèle absent dit les
+  deux syntaxes (`--set vlm.model=…` d'une recette, `adapter_kwargs` d'une
+  spec). Chaque test de significativité nomme la vue qu'il juge quand le run
+  en a plusieurs. `examples/config.yaml` dit que ses images ne sont pas
+  livrées ; le guide, que `examples/` vient d'un clone.
+
+- **La page, relue par un testeur.** Le surtitre de la bibliothèque n'est plus
+  en anglais dans la page française (`Vitrine · bibliothèque`) ; l'apostrophe
+  droite, que la police d'accent dessine comme un accent espacé (« l ’
+  instant »), retombe sur la police suivante (page et rapport) ; un corpus
+  déposé `pages.zip` s'appelle `pages`, comme par `cinoc corpus import zip`
+  (une fonction pour les deux) ; les vignettes de la galerie montrent la page
+  entière au lieu d'en rogner les bords ; le journal d'un run nomme chaque
+  unité (`[1/2] ocr_simple · tesseract · page_002 — fait`, la ligne de `cinoc
+  run`) et traduit les états ; chaque champ de réglage a un `id`, un `name` et
+  son `label for`. *Ruptures* : un corpus déposé `x.zip` s'appelle
+  `x` (il gardait l'extension) ; `cinoc corpus import zip` d'une archive sans
+  `.zip` garde son nom entier (il était coupé au dernier point) ; l'état d'un
+  job (`GET /api/runs/<id>`, SSE) gagne `pipeline`, `document_id`, `outcome`.
+
+- **`docs/PLUGINS.md` suffit pour écrire un module.** L'exemple s'arrêtait sur
+  `StepOutput(artifacts={ArtifactType.RAW_TEXT: ...})`. La page, désormais en
+  anglais comme le README et le guide et sans renvoi au contrat interne, donne
+  un module complet (fichier de sortie dans le workspace, `Artifact` construit,
+  échéance et échec typés), le script qui l'emploie **sans paquet** (un
+  registre, `register_builder`, `cinoc.app.run`) et sa spec ; la suite extrait
+  les trois blocs et les exécute. Elle dit franchement que `cinoc run` ne voit
+  qu'une distribution installée — `pip install -e .` d'un dossier local
+  suffit. `DeadlineExceeded` rejoint `cinoc.adapters.extension`.
+
+- **La recherche HTR-United dit ce qu'elle fait.** L'exemple du guide
+  (`"presse"`) ne trouvait rien ; il devient `"medieval"`, cherché par un test
+  dans le catalogue embarqué. La commande et le guide disent que la recherche
+  renvoie vers la source et ne télécharge rien. Un identifiant dérivé d'une
+  URL n'emporte plus son fragment ni sa requête (`3333627#.YhN1G1vMLUQ` →
+  `3333627`).
+
+- **La fourchette de `--repeat` nomme sa vue.** `cer : 0.0051 – 0.0051`
+  s'affichait deux fois, une par vue, sans dire laquelle ; chaque ligne dit
+  `pipeline · vue · métrique`, et la console dit que la fourchette vit dans
+  `<rapport>.variance.json`, le rapport HTML portant le dernier run (le guide
+  aussi). Une console cp1252 lit `->` pour le `→` d'un nom de recette, ici
+  comme dans la progression et l'avertissement de `cinoc compare`.
+
+- **Le rapport de `cinoc run` et de `cinoc demo` existe en anglais.** Seul
+  `cinoc compare` avait `--lang` ; `demo` et `run` le reçoivent (une option, la
+  même pour les trois). La console reste en français ; le README le dit.
+
+- **Deux chaînes de même nom disent ce qui les distingue.** `ocr_simple ·
+  tesseract` et `… #2` ne différaient que par `lang`, qui ne se lisait que dans
+  « Composition des chaînes » ; le rapport l'écrit à côté du nom
+  (`ocr.lang=fra`), dans les classements et la composition. `cinoc compare`
+  avertit — sur la sortie d'erreur et en tête de la comparaison, FR/EN — quand
+  deux chaînes appariées par leur nom n'ont pas la même composition (brique,
+  réglage, version de module, lus aux deux manifestes) et nomme l'écart
+  (`ocr.lang : fra -> eng`). Les noms ne changent pas : ils entrent dans la
+  clé d'archive.
+
 - **`cinoc run` n'est plus muet.** Un run VLM de sept minutes ne disait rien
   jusqu'au rapport. Une ligne par unité terminée (`[3/16] pipeline · document —
   fait`), sur la sortie d'erreur, aussi pour `cinoc correct` et `cinoc hybrid` ;
