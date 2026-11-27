@@ -1,0 +1,5 @@
+set -x
+V=/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s31l/venv/bin
+cd /tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s30/bnl && time $V/cinoc run m-bnl.yaml --workers 1 --resume-dir /tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s31l/archive-bnl --json /tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s31l/measure/m2-bnl.json -o /tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s31l/measure/m2-bnl.html
+cd /tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s30/dresden && time $V/cinoc run m-dresden.yaml --workers 1 --resume-dir /tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s31l/archive-dresden --json /tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s31l/measure/m2-dresden.json -o /tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s31l/measure/m2-dresden.html
+echo MEASURE2-DONE

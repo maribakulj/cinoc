@@ -1,0 +1,154 @@
+=== bnl-local ===
+-- unités (issue) :
+   E0 · tesseract : ok × 37
+   E1 · segmentation → qwen2.5vl:3b (VLM par région, local) : ok × 36
+   E1 · segmentation → qwen2.5vl:3b (VLM par région, local) : truncated × 1
+   E1 · segmentation → tesseract : ok × 37
+   E2 · tesseract → qwen2.5:3b (local) : ok × 37
+   E3 · segmentation → tesseract → saknussemm (règles) : ok × 37
+   E4 · segmentation → tesseract → saknussemm sélectif (règles, QE heuristique) : ok × 37
+   E5 · qwen2.5vl:3b (local) : ok × 37
+-- scores notés en ligne (tranches) = RunResult final (relu hors ligne) :
+scores (vue × pipeline × document) des tranches : identiques 732, différents 0 (hors de cette spec : 40)
+-- seconde re-notation hors ligne, comparée au final :
+real	0m3.915s
+user	0m4.067s
+sys	0m0.327s
+pipelines: identique
+documents: identique
+cross_engine: identique
+analyses: identique
+usage (hors resumed): identique ; relues hors ligne 259/259
+manifeste, champs qui diffèrent : ['completed_at', 'started_at']
+-- déterminisme (rejeu dans une archive neuve, contre la campagne) :
+unités rejouées : 9 ; hashes identiques : 0 ; différentes : 9 ; absentes de la campagne : 0
+artefacts qui diffèrent (étape.type : unités) : {'lecture.native_json': 3, 'correction.native_json': 3, 'lecture.raw_text': 2, 'reco.layout': 2, 'reco.native_json': 3}
+  E1 · segmentation → qwen2.5vl:3b (VLM par région, local) : |ΔCER texte| max 0.0010, moyen 0.0003 sur 3 page(s)
+  E2 · tesseract → qwen2.5:3b (local) : |ΔCER texte| max 0.0000, moyen 0.0000 sur 3 page(s)
+  E5 · qwen2.5vl:3b (local) : |ΔCER texte| max 0.0000, moyen 0.0000 sur 3 page(s)
+-- oracle dinglehopper (vue texte (lignes)) :
+unités notées : 259 / 259
+CER Cinoc du RunResult = maillon 'cinoc' : 259/259
+dernier maillon = dinglehopper : 259/259
+Cinoc = dinglehopper sans pont : 83/259 ; écart moyen absolu 0.0046
+unités que chaque maillon fait bouger : {'blancs': 1, 'invisibles': 1, 'sbb': 176, 'graphemes': 0}
+  E0 · tesseract : CER moyen par page Cinoc (lignes) 0.0556 · dinglehopper 0.0515
+  E1 · segmentation → qwen2.5vl:3b (VLM par région, local) : CER moyen par page Cinoc (lignes) 0.0686 · dinglehopper 0.0626
+  E1 · segmentation → tesseract : CER moyen par page Cinoc (lignes) 0.0577 · dinglehopper 0.0536
+  E2 · tesseract → qwen2.5:3b (local) : CER moyen par page Cinoc (lignes) 0.0716 · dinglehopper 0.0678
+  E3 · segmentation → tesseract → saknussemm (règles) : CER moyen par page Cinoc (lignes) 0.0499 · dinglehopper 0.0458
+  E4 · segmentation → tesseract → saknussemm sélectif (règles, QE heuristique) : CER moyen par page Cinoc (lignes) 0.0565 · dinglehopper 0.0524
+  E5 · qwen2.5vl:3b (local) : CER moyen par page Cinoc (lignes) 0.0460 · dinglehopper 0.0401
+RunResult final : /tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s31l/final/bnl-local.run_result.json (800 Ko)
+=== bnl-local-saknussemm ===
+-- unités (issue) :
+   E0 · tesseract : ok × 5
+   E1 · segmentation → qwen2.5vl:3b (VLM par région, local) : ok × 5
+   E1 · segmentation → tesseract : ok × 5
+   E2 · tesseract → qwen2.5:3b (local) : ok × 5
+   E3 · segmentation → tesseract → saknussemm (qwen2.5:3b, local) : ok × 5
+   E3 · segmentation → tesseract → saknussemm (règles) : ok × 5
+   E4 · segmentation → tesseract → saknussemm sélectif (qwen2.5:3b, QE dalembert, local) : ok × 5
+   E4 · segmentation → tesseract → saknussemm sélectif (règles, QE heuristique) : ok × 5
+   E5 · qwen2.5vl:3b (local) : ok × 5
+-- scores notés en ligne (tranches) = RunResult final (relu hors ligne) :
+scores (vue × pipeline × document) des tranches : identiques 136, différents 0 (hors de cette spec : 636)
+-- seconde re-notation hors ligne, comparée au final :
+real	0m1.936s
+user	0m2.211s
+sys	0m0.119s
+pipelines: identique
+documents: identique
+cross_engine: identique
+analyses: identique
+usage (hors resumed): identique ; relues hors ligne 45/45
+manifeste, champs qui diffèrent : ['completed_at', 'started_at']
+-- déterminisme (rejeu dans une archive neuve, contre la campagne) :
+unités rejouées : 2 ; hashes identiques : 0 ; différentes : 2 ; absentes de la campagne : 0
+artefacts qui diffèrent (étape.type : unités) : {'correction.native_json': 2}
+  E3 · segmentation → tesseract → saknussemm (qwen2.5:3b, local) : |ΔCER texte| max 0.0000, moyen 0.0000 sur 1 page(s)
+  E4 · segmentation → tesseract → saknussemm sélectif (qwen2.5:3b, QE dalembert, local) : |ΔCER texte| max 0.0000, moyen 0.0000 sur 1 page(s)
+-- oracle dinglehopper (vue texte (lignes)) :
+unités notées : 45 / 45
+CER Cinoc du RunResult = maillon 'cinoc' : 45/45
+dernier maillon = dinglehopper : 45/45
+Cinoc = dinglehopper sans pont : 10/45 ; écart moyen absolu 0.0062
+unités que chaque maillon fait bouger : {'blancs': 0, 'invisibles': 0, 'sbb': 35, 'graphemes': 0}
+  E0 · tesseract : CER moyen par page Cinoc (lignes) 0.0573 · dinglehopper 0.0518
+  E1 · segmentation → qwen2.5vl:3b (VLM par région, local) : CER moyen par page Cinoc (lignes) 0.0494 · dinglehopper 0.0415
+  E1 · segmentation → tesseract : CER moyen par page Cinoc (lignes) 0.0794 · dinglehopper 0.0735
+  E2 · tesseract → qwen2.5:3b (local) : CER moyen par page Cinoc (lignes) 0.0656 · dinglehopper 0.0607
+  E3 · segmentation → tesseract → saknussemm (qwen2.5:3b, local) : CER moyen par page Cinoc (lignes) 0.0988 · dinglehopper 0.0929
+  E3 · segmentation → tesseract → saknussemm (règles) : CER moyen par page Cinoc (lignes) 0.0748 · dinglehopper 0.0689
+  E4 · segmentation → tesseract → saknussemm sélectif (qwen2.5:3b, QE dalembert, local) : CER moyen par page Cinoc (lignes) 0.0790 · dinglehopper 0.0730
+  E4 · segmentation → tesseract → saknussemm sélectif (règles, QE heuristique) : CER moyen par page Cinoc (lignes) 0.0781 · dinglehopper 0.0722
+  E5 · qwen2.5vl:3b (local) : CER moyen par page Cinoc (lignes) 0.0320 · dinglehopper 0.0241
+RunResult final : /tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s31l/final/bnl-local-saknussemm.run_result.json (176 Ko)
+=== dresden-local ===
+-- unités (issue) :
+   E0 · tesseract : ok × 10
+   E1 · segmentation → tesseract : ok × 10
+   E2 · tesseract → qwen2.5:3b (local) : ok × 10
+   E3 · segmentation → tesseract → saknussemm (règles) : ok × 10
+   E5 · qwen2.5vl:3b (local) : ok × 5
+   E5 · qwen2.5vl:3b (local) : truncated × 5
+-- scores notés en ligne (tranches) = RunResult final (relu hors ligne) :
+scores (vue × pipeline × document) des tranches : identiques 160, différents 0 (hors de cette spec : 0)
+-- seconde re-notation hors ligne, comparée au final :
+real	0m4.864s
+user	0m2.086s
+sys	0m0.137s
+pipelines: identique
+documents: identique
+cross_engine: identique
+analyses: identique
+usage (hors resumed): identique ; relues hors ligne 50/50
+manifeste, champs qui diffèrent : ['completed_at', 'started_at']
+-- déterminisme (rejeu dans une archive neuve, contre la campagne) :
+unités rejouées : 6 ; hashes identiques : 0 ; différentes : 6 ; absentes de la campagne : 0
+artefacts qui diffèrent (étape.type : unités) : {'correction.native_json': 3, 'lecture.native_json': 3}
+  E2 · tesseract → qwen2.5:3b (local) : |ΔCER texte| max 0.0000, moyen 0.0000 sur 3 page(s)
+  E5 · qwen2.5vl:3b (local) : |ΔCER texte| max 0.0000, moyen 0.0000 sur 3 page(s)
+-- oracle dinglehopper (vue texte (lignes)) :
+unités notées : 50 / 50
+CER Cinoc du RunResult = maillon 'cinoc' : 50/50
+dernier maillon = dinglehopper : 50/50
+Cinoc = dinglehopper sans pont : 48/50 ; écart moyen absolu 0.0000
+unités que chaque maillon fait bouger : {'blancs': 2, 'invisibles': 0, 'sbb': 0, 'graphemes': 0}
+  E0 · tesseract : CER moyen par page Cinoc (lignes) 0.7676 · dinglehopper 0.7675
+  E1 · segmentation → tesseract : CER moyen par page Cinoc (lignes) 0.7975 · dinglehopper 0.7975
+  E2 · tesseract → qwen2.5:3b (local) : CER moyen par page Cinoc (lignes) 0.7705 · dinglehopper 0.7704
+  E3 · segmentation → tesseract → saknussemm (règles) : CER moyen par page Cinoc (lignes) 0.7978 · dinglehopper 0.7978
+  E5 · qwen2.5vl:3b (local) : CER moyen par page Cinoc (lignes) 2.1211 · dinglehopper 2.1211
+RunResult final : /tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s31l/final/dresden-local.run_result.json (220 Ko)
+=== durées des unités exécutées par tranche (hors relues) ===
+/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s31l/out/chunk-b1-fanout-sans-cle.json
+/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s31l/out/chunk-b2-e2.json
+/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s31l/out/chunk-b3-e1v-1.json
+/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s31l/out/chunk-b3-e1v-2.json
+/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s31l/out/chunk-b3-e1v-3.json
+/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s31l/out/chunk-b3-e1v-4.json
+  E1 · segmentation → qwen2.5vl:3b (VLM par région, local) : 650 s — 0006 186 s (2287→168, ok), 0011 38 s (1140→55, ok), 0016 166 s (4574→356, ok), 0021 37 s (1140→38, ok), 0026 115 s (3438→169, ok), 0031
+/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s31l/out/chunk-b3-e1v-5.json
+  E1 · segmentation → qwen2.5vl:3b (VLM par région, local) : 1664 s — 0007 258 s (6911→493, ok), 0012 350 s (10227→288, ok), 0017 75 s (2293→75, ok), 0022 210 s (5775→393, ok), 0027 51 s (1118→168, ok), 0
+/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s31l/out/chunk-d1-e5.json
+/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s31l/out/chunk-d2-fanout-sans-cle.json
+/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s31l/out/chunk-d3-e2.json
+/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s31l/out/chunk-det-bnl-local-saknussemm.json
+  E3 · segmentation → tesseract → saknussemm (qwen2.5:3b, local) : 169 s — 0017 169 s (2355→1557, ok)
+  E4 · segmentation → tesseract → saknussemm sélectif (qwen2.5:3b, QE dalembert, local) : 216 s — 0017 216 s (2355→1557, ok)
+/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s31l/out/chunk-det-bnl-local.json
+  E1 · segmentation → qwen2.5vl:3b (VLM par région, local) : 102 s — 0003 51 s (1147→178, ok), 0006 19 s (2287→175, ok), 0031 32 s (1118→294, ok)
+  E2 · tesseract → qwen2.5:3b (local) : 136 s — 0003 78 s (796→160, ok), 0006 20 s (740→179, ok), 0031 37 s (919→318, ok)
+  E5 · qwen2.5vl:3b (local) : 155 s — 0003 49 s (1147→178, ok), 0006 46 s (1106→166, ok), 0031 61 s (1118→295, ok)
+/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s31l/out/chunk-det-dresden-local.json
+  E2 · tesseract → qwen2.5:3b (local) : 77 s — Mscr.Dresd.K80_177 32 s (304→224, ok), Mscr.Dresd.K80_178 24 s (297→213, ok), Mscr.Dresd.K80_179 22 s (279→194, ok)
+  E5 · qwen2.5vl:3b (local) : 1041 s — Mscr.Dresd.K80_177 552 s (4092→2048, truncated), Mscr.Dresd.K80_178 262 s (4092→498, ok), Mscr.Dresd.K80_179 227 s (4092→156, ok)
+/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s31l/out/chunk-s1-e3-qwen.json
+/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s31l/out/chunk-s2-e4-qwen.json
+=== contrôle : unités saknussemm archivées entièrement en repli (attendu : aucune) ===
+0941ecca2634 0017 saknussemm:qwen        lignes   6 repli   6 (délai 0, séparateur 0) 100%-REPLI {'pair_drift_fallback': 4, 'too_different_from_source': 2}
+6a26dbe403ba 0017 saknussemm:qwen_qe     lignes   6 repli   6 (délai 0, séparateur 0) 100%-REPLI {'pair_drift_fallback': 4, 'too_different_from_source': 2}
+   /tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s31l/archive-dresden : aucune
+   /tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/s31l/archive-dresden : aucune
+=== fini : 2026-11-27T21:50:29Z ===
