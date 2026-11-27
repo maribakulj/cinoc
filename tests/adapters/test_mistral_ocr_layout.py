@@ -310,7 +310,9 @@ def test_en_fan_out_les_lignes_des_blocs_sont_greffees_a_la_region(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Reconnaisseur par région : une réponse à blocs donne ses lignes de
-    contenu (sans géométrie inventée) ; sans blocs, une ligne, comme avant."""
+    contenu (sans géométrie inventée) ; sans blocs, une ligne par ligne du
+    texte rendu — plus une seule « ligne » qui contiendrait des sauts de ligne
+    (D-311)."""
     from cinoc.domain.layout import Geometry, Region
     from cinoc.pipeline.fanout import _lignes_reconnues
 
@@ -322,8 +324,11 @@ def test_en_fan_out_les_lignes_des_blocs_sont_greffees_a_la_region(
     assert all(line.geometry is None for line in avec)
     (tmp_path / "b").mkdir()
     sans = _execute(tmp_path / "b", monkeypatch, "markdown")
-    (seule,) = _lignes_reconnues(sans.artifacts, region)
-    assert seule.text == _GT
+    lignes = _lignes_reconnues(sans.artifacts, region)
+    assert [line.text for line in lignes] == [
+        ligne for ligne in _GT.splitlines() if ligne.strip()
+    ]
+    assert all("\n" not in line.text for line in lignes)
 
 
 def test_un_jpeg_2000_part_annonce_image_jp2(

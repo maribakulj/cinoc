@@ -322,6 +322,12 @@ suivantes ne les répètent pas.
   trois blocs sortait avec trois lignes d'ALTO au lieu de vingt ; un
   reconnaisseur qui déclare `LAYOUT` voit ses lignes greffées, coordonnées
   retraduites.
+- **La correction structurée corrige une chaîne segmentation → Tesseract (ou
+  VLM) par région** : un reconnaisseur qui ne rend que du texte donnait à sa
+  région une seule « ligne » qui contenait les sauts de ligne du bloc, et
+  `saknussemm` refusait toute correction (trois tentatives payées, puis repli).
+  Une ligne par ligne de texte désormais ; seules les étapes à fan-out d'une
+  archive se ré-exécutent (`FANOUT_VERSION`).
 - Les mots des PAGE-XML sont lus ; un import IIIF rapporte la vraie image (il
   écrivait parfois l'`info.json` du service).
 - Une sortie pré-calculée corrigée sous la même image n'est plus resservie par
