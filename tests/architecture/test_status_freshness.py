@@ -81,40 +81,6 @@ def test_next_step_is_not_an_already_done_tranche() -> None:
     )
 
 
-def _next_session() -> str:
-    return (ROOT / "NEXT_SESSION.md").read_text(encoding="utf-8")
-
-
-def test_next_session_delegates_to_rollup() -> None:
-    # Même dérive que CLAUDE.md §0, même verrou : NEXT_SESSION.md est resté gelé
-    # à l'ère T1/TU2 (« prochaine = T2 », récaps de tranches livrées) longtemps
-    # après T5→T7. Il doit pointer, pas recopier.
-    assert "MIGRATION_PLAN.md" in _next_session(), (
-        "NEXT_SESSION.md doit déléguer le statut au roll-up de MIGRATION_PLAN.md."
-    )
-
-
-def test_next_session_has_no_hardcoded_test_count() -> None:
-    assert not re.search(
-        r"\d+\s*(?:tests|verts)\b", _next_session(), re.IGNORECASE
-    ), (
-        "NEXT_SESSION.md ne doit pas figer un compte de tests (il se périme) — "
-        "déléguer au roll-up."
-    )
-
-
-def test_next_session_does_not_recap_delivered_tranches() -> None:
-    # Un titre « ## TU2.x — fait » (récap de tranche livrée) est exactement la
-    # duplication de statut qui a pourri ce fichier : le détail vit dans le
-    # roll-up et les DoD de couche, pas ici.
-    assert not re.search(
-        r"^##.*\b[TS]U?\d.*fait", _next_session(), re.MULTILINE
-    ), (
-        "NEXT_SESSION.md ne doit pas porter de récap « tranche — fait » : "
-        "déléguer au roll-up de MIGRATION_PLAN.md."
-    )
-
-
 def test_every_cli_command_is_documented_in_the_readme() -> None:
     """Une commande absente du README n'est pas une commande — personne ne peut
     la trouver.

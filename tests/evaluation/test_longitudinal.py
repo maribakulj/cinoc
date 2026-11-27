@@ -1,6 +1,6 @@
 """Longitudinal : tendance (``linregress``, valeurs main + p) et Pettitt.
 
-Règle PLAN_PARITE §5.8b : OLS = algorithme à référence externe → parité
+Règle d'ancrage (D-068) : OLS = algorithme à référence externe → parité
 ``scipy.stats.linregress`` (oracle **exécuté**) en plus des valeurs posées à la
 main ; Pettitt = formule publiée (Pettitt 1979) → U_t/K dérivés à la main sur
 séries courtes + recoupement contre une implémentation **directe indépendante**

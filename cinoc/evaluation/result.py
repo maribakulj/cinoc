@@ -8,7 +8,7 @@ une métrique ou une vue est **additif**, jamais un changement d'enveloppe.
 ``value``, ``support``, ``pipeline``, ``view``) sont un **contrat dur** avec le
 rapport — renommer une clé est interdit (CLAUDE.md §12, déterminisme).
 
-Contrat « analyses » (enveloppe, cf. ``PLAN_PARITE.md`` §1/E2) : les résultats
+Contrat « analyses » (enveloppe, cf. D-066/D-067, E2) : les résultats
 **non scalaires** (inférentiel, fronts de Pareto, paires de confusion, bins de
 calibration…) passent par le canal unique ``RunResult.analyses`` — payloads
 Pydantic figés (``evaluation.analysis``), **union discriminée par ``kind``**.

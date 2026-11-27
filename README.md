@@ -4,9 +4,9 @@
 
 [![CI](https://github.com/maribakulj/cinoc/actions/workflows/ci.yml/badge.svg)](https://github.com/maribakulj/cinoc/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.11%20|%203.12%20|%203.13-blue.svg)](https://www.python.org/)
-[![License](https://img.shields.io/badge/license-Apache--2.0-green.svg)](LICENSE)
-[![Coverage](https://img.shields.io/badge/coverage-%E2%89%A585%25-brightgreen.svg)](docs/guide.md#development)
-[![Metrics: deterministic](https://img.shields.io/badge/metrics-deterministic-6e40c9.svg)](docs/guide.md#invariants)
+[![License](https://img.shields.io/badge/license-Apache--2.0-green.svg)](https://github.com/maribakulj/cinoc/blob/main/LICENSE)
+[![Coverage](https://img.shields.io/badge/coverage-%E2%89%A585%25-brightgreen.svg)](https://github.com/maribakulj/cinoc/blob/main/docs/guide.md#development)
+[![Metrics: deterministic](https://img.shields.io/badge/metrics-deterministic-6e40c9.svg)](https://github.com/maribakulj/cinoc/blob/main/docs/guide.md#invariants)
 
 **A reproducible benchmark for transcription *pipelines* — OCR, HTR, VLM, OCR→LLM — on heritage documents.**
 
@@ -19,7 +19,7 @@ its ground truth, and writes a **self‑contained HTML report** of metrics and
 significance tests. No LLM writes the report: every number is an auditable
 function of the inputs.
 
-![Cinoc report](docs/screenshots/report.png)
+![Cinoc report](https://raw.githubusercontent.com/maribakulj/cinoc/main/docs/screenshots/report.png)
 
 ## A first report in two minutes
 
@@ -90,15 +90,15 @@ pages. **The complete figure** — Mistral OCR, Mistral as corrector and as visi
 model, five repetitions each, then the published dataset that lets anyone
 re‑score it offline — comes with the next two steps of the campaign, which wait
 for the maintainer's key and agreement. Protocol, conventions, estimated cost
-and every other view: [`campaigns/2026-11-26-reference/README.md`](campaigns/2026-11-26-reference/README.md).
+and every other view: [`campaigns/2026-11-26-reference/README.md`](https://github.com/maribakulj/cinoc/blob/main/campaigns/2026-11-26-reference/README.md).
 
 ## Three things people come to do
 
 | You have… | You run | |
 |---|---|---|
-| transcriptions from another tool (text or ALTO) | `precomputed` reads `page.<label>.txt`, `alto_source` reads `page.xml`, beside each image — no engine | [guide](docs/guide.md#scoring-ocr-that-cinoc-did-not-produce) |
-| a corpus and several candidate engines | `cinoc run` with recipes or a full YAML spec | [guide](docs/guide.md#the-run-config) |
-| ALTO to post‑correct inside its layout | `cinoc correct alto/` (extra `[saknussemm]`; `--pipeline <p>` for the ALTO of a Cinoc run; `<page>.gt.txt` beside it is the ground truth) | [guide](docs/guide.md#getting-a-corpus) |
+| transcriptions from another tool (text or ALTO) | `precomputed` reads `page.<label>.txt`, `alto_source` reads `page.xml`, beside each image — no engine | [guide](https://github.com/maribakulj/cinoc/blob/main/docs/guide.md#scoring-ocr-that-cinoc-did-not-produce) |
+| a corpus and several candidate engines | `cinoc run` with recipes or a full YAML spec | [guide](https://github.com/maribakulj/cinoc/blob/main/docs/guide.md#the-run-config) |
+| ALTO to post‑correct inside its layout | `cinoc correct alto/` (extra `[saknussemm]`; `--pipeline <p>` for the ALTO of a Cinoc run; `<page>.gt.txt` beside it is the ground truth) | [guide](https://github.com/maribakulj/cinoc/blob/main/docs/guide.md#getting-a-corpus) |
 
 Each of these is run end to end on the **installed wheel** by CI
 (`tests/installed/`).
@@ -119,14 +119,14 @@ Each of these is run end to end on the **installed wheel** by CI
 
 ## Documentation
 
-- [`docs/guide.md`](docs/guide.md) — the user guide: what is measured and why,
+- [`docs/guide.md`](https://github.com/maribakulj/cinoc/blob/main/docs/guide.md) — the user guide: what is measured and why,
   installation extras, the run config, recipes, corpora, correction, the web app
   and the Space, development.
-- [`docs/PLUGINS.md`](docs/PLUGINS.md) — writing a third‑party brick (the only
+- [`docs/PLUGINS.md`](https://github.com/maribakulj/cinoc/blob/main/docs/PLUGINS.md) — writing a third‑party brick (the only
   extension point).
-- [`deploy/README_SPACE.md`](deploy/README_SPACE.md) — the HuggingFace Space.
-- [`MIGRATION_PLAN.md`](MIGRATION_PLAN.md) — decision log; [`CHANGELOG.md`](CHANGELOG.md);
-  working contract: [`CLAUDE.md`](CLAUDE.md).
+- [`deploy/README_SPACE.md`](https://github.com/maribakulj/cinoc/blob/main/deploy/README_SPACE.md) — the HuggingFace Space.
+- [`MIGRATION_PLAN.md`](https://github.com/maribakulj/cinoc/blob/main/MIGRATION_PLAN.md) — decision log; [`CHANGELOG.md`](https://github.com/maribakulj/cinoc/blob/main/CHANGELOG.md);
+  working contract: [`CLAUDE.md`](https://github.com/maribakulj/cinoc/blob/main/CLAUDE.md).
 
 ```bash
 pip install -e ".[dev]" && make check-fast   # contributing: ruff + mypy + the whole suite
@@ -137,13 +137,13 @@ pip install -e ".[dev]" && make check-fast   # contributing: ruff + mypy + the w
 <details>
 <summary><strong>The benchmark composer</strong> — queue recipes, choose their bricks and settings, launch one compared run.</summary>
 
-![Cinoc benchmark composer](docs/screenshots/launcher.png)
+![Cinoc benchmark composer](https://raw.githubusercontent.com/maribakulj/cinoc/main/docs/screenshots/launcher.png)
 </details>
 
 <details>
 <summary><strong>Layout & hybrid transcription</strong> — segment a page, then transcribe block by block.</summary>
 
-![Cinoc segmentation & hybrid transcription](docs/screenshots/segmentation.png)
+![Cinoc segmentation & hybrid transcription](https://raw.githubusercontent.com/maribakulj/cinoc/main/docs/screenshots/segmentation.png)
 </details>
 
 ## The name

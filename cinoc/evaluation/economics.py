@@ -1,7 +1,7 @@
 """Économie d'un run : coûts estimés, débit effectif, Pareto (couche 3).
 
 Heuristique **maison** (héritée de l'analyse de l'implémentation source,
-relue au port — ``PLAN_PARITE.md`` §5.8b : valeurs de test dérivées à la main,
+relue au port — règle D-068 : valeurs de test dérivées à la main,
 jamais en exécutant la source). Modèle de coût simple et auditable :
 
 - **temps machine** : durée mesurée (E1, wall-clock exécuteur) × taux horaire

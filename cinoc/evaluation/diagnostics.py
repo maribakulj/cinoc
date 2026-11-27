@@ -3,7 +3,7 @@
 Collecte au fil du scoring (les représentations normalisées sont déjà
 chargées — aucun re-calcul, aucune relecture de fichier), puis assemble le
 payload ``diagnostics`` (``evaluation.analysis``). Heuristiques **maison**
-(PLAN_PARITE §5.8b : valeurs de test dérivées à la main).
+(règle D-068 : valeurs de test dérivées à la main).
 
 - **Confusions** : les substitutions de l'alignement caractère du CER
   (``Levenshtein.editops``, ``evaluation._alignment``) — top par pipeline ;

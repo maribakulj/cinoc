@@ -1,6 +1,6 @@
 """Diagnostic : métriques + assemblage — valeurs dérivées **à la main**.
 
-Règle d'ancrage (PLAN_PARITE §5.8b) : heuristiques maison — chaque valeur
+Règle d'ancrage (D-068) : heuristiques maison — chaque valeur
 attendue est calculée sur papier, jamais générée en exécutant la source.
 """
 

@@ -43,7 +43,10 @@ avant d'écrire la moindre ligne.**
   aussi le mainteneur (publication, testeurs sur `rc1`, tag) — de S34, les
   parties S34a et S34b (les dix-sept frictions d'un testeur extérieur simulé,
   D-307, D-308) sont livrées ; restent les testeurs humains sur `rc1` (A7),
-  au mainteneur. Les arbitrages
+  au mainteneur ; de S35, la partie S35a (métadonnées du paquet,
+  `CITATION.cff`, `CHANGELOG` prêt pour 1.0.0, plans historiques livrés
+  retirés de l'arbre, D-309) est livrée ; restent le tag, la publication et
+  ce qui les suit, au mainteneur. Les arbitrages
   A1, A2, A3, A6, A9 sont rendus (D-271). Née d'un audit sur le produit et non sur la CI : un
   `pip install cinoc` sans extra ne démarrait pas, et plusieurs chiffres
   affichés ne mesuraient pas ce qu'annonçait leur nom. Cette route **remplace**

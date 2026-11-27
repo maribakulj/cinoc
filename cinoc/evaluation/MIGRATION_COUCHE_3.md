@@ -290,7 +290,7 @@ métriques structurelles PAGE-natives ; découpes des fichiers >400 LOC ; coutur
 >
 > **T9 (D-067)** : `+ inference.py` (Nemenyi post-hoc + bootstrap percentile, stdlib pur, plancher partagé `MIN_SUPPORT`) `+ analysis.py` (canal E2 : `Analysis` + `InferencePayload`) ; le runner produit une analyse par (vue × métrique) applicable, sur les mêmes séries que `significance_p`. Parité numérique prouvée contre la source Picarones. Preuves : `tests/evaluation/test_inference.py` · `test_runner.py::test_inference_analyses_through_evaluate_run`.
 >
-> **T10 (D-068)** : `+ economics.py` + `pricing.json` (donnée datée packagée) — coût machine+jetons depuis les mesures E1, débit effectif, coût marginal, `pareto_front` ; payload `economics` = 2ᵉ membre de l'union `analyses` (discriminateur `kind` activé). Tests **dérivés à la main** (règle PLAN_PARITE §5.8b). Preuves : `tests/evaluation/test_economics.py`.
+> **T10 (D-068)** : `+ economics.py` + `pricing.json` (donnée datée packagée) — coût machine+jetons depuis les mesures E1, débit effectif, coût marginal, `pareto_front` ; payload `economics` = 2ᵉ membre de l'union `analyses` (discriminateur `kind` activé). Tests **dérivés à la main** (règle d'ancrage de D-068). Preuves : `tests/evaluation/test_economics.py`.
 >
 > **T11 (D-069)** : `+ metrics/diagnostics.py` (`searchability`, `hallucination` — registre = 12 métriques, vue `text` par défaut enrichie) `+ diagnostics.py` (collecteur branché au scoring : confusions, pires lignes, documents difficiles → 3ᵉ payload `analyses`). Preuves : `tests/evaluation/test_diagnostics.py`.
 >

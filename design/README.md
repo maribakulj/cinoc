@@ -65,4 +65,4 @@ by-engine, by-document, crosses). **Manque : la segmentation / mise en page**
 (pas d'écran) → axe **structure (T5)**, déjà réservé côté domaine par
 `ArtifactType.LAYOUT`. Place à réserver dans la nav.
 
-Plan d'exécution : [`../PLAN_SPACE_INTERACTIF.md`](../PLAN_SPACE_INTERACTIF.md).
+Plan d'exécution : axe `S#` du roll-up de [`../MIGRATION_PLAN.md`](../MIGRATION_PLAN.md) (la spec UX qui l'accompagnait, livrée, est retirée de l'arbre — D-309).

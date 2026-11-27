@@ -1,6 +1,6 @@
 """Distribution par ligne : alignement F15, percentiles, Gini, seuils, sonde.
 
-Toutes les valeurs attendues sont **dérivées à la main** (PLAN_PARITE §5.8b) :
+Toutes les valeurs attendues sont **dérivées à la main** (règle D-068) :
 fixture canonique = 5 lignes de 5 caractères aux CER [0.0, 0.2, 0.4, 0.6, 1.0]
 (0, 1, 2, 3, 5 substitutions) — percentiles interpolés posés, Gini = 24/55.
 """
