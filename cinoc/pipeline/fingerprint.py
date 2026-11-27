@@ -10,8 +10,9 @@ Ce qui détermine la sortie d'une étape, et rien d'autre :
   d'exploitation (un délai, le nom de la variable d'une clé, « auto-hébergé »),
   que la brique déclare ``affects_output=False`` (``pipeline.params``) : ils
   vont au manifeste, et les changer ne fait réexécuter aucune inférence ;
-- :data:`EXECUTION_VERSION`, pour ce que l'exécuteur ajoute hors des modules
-  (fan-out, découpe des régions).
+- :data:`EXECUTION_VERSION`, pour ce que l'exécuteur ajoute hors des modules,
+  et :data:`FANOUT_VERSION` pour ce qu'en fait le fan-out (découpe des
+  régions, lignes), dans l'empreinte des seules étapes ``fanout``.
 
 La version **du paquet** n'y entre pas : une correction de métrique ne change
 aucune sortie d'inférence, et la mettre dans l'empreinte faisait re-payer toute
@@ -37,12 +38,20 @@ from dataclasses import dataclass, field
 from cinoc.domain.artifacts import compute_content_hash
 from cinoc.domain.pipeline import PipelineStep
 
-#: Version de ce que l'**exécuteur** fait d'une étape, hors du module : le
-#: fan-out par région, la découpe des blocs, la résolution des entrées. À
+#: Version de ce que l'**exécuteur** fait d'une étape, hors du module : la
+#: résolution des entrées (le fan-out a la sienne, ci-dessous). À
 #: relever quand ce code peut changer une sortie — comme un module relève la
 #: sienne. (La version du paquet n'est pas ce signal : elle change à chaque
 #: commit, métriques comprises.)
 EXECUTION_VERSION = "1"
+
+#: Version de ce que le **fan-out** fait des sorties d'un reconnaisseur par
+#: région (découpe en lignes, greffe d'un sous-layout) — hachée dans l'empreinte
+#: des seules étapes ``fanout`` : la relever ré-exécute ce qui passe par le
+#: fan-out, pas un OCR ou un VLM de page entière. **2** : un texte de région
+#: rendu sans layout devient une ligne par ligne de texte, plus une seule ligne
+#: qui contenait des sauts de ligne (D-311).
+FANOUT_VERSION = "2"
 
 
 @dataclass(frozen=True)
@@ -71,23 +80,23 @@ def canonical_json(payload: object) -> bytes:
 
 def step_fingerprint(step: PipelineStep, identity: ModuleIdentity) -> str:
     """Empreinte SHA-256 de ``step`` exécutée par un module d'``identity``."""
-    return compute_content_hash(
-        canonical_json(
-            {
-                "execution": EXECUTION_VERSION,
-                "step": step.model_dump(mode="json"),
-                "module": {
-                    "version": identity.version,
-                    "settings": dict(identity.settings),
-                    "binaries": dict(identity.binaries),
-                },
-            }
-        )
-    )
+    payload: dict[str, object] = {
+        "execution": EXECUTION_VERSION,
+        "step": step.model_dump(mode="json"),
+        "module": {
+            "version": identity.version,
+            "settings": dict(identity.settings),
+            "binaries": dict(identity.binaries),
+        },
+    }
+    if step.fanout:
+        payload["fanout"] = FANOUT_VERSION
+    return compute_content_hash(canonical_json(payload))
 
 
 __all__ = [
     "EXECUTION_VERSION",
+    "FANOUT_VERSION",
     "ModuleIdentity",
     "canonical_json",
     "step_fingerprint",

@@ -273,13 +273,12 @@ def test_an_empty_sub_layout_leaves_the_region_without_lines(tmp_path: Any) -> N
     assert _region_remplie(tmp_path).lines == ()
 
 
-def test_a_text_only_recognizer_still_yields_one_line(tmp_path: Any) -> None:
-    """Le pendant : rien ne change pour un reconnaisseur qui ne sait rendre
-    qu'une chaîne. Il n'a qu'un texte à donner, la région n'a qu'une ligne."""
+def _remplie_par_texte(tmp_path: Any, texte: str) -> Any:
+    """La région remplie par un reconnaisseur qui ne rend qu'une chaîne."""
     from cinoc.pipeline.types import StepOutput
 
     chemin = tmp_path / "t.txt"
-    chemin.write_text("une seule", encoding="utf-8")
+    chemin.write_text(texte, encoding="utf-8")
 
     class _Plat:
         name, version = "plat", "1.0"
@@ -307,8 +306,41 @@ def test_a_text_only_recognizer_still_yields_one_line(tmp_path: Any) -> None:
     remplie, _ = _fill_region(
         region, page, image, _Plat(), _contexte(tmp_path), RunControl(), {}, None
     )
+    return remplie
+
+
+def test_a_text_only_recognizer_still_yields_one_line(tmp_path: Any) -> None:
+    """Le pendant : rien ne change pour un reconnaisseur qui rend une ligne."""
+    remplie = _remplie_par_texte(tmp_path, "une seule")
     assert [ligne.id for ligne in remplie.lines] == ["r1.l1"]
     assert remplie.lines[0].text == "une seule"
+
+
+def test_a_text_only_recognizer_yields_one_line_per_line_of_text(
+    tmp_path: Any,
+) -> None:
+    """Tesseract ou un VLM rendent le texte d'un bloc **avec ses sauts de ligne**.
+
+    Le fan-out en faisait **une** ligne de layout dont le texte contenait des
+    ``\\n`` : une « ligne » qui n'en est pas une. La correction structurée,
+    dont le contrat est la ligne, refusait alors toute correction de chaque
+    bloc (« contains a line separator », 3 tentatives puis repli) — mesuré sur
+    la campagne de référence (S31L, D-311) : rien ne pouvait être corrigé.
+    Les lignes blanches ne sont pas des lignes : la projection les sautait déjà.
+    """
+    remplie = _remplie_par_texte(tmp_path, "ligne un\nligne deux\n\n  \nligne trois\n")
+    assert [ligne.id for ligne in remplie.lines] == ["r1.l1", "r1.l2", "r1.l3"]
+    assert [ligne.text for ligne in remplie.lines] == [
+        "ligne un", "ligne deux", "ligne trois",
+    ]
+    assert all("\n" not in ligne.text for ligne in remplie.lines)
+
+
+def test_a_text_only_recognizer_that_reads_nothing_yields_no_line(
+    tmp_path: Any,
+) -> None:
+    """Comme un sous-layout vide : un bloc illisible n'invente pas de ligne."""
+    assert _remplie_par_texte(tmp_path, "\n \n").lines == ()
 
 
 def test_le_fanout_descend_dans_les_blocs_composes(tmp_path: Any) -> None:

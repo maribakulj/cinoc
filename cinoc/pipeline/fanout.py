@@ -270,7 +270,16 @@ def _lignes_reconnues(
 
     Un reconnaisseur qui déclare ``LAYOUT`` en sortie sait découper son bloc en
     lignes : on les greffe telles quelles. Celui qui ne déclare que ``RAW_TEXT``
-    n'a qu'un texte à donner, et la région n'a donc qu'une ligne.
+    n'a qu'un texte à donner : **une ligne par ligne de ce texte** (les lignes
+    blanches sautées, comme la projection les sautait), sans géométrie.
+
+    **Second défaut, du même ordre (D-311).** Ce texte-là, une seule ligne
+    l'emportait, sauts de ligne compris : Tesseract et un VLM rendent un bloc
+    *avec* ses ``\\n``. Le texte projeté était juste, mais la correction
+    structurée — dont le contrat est la ligne — refusait toute correction
+    d'une « ligne » qui en contenait plusieurs, trois tentatives puis repli :
+    sur une chaîne segmentation → Tesseract → ``saknussemm``, rien ne pouvait
+    être corrigé, et l'appel au modèle était payé trois fois pour rien.
 
     **Le défaut que cette distinction ferme.** Le fan-off ne lisait que le texte
     plat, donc fabriquait *toujours* une ligne par région — non par choix, mais
@@ -283,7 +292,11 @@ def _lignes_reconnues(
     layout = outputs.get(ArtifactType.LAYOUT)
     if layout is not None and layout.uri is not None:
         return _greffer(layout, region)
-    return (Line(id=f"{region.id}{_LINE_ID_SEPARATOR}l1", text=_read_text(outputs)),)
+    lignes = [ligne for ligne in _read_text(outputs).splitlines() if ligne.strip()]
+    return tuple(
+        Line(id=f"{region.id}{_LINE_ID_SEPARATOR}l{rang}", text=ligne)
+        for rang, ligne in enumerate(lignes, start=1)
+    )
 
 
 def _greffer(layout_artifact: Artifact, region: Region) -> tuple[Line, ...]:
