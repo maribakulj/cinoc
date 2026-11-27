@@ -304,3 +304,83 @@ B9, en revanche, ne peut pas être tranché tel qu'il est écrit : sa propre dé
 - n_min calibré sur les scénarios à levier borné.
 
 Restent ensuite à écrire C3 (n_eff) et C5 (support et unités de l'analyse d'invention). Ce sont des clauses ; aucun contrat n'est à repenser. C4 relève de la tranche 4.
+
+---
+
+## 8. Clôture de la révision n° 4
+
+Objet : la révision n° 4 de `CONTRATS.md`, avec sa table « Révision n° 4 » et les scripts de l'auteur `c1_c2_levier_calibration.py` et `n5_resolution_sans_import.py`. Je les ai exécutés tous deux ; ils redonnent les valeurs annoncées.
+
+J'ai recalibré B9 **indépendamment**, avec mon propre code, ma propre graine et un nombre de réplicats différent, sur :
+- les scénarios de C1 et C2 ;
+- **trois scénarios que l'auteur n'a pas vus** :
+  - des dénominateurs bimodaux ;
+  - une corrélation entre le dénominateur et l'effet ;
+  - des grappes de tailles inégales, avec un effet propre à chaque grappe.
+
+Les scripts `r4_*.py` sont dans `/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/ce-review2/` et `run_all.sh` les rejoue avec les autres. Comptez environ 40 minutes : les calibrations sont longues.
+
+**Comptes** : C1 à C5 et la remarque `find_spec` (6 points) donnent **4 levés** (C1, C4, C5, `find_spec`), **2 partiels** (C2 / B9 et C3), **0 non levé**. **4 contradictions nouvelles** (D1 à D4), plus une perte de puissance chiffrée.
+
+### 8.1 Point par point
+
+| Point | Verdict | Une ligne |
+|---|---|---|
+| C1 | **levé** | PS est retirée ; il ne reste qu'une procédure par famille. |
+| C2 / B9 | **partiel** | Le diagnostic de Kish refuse bien les cas à levier non borné. Mais au seuil 20, le niveau ne tient pas sur le scénario lognormal de l'auteur dès que l'erreur Monte-Carlo est réduite (D1), et le critère d'A3 dépend du nombre de simulations (D2). Le diagnostic porte sur les sorties et peut être contourné (D3). |
+| C3 | **partiel** | Les comptes n₀ ≥ 6 (rejet possible) et m ≥ 6 (IC borné) sont exacts, et ce sont les bonnes quantités. Mais ils ignorent la correction de Holm : « avec les 10 pages Dresden, SF peut rejeter » est faux sous la famille par défaut B4 (D4). |
+| C4 | **levé** | Paires héritées fixées, puis optimum sur le reste : `region_cer` = 0,76 (`r4_c4_c5_rejeu.py`). |
+| C5 | **levé** | L'analyse se fait sur le support apparié, et A et B y sont identiques ; l'unité est déclarée par famille (même script). |
+| `find_spec` | **levé** | Résolution par `sys.meta_path` composant par composant : le `__init__` n'est pas exécuté et `cinoc` n'est pas importé (script de l'auteur rejoué). |
+
+### 8.2 Calibration indépendante de B9
+
+BA conditionné à n_eff ≥ 20 (`r4_ba_kish_calibration.py`, 600 jeux par case, 1 499 réplicats). Colonnes :
+- **niveau parmi les retenus** : taux de rejet sous H0, parmi les jeux qui passent le diagnostic ;
+- **BA sans diagnostic** : taux de rejet sur tous les jeux ;
+- **non estimables** : part des jeux refusés par le diagnostic.
+
+| Scénario (n) | Niveau parmi les retenus (borne) | BA sans diagnostic | Non estimables |
+|---|---|---|---|
+| revue (25) | **0,078** (0,077) ; à 2 000 jeux : **0,067** (0,065) | 0,078 | 0 % |
+| revue (30 à 100) | 0,050 à 0,058 | idem | 0 % |
+| levier r0 = 60 (10 à 100) | — | 0,045 à 0,128 ; à 2 000 jeux, **0,061 (60) et 0,071 (100)** | **100 %** (refus justifié : BA ne tient pas) |
+| lognormal (60) | **0,095** (0,086) ; à 1 059 et 770 retenus : **0,096 et 0,079** (0,070 et 0,074) | 0,076 à 0,078 | 45 % |
+| lognormal (100) | 0,065 (0,079) ; à 1 277 retenus : **0,075** (0,068) | 0,070 à 0,073 | 13 à 15 % |
+| MER (25 à 100) | 0,032 à 0,038 | idem | 0 % |
+| MER (20) | — | **0,030** ; à 2 000 jeux : **0,0495** | **100 %** |
+| bimodal\* (100) | 0,072 (0,077) | 0,070 | 2 % |
+| corrélé\* (40, 60, 100) | 0,063 / 0,055 / 0,047 | idem | 10 % / 0 % / 0 % |
+| corrélé\* (30) | 0,25 sur 32 retenus (trop peu pour conclure) | 0,053 ; à 2 000 jeux : **0,0695** | 95 % |
+| grappes\* (40, 60, 100) | 0,072 / 0,058 / 0,053 | idem | 17 % / 0 % / 0 % |
+| Jeux à 20 ≤ n_eff < 25, scénarios lourds confondus (975 jeux) | **0,073** (0,071) | — | — |
+
+\* scénario nouveau, non vu par l'auteur.
+
+Ce qui en ressort :
+- **Le diagnostic fait bien son travail principal.** Il refuse le levier non borné (BA y rejette entre 0,06 et 0,07), et sur les trois scénarios nouveaux le niveau parmi les retenus tient dès que n ≥ 40.
+- **Il ne rend pas BA valide sous des dénominateurs à queue lourde.** Sur le lognormal de l'auteur, le niveau parmi les retenus vaut entre 0,075 et 0,096 à n = 60 et 100. La règle ≥ 30 ne corrige rien (0,081 à n = 100), et un Kish calculé sur la référence non plus (0,071 à 0,073) (`r4_diagnostic_non_ancillaire.py`). C'est BA percentile qui est anticonservatrice d'environ 1,5·α. Les 600 jeux de l'auteur et le faible nombre de jeux retenus (518, borne 0,079) l'avaient masqué.
+- **Puissance perdue là où BA tient.** Pour MER à n = 20, BA a un niveau de 0,0495 (2 000 jeux), mais n_eff ≈ 0,96·n < 20 entraîne 100 % de « non estimable ». Sous l'alternative q_B = 0,4, la puissance de BA (0,43) devient une **puissance publiée de 0**. Ailleurs, la perte touche des cas où BA ne tenait pas non plus :
+  - corrélé à n = 30 : niveau 0,0695, puissance 0,41 réduite à 0,08 publiée ;
+  - bimodal à n = 60 : niveau 0,070, puissance 0,34 réduite à 0,03 ;
+  - levier à n = 100 : puissance 0,78 réduite à 0 (`r4_ba_kish_confirmation.py`).
+
+### 8.3 Contradictions nouvelles
+
+| # | Phrase visée | Contre-exemple minimal | Script | Correction minimale |
+|---|---|---|---|---|
+| **D1** | B9 et § 2.1 d : « au seuil n_eff ≥ 20, aucune case ne dépasse α + 3 erreurs Monte-Carlo » | Scénario lognormal de l'auteur, n = 60 : 0,096 parmi 1 059 jeux retenus (borne 0,070). À n = 100 : 0,075 parmi 1 277 (borne 0,068). Jeux juste au-dessus du seuil : 0,073 (borne 0,071). | `r4_ba_kish_confirmation.py`, `r4_diagnostic_non_ancillaire.py` | Soit publier le niveau réel de BA sous queue lourde (environ 0,075 à 0,08) comme tolérance assumée, soit changer la procédure pour ces familles (bootstrap studentisé, à calibrer), soit ajouter au diagnostic un critère de queue. |
+| **D2** | A3 : « taux de rejet ≤ α + 3 erreurs Monte-Carlo » | Un vrai niveau de 0,075 passe à 600 jeux (borne 0,077) et échoue à 2 000 (borne 0,065). L'invariant change de verdict avec le nombre de simulations, sans que la procédure change. | mêmes scripts | Fixer une **tolérance sur le niveau vrai** (par exemple ≤ 0,06) et un nombre de simulations qui la rend décidable (erreur MC ≤ 0,003, soit environ 5 000 jeux retenus par case). |
+| **D3** | § 2.1 d : n_eff = min sur la paire de (Σ den)²/Σ den², den étant celui de **chaque pipeline** | 40 documents ; A a F1 0,8 et B F1 0,6, avec n_eff 38,9 et p < 10⁻⁴. Si B invente **en plus** 2 000 entités sur un document, il est encore pire (F1 0,10), mais n_eff tombe à 1,4 et le verdict devient « non estimable ». Être pire efface le verdict. | `r4_levier_echappatoire.py` | Calculer le diagnostic sur des quantités de **référence** (tp+fn, n_réf), qui sont ancillaires et communes à la paire (niveau mesuré équivalent, 0,071 à 0,073). Ou publier l'invention massive comme constat. |
+| **D4** | C3, § 2.1 d : « un rejet n'est possible que si n₀ ≥ 6 » ; « avec les 10 pages Dresden, SF peut rejeter » ; B4 (famille par défaut) | `campaigns/2026-11-26-reference/dresden.yaml` : 10 pipelines, 45 paires, 8 couples (vue, métrique établie), 2 estimandes, donc m = 720. La p minimale de SF vaut 2⁻⁹, soit 0,00195, et la p corrigée par Holm vaut **1,0**. Un rejet exige n₀ ≥ 1 + log₂(m/α), soit **15** unités. | `r4_sf_holm_dresden.py` | Écrire le seuil corrigé (rejet possible ssi m·2^(1−n₀) ≤ α), et publier pour chaque campagne le n₀ requis par sa famille. Une famille déclarée réduite (un témoin contre les autres) relève de B4. |
+
+### 8.4 Avis : reste-t-il une contradiction qui empêche de commencer la tranche 1a ?
+
+**Non pour commencer la tranche 1a : tests rouges d'abord, puis l'implémentation des statistiques, des supports, de SF, des rangs et de Holm.** Ces contrats sont stables, sans contradiction ouverte, et D4 n'est qu'un seuil à écrire.
+
+Une condition reste toutefois attachée à B9 : **telle qu'elle est écrite, elle n'est pas satisfaite par son propre scénario lognormal** une fois l'erreur Monte-Carlo maîtrisée (D1). Son critère d'acceptation est aussi indécidable en l'état (D2). Avant d'implémenter BA pour les familles à dénominateur d'hypothèse (F1, MER, exactitudes, précisions, τ), il faut que le mainteneur tranche trois choses :
+1. une tolérance de niveau explicite, avec le nombre de simulations qui la décide ;
+2. un diagnostic calculé sur la référence (il ferme aussi D3) ;
+3. pour les queues lourdes, soit la tolérance qu'il accepte (environ 0,075), soit une autre procédure.
+
+Ce sont des paramètres de B9, pas une contradiction de contrat. Les tests rouges d'A3 peuvent être écrits dès maintenant, avec les sept scénarios de ce paragraphe.
