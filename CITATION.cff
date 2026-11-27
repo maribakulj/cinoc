@@ -1,0 +1,41 @@
+# How to cite Cinoc — Citation File Format 1.2.0 (https://citation-file-format.github.io/).
+#
+# TO BE COMPLETED BY THE MAINTAINER: the repository declares no author name,
+# so only the alias of the repository's public owner is written below. Add
+# each author's `given-names`, `family-names` and `orcid` (and `affiliation`).
+#
+# Deliberately absent until the `v1.0.0` tag exists (S32, S35): `version`,
+# `date-released` and `doi`. The package version is computed from the git tag
+# (setuptools_scm); a `version` written here before that tag would contradict
+# it, and tests/guardrails/test_citation.py refuses one that no tag carries.
+cff-version: 1.2.0
+message: "If you use Cinoc, please cite it using the metadata from this file."
+type: software
+title: Cinoc
+abstract: >-
+  Cinoc is a deterministic, reproducible benchmark for transcription
+  pipelines (OCR, HTR, vision-language models, OCR followed by an LLM) on
+  heritage documents. It runs competing pipelines over a corpus and its
+  ground truth, and writes a self-contained HTML report of metrics and
+  significance tests; no language model writes the report, every number is
+  an auditable function of the inputs.
+authors:
+  - alias: maribakulj
+repository-code: "https://github.com/maribakulj/cinoc"
+license: Apache-2.0
+keywords:
+  - ocr
+  - htr
+  - vlm
+  - llm
+  - transcription
+  - benchmark
+  - evaluation
+  - cer
+  - wer
+  - alto
+  - page-xml
+  - iiif
+  - post-correction
+  - cultural-heritage
+  - digital-humanities
