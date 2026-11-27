@@ -84,3 +84,35 @@ def test_public_mode_keeps_nothing_across_restarts(tmp_path: Path) -> None:
     from cinoc.app.data_dir import user_data_dir
 
     assert not user_data_dir().exists()
+
+
+# --------------------------------------------------------------------------- #
+# Un dossier de données qui dure ne doit pas figer les rapports déposés
+# --------------------------------------------------------------------------- #
+
+
+def test_a_deposited_report_is_refreshed_and_forgotten_across_restarts(
+    tmp_path: Path,
+) -> None:
+    """Le dossier de données durait (D-307) ; la copie d'un rapport déposé
+    (``--reports-dir``) ne doit pas durer avec lui. Relancé après un nouveau
+    ``cinoc run --json``, le serveur servait l'ancienne copie (une graine
+    présente n'était jamais réécrite) ; un rapport retiré du dépôt restait
+    listé, d'une session à l'autre et d'un dépôt à l'autre."""
+    from cinoc.interfaces.web.catalog import seed_reports
+
+    depot, donnees = tmp_path / "depot", tmp_path / "donnees"
+    depot.mkdir()
+    (depot / "a.json").write_text('{"v": 1}', encoding="utf-8")
+    (depot / "b.json").write_text('{"v": 1}', encoding="utf-8")
+    seed_reports(depot, donnees)
+    (donnees / "web-run.json").write_text('{"run": 1}', encoding="utf-8")
+
+    (depot / "a.json").write_text('{"v": 2}', encoding="utf-8")  # relancé
+    (depot / "b.json").unlink()  # retiré du dépôt
+    seed_reports(depot, donnees)
+
+    assert (donnees / "a.json").read_text(encoding="utf-8") == '{"v": 2}'
+    assert not (donnees / "b.json").exists()
+    # Un run du serveur n'est pas une graine : il reste.
+    assert (donnees / "web-run.json").read_text(encoding="utf-8") == '{"run": 1}'

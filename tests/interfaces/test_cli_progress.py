@@ -36,3 +36,32 @@ def test_each_finished_unit_prints_one_line_on_stderr(
     assert {m.group(3) for m in lignes} == {"tesseract", "pero"}
     assert {m.group(5) for m in lignes} == {"fait"}
     assert "[1/" not in sortie.out
+
+
+def test_a_pipeline_name_with_an_arrow_prints_under_a_cp1252_console(
+    tmp_path: Path,
+) -> None:
+    """Un nom de recette porte « → » (``ocr_puis_llm · tesseract → ollama``) ;
+    la console Windows (cp1252) ne l'encode pas, et la ligne de progression
+    ferait tomber le run au premier document."""
+    import os
+    import subprocess
+    import sys
+
+    shutil.copytree(EXAMPLES, tmp_path / "examples")
+    config = tmp_path / "examples" / "config.yaml"
+    config.write_text(
+        config.read_text(encoding="utf-8").replace(
+            "- name: tesseract\n", "- name: tesseract → ollama\n"
+        ),
+        encoding="utf-8",
+    )
+    done = subprocess.run(
+        [sys.executable, "-m", "cinoc.interfaces.cli", "run", str(config),
+         "-o", str(tmp_path / "r.html")],
+        capture_output=True,
+        env={**os.environ, "PYTHONIOENCODING": "cp1252"},
+        check=False,
+    )
+    assert done.returncode == 0, done.stderr.decode("cp1252", "replace")
+    assert b"] tesseract -> ollama \xb7 folio_001 \x97 fait" in done.stderr

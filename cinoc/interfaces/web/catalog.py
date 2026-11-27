@@ -12,6 +12,7 @@ sortir du dossier (défense path-traversal, invariant §12).
 from __future__ import annotations
 
 import filecmp
+import hashlib
 import shutil
 from pathlib import Path
 
@@ -38,21 +39,50 @@ def resolve_report(reports_dir: Path, name: str) -> Path:
     return validated_path(f"{name}.json", reports_dir, must_exist=True)
 
 
+#: Graines recopiées au dernier démarrage (``nom\tempreinte`` par ligne), dans
+#: le dossier de données. Pas en ``.json`` : le catalogue le listerait.
+SEEDS_FILE = ".graines"
+
+
+def _digest(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
 def seed_reports(src: Path, dst: Path) -> None:
-    """Copie les rapports *bakés* (``src``) dans le dossier inscriptible ``dst``.
+    """Copie les rapports *bakés* ou déposés (``src``) dans le dossier de données.
 
     Permet à la vitrine de servir, depuis un **seul** dossier inscriptible, à la
     fois les rapports livrés dans l'image (graine) et ceux produits au runtime.
-    Idempotent et best-effort : un rapport déjà présent n'est jamais réécrit (un
-    run produit prime sur la graine homonyme) ; ``src`` absent → no-op.
+    Un rapport présent qui n'est pas une graine n'est jamais réécrit (un run
+    produit prime sur la graine homonyme) ; ``src`` absent → no-op.
+
+    **Le dossier de données dure** (D-307) : les graines du lancement précédent
+    — notées dans :data:`SEEDS_FILE`, et encore intactes — sont retirées avant
+    de recopier celles d'aujourd'hui. Sans quoi un rapport relancé (``cinoc run
+    --json``) restait servi dans son ancienne version, et un rapport retiré du
+    dépôt, ou d'un autre ``--reports-dir``, restait listé.
     """
-    if src == dst or not src.is_dir():
+    if src == dst:
+        return
+    notes = dst / SEEDS_FILE
+    if notes.is_file():
+        for ligne in notes.read_text(encoding="utf-8").splitlines():
+            nom, _, empreinte = ligne.partition("\t")
+            ancienne = dst / Path(nom).name
+            if ancienne.is_file() and _digest(ancienne) == empreinte:
+                ancienne.unlink()
+        notes.unlink()
+    if not src.is_dir():
         return
     dst.mkdir(parents=True, exist_ok=True)
-    for path in src.glob("*.json"):
+    semees: list[str] = []
+    for path in sorted(src.glob("*.json")):
         target = dst / path.name
         if not target.exists():
             shutil.copy2(path, target)
+            semees.append(f"{path.name}\t{_digest(target)}")
+    if semees:
+        notes.write_text("\n".join(semees) + "\n", encoding="utf-8")
 
 
 def report_image_root(

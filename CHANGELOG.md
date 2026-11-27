@@ -99,7 +99,10 @@ publier, et son moment, appartiennent au mainteneur.
   `%LOCALAPPDATA%\cinoc`), `CINOC_DATA_DIR` prime toujours, et le démarrage
   affiche le dossier retenu. **Changement de comportement** : sans
   `CINOC_DATA_DIR`, le serveur écrit maintenant sous ce dossier ; le mode
-  public (`CINOC_PUBLIC_MODE=true`) reste éphémère.
+  public (`CINOC_PUBLIC_MODE=true`) reste éphémère. Les rapports déposés
+  (`--reports-dir`) sont, eux, recopiés à chaque lancement : un rapport relancé
+  est servi dans sa dernière version, un rapport retiré du dépôt n'est plus
+  listé.
 
 - **Sans l'extra `[images]`, l'absence de Pillow se dit une fois.** L'avertissement se répétait à chaque vignette (quatre lignes pour deux pages).
 

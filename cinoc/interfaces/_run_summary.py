@@ -66,11 +66,14 @@ def print_progress(unit: UnitProgress) -> None:
     celle qu'un script lit ; le bilan d'un échec, lui, détaille les motifs.
     """
     issue = _ISSUES.get(unit.outcome, unit.outcome)
-    print(
-        f"[{unit.done}/{unit.total}] {unit.pipeline} · {unit.document_id} — {issue}",
-        file=sys.stderr,
-        flush=True,
-    )
+    ligne = f"[{unit.done}/{unit.total}] {unit.pipeline} · {unit.document_id} — {issue}"
+    try:
+        ligne.encode(sys.stderr.encoding or "utf-8")
+    except (UnicodeEncodeError, LookupError):
+        # Console cp1252 (Windows) : le « → » d'un nom de recette s'y écrirait
+        # « \u2192 » ; la flèche ASCII se lit.
+        ligne = ligne.replace("→", "->")
+    print(ligne, file=sys.stderr, flush=True)
 
 
 __all__ = ["EXIT_UNITS_FAILED", "print_progress", "unit_summary"]
