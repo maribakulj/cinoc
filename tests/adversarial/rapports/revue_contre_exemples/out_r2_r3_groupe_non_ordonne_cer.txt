@@ -1,0 +1,4 @@
+τ (paires non ordonnées exclues) : aucune paire -> non pénalisé
+CER vue texte, VT déclarée (m1, m2) : 0.919
+CER vue texte, VT déclarée (m2, m1) : 0.0
+=> écrire que la vue texte impose l'ordre de déclaration (convention publiée), ou aligner les membres d'un groupe non ordonné par appariement avant concaténation (comme FCA).

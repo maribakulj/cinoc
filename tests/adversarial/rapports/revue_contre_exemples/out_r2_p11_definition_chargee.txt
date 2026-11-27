@@ -1,0 +1,4 @@
+re-notation seule            : 68 modules, empreinte partielle a41e0a943afb
++ validation des images      : 69 modules, empreinte partielle 656414c40d95
++ analyse longitudinale      : 69 modules, empreinte partielle 5bd8a4aab03d
+=> hacher toutes les sources des paquets cinoc.evaluation et cinoc.formats (sur disque), pas les modules chargés.

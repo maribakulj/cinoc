@@ -1,0 +1,6 @@
+(1) inversion du bootstrap, scénario F1 de la revue, 1000 simulations (erreur MC ≈ 0,007)
+   n =   5 : taux de rejet 0.188 (borne A3 : 0.071)
+   n =  10 : taux de rejet 0.117 (borne A3 : 0.071)
+   n =  30 : taux de rejet 0.036 (borne A3 : 0.071)
+(2) taux d'édition : p (changement de signe exact) contre IC percentile (bootstrap apparié)
+   n = 10 : publications où p et IC se contredisent : 0.501

@@ -1,0 +1,3 @@
+contre-exemple de la revue : poolé == par document : True -> 0.2
+200 000 jetons : Fraction 0.28 s (dénominateur 52 bits), fsum 2.0 ms
+partition en 7 et ordre mélangé : égalité exacte (==) vérifiée

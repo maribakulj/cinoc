@@ -1,0 +1,3 @@
+paires par id admissibles : {'r1': '3/5', 'r2': '3/5'}
+region_cer sous filiation « vérifiée » : 1.2 | sous l'optimum géométrique : 0.0 | Σ IoU : 6/5 contre 2
+=> sous héritage, exiger la géométrie IDENTIQUE à celle de la VT (empreinte des coordonnées), ou ne retenir la paire par id que si elle appartient à un optimum lexicographique.

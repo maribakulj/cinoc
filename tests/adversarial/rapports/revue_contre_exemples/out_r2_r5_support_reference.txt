@@ -1,0 +1,2 @@
+D^M = ['d1'] | Δ macro = 0.0 | micro = {'A': 0.6666666666666666, 'B': 1.0}
+=> A4 doit dire : le macro ne voit pas l'hallucination d'un document sans référence ; le micro la voit.

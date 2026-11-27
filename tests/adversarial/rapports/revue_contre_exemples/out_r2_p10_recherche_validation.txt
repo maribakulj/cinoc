@@ -1,0 +1,3 @@
+(a) poids remplacés : clé identique = True | validation = True
+(b) module enregistré : venv1 | module résolu aujourd'hui : venv2 | validation = True
+=> valider aussi la partie calculée de la définition (poids, sources) ; valider par NOM de module résolu dans le processus courant (find_spec), pas en re-hachant les chemins enregistrés.

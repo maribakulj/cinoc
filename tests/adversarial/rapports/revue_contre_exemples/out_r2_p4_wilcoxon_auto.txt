@@ -1,0 +1,3 @@
+scipy 1.18.1 | n = 7 avec ex æquo : {'auto': np.float64(0.2656), 'exact': np.float64(0.2188), 'approx': np.float64(0.1605)}
+n = 30 avec ex æquo : {'auto': np.float64(0.01757), 'approx': np.float64(0.01757)} | répétable : True
+=> B5 : décrire le comportement réel de la version tracée, passer `method` explicite et écrire la méthode réellement appliquée en présence d'ex æquo.

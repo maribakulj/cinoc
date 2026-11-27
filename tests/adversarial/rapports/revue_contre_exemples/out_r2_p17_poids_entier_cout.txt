@@ -1,0 +1,4 @@
+n =  10 : ppcm des unions =    1355 bits ; opération ≈    0.11 µs ; hongrois n³ ≈      0.00 s par page (hors facteur constant)
+n =  40 : ppcm des unions =   14588 bits ; opération ≈    0.57 µs ; hongrois n³ ≈      0.04 s par page (hors facteur constant)
+n = 100 : ppcm des unions =   63334 bits ; opération ≈    2.24 µs ; hongrois n³ ≈      2.24 s par page (hors facteur constant)
+=> décomposer en composantes connexes du graphe d'admissibilité, et départager les critères par passes successives (ou Fraction seulement entre ex æquo), au lieu d'un poids entier global.

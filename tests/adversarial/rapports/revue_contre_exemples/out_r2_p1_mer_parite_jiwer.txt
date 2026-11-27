@@ -1,0 +1,13 @@
+paires de test_metrics_parity (MER mot) :
+  'le chat noir'                 canon=0.3333 jiwer=0.3333
+  'Icy commence le prologue'     canon=0.2500 jiwer=0.2500
+  'maistre Jehan Froissart'      canon=0.3333 jiwer=0.3333
+  'hello world here'             canon=0.3333 jiwer=0.3333
+  'transcription test case'      canon=0.3333 jiwer=0.3333
+cMER (caractères), paires de test_metrics_conformity :
+  'abc'   'abd'    canon=0.3333333333333333 jiwer=0.3333333333333333
+  'ab'    'abxy'   canon=0.5 jiwer=0.5
+  'chat'  'chien'  canon=0.6 jiwer=0.6
+  ''      'xy'     canon=1.0 jiwer=None
+cas minimal mots : 1.0 contre jiwer 0.6666666666666666
+écarts sur les paires des tests existants : []
