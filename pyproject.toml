@@ -1,13 +1,47 @@
 [build-system]
-requires = ["setuptools>=68", "setuptools_scm>=8"]
+# setuptools >= 77 : licence en expression SPDX (PEP 639), la forme en table
+# étant dépréciée.
+requires = ["setuptools>=77", "setuptools_scm>=8"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "cinoc"
-description = "Banc d'essai déterministe de pipelines de transcription (OCR / HTR / VLM)."
+description = "A deterministic, reproducible benchmark for transcription pipelines (OCR, HTR, VLM, OCR + LLM) on heritage documents, with a self-contained HTML report."
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+# Ni `authors` ni `maintainers` : le dépôt ne déclare aucun nom (LICENSE garde
+# le gabarit d'Apache). Au mainteneur de les poser, avec CITATION.cff (D-309).
+keywords = [
+    "ocr", "htr", "vlm", "llm", "transcription", "benchmark", "evaluation",
+    "cer", "wer", "alto", "page-xml", "iiif", "post-correction",
+    "cultural-heritage", "digital-humanities",
+]
+# « Development Status » passe à « 5 - Production/Stable » avec le tag
+# `v1.0.0`, que pose le mainteneur (D-309). Les versions de Python et les
+# systèmes sont ceux de la matrice du job `test` (.github/workflows/ci.yml).
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Environment :: Web Environment",
+    "Framework :: FastAPI",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Natural Language :: English",
+    "Natural Language :: French",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Image Recognition",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+    "Topic :: Sociology :: History",
+    "Topic :: Text Processing :: Linguistic",
+]
 dynamic = ["version"]
 dependencies = [
     "pydantic>=2",
@@ -94,6 +128,16 @@ oracle = [
     "Deprecated==1.2.0",
     "wrapt==1.17.3",
 ]
+
+# Chaque adresse est vérifiée par `tests/guardrails/test_package_metadata.py` :
+# le dépôt, ses tickets, ou un fichier qui existe dans l'arbre. Ni PyPI, ni le
+# Space, ni un DOI tant qu'ils ne sont pas publiés (S32, S35).
+[project.urls]
+Homepage = "https://github.com/maribakulj/cinoc"
+Source = "https://github.com/maribakulj/cinoc"
+Issues = "https://github.com/maribakulj/cinoc/issues"
+Changelog = "https://github.com/maribakulj/cinoc/blob/main/CHANGELOG.md"
+Documentation = "https://github.com/maribakulj/cinoc/blob/main/docs/guide.md"
 
 [project.scripts]
 cinoc = "cinoc.interfaces.cli:main"
