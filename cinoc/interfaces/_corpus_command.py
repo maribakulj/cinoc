@@ -198,6 +198,11 @@ def run_corpus_search(args: argparse.Namespace) -> int:
     reste = len(entrees) - args.limit
     if reste > 0:
         print(f"… et {reste} autre(s) — affine la recherche ou relève --limit.")
+    print(
+        "\nLa recherche renvoie vers la source et ne télécharge rien : récupère "
+        "le corpus à son adresse, puis « cinoc corpus import zip » (images + "
+        "transcriptions)."
+    )
     return 0
 
 

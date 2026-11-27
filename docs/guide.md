@@ -372,9 +372,11 @@ cinoc corpus import hf <owner/dataset>        --split train    # a HuggingFace d
 cinoc corpus import curated <owner/dataset>   --revision ...   # a curated Cinoc dataset, pinned
 cinoc corpus import zip corpus.zip                             # a local archive
 
-cinoc corpus search "presse"        # the HTR-United catalogue
+cinoc corpus search "medieval"      # the HTR-United catalogue: where to find it
 cinoc corpus discover               # your own curated datasets on HuggingFace
 ```
+
+`cinoc corpus search` reads the [HTR-United](https://htr-united.github.io/) catalogue (an embedded sample when it is unreachable — it says so) and gives each entry's address: it **does not download** the corpus. An HTR-United entry is a repository of ALTO or PAGE files in its own layout; fetch it from its source, then import the images and transcriptions (`cinoc corpus import zip`). No command imports an entry by its name.
 
 The other way round, `cinoc corpus standardize` **produces** a curated dataset from a raw folder (`<raw>/page/*.xml` PAGE XML + `<raw>/jpg/*.jpg`): static IIIF derivatives (Image API 3, level 0), the ground truth as text and PAGE, a `corpus.json` and a HuggingFace dataset card carrying the `cinoc-corpus` tag that `discover` looks for. Licence, image rights and attribution are required — a dataset published without them cannot be reused. Publishing is a separate, hand-run step (`scripts/publish_dataset.py`, it needs a write token), so the command has no web counterpart: it writes to the curator's disk.
 

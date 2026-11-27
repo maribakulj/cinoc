@@ -271,6 +271,22 @@ def test_search_lists_catalogue_entries(
     assert capsys.readouterr().out.strip()
 
 
+def test_search_says_it_points_to_the_source_and_downloads_nothing(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """S34b, n° 10 : le testeur cherchait la commande qui importe une entrée ;
+    il n'y en a pas — la recherche donne l'adresse de la source, et le dit."""
+    from cinoc.adapters.corpus.htr_united import HTRUnitedCatalogue
+
+    monkeypatch.setattr(
+        "cinoc.interfaces._corpus_command.fetch_catalogue",
+        lambda: HTRUnitedCatalogue.from_demo(),
+    )
+    assert main(["corpus", "search", "medieval"]) == 0
+    sortie = capsys.readouterr().out
+    assert "ne télécharge rien" in sortie and "corpus import zip" in sortie
+
+
 def test_discover_without_an_account_says_how_to_name_one(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

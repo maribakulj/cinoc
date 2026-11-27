@@ -48,6 +48,13 @@ publier, et son moment, appartiennent au mainteneur.
 
 ### Corrigé
 
+- **La recherche HTR-United dit ce qu'elle fait.** L'exemple du guide
+  (`"presse"`) ne trouvait rien ; il devient `"medieval"`, cherché par un test
+  dans le catalogue embarqué. La commande et le guide disent que la recherche
+  renvoie vers la source et ne télécharge rien. Un identifiant dérivé d'une
+  URL n'emporte plus son fragment ni sa requête (`3333627#.YhN1G1vMLUQ` →
+  `3333627`).
+
 - **La fourchette de `--repeat` nomme sa vue.** `cer : 0.0051 – 0.0051`
   s'affichait deux fois, une par vue, sans dire laquelle ; chaque ligne dit
   `pipeline · vue · métrique`, et la console dit que la fourchette vit dans

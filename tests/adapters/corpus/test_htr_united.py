@@ -56,3 +56,14 @@ def test_fetch_catalogue_falls_back_to_demo(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(htr_united, "fetch_text", boom)
     cat = fetch_catalogue()
     assert cat.is_demo  # repli silencieux, jamais d'exception remontée
+
+
+def test_an_id_derived_from_an_url_drops_its_fragment_and_query() -> None:
+    """S34b, n° 10 : ``3333627#.YhN1G1vMLUQ`` — un fragment de suivi d'URL
+    Zenodo pris pour un morceau d'identifiant."""
+    entries = parse_catalogue(
+        "- title: Zenodo\n  url: https://zenodo.org/record/3333627#.YhN1G1vMLUQ\n"
+        "- title: Requete\n  url: https://example.org/corpus/b/?tab=readme\n"
+    )
+    assert [e.id for e in entries] == ["3333627", "b"]
+    assert entries[0].url == "https://zenodo.org/record/3333627#.YhN1G1vMLUQ"
