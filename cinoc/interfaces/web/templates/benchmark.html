@@ -151,6 +151,13 @@
       <span class="dropzone-meta">{{ t.bench_metric_profile_hint }}</span>
     </div>
     <div class="panel stack-panel">
+      <label class="label" for="detailed-analyses">
+        <input id="detailed-analyses" name="detailed_analyses" type="checkbox">
+        {{ t.bench_detailed }}
+      </label>
+      <span class="dropzone-meta">{{ t.bench_detailed_hint }}</span>
+    </div>
+    <div class="panel stack-panel">
       <label class="label">{{ t.bench_config_io }}</label>
       <div class="config-io">
         <button id="config-export" class="btn btn-sm" type="button">{{ t.bench_config_export }}</button>

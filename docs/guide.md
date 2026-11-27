@@ -224,16 +224,16 @@ Nothing is persisted — a custom config is applied on the fly, exactly as in th
 
 ### The run config
 
-`cinoc run` takes a full `RunSpec` in YAML — a corpus, candidate pipelines, and the views that score them. A **runnable, commented example** ships with the repo:
+`cinoc run` takes a full `RunSpec` in YAML — a corpus, candidate pipelines, and the views that score them. A **runnable, commented example** lives in the repository, from a clone (`pip install` does not ship `examples/`; [browse it on GitHub](https://github.com/maribakulj/cinoc/tree/main/examples)):
 
 ```bash
 cinoc run examples/config.yaml --check     # read the plan first
 cinoc run examples/config.yaml -o report.html
 ```
 
-It needs **no engine and no network**: it replays frozen outputs through `precomputed`, so it works before you install anything. Swap `precomputed:<label>` for `tesseract`, `openai`, `kraken`… for a real run. A test loads *and runs* every example in `examples/`, so they cannot go stale.
+It needs **no engine and no network**: it replays frozen outputs through `precomputed`, so it works before you install anything. The page images it names (`corpus/folio_001.png`…) are not shipped, and it says so: `precomputed` does not read the image, so the run passes and the report shows a synthetic preview instead of a thumbnail. Swap `precomputed:<label>` for `tesseract`, `openai`, `kraken`… for a real run. A test loads *and runs* every example in `examples/`, so they cannot go stale.
 
-Two flags worth knowing. `--check` validates the file and prints what would run without executing it — a benchmark spec commits billed API calls and hours of compute, so reading it first is not a luxury. `--alto-dir` keeps the ALTO a run produced: without it, an ALTO your spec asked for dies with the temporary workspace.
+Two flags worth knowing. `--check` validates the file and prints what would run without executing it — a benchmark spec commits billed API calls and hours of compute, so reading it first is not a luxury. `--alto-dir` keeps the ALTO a run produced: without it, an ALTO your spec asked for dies with the temporary workspace. By default a run computes the metrics only (**fast mode**); `--analyses toutes` — the *Detailed mode* box of the benchmark page — also computes the **analyses**: the correction balance (what improved, got worse, was rewritten) and the corrector's decisions that the correction recipes announce, bootstrap intervals, the error taxonomy… When a run scores several views, each view has its own significance test, named beside its verdict: a difference can be significant under `texte (lignes)`, which counts line breaks, and absent under `texte`.
 
 **Scoring an intermediate step.** A view scores the output of the most downstream step that produces one of its `candidate_types`. Name a step with `target_step` to score an earlier one — every step's output is kept, so an ablation (OCR alone vs. OCR + correction) is measured **in one run, without re-executing the prefix**:
 

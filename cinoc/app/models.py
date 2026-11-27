@@ -159,12 +159,22 @@ def describe_listing(listing: ModelListing) -> str:
     return f"Modèles disponibles chez {listing.provider} : {cited}{more}."
 
 
-def missing_model_message(adapter_name: str, settings: Mapping[str, object]) -> str:
-    """Le refus d'une instance sans modèle : ce qu'il faut écrire, et parmi quoi."""
+def missing_model_message(
+    adapter_name: str, settings: Mapping[str, object], *, step: str | None = None
+) -> str:
+    """Le refus d'une instance sans modèle : ce qu'il faut écrire, et parmi quoi.
+
+    Dans les deux syntaxes où on l'écrit (S34b) : une recette le reçoit par
+    ``--set <étape>.model=…`` (``step``, quand l'étape est connue), une spec
+    YAML sous ``adapter_kwargs``."""
     provider = adapter_name.split(":", 1)[0]
+    recette = (
+        f"avec une recette : --set {step}.model=<modèle> ; " if step else ""
+    )
     return (
-        f"{adapter_name} : aucun modèle nommé (adapter_kwargs.{adapter_name}.model)"
-        " — aucun modèle par défaut. "
+        f"{adapter_name} : aucun modèle nommé — aucun modèle par défaut. "
+        f"Le nommer : {recette}dans une spec YAML : "
+        f'adapter_kwargs: {{"{adapter_name}": {{model: <modèle>}}}}. '
         + describe_listing(available_models(provider, settings))
     )
 
@@ -201,7 +211,9 @@ def check_spec_models(spec: RunSpec, *, live: bool) -> tuple[str, ...]:
             settings = spec.adapter_kwargs.get(name, {})
             model = _named_model(settings)
             if model is None:
-                raise ModelChoiceError(missing_model_message(name, settings))
+                raise ModelChoiceError(
+                    missing_model_message(name, settings, step=step.id)
+                )
             if not live:
                 continue
             listing = available_models(provider, settings, wanted=model)

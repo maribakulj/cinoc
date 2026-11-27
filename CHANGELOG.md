@@ -48,6 +48,19 @@ publier, et son moment, appartiennent au mainteneur.
 
 ### Corrigé
 
+- **Ce que promettent les recettes de correction est atteignable.**
+  `ocr_puis_llm` et `alto_corrige` annonçaient que le rapport dit ce qui a été
+  amélioré, dégradé ou refusé : ces bilans sont des analyses, que le mode
+  rapide (le défaut) ne calcule pas. Les descriptions disent « en mode
+  détaillé » ; la page du banc d'essai reçoit la case *Mode détaillé*, que
+  `POST /api/runs` acceptait déjà (`detailed_analyses`) mais qu'aucune page
+  n'offrait. `cinoc hybrid --help` lit ses briques sur les rôles de la recette
+  qu'il exécute (il oubliait `ollama`). Le refus d'un modèle absent dit les
+  deux syntaxes (`--set vlm.model=…` d'une recette, `adapter_kwargs` d'une
+  spec). Chaque test de significativité nomme la vue qu'il juge quand le run
+  en a plusieurs. `examples/config.yaml` dit que ses images ne sont pas
+  livrées ; le guide, que `examples/` vient d'un clone.
+
 - **La page, relue par un testeur.** Le surtitre de la bibliothèque n'est plus
   en anglais dans la page française (`Vitrine · bibliothèque`) ; l'apostrophe
   droite, que la police d'accent dessine comme un accent espacé (« l ’

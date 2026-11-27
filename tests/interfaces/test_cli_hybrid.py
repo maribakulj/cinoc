@@ -229,3 +229,19 @@ def test_layout_files_are_named_so_they_can_be_replayed(tmp_path: Path) -> None:
 
     assert [p.name for p in ecrits] == ["doc_1.layout.json"]
     assert ecrits[0].read_text(encoding="utf-8") == '{"pages": []}'
+
+
+def test_hybrid_help_lists_the_bricks_the_recipe_offers(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """S34b : ``cinoc hybrid --help`` ne citait pas ``ollama`` en VLM par bloc,
+    que ``cinoc list recipes`` offrait — l'aide est lue sur les rôles de la
+    recette ``segmentation_puis_lecture``, qu'exécute ``hybrid``."""
+    from cinoc.app.recipes import roles
+
+    with pytest.raises(SystemExit):
+        main(["hybrid", "--help"])
+    aide = " ".join(capsys.readouterr().out.split())
+    for role in ("segmenter", "region_recognizer"):
+        for brique in roles()[role].briques:
+            assert brique in aide, (role, brique)

@@ -119,6 +119,10 @@ _STRINGS: dict[str, dict[str, str]] = {
         "bench_char_exclude_ph": "ex : ,.;:!? — exclus des deux côtés",
         "bench_char_exclude_hint": "Filtrés de la GT ET de l'hypothèse avant le "
         "calcul (ne mesure plus ces caractères).",
+        "bench_detailed": "Mode détaillé (toutes les analyses)",
+        "bench_detailed_hint": "Calcule aussi les analyses : bilan de "
+        "correction, décisions du correcteur, intervalles, taxonomie… Plus "
+        "lent ; le mode rapide ne calcule que les métriques.",
         "bench_metric_profile": "Profil de métriques",
         "bench_metric_profile_hint": "Choisit les colonnes de classement du "
         "rapport ; n'allège pas la donnée collectée (sections inchangées).",
@@ -381,6 +385,10 @@ _STRINGS: dict[str, dict[str, str]] = {
         "bench_config_hint": "Saves the form state (recipe queue + options) as "
         "JSON; reloadable later. No server persistence. A secret (token) is "
         "never written to it: it is asked again on import.",
+        "bench_detailed": "Detailed mode (every analysis)",
+        "bench_detailed_hint": "Also computes the analyses: correction "
+        "balance, corrector decisions, intervals, taxonomy… Slower; the fast "
+        "mode computes the metrics only.",
         "bench_metric_profile": "Metric profile",
         "bench_metric_profile_hint": "Picks the report's ranking columns; does not "
         "drop collected data (sections unchanged).",

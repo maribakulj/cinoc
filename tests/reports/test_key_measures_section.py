@@ -385,3 +385,23 @@ def test_an_offline_rescore_measures_no_duration() -> None:
 def test_no_duration_column_without_measured_durations() -> None:
     html = KeyMeasuresSection().render(_result(), SectionContext())
     assert html is not None and "s/page" not in html and "durée" not in html
+
+
+def test_each_test_names_the_view_it_judges() -> None:
+    """S34b, n° 14 : « différence significative » dans « texte (lignes) », CER
+    à 0 dans « texte » — deux tests, deux vues, et rien ne le disait à côté du
+    verdict. Plusieurs vues : chaque test nomme la sienne, et le chapeau dit
+    qu'un verdict ne vaut que pour sa vue."""
+    base = _result(p=0.03)
+    lignes = tuple(
+        p.model_copy(update={"view": "texte (lignes)"}) for p in base.pipelines
+    )
+    deux = base.model_copy(update={"pipelines": base.pipelines + lignes})
+    fr = KeyMeasuresSection().render(deux, SectionContext())
+    en = KeyMeasuresSection().render(deux, SectionContext(lang="en"))
+    assert fr is not None and en is not None
+    assert "Test inter-moteurs (CER, vue « Texte (lignes) »)" in fr
+    assert "ne vaut que pour sa vue" in fr
+    assert "Inter-engine test (CER, “Text (lines)” view)" in en
+    seule = KeyMeasuresSection().render(base, SectionContext())
+    assert seule is not None and "Test inter-moteurs (CER)" in seule

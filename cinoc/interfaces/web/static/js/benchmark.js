@@ -82,6 +82,7 @@
     var normalization = document.getElementById("normalization");
     var charExclude = document.getElementById("char-exclude");
     var metricProfile = document.getElementById("metric-profile");
+    var detailed = document.getElementById("detailed-analyses");
     var queueTpl = document.getElementById("queue-row-tpl");
     var queueList = document.getElementById("queue-list");
     var queueEmpty = document.getElementById("queue-empty");
@@ -165,6 +166,7 @@
       if (normalization && normalization.value) cfg.normalization = normalization.value;
       if (charExclude && charExclude.value) cfg.char_exclude = charExclude.value;
       if (metricProfile && metricProfile.value) cfg.metric_profile = metricProfile.value;
+      if (detailed && detailed.checked) cfg.detailed_analyses = true;
       return cfg;
     }
 
@@ -205,6 +207,7 @@
       if (normalization) normalization.value = cfg.normalization || "";
       if (charExclude) charExclude.value = cfg.char_exclude || "";
       if (metricProfile && cfg.metric_profile) metricProfile.value = cfg.metric_profile;
+      if (detailed) detailed.checked = cfg.detailed_analyses === true;
     }
 
     function importConfig(file, feedback) {

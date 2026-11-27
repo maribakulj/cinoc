@@ -6,12 +6,13 @@ title:
   en: OCR then LLM post-correction
 description:
   fr: >-
-    Un OCR lit la page, un modèle de langue corrige son texte. Le rapport dit
-    ce qui a été amélioré, ce qui a été dégradé, et ce qui a été réécrit sans
-    raison.
+    Un OCR lit la page, un modèle de langue corrige son texte. En mode
+    détaillé, le rapport dit ce qui a été amélioré, ce qui a été dégradé, et ce
+    qui a été réécrit sans raison.
   en: >-
-    An OCR reads the page, a language model corrects its text. The report says
-    what improved, what got worse, and what was rewritten for nothing.
+    An OCR reads the page, a language model corrects its text. In detailed
+    mode, the report says what improved, what got worse, and what was rewritten
+    for nothing.
 steps:
   - id: ocr
     role: ocr
