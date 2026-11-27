@@ -1,0 +1,1436 @@
+{
+  "runs": 5,
+  "corpus": "dresden-k80-1665",
+  "spreads": [
+    {
+      "pipeline": "E0 · mistral-ocr",
+      "view": "lecture",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 2.392164431149281,
+      "median_value": 3.3687156228891246,
+      "maximum": 5.0602142236804015,
+      "spread": 0.7920080206244631
+    },
+    {
+      "pipeline": "E0 · mistral-ocr",
+      "view": "lecture",
+      "metric": "cer_diplo",
+      "n": 5,
+      "minimum": 2.3892695165492617,
+      "median_value": 3.363408279455756,
+      "maximum": 5.0549068802470325,
+      "spread": 0.7925405250322766
+    },
+    {
+      "pipeline": "E0 · mistral-ocr",
+      "view": "lecture",
+      "metric": "wer",
+      "n": 5,
+      "minimum": 3.4484769928710306,
+      "median_value": 3.64549578742709,
+      "maximum": 5.026571613739469,
+      "spread": 0.4328888888888889
+    },
+    {
+      "pipeline": "E0 · mistral-ocr",
+      "view": "sans césure",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 2.3961972782549945,
+      "median_value": 3.3755429012643567,
+      "maximum": 5.066402856867097,
+      "spread": 0.7910447761194029
+    },
+    {
+      "pipeline": "E0 · mistral-ocr",
+      "view": "texte",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 2.392164431149281,
+      "median_value": 3.3687156228891246,
+      "maximum": 5.0602142236804015,
+      "spread": 0.7920080206244631
+    },
+    {
+      "pipeline": "E0 · mistral-ocr",
+      "view": "texte",
+      "metric": "cer_diplo",
+      "n": 5,
+      "minimum": 2.3892695165492617,
+      "median_value": 3.363408279455756,
+      "maximum": 5.0549068802470325,
+      "spread": 0.7925405250322766
+    },
+    {
+      "pipeline": "E0 · mistral-ocr",
+      "view": "texte",
+      "metric": "cmer",
+      "n": 5,
+      "minimum": 0.8053407835748164,
+      "median_value": 0.8522634784317027,
+      "maximum": 0.9017264504591258,
+      "spread": 0.11309374310122264
+    },
+    {
+      "pipeline": "E0 · mistral-ocr",
+      "view": "texte",
+      "metric": "mer",
+      "n": 5,
+      "minimum": 0.9408183970240108,
+      "median_value": 0.9483158082338264,
+      "maximum": 0.9645566471831861,
+      "spread": 0.025032009329662208
+    },
+    {
+      "pipeline": "E0 · mistral-ocr",
+      "view": "texte",
+      "metric": "unanchored_trigrams",
+      "n": 5,
+      "minimum": 0.6259467743361528,
+      "median_value": 0.6470974952337124,
+      "maximum": 0.6643385802147399,
+      "spread": 0.05932924506951023
+    },
+    {
+      "pipeline": "E0 · mistral-ocr",
+      "view": "texte",
+      "metric": "wer",
+      "n": 5,
+      "minimum": 3.4484769928710306,
+      "median_value": 3.64549578742709,
+      "maximum": 5.026571613739469,
+      "spread": 0.4328888888888889
+    },
+    {
+      "pipeline": "E0 · mistral-ocr",
+      "view": "texte (lignes)",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 2.3955418315159704,
+      "median_value": 3.3746984463958314,
+      "maximum": 5.0652320756537685,
+      "spread": 0.7910900148690381
+    },
+    {
+      "pipeline": "E0 · tesseract",
+      "view": "lecture",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 0.7563446878317089,
+      "median_value": 0.7563446878317089,
+      "maximum": 0.7563446878317089,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E0 · tesseract",
+      "view": "lecture",
+      "metric": "cer_diplo",
+      "n": 5,
+      "minimum": 0.7556692077583711,
+      "median_value": 0.7556692077583711,
+      "maximum": 0.7556692077583711,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E0 · tesseract",
+      "view": "lecture",
+      "metric": "wer",
+      "n": 5,
+      "minimum": 0.998703823720026,
+      "median_value": 0.998703823720026,
+      "maximum": 0.998703823720026,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E0 · tesseract",
+      "view": "sans césure",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 0.7680725798668082,
+      "median_value": 0.7680725798668082,
+      "maximum": 0.7680725798668082,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E0 · tesseract",
+      "view": "texte",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 0.7563446878317089,
+      "median_value": 0.7563446878317089,
+      "maximum": 0.7563446878317089,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E0 · tesseract",
+      "view": "texte",
+      "metric": "cer_diplo",
+      "n": 5,
+      "minimum": 0.7556692077583711,
+      "median_value": 0.7556692077583711,
+      "maximum": 0.7556692077583711,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E0 · tesseract",
+      "view": "texte",
+      "metric": "cmer",
+      "n": 5,
+      "minimum": 0.752712954960146,
+      "median_value": 0.752712954960146,
+      "maximum": 0.752712954960146,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E0 · tesseract",
+      "view": "texte",
+      "metric": "mer",
+      "n": 5,
+      "minimum": 0.9941935483870967,
+      "median_value": 0.9941935483870967,
+      "maximum": 0.9941935483870967,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E0 · tesseract",
+      "view": "texte",
+      "metric": "unanchored_trigrams",
+      "n": 5,
+      "minimum": 0.8412429378531073,
+      "median_value": 0.8412429378531073,
+      "maximum": 0.8412429378531073,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E0 · tesseract",
+      "view": "texte",
+      "metric": "wer",
+      "n": 5,
+      "minimum": 0.998703823720026,
+      "median_value": 0.998703823720026,
+      "maximum": 0.998703823720026,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E0 · tesseract",
+      "view": "texte (lignes)",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 0.7683103348451221,
+      "median_value": 0.7683103348451221,
+      "maximum": 0.7683103348451221,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E1 · segmentation → mistral (VLM par région)",
+      "view": "lecture",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 1.119559972980797,
+      "median_value": 1.1467721702209785,
+      "maximum": 1.2000385988613336,
+      "spread": 0.07017839111410303
+    },
+    {
+      "pipeline": "E1 · segmentation → mistral (VLM par région)",
+      "view": "lecture",
+      "metric": "cer_diplo",
+      "n": 5,
+      "minimum": 1.1137701437807586,
+      "median_value": 1.1412718324809419,
+      "maximum": 1.194055775354627,
+      "spread": 0.07034750993489465
+    },
+    {
+      "pipeline": "E1 · segmentation → mistral (VLM par région)",
+      "view": "lecture",
+      "metric": "wer",
+      "n": 5,
+      "minimum": 1.611147116007777,
+      "median_value": 1.6500324044069994,
+      "maximum": 1.7167854828256643,
+      "spread": 0.06402199528672431
+    },
+    {
+      "pipeline": "E1 · segmentation → mistral (VLM par région)",
+      "view": "sans césure",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 1.134446481999807,
+      "median_value": 1.1619534793938808,
+      "maximum": 1.2143615481131165,
+      "spread": 0.06877647645153245
+    },
+    {
+      "pipeline": "E1 · segmentation → mistral (VLM par région)",
+      "view": "texte",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 1.119559972980797,
+      "median_value": 1.1467721702209785,
+      "maximum": 1.2000385988613336,
+      "spread": 0.07017839111410303
+    },
+    {
+      "pipeline": "E1 · segmentation → mistral (VLM par région)",
+      "view": "texte",
+      "metric": "cer_diplo",
+      "n": 5,
+      "minimum": 1.1137701437807586,
+      "median_value": 1.1412718324809419,
+      "maximum": 1.194055775354627,
+      "spread": 0.07034750993489465
+    },
+    {
+      "pipeline": "E1 · segmentation → mistral (VLM par région)",
+      "view": "texte",
+      "metric": "cmer",
+      "n": 5,
+      "minimum": 0.7286566800633297,
+      "median_value": 0.7324195838735569,
+      "maximum": 0.7362936648904678,
+      "spread": 0.010427062568081834
+    },
+    {
+      "pipeline": "E1 · segmentation → mistral (VLM par région)",
+      "view": "texte",
+      "metric": "mer",
+      "n": 5,
+      "minimum": 0.9569932685115932,
+      "median_value": 0.9580152671755725,
+      "maximum": 0.9587404994571118,
+      "spread": 0.001823802819625047
+    },
+    {
+      "pipeline": "E1 · segmentation → mistral (VLM par région)",
+      "view": "texte",
+      "metric": "unanchored_trigrams",
+      "n": 5,
+      "minimum": 0.6904971127290986,
+      "median_value": 0.6959429335711101,
+      "maximum": 0.7041045910611128,
+      "spread": 0.019552577769831984
+    },
+    {
+      "pipeline": "E1 · segmentation → mistral (VLM par région)",
+      "view": "texte",
+      "metric": "wer",
+      "n": 5,
+      "minimum": 1.611147116007777,
+      "median_value": 1.6500324044069994,
+      "maximum": 1.7167854828256643,
+      "spread": 0.06402199528672431
+    },
+    {
+      "pipeline": "E1 · segmentation → mistral (VLM par région)",
+      "view": "texte (lignes)",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 1.1335520602142237,
+      "median_value": 1.160764257454405,
+      "maximum": 1.2130657145614205,
+      "spread": 0.06850112228780453
+    },
+    {
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "lecture",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 0.7774775644118499,
+      "median_value": 0.7774775644118499,
+      "maximum": 0.7774775644118499,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "lecture",
+      "metric": "cer_diplo",
+      "n": 5,
+      "minimum": 0.7766090900318441,
+      "median_value": 0.7766090900318441,
+      "maximum": 0.7766090900318441,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "lecture",
+      "metric": "wer",
+      "n": 5,
+      "minimum": 1.303953337653921,
+      "median_value": 1.303953337653921,
+      "maximum": 1.303953337653921,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "sans césure",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 0.7947109352379114,
+      "median_value": 0.7947109352379114,
+      "maximum": 0.7947109352379114,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "texte",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 0.7774775644118499,
+      "median_value": 0.7774775644118499,
+      "maximum": 0.7774775644118499,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "texte",
+      "metric": "cer_diplo",
+      "n": 5,
+      "minimum": 0.7766090900318441,
+      "median_value": 0.7766090900318441,
+      "maximum": 0.7766090900318441,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "texte",
+      "metric": "cmer",
+      "n": 5,
+      "minimum": 0.7496278377372534,
+      "median_value": 0.7496278377372534,
+      "maximum": 0.7496278377372534,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "texte",
+      "metric": "mer",
+      "n": 5,
+      "minimum": 0.9945625308947108,
+      "median_value": 0.9945625308947108,
+      "maximum": 0.9945625308947108,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "texte",
+      "metric": "unanchored_trigrams",
+      "n": 5,
+      "minimum": 0.8629711177308639,
+      "median_value": 0.8629711177308639,
+      "maximum": 0.8629711177308639,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "texte",
+      "metric": "wer",
+      "n": 5,
+      "minimum": 1.303953337653921,
+      "median_value": 1.303953337653921,
+      "maximum": 1.303953337653921,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E1 · segmentation → tesseract",
+      "view": "texte (lignes)",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 0.7949435491652996,
+      "median_value": 0.7949435491652996,
+      "maximum": 0.7949435491652996,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E2 · mistral-ocr → mistral",
+      "view": "lecture",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 0.9217408086461449,
+      "median_value": 1.4060600212293737,
+      "maximum": 3.8495609379523303,
+      "spread": 2.0822867339235467
+    },
+    {
+      "pipeline": "E2 · mistral-ocr → mistral",
+      "view": "lecture",
+      "metric": "cer_diplo",
+      "n": 5,
+      "minimum": 0.9178809225127859,
+      "median_value": 1.4033581009360223,
+      "maximum": 3.8450255717456336,
+      "spread": 2.0858144811937014
+    },
+    {
+      "pipeline": "E2 · mistral-ocr → mistral",
+      "view": "lecture",
+      "metric": "wer",
+      "n": 5,
+      "minimum": 1.510045366169799,
+      "median_value": 2.1095268956578095,
+      "maximum": 5.379779650032404,
+      "spread": 1.8344086021505372
+    },
+    {
+      "pipeline": "E2 · mistral-ocr → mistral",
+      "view": "sans césure",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 0.5904835440594537,
+      "median_value": 0.6434707074606698,
+      "maximum": 0.6844899141009555,
+      "spread": 0.14609269536523178
+    },
+    {
+      "pipeline": "E2 · mistral-ocr → mistral",
+      "view": "texte",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 0.5773424683971823,
+      "median_value": 0.6330213258708868,
+      "maximum": 0.6742256103444948,
+      "spread": 0.15304878048780482
+    },
+    {
+      "pipeline": "E2 · mistral-ocr → mistral",
+      "view": "texte",
+      "metric": "cer_diplo",
+      "n": 5,
+      "minimum": 0.5736755765704912,
+      "median_value": 0.6299334169641996,
+      "maximum": 0.6690147640644601,
+      "spread": 0.15134803921568635
+    },
+    {
+      "pipeline": "E2 · mistral-ocr → mistral",
+      "view": "texte",
+      "metric": "cmer",
+      "n": 5,
+      "minimum": 0.5311140701287173,
+      "median_value": 0.5506589440107446,
+      "maximum": 0.5776960574702814,
+      "spread": 0.08459317304878869
+    },
+    {
+      "pipeline": "E2 · mistral-ocr → mistral",
+      "view": "texte",
+      "metric": "mer",
+      "n": 5,
+      "minimum": 0.8281101614434948,
+      "median_value": 0.8337142857142857,
+      "maximum": 0.8432377049180327,
+      "spread": 0.01814475742319491
+    },
+    {
+      "pipeline": "E2 · mistral-ocr → mistral",
+      "view": "texte",
+      "metric": "unanchored_trigrams",
+      "n": 5,
+      "minimum": 0.47869836890367606,
+      "median_value": 0.4864528184366241,
+      "maximum": 0.4952995916817016,
+      "spread": 0.03412709752896292
+    },
+    {
+      "pipeline": "E2 · mistral-ocr → mistral",
+      "view": "texte",
+      "metric": "wer",
+      "n": 5,
+      "minimum": 0.9455605962410888,
+      "median_value": 0.9980557355800389,
+      "maximum": 1.1302657161373948,
+      "spread": 0.18506493506493515
+    },
+    {
+      "pipeline": "E2 · mistral-ocr → mistral",
+      "view": "texte (lignes)",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 0.5905625784039371,
+      "median_value": 0.6432500241242883,
+      "maximum": 0.6839718228312265,
+      "spread": 0.14521452145214517
+    },
+    {
+      "pipeline": "E2 · tesseract → mistral",
+      "view": "lecture",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 0.7563446878317089,
+      "median_value": 0.7563446878317089,
+      "maximum": 0.7563446878317089,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E2 · tesseract → mistral",
+      "view": "lecture",
+      "metric": "cer_diplo",
+      "n": 5,
+      "minimum": 0.7556692077583711,
+      "median_value": 0.7556692077583711,
+      "maximum": 0.7556692077583711,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E2 · tesseract → mistral",
+      "view": "lecture",
+      "metric": "wer",
+      "n": 5,
+      "minimum": 0.998703823720026,
+      "median_value": 0.998703823720026,
+      "maximum": 0.998703823720026,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E2 · tesseract → mistral",
+      "view": "sans césure",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 0.7686516745487887,
+      "median_value": 0.7688447061094489,
+      "maximum": 0.7697133481324197,
+      "spread": 0.0013808686919407982
+    },
+    {
+      "pipeline": "E2 · tesseract → mistral",
+      "view": "texte",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 0.7566341792917108,
+      "median_value": 0.7569236707517129,
+      "maximum": 0.7579851394383865,
+      "spread": 0.0017848036715961385
+    },
+    {
+      "pipeline": "E2 · tesseract → mistral",
+      "view": "texte",
+      "metric": "cer_diplo",
+      "n": 5,
+      "minimum": 0.7558622020650391,
+      "median_value": 0.756151693525041,
+      "maximum": 0.7572131622117148,
+      "spread": 0.0017866258295048637
+    },
+    {
+      "pipeline": "E2 · tesseract → mistral",
+      "view": "texte",
+      "metric": "cmer",
+      "n": 5,
+      "minimum": 0.752784178187404,
+      "median_value": 0.7529999040030719,
+      "maximum": 0.7542006721075372,
+      "spread": 0.0018811342638994969
+    },
+    {
+      "pipeline": "E2 · tesseract → mistral",
+      "view": "texte",
+      "metric": "mer",
+      "n": 5,
+      "minimum": 0.9929078014184397,
+      "median_value": 0.9935400516795866,
+      "maximum": 0.9948320413436692,
+      "spread": 0.0019367512381373625
+    },
+    {
+      "pipeline": "E2 · tesseract → mistral",
+      "view": "texte",
+      "metric": "unanchored_trigrams",
+      "n": 5,
+      "minimum": 0.8351153629713,
+      "median_value": 0.8377978939589876,
+      "maximum": 0.8399848685454889,
+      "spread": 0.005812267623612987
+    },
+    {
+      "pipeline": "E2 · tesseract → mistral",
+      "view": "texte",
+      "metric": "wer",
+      "n": 5,
+      "minimum": 0.9948152948801037,
+      "median_value": 0.9974076474400518,
+      "maximum": 0.9980557355800389,
+      "spread": 0.003248862897985746
+    },
+    {
+      "pipeline": "E2 · tesseract → mistral",
+      "view": "texte (lignes)",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 0.768792820611792,
+      "median_value": 0.7688893177651259,
+      "maximum": 0.7697577921451317,
+      "spread": 0.001255020080321254
+    },
+    {
+      "pipeline": "E3 témoin · segmentation → tesseract → mistral (correction libre)",
+      "view": "lecture",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 0.7774775644118499,
+      "median_value": 0.7774775644118499,
+      "maximum": 0.7774775644118499,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E3 témoin · segmentation → tesseract → mistral (correction libre)",
+      "view": "lecture",
+      "metric": "cer_diplo",
+      "n": 5,
+      "minimum": 0.7766090900318441,
+      "median_value": 0.7766090900318441,
+      "maximum": 0.7766090900318441,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E3 témoin · segmentation → tesseract → mistral (correction libre)",
+      "view": "lecture",
+      "metric": "wer",
+      "n": 5,
+      "minimum": 1.303953337653921,
+      "median_value": 1.303953337653921,
+      "maximum": 1.303953337653921,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E3 témoin · segmentation → tesseract → mistral (correction libre)",
+      "view": "sans césure",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 0.7917189460476788,
+      "median_value": 0.7928771354116398,
+      "maximum": 0.8050381237332304,
+      "spread": 0.016798539257455856
+    },
+    {
+      "pipeline": "E3 témoin · segmentation → tesseract → mistral (correction libre)",
+      "view": "texte",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 0.7744861526584966,
+      "median_value": 0.7760301071118402,
+      "maximum": 0.7872237768985815,
+      "spread": 0.016413827406117788
+    },
+    {
+      "pipeline": "E3 témoin · segmentation → tesseract → mistral (correction libre)",
+      "view": "texte",
+      "metric": "cer_diplo",
+      "n": 5,
+      "minimum": 0.7737141754318247,
+      "median_value": 0.7753546270385023,
+      "maximum": 0.7866447939785777,
+      "spread": 0.016677037958929754
+    },
+    {
+      "pipeline": "E3 témoin · segmentation → tesseract → mistral (correction libre)",
+      "view": "texte",
+      "metric": "cmer",
+      "n": 5,
+      "minimum": 0.7482752190937908,
+      "median_value": 0.7493477450614984,
+      "maximum": 0.7595195978028116,
+      "spread": 0.015005554875057406
+    },
+    {
+      "pipeline": "E3 témoin · segmentation → tesseract → mistral (correction libre)",
+      "view": "texte",
+      "metric": "mer",
+      "n": 5,
+      "minimum": 0.9938744257274119,
+      "median_value": 0.994475138121547,
+      "maximum": 0.9945436507936508,
+      "spread": 0.0006729429832735593
+    },
+    {
+      "pipeline": "E3 témoin · segmentation → tesseract → mistral (correction libre)",
+      "view": "texte",
+      "metric": "unanchored_trigrams",
+      "n": 5,
+      "minimum": 0.8574456809750928,
+      "median_value": 0.8622435730978967,
+      "maximum": 0.8754536029030586,
+      "spread": 0.020884959296671134
+    },
+    {
+      "pipeline": "E3 témoin · segmentation → tesseract → mistral (correction libre)",
+      "view": "texte",
+      "metric": "wer",
+      "n": 5,
+      "minimum": 1.2618276085547635,
+      "median_value": 1.2832145171743357,
+      "maximum": 1.2994167206740117,
+      "spread": 0.029292929292929284
+    },
+    {
+      "pipeline": "E3 témoin · segmentation → tesseract → mistral (correction libre)",
+      "view": "texte (lignes)",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 0.7919521374119464,
+      "median_value": 0.7931101032519541,
+      "maximum": 0.8052687445720351,
+      "spread": 0.01679036379121545
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (ministral-3b)",
+      "view": "lecture",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 0.7774775644118499,
+      "median_value": 0.7774775644118499,
+      "maximum": 0.7774775644118499,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (ministral-3b)",
+      "view": "lecture",
+      "metric": "cer_diplo",
+      "n": 5,
+      "minimum": 0.7766090900318441,
+      "median_value": 0.7766090900318441,
+      "maximum": 0.7766090900318441,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (ministral-3b)",
+      "view": "lecture",
+      "metric": "wer",
+      "n": 5,
+      "minimum": 1.303953337653921,
+      "median_value": 1.303953337653921,
+      "maximum": 1.303953337653921,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (ministral-3b)",
+      "view": "sans césure",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 0.7939388089952707,
+      "median_value": 0.7943248721165911,
+      "maximum": 0.7949039667985716,
+      "spread": 0.0012150668286756085
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (ministral-3b)",
+      "view": "texte",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 0.777091575798514,
+      "median_value": 0.7771880729518479,
+      "maximum": 0.7777670558718518,
+      "spread": 0.0008691333498882612
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (ministral-3b)",
+      "view": "texte",
+      "metric": "cer_diplo",
+      "n": 5,
+      "minimum": 0.7762231014185081,
+      "median_value": 0.7762231014185081,
+      "maximum": 0.776705587185178,
+      "spread": 0.0006215813028343952
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (ministral-3b)",
+      "view": "texte",
+      "metric": "cmer",
+      "n": 5,
+      "minimum": 0.7501630181648812,
+      "median_value": 0.7507224759951524,
+      "maximum": 0.7514450867052023,
+      "spread": 0.0017077796140598958
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (ministral-3b)",
+      "view": "texte",
+      "metric": "mer",
+      "n": 5,
+      "minimum": 0.9941002949852508,
+      "median_value": 0.9945328031809145,
+      "maximum": 0.9945436507936508,
+      "spread": 0.0004457930467270845
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (ministral-3b)",
+      "view": "texte",
+      "metric": "unanchored_trigrams",
+      "n": 5,
+      "minimum": 0.8618167821401078,
+      "median_value": 0.8632179437313626,
+      "maximum": 0.8638485477178424,
+      "spread": 0.0023537110094722967
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (ministral-3b)",
+      "view": "texte",
+      "metric": "wer",
+      "n": 5,
+      "minimum": 1.2961762799740766,
+      "median_value": 1.2968243681140634,
+      "maximum": 1.3104342190537912,
+      "spread": 0.010994502748625517
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (ministral-3b)",
+      "view": "texte (lignes)",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 0.7941715719386279,
+      "median_value": 0.7945575605519637,
+      "maximum": 0.7951365434719676,
+      "spread": 0.00121447656060235
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (ministral-8b)",
+      "view": "lecture",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 0.7774775644118499,
+      "median_value": 0.7774775644118499,
+      "maximum": 0.7774775644118499,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (ministral-8b)",
+      "view": "lecture",
+      "metric": "cer_diplo",
+      "n": 5,
+      "minimum": 0.7766090900318441,
+      "median_value": 0.7766090900318441,
+      "maximum": 0.7766090900318441,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (ministral-8b)",
+      "view": "lecture",
+      "metric": "wer",
+      "n": 5,
+      "minimum": 1.303953337653921,
+      "median_value": 1.303953337653921,
+      "maximum": 1.303953337653921,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (ministral-8b)",
+      "view": "sans césure",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 0.7943248721165911,
+      "median_value": 0.7945179036772513,
+      "maximum": 0.7947109352379114,
+      "spread": 0.00048590864917388393
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (ministral-8b)",
+      "view": "texte",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 0.7771880729518479,
+      "median_value": 0.7774775644118499,
+      "maximum": 0.7776705587185178,
+      "spread": 0.0006205783790492584
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (ministral-8b)",
+      "view": "texte",
+      "metric": "cer_diplo",
+      "n": 5,
+      "minimum": 0.7763195985718422,
+      "median_value": 0.776705587185178,
+      "maximum": 0.7768020843385121,
+      "spread": 0.0006211951795253914
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (ministral-8b)",
+      "view": "texte",
+      "metric": "cmer",
+      "n": 5,
+      "minimum": 0.7494184423560063,
+      "median_value": 0.7496045408020843,
+      "maximum": 0.75,
+      "spread": 0.0007758192651440313
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (ministral-8b)",
+      "view": "texte",
+      "metric": "mer",
+      "n": 5,
+      "minimum": 0.9945191828599901,
+      "median_value": 0.9945300845350572,
+      "maximum": 0.994535519125683,
+      "spread": 0.00001642611515428466
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (ministral-8b)",
+      "view": "texte",
+      "metric": "unanchored_trigrams",
+      "n": 5,
+      "minimum": 0.861714583062313,
+      "median_value": 0.8628393297830887,
+      "maximum": 0.8629692167814002,
+      "spread": 0.0014540757192913181
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (ministral-8b)",
+      "view": "texte",
+      "metric": "wer",
+      "n": 5,
+      "minimum": 1.2935839274141283,
+      "median_value": 1.2961762799740766,
+      "maximum": 1.2974724562540505,
+      "spread": 0.002999999999999969
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (ministral-8b)",
+      "view": "texte (lignes)",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 0.7945575605519637,
+      "median_value": 0.7947505548586317,
+      "maximum": 0.7949435491652996,
+      "spread": 0.00048567265662947555
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (mistral)",
+      "view": "lecture",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 0.7774775644118499,
+      "median_value": 0.7774775644118499,
+      "maximum": 0.7774775644118499,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (mistral)",
+      "view": "lecture",
+      "metric": "cer_diplo",
+      "n": 5,
+      "minimum": 0.7766090900318441,
+      "median_value": 0.7766090900318441,
+      "maximum": 0.7766090900318441,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (mistral)",
+      "view": "lecture",
+      "metric": "wer",
+      "n": 5,
+      "minimum": 1.303953337653921,
+      "median_value": 1.303953337653921,
+      "maximum": 1.303953337653921,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (mistral)",
+      "view": "sans césure",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 0.794228356336261,
+      "median_value": 0.7943248721165911,
+      "maximum": 0.7945179036772513,
+      "spread": 0.00036452004860272445
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (mistral)",
+      "view": "texte",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 0.7769950786451799,
+      "median_value": 0.7772845701051819,
+      "maximum": 0.7774775644118499,
+      "spread": 0.0006207324643080106
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (mistral)",
+      "view": "texte",
+      "metric": "cer_diplo",
+      "n": 5,
+      "minimum": 0.7761266042651742,
+      "median_value": 0.7764160957251761,
+      "maximum": 0.7766090900318441,
+      "spread": 0.0006214267959234247
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (mistral)",
+      "view": "texte",
+      "metric": "cmer",
+      "n": 5,
+      "minimum": 0.7491859707879803,
+      "median_value": 0.7493718008375989,
+      "maximum": 0.7499069247952346,
+      "spread": 0.000962077845000857
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (mistral)",
+      "view": "texte",
+      "metric": "mer",
+      "n": 5,
+      "minimum": 0.9940623453735774,
+      "median_value": 0.9945544554455445,
+      "maximum": 0.9945598417408507,
+      "spread": 0.0005002203394186024
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (mistral)",
+      "view": "texte",
+      "metric": "unanchored_trigrams",
+      "n": 5,
+      "minimum": 0.8623508043591074,
+      "median_value": 0.8625518672199171,
+      "maximum": 0.8629356134214277,
+      "spread": 0.000677998720477149
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (mistral)",
+      "view": "texte",
+      "metric": "wer",
+      "n": 5,
+      "minimum": 1.3013609850939727,
+      "median_value": 1.3020090732339598,
+      "maximum": 1.303305249513934,
+      "spread": 0.0014932802389249083
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (mistral)",
+      "view": "texte (lignes)",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 0.7944610633986298,
+      "median_value": 0.7945575605519637,
+      "maximum": 0.7947505548586317,
+      "spread": 0.0003643429681806771
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "lecture",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 0.7774775644118499,
+      "median_value": 0.7774775644118499,
+      "maximum": 0.7774775644118499,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "lecture",
+      "metric": "cer_diplo",
+      "n": 5,
+      "minimum": 0.7766090900318441,
+      "median_value": 0.7766090900318441,
+      "maximum": 0.7766090900318441,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "lecture",
+      "metric": "wer",
+      "n": 5,
+      "minimum": 1.303953337653921,
+      "median_value": 1.303953337653921,
+      "maximum": 1.303953337653921,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "sans césure",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 0.7950969983592318,
+      "median_value": 0.7950969983592318,
+      "maximum": 0.7950969983592318,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "texte",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 0.7777670558718518,
+      "median_value": 0.7777670558718518,
+      "maximum": 0.7777670558718518,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "texte",
+      "metric": "cer_diplo",
+      "n": 5,
+      "minimum": 0.7766090900318441,
+      "median_value": 0.7766090900318441,
+      "maximum": 0.7766090900318441,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "texte",
+      "metric": "cmer",
+      "n": 5,
+      "minimum": 0.7499767376942402,
+      "median_value": 0.7499767376942402,
+      "maximum": 0.7499767376942402,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "texte",
+      "metric": "mer",
+      "n": 5,
+      "minimum": 0.9945625308947108,
+      "median_value": 0.9945625308947108,
+      "maximum": 0.9945625308947108,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "texte",
+      "metric": "unanchored_trigrams",
+      "n": 5,
+      "minimum": 0.8634891853386867,
+      "median_value": 0.8634891853386867,
+      "maximum": 0.8634891853386867,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "texte",
+      "metric": "wer",
+      "n": 5,
+      "minimum": 1.303953337653921,
+      "median_value": 1.303953337653921,
+      "maximum": 1.303953337653921,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E3 · segmentation → tesseract → saknussemm (règles)",
+      "view": "texte (lignes)",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 0.7953295377786356,
+      "median_value": 0.7953295377786356,
+      "maximum": 0.7953295377786356,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E5 · mistral (VLM)",
+      "view": "lecture",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 0.8125060310720834,
+      "median_value": 0.8292000385988614,
+      "maximum": 0.900897423526006,
+      "spread": 0.10659839404166177
+    },
+    {
+      "pipeline": "E5 · mistral (VLM)",
+      "view": "lecture",
+      "metric": "cer_diplo",
+      "n": 5,
+      "minimum": 0.8083566534787224,
+      "median_value": 0.8247611695454984,
+      "maximum": 0.896555051625977,
+      "spread": 0.10693810693810689
+    },
+    {
+      "pipeline": "E5 · mistral (VLM)",
+      "view": "lecture",
+      "metric": "wer",
+      "n": 5,
+      "minimum": 1.1069345430978612,
+      "median_value": 1.1840570317563188,
+      "maximum": 1.1970187945560595,
+      "spread": 0.07608100711548987
+    },
+    {
+      "pipeline": "E5 · mistral (VLM)",
+      "view": "sans césure",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 0.8274297847698099,
+      "median_value": 0.8426792780619631,
+      "maximum": 0.9169964289161278,
+      "spread": 0.10628793952582746
+    },
+    {
+      "pipeline": "E5 · mistral (VLM)",
+      "view": "texte",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 0.8125060310720834,
+      "median_value": 0.8292000385988614,
+      "maximum": 0.900897423526006,
+      "spread": 0.10659839404166177
+    },
+    {
+      "pipeline": "E5 · mistral (VLM)",
+      "view": "texte",
+      "metric": "cer_diplo",
+      "n": 5,
+      "minimum": 0.8083566534787224,
+      "median_value": 0.8247611695454984,
+      "maximum": 0.896555051625977,
+      "spread": 0.10693810693810689
+    },
+    {
+      "pipeline": "E5 · mistral (VLM)",
+      "view": "texte",
+      "metric": "cmer",
+      "n": 5,
+      "minimum": 0.6829426555276178,
+      "median_value": 0.6888215174129353,
+      "maximum": 0.6968724341270434,
+      "spread": 0.020222624072114944
+    },
+    {
+      "pipeline": "E5 · mistral (VLM)",
+      "view": "texte",
+      "metric": "mer",
+      "n": 5,
+      "minimum": 0.9223446893787575,
+      "median_value": 0.9283536585365854,
+      "maximum": 0.9323513366066557,
+      "spread": 0.010778917211003682
+    },
+    {
+      "pipeline": "E5 · mistral (VLM)",
+      "view": "texte",
+      "metric": "unanchored_trigrams",
+      "n": 5,
+      "minimum": 0.5715199707522164,
+      "median_value": 0.5933000846899407,
+      "maximum": 0.6066096139839767,
+      "spread": 0.05914316235113674
+    },
+    {
+      "pipeline": "E5 · mistral (VLM)",
+      "view": "texte",
+      "metric": "wer",
+      "n": 5,
+      "minimum": 1.1069345430978612,
+      "median_value": 1.1840570317563188,
+      "maximum": 1.1970187945560595,
+      "spread": 0.07608100711548987
+    },
+    {
+      "pipeline": "E5 · mistral (VLM)",
+      "view": "texte (lignes)",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 0.8273665926855158,
+      "median_value": 0.842806137218952,
+      "maximum": 0.9171089452861141,
+      "spread": 0.10648042134188228
+    },
+    {
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "lecture",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 1.8614232209737829,
+      "median_value": 1.8614232209737829,
+      "maximum": 1.8614232209737829,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "lecture",
+      "metric": "cer_diplo",
+      "n": 5,
+      "minimum": 1.8522940074906367,
+      "median_value": 1.8522940074906367,
+      "maximum": 1.8522940074906367,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "lecture",
+      "metric": "wer",
+      "n": 5,
+      "minimum": 2.484297520661157,
+      "median_value": 2.484297520661157,
+      "maximum": 2.484297520661157,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "sans césure",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 1.8716627634660419,
+      "median_value": 1.8716627634660419,
+      "maximum": 1.8716627634660419,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "texte",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 1.8614232209737829,
+      "median_value": 1.8614232209737829,
+      "maximum": 1.8614232209737829,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "texte",
+      "metric": "cer_diplo",
+      "n": 5,
+      "minimum": 1.8522940074906367,
+      "median_value": 1.8522940074906367,
+      "maximum": 1.8522940074906367,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "texte",
+      "metric": "cmer",
+      "n": 5,
+      "minimum": 0.7685319416255919,
+      "median_value": 0.7685319416255919,
+      "maximum": 0.7685319416255919,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "texte",
+      "metric": "mer",
+      "n": 5,
+      "minimum": 0.9476670870113493,
+      "median_value": 0.9476670870113493,
+      "maximum": 0.9476670870113493,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "texte",
+      "metric": "unanchored_trigrams",
+      "n": 5,
+      "minimum": 0.5554396578700324,
+      "median_value": 0.5554396578700324,
+      "maximum": 0.5554396578700324,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "texte",
+      "metric": "wer",
+      "n": 5,
+      "minimum": 2.484297520661157,
+      "median_value": 2.484297520661157,
+      "maximum": 2.484297520661157,
+      "spread": 0.0
+    },
+    {
+      "pipeline": "E5 · qwen2.5vl:3b (local)",
+      "view": "texte (lignes)",
+      "metric": "cer",
+      "n": 5,
+      "minimum": 1.8705524344569286,
+      "median_value": 1.8705524344569286,
+      "maximum": 1.8705524344569286,
+      "spread": 0.0
+    }
+  ]
+}

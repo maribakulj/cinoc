@@ -74,6 +74,25 @@ def test_the_billed_part_completes_the_keyless_part(corpus: str) -> None:
     assert facturee.evaluation == complete.evaluation
 
 
+def test_the_repeated_bnl_spec_is_the_full_one_without_selective_mistral() -> None:
+    """S31 : E4 Mistral n'a qu'une répétition (le calcul QE de D'AlemBERT coûte
+    ~400 s de CPU par page) ; les répétitions 2-5 se re-notent avec la spec
+    complète moins ce seul pipeline, chacun des autres à l'identique."""
+    complete = _spec("bnl.yaml")
+    repetee = _spec("bnl-repetitions.yaml")
+    absent = [p.name for p in complete.pipelines if p not in repetee.pipelines]
+    assert absent == [
+        "E4 · segmentation → tesseract → saknussemm sélectif (mistral, QE dalembert)"
+    ]
+    for pipeline in repetee.pipelines:
+        for step in pipeline.steps:
+            assert complete.adapter_kwargs.get(step.adapter_name) == (
+                repetee.adapter_kwargs.get(step.adapter_name)
+            ), step.adapter_name
+    assert repetee.corpus == complete.corpus
+    assert repetee.evaluation == complete.evaluation
+
+
 @pytest.mark.parametrize("corpus", ["bnl", "dresden"])
 def test_every_view_scores_every_pipeline_of_the_campaign(corpus: str) -> None:
     """La vue d'ablation ``lecture`` vise une étape que chaque chaîne nomme."""

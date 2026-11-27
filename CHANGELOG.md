@@ -154,8 +154,9 @@ suivantes ne les répètent pas.
 - **Moteurs first-party** : Tesseract, Kraken, Pero, Calamari, Mistral OCR,
   Google Vision, Azure Document Intelligence (OCR/HTR) ; OpenAI, Anthropic,
   Mistral, Ollama et tout serveur compatible OpenAI (LLM/VLM). Jetons — de
-  cache et de raisonnement compris — et coûts remontés ; tarifs datés ; les
-  modèles se demandent au fournisseur.
+  cache et de raisonnement compris — et coûts remontés ; tarifs datés (dont
+  `ministral-8b-latest` et `ministral-3b-latest`) ; les modèles se demandent
+  au fournisseur.
 - **Des confidences par mot pour les moteurs qui n'en produisent pas** :
   `text_confidences` note chaque mot avec un modèle de langue d'époque, ce qui
   allume la calibration pour l'OCR Mistral, un VLM ou un texte corrigé. Ce

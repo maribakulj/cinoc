@@ -86,11 +86,12 @@ word error rate, micro‑averaged, read from the committed `RunResult`:
 Read them as what they are: one unpublished run, no repetitions, a small local
 model — not a ranking. On the handwritten corpus Tesseract has no Kurrent model
 and the small VLM hallucinates (a CER above 1) or exceeds its 600 s limit on six
-pages. **The complete figure** — Mistral OCR, Mistral as corrector and as vision
-model, five repetitions each, then the published dataset that lets anyone
-re‑score it offline — comes with the next two steps of the campaign, which wait
-for the maintainer's key and agreement. Protocol, conventions, estimated cost
-and every other view: [`campaigns/2026-11-26-reference/README.md`](https://github.com/maribakulj/cinoc/blob/main/campaigns/2026-11-26-reference/README.md).
+pages. **The Mistral half has now run too** — Mistral OCR, Mistral as corrector
+and as vision model, five repetitions each, re‑scored offline to the digit and
+cross‑checked with dinglehopper — but it is not published yet: this table stays
+the keyless part until the dataset that lets anyone re‑score the archive goes
+out, with the maintainer's agreement. Protocol, conventions, cost (estimated
+and spent), every view and the spread over repetitions: [`campaigns/2026-11-26-reference/README.md`](https://github.com/maribakulj/cinoc/blob/main/campaigns/2026-11-26-reference/README.md).
 
 ## Three things people come to do
 
