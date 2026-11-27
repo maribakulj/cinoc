@@ -15,125 +15,50 @@ Ce document fait suite à `README.md`, `CONVENTIONS.md`, `BIBLIOTHEQUES.md`, `ra
 
 Les scripts de vérification de l'auteur sont tous dans **un seul dossier**, `tests/adversarial/rapports/revision2_verifications/`. Ceux de la revue sont dans `tests/adversarial/rapports/revue_contre_exemples/`.
 
-## Révision n° 5 (clôture de la révision n° 4, `REVUE_CONTRATS.md` § 8)
-
-La revue conclut que rien n'empêche la tranche 1a, sauf le paramétrage de B9. Un script a été ajouté : `revision2_verifications/d1_d3_options.py`, 2 000 jeux par case, qui reprend les générateurs de la revue.
+## Révision n° 6 (arbitrages du mainteneur)
 
 | Point | Section | Ce qui change |
 |---|---|---|
-| **D3** échappatoire par invention | § 2.1 d, A3, B9a | Le diagnostic porte sur des **quantités de référence**, les mêmes pour les deux pipelines : n_eff_réf = (Σ r_d)² / Σ r_d². r_d vaut tp+fn pour les F1 et rappels, n_réf pour les taux d'édition, MER et exactitudes, la taille de la référence (mots, entités, régions, paires ordonnées) pour les précisions et τ, et le nombre de mots de référence pour l'ECE. Ce diagnostic ne dépend d'aucune sortie et ne peut donc pas être contourné. Vérifié sur l'exemple de la revue : B, qui invente 2 000 entités, reste jugé (Kish(réf) = 40, p < 10⁻⁴), alors que Kish(den) tombait à 1,4. Effet secondaire : pour MER à n = 20 (n_réf constant), Kish(réf) = n = 20, donc la comparaison redevient publiable. La perte de puissance chiffrée par la revue (0,43 → 0) disparaît par construction pour ce cas. |
-| **D4** seuils de SF sans Holm | § 2.1 d, A3, B4 | Seuil écrit à l'échelle de la famille. Holm compare la plus petite p à α/m : **un rejet est possible dans une famille de taille m ssi max_i n₀,i ≥ 1 + log₂(m/α)**. Le test i n'est jamais rejeté si 2^(1−n₀,i) > α. La phrase sur Dresden est corrigée : avec la famille par défaut B4 sur `dresden.yaml` (m = 720), il faut **n₀ ≥ 15** ; les 10 pages Dresden **ne permettent aucun rejet** (p minimale corrigée 1,0, `r4_sf_holm_dresden.py`). Chaque campagne publie le n₀ requis par sa famille. **La composition de la famille (B4) décide donc directement de ce qui est publiable.** |
-| **D2** critère d'A3 dépendant du nombre de simulations | A3, B9b | Le critère porte sur le **niveau vrai** : tolérance τ_niveau. Règle de décision : une case passe si la borne supérieure unilatérale à 95 % (Clopper-Pearson) du taux de rejet observé est ≤ τ_niveau, avec un nombre de jeux retenus N tel qu'un niveau vrai de 0,05 passe avec une probabilité d'au moins 0,9 lorsque τ_niveau = 0,06 : **N ≥ 4 600** par case. Calcul binomial exact de Clopper-Pearson : 0,905 à 4 600, 0,886 à 4 400. Un niveau vrai de 0,06 n'est accepté qu'avec une probabilité ≤ 0,05, à tout N, par construction. Les valeurs sont proposées, non décidées (B9b). |
-| **D1** BA anticonservateur sous queue lourde | § 2.1 d, B9c | Rien n'est décidé. Les options sont présentées dans B9c avec leur niveau mesuré (Kish(réf) ≥ 20, 2 000 jeux, erreur Monte-Carlo ≈ 0,005-0,006), sur la revue (n = 25) puis le lognormal (n = 60 et 100) :<br>• (a) BA tel quel : 0,062 / 0,082 / 0,073 ;<br>• (b) **bootstrap-t apparié** (studentisé par l'écart-type linéarisé, une seule linéarisation pour tous les ratios de sommes ; p et IC des mêmes réplicats) : 0,055 / 0,071 / 0,060 ;<br>• (c) BA + diagnostic de queue (kurtosis des tailles de référence ≤ 10) : 0,062 / 0,075 / 0,063, avec 35 % à 65 % de jeux refusés sur le lognormal ;<br>• (b)+(c) : 0,055 / **0,062** / **0,054**. |
+| **Défaut du générateur** de `revision2_verifications/d1_d3_options.py` | § 2.1 d, annexe (D3) | **Partie (1), D3** : FN était fixe alors que TP variait, donc TP + FN ≠ 5. Corrigé avec fn = 5 − tp et une assertion TP + FN = 5 pour chaque document et chaque pipeline. Après rejeu, la conclusion ne change pas :<br>• F1 de B : 0,592 → **0,586** (avec invention : 0,097, inchangé) ;<br>• Kish(den) de B : 39,0 → **39,8** (avec invention : 1,4, inchangé) ;<br>• F1 de A : **0,818** (non affiché avant) ;<br>• Kish(réf) = 40 dans les deux cas ; la p de BA s'écrit maintenant < 2·10⁻⁴ (aucun réplicat de signe contraire sur 4 999), et non « < 10⁻⁴ », qui excédait la résolution.<br>**Partie (2), B9c** : le générateur respectait déjà TP + FN = r (A : (r, 2r, 0) ; B : (r, 0, 0) ou (0, 0, r)). L'assertion est ajoutée ; rejoué, les chiffres sont **identiques**. |
+| **Principe métrologique / inférentiel** | en-tête, § 2.1 d, § 3, § 5, § 6.3 | Les garanties M et le cœur de K1 à K5 sont **inconditionnels**. Les invariants d'inférence (A3, A5, A8, A9, A10, A13) sont **conditionnels** à une procédure validée. Hors de ce cadre : « inférence non estimable » ou étiquette **exploratoire**. Les tranches métrologiques passent d'abord ; l'inférence conditionnelle (tranche I) et la recherche (R, sans échéance) sont à part. |
+| B1 | § 2.1 a, M2 | Plancher au niveau du corpus, documenté ; les comptes et le taux d'erreur non tronqué sont publiés à côté. |
+| B2 | § 2.1 d | Le bootstrap percentile et le bootstrap-t sont deux procédures distinctes. La cohérence de leurs p et IC n'est pas présumée. Toute procédure non validée reste exploratoire. |
+| B3 | § 2.1 c | Grappes déclarées par le corpus, avec la **population cible** et la **pondération des grappes** documentées. |
+| B4 | § 2.1 d, A9 | Pas de famille exhaustive par défaut (720 tests sur Dresden). La spec déclare **avant l'expérience** des hypothèses principales et secondaires ; Holm s'applique à la famille confirmatoire déclarée. Sans déclaration, aucune inférence confirmatoire n'est publiée. |
+| B5 | § 2.1 d, A5 | Méthode de permutation explicite, jamais `auto` ; analyses de rangs distinctes des tests du micro et du macro. |
+| B6, B7 | § 2.1 b, c | validés |
+| B8 | § 2.3 d | Reproductibilité sous environnement **et** protocole identiques (`ProtocolDefinition` + environnement complet), pas seulement les versions de NumPy et SciPy. |
+| B9a | § 2.1 d, § 6.3 | Kish(réf) est utile, mais ne mesure pas directement l'influence d'une observation sur un ratio à dénominateur d'hypothèse : ce n'est pas une garantie. |
+| B9b | § 6.3 | La calibration empirique est validée en principe, pas comme preuve générale. Une calibration à α = 0,05 ne démontre rien aux seuils extrêmes qu'exige Holm. |
+| B9c | § 2.1 d | Aucune solution validée. Les familles à dénominateur d'hypothèse rendent **« inférence non estimable »** ; les options passent en recherche (§ 6.3). |
+| Tranches | § 5 | Ordre : 1a, 1b, 2, 3, 4 (métrologiques), puis I (inférence conditionnelle) ; R (recherche) sans échéance. |
+| Tests de 1a et 1b | § 4.1 | Liste exacte : 17 tests valides importés, dont 2 reformulés ; 9 discutables reformulés ; tests à écrire. |
+| Historique | annexe | Les révisions 1 à 5 sont déplacées en annexe, sans modification de leur contenu. |
 
-**Prêts pour la tranche 1a** (tests rouges dès maintenant) : M1, M2, M3, M6, A4, A5, A8, A9, A10, A13 ; et **A3**, avec les sept scénarios de la revue (§ 8.2) et ceux de `d1_d3_options.py`. Le correctif d'inférence des familles à dénominateur d'hypothèse attend B9a-c. SF, les rangs et Holm n'attendent que B4 (taille de la famille).
+## Principe : garanties métrologiques et garanties inférentielles
 
-## Révision n° 4 (clôture de la révision n° 3, `REVUE_CONTRATS.md` § 7)
+> « Les calculs des métriques, leur agrégation, l'applicabilité et les supports doivent être corrects pour **toutes** les observations. L'inférence statistique, en revanche, est **conditionnée** à un protocole, des hypothèses et des méthodes **effectivement validées**. » (mainteneur)
 
-La revue lève 6 points de la révision n° 3 (N2, N3, N4, N5, N7, N8). Elle en lève 2 en partie, N1 et N6, et relève 5 contradictions nouvelles. Toutes sont traitées et **aucune n'est rejetée**. Deux scripts ont été ajoutés dans `revision2_verifications/` :
-- `c1_c2_levier_calibration.py` : 5 scénarios, 8 valeurs de n, 600 simulations par case ;
-- `n5_resolution_sans_import.py`.
-
-Les 7 scripts `r3_*.py` de la revue deviennent des tests des tranches indiquées.
-
-| Point | Section | Ce qui change |
+| Nature | Ce qui est garanti | Où |
 |---|---|---|
-| **C1** PS hors niveau sous fort levier (0,35-0,54) et dénominateurs lognormaux (0,10-0,14) | § 2.1 d, A3, B9 | **PS est retirée du contrat.** Sous le seuil du diagnostic, aucune procédure ne tient, ni PS ni BA (C2). Au-dessus, BA tient et fournit en plus l'IC. Les familles à dénominateur d'hypothèse n'ont donc qu'une procédure, BA, conditionnée au diagnostic. |
-| **C2** BA hors niveau sous levier et lognormal, même à n = 50-100 | § 2.1 d, A3, B9 | **Diagnostic de levier déclaré** : taille effective de Kish n_eff = (Σ_d den_d)² / Σ_d den_d², calculée pour chaque pipeline de la paire, et l'on garde le minimum. On a toujours n_eff ≤ n, et n_eff ≈ 1/(part maximale) quand une unité domine. La p et l'IC de BA ne sont publiés que si **n_eff ≥ 20**, quel que soit n ; sinon « non estimable (levier ou effectif) ». Valeur calibrée sur les scénarios à levier borné (F1, levier r0 = 10, lognormal, MER) : au seuil 20, aucune case ne dépasse α + 3 erreurs Monte-Carlo, ni pour BA ni pour PS. La case la plus serrée est F1 à n = 50 (BA 0,073 pour une borne de 0,077). À 15, des cases dépassent : F1 n = 20 (BA 0,108) ; levier r0 = 60 à n = 100 (BA 0,116). Le scénario à levier **non borné** (r0 = 60) est déclaré non estimable dans 100 % des jeux jusqu'à n = 100 (n_eff médian 16,7). Le seuil sur n_eff remplace n_min, puisque n ≥ n_eff ≥ 20. |
-| **C3** seuil « n ≤ 5 » de SF | § 2.1 d, A3 | Deux comptes distincts. **Rejet possible** ssi n₀ = #{unités à r_d(0) ≠ 0} ≥ 6, car la p minimale vaut 2^(1−n₀). **IC borné** ssi m = #{unités à n_d > 0} ≥ 6, car p(δ → ±∞) → 2^(1−m). Dans le contre-exemple n = 8 dont 3 pages vides, p(0) = 0,016 rejette, mais m = 5 donne un IC non borné, et c'est ce qui est publié. **Avec au plus 5 unités** (les 5 grappes BNL), **aucun Δ d'aucune famille ne peut être déclaré significatif** : SF a p ≥ 2^(1−5) = 1/16, BA est non estimable (n_eff ≤ 5 < 20), et la PS retirée aurait eu p ≥ 2/32. La même borne vaut pour le Wilcoxon de la paire. |
-| **C4** paire héritée hors de l'optimum quand la VT se recouvre | § 2.4 a, M8 | Choix : **les paires héritées sont fixées avant l'optimisation**, qui ne porte que sur les régions restantes. Une filiation démontrée par les empreintes, avec une géométrie identique, est une preuve de correspondance (arbitrage 6) ; elle prime sur une coïncidence géométrique. La phrase « appartient toujours à un optimum » est retirée, de même que le critère 4. Invariant M8 : sans filiation, l'optimum est égal à l'énumération ; sous filiation, les paires héritées plus l'optimum de l'énumération sur le reste. Dans `r3_n6_heritage_hors_optimum.py` (b), `region_cer` vaut 0,76 (paire gardée) et non 0,84. |
-| **C5** « invention hors référence » | § 2.1 c, A4 | Calculée sur le **support apparié** de la paire, et sur le support global pour le tableau. La couverture des pages sans référence est publiée par pipeline. L'unité inventée est déclarée par famille : insertions pour les taux d'édition, MER et exactitudes ; fp pour les F1 et rappels ; texte d'hypothèse non apparié pour le texte par région. Pour les proportions à dénominateur de référence (`numseq_*`, `searchability`, `diacritic_err`, `mufi_err`, `hcpr`, préservation, couvertures), elle est « **non définie** » : leur statistique ne compte aucune unité de l'hypothèse. Leur macro reste publié, avec la mention « insensible à l'invention par construction ». |
-| Remarque `find_spec` (N5) | § 2.2, § 2.3 c | `importlib.util.find_spec("pkg.sub")` importe `pkg`. La résolution interroge donc les chercheurs de `sys.meta_path`, composant par composant, avec les `submodule_search_locations` du parent, sans l'importer. Vérifié : un `__init__` à effet de bord n'est pas exécuté, et `cinoc.evaluation.metric`, installé en éditable, est résolu sans importer `cinoc`. Limite écrite : un paquet qui modifie son `__path__` dans son `__init__` est résolu statiquement, et l'observation porte l'étiquette `resolution_statique`. |
-| N1 (partiel) | § 2.1 d | levé par C1, C2, C3 |
-| N6 (partiel) | § 2.4 a | levé par C4 |
+| **Métrologique** (inconditionnelle) | Vrai pour **toute** observation, sans hypothèse statistique : statistiques suffisantes, combinaison et finalisation, agrégats micro et macro, quatre axes, supports, couverture, échecs, étapes, identité, archive, correspondance. | K1 (§ 2.1 a), K2 (§ 2.1 b, c, e), K3, K4, K5 ; invariants M, A1, A2, A4, A6, A7, A11, A12, I, F ; tranches 1a, 1b, 2, 3, 4 |
+| **Inférentielle** (conditionnelle) | Vrai seulement pour une procédure **validée**, sous sa H0 nommée, sur une famille confirmatoire **déclarée** a priori. Sinon : « inférence non estimable », ou étiquette « exploratoire » (jamais « significatif »). | § 2.1 d ; invariants A3, A5, A8, A9, A10 ; tranche I |
+| **Recherche** | Procédures candidates non validées, sans échéance de livraison. | § 6.3 ; A13 |
 
-**Prêts pour la tranche 1a** (tests rouges dès maintenant) : M1, M2, M3, M6, A4, A5, A8, A9, A10, A13. **A3** l'est aussi, B9 étant reformulé ci-dessus ; le correctif d'inférence attend la décision du mainteneur sur B9.
+Procédures **validées** en 1.0 :
+- **SF**, le changement de signe exact (énumération, ou tirages en nombre suffisant pour le plus petit seuil de Holm) ;
+- la **permutation explicite des rangs** ;
+- **Holm**, sur la famille déclarée.
 
-## Révision n° 3 (clôture de la revue, `REVUE_CONTRATS.md` § 6)
+Toute autre procédure (bootstrap percentile, bootstrap-t, PS) est **non validée**.
 
-La revue lève 25 points de la révision n° 2, en lève 6 en partie (R4, R5, R11, P4, P10, P11) et relève 8 contradictions nouvelles. Toutes sont traitées ci-dessous et **aucune n'est rejetée**. Trois scripts ont été ajoutés :
-- `revision2_verifications/n1_n2_procedure_unique.py` (N1, N2) ;
-- `revision2_verifications/n8_wilcoxon_methode_explicite.py` (N8) ;
-- les scripts `r2_*.py` de la revue, qui deviennent des tests des tranches indiquées.
-
-| Point | Section | Ce qui change |
-|---|---|---|
-| **N1** niveau de l'inversion du bootstrap aux petits n (0,188 à n = 5, 0,117 à n = 10) | § 2.1 d, A3 | *(Remplacé en révision n° 4 par C1-C3 : PS retirée, n_min remplacé par le diagnostic de levier.)* Procédure fixée selon la famille et n, l'effectif des unités de rééchantillonnage (grappes si elles sont déclarées). **Dénominateur fixé par la référence** : changement de signe exact, valable à tout n (rejet sous H0 mesuré à 0,000 à n = 5 et 0,037 à n = 10). Quand 2^(1−n) > α, soit n ≤ 5, on publie « aucun rejet possible ; IC non borné ». **Dénominateur d'hypothèse** : si n ≥ n_min = 30, bootstrap apparié, avec un niveau mesuré de 0,050 à n = 30 et 0,061 à n = 50, mais 0,087 à n = 20. Si n < n_min, p par **permutation studentisée** (rejet mesuré entre 0,000 et 0,060 pour n de 5 à 30) et **pas d'IC** (« IC non estimable : n < 30 »). n_min et le jeu de scénarios de calibration sont l'arbitrage bloquant B9. Le BNL à 5 grappes et le Dresden à 10 pages sont donc dans le régime petit n. |
-| **N2** p et IC contradictoires pour un même Δ | § 2.1 d, A3 | **Une seule procédure par Δ.** Changement de signe : l'IC est l'**inversion du même test**, {δ : p(δ) > α}, sous un modèle d'effet de taux constant. Mesuré sur 800 jeux : l'IC est toujours d'un seul tenant, et p et IC ne se contredisent jamais. Bootstrap : p et IC percentile (`quantile(method="inverted_cdf")`) viennent des **mêmes réplicats** ; aucune contradiction sur 6 000 jeux. Sous n_min, le seul objet publié est la p de permutation. |
-| **N3** A4 faux | § 2.1 c, A4 | A4 dit désormais que le macro **ne voit pas** l'invention sur un document hors de D^M. Elle est visible au **micro** (insertions, fp) et dans une analyse dédiée, « invention hors référence » : par pipeline, nombre de documents sans référence à sortie non vide, et somme des unités inventées. |
-| **N4** clé en deux temps incomplète | § 2.2, § 2.3 c ; I1, F3 | La validation porte sur toute la partie **calculée** de la définition (sources de la brique, fichiers de poids) **et** sur l'environnement. Chaque module est **résolu par son nom** dans le processus courant (`importlib.util.find_spec(nom).origin`), puis haché et comparé à l'empreinte enregistrée sous ce nom, et non sous un chemin. De même, les poids sont résolus par les réglages effectifs et les binaires par `shutil.which`. |
-| **N5** définition dépendante des modules chargés | § 2.3 c, d ; I3, I5 | La définition hache les sources **sur disque** : tous les `.py` du paquet déclaré par la brique et de sa fermeture d'imports **statique** (graphe AST, résolu par `find_spec` sans exécuter), limitée à sa distribution. Pour le protocole, ce sont tous les `.py` sur disque de `cinoc.domain`, `cinoc.formats` et `cinoc.evaluation` (fermeture statique d'`evaluation`), plus les profils de normalisation. Le résultat ne dépend pas de ce que le processus a chargé. Ce qui est chargé ne sert qu'à l'**environnement**. |
-| **N6** filiation trompée par un échange d'ids | § 2.4 a, M8 | Sous héritage, une paire par id n'existe que si la géométrie de l'hypothèse est **identique** à celle de la VT de même id (boîte et polygone égaux). L'id n'intervient alors **qu'en 4ᵉ critère**, entre des ex æquo exacts des trois premiers. L'optimum reste celui de l'énumération (M8). Dans le contre-exemple, les géométries échangées ne sont plus identiques, donc l'optimum géométrique s'applique et `region_cer` = 0. |
-| **N7** linéarisation d'un groupe non ordonné | § 2.4 b, M7 | Convention écrite : la vue texte linéarise les membres d'un groupe non ordonné dans un **ordre géométrique canonique** (y0, x0 de leur boîte), jamais dans l'ordre de déclaration XML. Un membre sans géométrie est rangé en dernier par id, et l'observation porte l'étiquette `order_by_id`. Invariant : permuter les déclarations ne change ni la projection ni le CER. La vue texte pénalise donc la liberté que laisse la VT, ce que publie la fiche de la vue. La métrique insensible à l'ordre des lignes est `fca`, qui apparie les lignes par le hongrois. L'appariement des membres avant concaténation reste ouvert (O14). |
-| **N8** `method="auto"` de scipy mal décrit | § 2.1 d, A5, B5 | Ce que fait réellement scipy 1.18.1 (`_wilcoxon.py`, l. 128-242) : n > 50, asymptotique ; n ≤ 50 sans zéro ni ex æquo, loi exacte ; zéros ou ex æquo et n ≤ 13, énumération des 2^n ; zéros ou ex æquo et 13 < n ≤ 50, asymptotique avec correction de continuité. **Contrat** : `method=PermutationMethod` explicite, énumération exacte si 2^n ≤ 2^16, sinon 99 999 échanges avec une graine déclarée. Vérifié égal à une énumération écrite à la main sur rangs moyens (n = 7 : 0,2656, alors que `method="exact"` donne 0,2188 ; n = 20 : 0,4366, alors que `auto` donne 0,4271). |
-| R4 (partiel) | § 2.1 d | levé par N1 et N2 |
-| R5 (partiel) | A4 | levé par N3 |
-| R11 (partiel) | § 2.4 a | levé par N6 |
-| P4 (partiel) | B5 | levé par N8 |
-| P10 (partiel) | § 2.2 | levé par N4 |
-| P11 (partiel) | § 2.3 c-d | levé par N5 |
-| Remarque P17 (coût du ppcm) | § 2.4 a | Calcul exact par **composante connexe** du graphe d'admissibilité. Le dénominateur commun ne porte que sur les unions des paires **admissibles** de la composante. |
-| Remarque : un seul emplacement pour les scripts | en-tête | `revision2_verifications/` seulement |
-
-## Révision n° 2 (revue adverse `rapports/REVUE_CONTRATS.md`)
-
-Les 23 contre-exemples de la revue se reproduisent sur la copie (`run_all.sh` : 23/23). **Aucun point n'est rejeté.**
-
-Trois points sont acceptés avec une précision vérifiable :
-- **P1** : le départage canonique est calculé et vérifié (`revision2_verifications/p1_departage_canonique.py`) ;
-- **R4** : niveau mesuré par `revision2_verifications/r4_bootstrap_niveau.py`, complété en révision n° 3 par N1 et N2 ;
-- **R10** : la résolution des bibliothèques d'un binaire est précisée.
-
-| Point | Section | Ce qui change |
-|---|---|---|
-| **R1** `fsum` non associatif | § 2.1 a, M6 | Statistiques réelles stockées **exactes** : entiers quand la grandeur est discrète (jetons, ns, micro-unités), sinon `Fraction`. Combinaison = addition exacte ; une seule conversion en flottant, à la finalisation. Propriété : pour toute partition et tout ordre des documents, la statistique combinée est égale (`==`). |
-| **R2** régions de référence non appariées | § 2.1 a, M4 | Le numérateur compte aussi le texte des régions de référence non appariées (suppressions), comme le code actuel (`layout.py:103-108`). |
-| **R3** ordre partiel | § 2.4 b, M5 | `LayoutPage.reading_order` devient un arbre de groupes ordonnés et non ordonnés (domain, couche 1). Le τ ne compte que les paires que la référence ordonne. M5 passe en tranche 4. |
-| **R4** inférence du Δ micro | § 2.1 d (table par famille), A3 | Permutation (changement de signe) seulement si le dénominateur est fixé par la référence. Sinon, bootstrap apparié par document, et p par inversion du bootstrap. Niveau mesuré sur le scénario de la revue : 0,063 (n = 30 et 100, 300 simulations) contre 0,30 pour la permutation. La H0 de chaque test est nommée. |
-| **R5** support macro | § 2.1 c, A4, A6 | D^M est fixé **par la référence** (n_réf > 0, ou tp + fn > 0), le même pour tous les pipelines. Pas de macro publié quand le scalaire dépend de l'hypothèse (précisions, τ). |
-| **R6** `partial`/`truncated` imputés en silence | § 2.1 b, e ; A1, A2, A7 | La part manquante porte un motif d'axe 3 (`partial_output`, `truncated_output`). L'observation est exclue par défaut et notée telle quelle sous la seule sensibilité `empty_page`, qui couvre toute part manquante. |
-| **R7** jiwer sur référence vide | M1 | « Égal à jiwer quand Σ n_réf > 0, pour S+D+I seulement ». Les écarts volontaires sont écrits : jiwer rend `cer([""], ["xyz"]) = 3` et `cer([""], [""]) = 0` ; Cinoc rend « indéfini ». |
-| **R8** oracle NER | M3, M8 | nervaluate est retiré. L'oracle devient l'énumération exhaustive de l'appariement par IoU d'empan, la règle même de Cinoc. Constat associé : l'appariement NER actuel est glouton (`ner.py`, `align_entities`), donc il passe sous l'appariement unique de K5. |
-| **R9** différence de `sys.modules` | § 2.3 c, I1 | Instantané du **processus entier** à la fin de chaque étape : modules hors stdlib et bibliothèques partagées mappées. C'est une sur-approximation sûre, indépendante de l'historique, mémoïsée par run. |
-| **R10** binaire coquille | § 2.3 c, I1 | Sont hachés l'exécutable **et** les bibliothèques qu'il charge (`ld.so --list` sous Linux, `otool -L` sous macOS ; Cinoc exécute déjà ce binaire, donc aucune frontière de confiance nouvelle). La sortie complète de `--version` reste tracée. |
-| **R11** filiation déclarée | § 2.4 a, M8 | La filiation est **vérifiée** : chaîne d'empreintes jusqu'à la VT, plus déclaration du module, plus id identique **et** paire admissible. Les ids ne font que choisir parmi des paires admissibles. `region_detection` est `not_applicable` quand les régions sont héritées de la VT. |
-| **P1** départage S/D/I | § 2.1 a, M1 | Règle canonique : parmi les alignements optimaux, **maximiser S**. Les comptes (S, D, I) deviennent uniques et indépendants de la bibliothèque. Calcul : deux appels `rapidfuzz` (distance d, distance pondérée W avec (K, K, K−1), K = \|r\|+\|h\|+1, S = K·d − W). Vérifié contre une DP lexicographique sur 3 000 cas. |
-| **P2** réplicats dégénérés | § 2.1 d, A3 | Un réplicat dont la finalisation est indéfinie est écarté et compté. Au-delà d'un taux ε, IC et p sont « non estimables ». Méthode percentile nommée (§ 6, B2). |
-| **P3** quantiles | § 2.1 a, A13 | La statistique d'un document est le multi-ensemble de ses lignes ; on tire des **documents**. |
-| **P4** analyses de rangs | § 2.1 d, A5, A9 | `zero_method` et `method` fixés (§ 6, B5). Rangs calculés sur des scalaires exacts (`Fraction`, convertis une fois). Friedman seulement si k ≥ 3. « Non calculé » si la variance est nulle, et le test garde sa place dans la famille. |
-| **P5** grappes et ordre | § 2.1 d, A8 | Les grappes sont triées par le plus petit id de document qu'elles contiennent : en singletons, l'IC est identique bit à bit à l'IC par document. |
-| **P6** grappes et répétitions dans l'inférence | § 2.1 d, A8 | Une répétition n'est jamais une unité d'inférence ; la grappe d'une répétition est son document. Sous grappes déclarées, les analyses de rangs portent sur les moyennes par grappe, ou ne sont pas publiées. |
-| **P7** VT non transcrite | § 2.1 b, A2, M1, M4 | Axe 1 : `not_transcribed`, déclaré par l'importeur, distinct d'une référence vide (page blanche). Hors des attendus. |
-| **P8** ordres appariés intransitifs | § 2.1 c, A6 | Les ordres appariés ne composent pas un classement. Seul le support global trie. |
-| **P9** reprise d'un record `partial` | § 2.2, F3 | Seuls les records `ok` et `truncated` (cause de la coupure incluse dans la clé) sont réutilisables en `resume`. `partial` et `failed` sont retentés ; ils ne sont relus qu'en `rescore`. |
-| **P10** clé circulaire | § 2.2, § 2.3 c, F3 | Clé en deux temps : **recherche** sur la partie déclarée et les entrées consommées ; **validation** du record trouvé sur l'environnement enregistré à la première exécution. |
-| **P11** protocole dépendant de la plateforme | § 2.3 c, d ; I3, I5 | Deux identités : **définition** (portable : sources `.py`, réglages, profils, Unicode, règles de calcul) et **environnement** (extensions compilées, bibliothèques, plateforme). Elle est enregistrée, qualifie une reproduction sans la bloquer, et sert à valider le cache sur la même machine. |
-| **P12** `ObservationId` dépendant du corpus | § 2.3 d, I3 | Les VT du corpus sortent de l'identité du protocole. L'`ObservationId` ne contient que la VT de son document. `CorpusIdentity` est séparée. |
-| **P13** BagIt : fichiers hors manifeste, liens durs, 0444 | § 2.3 b, e ; I6, F7 | Tout le contenu est sous `data/`. Tout fichier non listé dans un manifeste est refusé. Un « lien » est un lien symbolique ou un fichier avec `st_nlink > 1` hors option. Le mode 0444 n'est pas présenté comme une protection. |
-| **P14** durabilité | § 2.2, F5 | Ordre imposé : `fsync` des blobs → record écrit et `fsync` → `os.replace` → `fsync` du répertoire. |
-| **P15** poids | § 2.3 c | Les fichiers de poids chargés sont hachés, pas seulement le commit du Hub. |
-| **P16** ex æquo géométriques | § 2.4 a, M8 | 3ᵉ critère lexicographique : Σ distance d'édition des textes appariés ; ensuite l'ordre géométrique canonique, sans le texte. |
-| **P17** IoU flottante au seuil | § 2.4 a, M8 | Admissibilité en arithmétique exacte : 2·\|∩\| ≥ \|∪\| en entiers, dans un repère commun, en `Fraction` si les dimensions des pages diffèrent. |
-| **P18** justification Kirillov | § 2.4 c, § 6 | Justification retirée. Les relations de fusion et de scission entre régions de VT qui se recouvrent sont `not_applicable` (`ref_overlap`), et leur nombre est publié. |
-| **P19** `line_identity_*` sans filiation | § 2.4 a, M4 | Applicables seulement sous filiation vérifiée des lignes ; `not_applicable` sinon. |
-| **P20** deux conventions de seuil | § 2.4 a, § 6 (O2) | Un seul appariement et une seule règle d'admissibilité pour les boîtes et les empans NER. |
-
-Les deux mécanismes à re-spécifier, signalés par la revue, sont l'**inférence du Δ micro par famille** (R4, § 2.1 d) et l'**identité d'exécution** (R9, R10, P10, P11, § 2.3 c-d). Le correctif le plus transversal, **R5**, est propagé dans K2 et dans A4 à A6.
-
-## Révision n° 1 (rappel)
-
-Statistiques par famille (point 1) · micro et macro chacun avec son inférence, rangs à part (2) · quatre axes (3) · trois supports (4) · propriétés par métrique (5) · clé sur artefacts consommés et répétitions (6) · intégrité contre authenticité, liens, fichiers exécutés (7) · appariement lexicographique et filiation (8) · relecture, reproduction et réévaluation (9) · familles de Holm a priori (10).
-
-Décisions rendues et intégrées :
-- BagIt ;
-- Hypothesis (extra `dev`) ;
-- `scipy>=1.15` ;
-- rupture du schéma `RunResult` (v6, un JSON antérieur est re-noté depuis son archive) ;
-- enregistrements par étape ;
-- persistance atomique immédiate ;
-- RO-Crate reporté à la publication ;
-- refus du fan-out multipage à image unique en 1.0 ;
-- K1 et K2 conçus ensemble.
+**Les questions ouvertes de B9 ne bloquent pas** les corrections suivantes, toutes métrologiques :
+- le F1 ;
+- le CER sur les références vides ;
+- l'intégrité des artefacts ;
+- les échecs partiels ;
+- l'archivage ;
+- les correspondances documentaires.
 
 ---
 
@@ -203,7 +128,7 @@ Il n'y a pas d'algèbre générique : une petite classe par famille. Deux règle
 |---|---|---|---|---|
 | Taux d'édition | `cer`, `cer_diplo`, `wer`, `ins_rate`, `del_rate` | (S, D, I, n_réf) canoniques | (S+D+I)/n_réf ; I/n_réf ; D/n_réf | n_réf = 0 |
 | MER | `mer`, `cmer` | (S+D+I, n_réf + I) | ratio | deux textes vides |
-| Exactitudes | `char_accuracy`, `word_accuracy`, `fca` | (erreurs, n_réf) | max(0, 1 − e/n), plancher **après** combinaison (B1) | n = 0 |
+| Exactitudes | `char_accuracy`, `word_accuracy`, `fca` | (erreurs, n_réf) | max(0, 1 − e/n), plancher **au niveau du corpus**, après combinaison (B1, documenté) ; les comptes (e, n) et le taux d'erreur **non tronqué** e/n sont publiés à côté | n = 0 |
 | Appariement P/R/F | `ner_f1`, `ner_f1_exact`, `region_detection`, `bow_*` | (tp, fp, fn) | F1 = 2tp/(2tp+fp+fn) ; P ; R | dénominateur nul |
 | Proportions | `searchability`, `diacritic_err`, `mufi_err`, `hcpr`, `air`, `numseq_*`, `unanchored_trigrams`, `*_coverage`, préservation | (k, n) | k/n | n = 0 |
 | Texte par région (R2) | `region_cer`, `line_identity_cer` | (éditions sur paires bijectives **+ texte de l'hypothèse non apparié + texte de la référence non apparié**, car. réf.) | ratio | car. réf. = 0 |
@@ -212,7 +137,7 @@ Il n'y a pas d'algèbre générique : une petite classe par famille. Deux règle
 | Moyennes | estimande macro, durées, coûts | (Σ x exacte, n) | Σx/n | n = 0 |
 | Quantiles (P3) | percentiles par ligne | multi-ensemble des valeurs **du document** ; combinaison = concaténation | quantile, méthode déclarée | vide |
 
-Le bootstrap convertit une fois en float64 les statistiques exactes des documents, dans l'ordre canonique (tri par id), puis somme les lignes tirées. La valeur ponctuelle est exacte ; les réplicats sont déterministes à versions égales (§ 6, B8). Les quantiles tirent des documents (P3).
+La valeur ponctuelle (page, micro, macro) est **exacte**, et c'est une garantie métrologique. Les procédures de tirage de la tranche I (SF en tirages) parcourent les documents dans l'ordre canonique (tri par id) ; leurs sorties sont reproductibles sous environnement et protocole identiques (B8). Les IC de quantiles relèvent de la recherche (A13, § 6.3).
 
 #### b. Quatre axes par observation (point 3 ; R6, P7)
 
@@ -249,56 +174,61 @@ Le macro n'est **publié que si**, sur D^M, le scalaire est défini pour toute h
 
 | Support | Définition | Analyses |
 |---|---|---|
-| Conditionnel, par pipeline | D^μ_P ; D^M_P = D^M ∩ D^μ_P | agrégats micro et macro d'un pipeline ; couverture ventilée par axe et par motif ; IC marginal étiqueté « conditionnel » |
-| Apparié, par paire | D^μ_AB = D^μ_A ∩ D^μ_B ; D^M_AB = D^M ∩ D^μ_A ∩ D^μ_B | Δ micro, Δ macro, leurs IC et p ; Wilcoxon de la paire |
+| Conditionnel, par pipeline | D^μ_P ; D^M_P = D^M ∩ D^μ_P | agrégats micro et macro d'un pipeline ; couverture ventilée par axe et par motif (l'IC marginal n'a pas de procédure validée en 1.0 : § 6.3) |
+| Apparié, par paire | D^μ_AB = D^μ_A ∩ D^μ_B ; D^M_AB = D^M ∩ D^μ_A ∩ D^μ_B | Δ micro et Δ macro ponctuels (métrologiques) ; leurs p et IC si une procédure validée s'applique (§ 2.1 d) ; Wilcoxon de la paire |
 | Global, sur la famille | D^μ_F, D^M_F (∩ sur F) | Friedman et Nemenyi ; **seul tri** multi-pipelines (P8 : les ordres appariés ne composent pas un classement) |
 | Sensibilité `empty_page` | attendus ∩ {VT disponible} | toute part manquante notée vide : unité en échec, région en échec, fin tronquée (R6) |
 
-#### d. Estimandes et inférence (points 2 et 10 ; R4, P2, P4, P5, P6)
+**Grappes (B3).** Les grappes sont déclarées par le corpus (champ de `DocumentRef`). Le corpus documente aussi :
+- la **population cible** : ce que l'échantillon de documents ou de grappes représente ;
+- la **pondération des grappes** : le macro est une moyenne par document ou par grappe, déclarée.
 
-**Une seule procédure par Δ (N2), choisie par famille et par effectif (R4, N1).**
+Les deux sont publiés avec chaque agrégat. Le micro, ratio de sommes, ne dépend pas de la pondération ; le macro en dépend.
 
-n est le nombre d'**unités de rééchantillonnage** : documents, ou grappes si elles sont déclarées. La H0 de chaque procédure est nommée dans le payload.
+**Ce que publient les supports.** Les supports conditionnel, apparié et global sont **métrologiques**. Ils définissent sur quoi portent un agrégat, une couverture ou un Δ ponctuel, et restent corrects pour toute observation. Les colonnes « IC » et « p » qu'ils servent relèvent du § 2.1 d (inférence conditionnelle).
 
-| Procédure | H0 | p | IC | Niveau mesuré |
-|---|---|---|---|---|
-| **SF** : changement de signe exact (énumération si 2^n ≤ 2^16, sinon 99 999 échanges avec une graine déclarée), sur r_d(δ) = e_d − δ·n_d | A et B échangeables dans chaque document (effet de taux constant pour δ ≠ 0) | p(0) | **inversion du même test** : {δ : p(δ) > α}, d'un seul tenant (monotonie démontrée par la revue, § 7.1) | rejet sous H0 : 0,000 (n = 5), 0,037 (n = 10) ; couverture 0,942 sous effets hétérogènes (revue) |
-| **BA** : bootstrap apparié par unité (9 999 réplicats), **conditionné au diagnostic de levier sur la référence** n_eff_réf ≥ 20 (C2, D3). Variante en discussion : bootstrap-t, et diagnostic de queue (B9c) | R_A = R_B | 2·min(F̂*(0), 1 − F̂*(0⁻)) sur les réplicats | percentile des **mêmes** réplicats (`method="inverted_cdf"`) | au seuil n_eff ≥ 20, sur F1, levier r0 = 10, lognormal et MER, n de 6 à 100 : aucune case au-delà de α + 3 erreurs Monte-Carlo ; maximum 0,073 pour une borne de 0,077 (`c1_c2_levier_calibration.py`) |
+#### d. Inférence conditionnelle (points 2 et 10 ; B2, B4, B5, B9)
 
-**Diagnostic de levier (C2, D3).** n_eff_réf = (Σ_d r_d)² / Σ_d r_d², où r_d est une quantité de **référence** : la même pour les deux pipelines, et indépendante de toute sortie. Par famille :
-- tp + fn pour les F1 et les rappels ;
-- n_réf pour les taux d'édition, MER, cMER et exactitudes ;
-- taille de la référence (mots, entités, régions, paires ordonnées) pour les précisions, `unanchored_trigrams`, `air` et τ ;
-- nombre de mots de référence pour l'ECE.
+Rien dans cette sous-section n'est une garantie métrologique. Une p ou un IC est publié comme **confirmatoire** seulement si trois conditions sont réunies :
+1. la comparaison appartient à la famille confirmatoire **déclarée par la spec avant l'expérience** (B4) ;
+2. la procédure est **validée** pour la famille de métriques concernée ;
+3. ses conditions d'application sont remplies.
 
-Les sommes portent sur les unités de rééchantillonnage (grappes si elles sont déclarées). Calculé sur les dénominateurs d'hypothèse (révision 4), le diagnostic pouvait être contourné : un pipeline **pire**, qui invente massivement, effaçait le verdict (`r4_levier_echappatoire.py` ; vérifié corrigé dans `d1_d3_options.py` (1)).
+Sinon, le résultat est publié comme :
+- « **inférence non estimable** », avec son motif, quand aucune procédure validée n'existe ou que ses conditions ne sont pas remplies ;
+- ou « **exploratoire** », quand une procédure validée est appliquée hors de la famille déclarée. Le résultat porte alors une p non corrigée et n'est jamais présenté comme « significatif ».
 
-**Seuils de SF (C3).**
-- n₀ = #{unités à r_d(0) ≠ 0} : la p minimale non corrigée vaut 2^(1−n₀).
-- **À l'échelle de la famille (D4).** Holm compare la plus petite p à α/m. Un rejet est donc possible dans une famille de taille m ssi max_i n₀,i ≥ 1 + log₂(m/α). Un test i ne peut être rejeté que si 2^(1−n₀,i) ≤ α/(m − j + 1) pour son rang j dans la procédure descendante, et jamais si 2^(1−n₀,i) > α. Chaque campagne publie le n₀ requis, ⌈1 + log₂(m/α)⌉. Pour `dresden.yaml` avec la famille par défaut B4 (m = 720), il vaut **15**.
-- m = #{unités à n_d > 0} : p(δ → ±∞) → 2^(1−m), donc l'IC n'est borné que si m ≥ 6.
+Le Δ ponctuel, lui, reste toujours publié : il est métrologique.
 
-| Famille | Dénominateur | Procédure du Δ micro | Macro publié |
+n est le nombre d'unités de rééchantillonnage : documents, ou grappes si elles sont déclarées.
+
+| Procédure | Statut en 1.0 | H0 nommée | p | IC | Conditions |
+|---|---|---|---|---|---|
+| **SF** : changement de signe exact sur r_d(δ) = e_d − δ·n_d (Δ micro), ou sur d_d(δ) = r_A,d − r_B,d − δ (Δ macro) | **validée** (exacte, à tout seuil) | A et B échangeables dans chaque unité | p(0) par énumération si 2^n ≤ 2^16 ; sinon (k+1)/(B+1) avec B + 1 ≥ m/α, pour que le plus petit seuil de Holm soit atteignable, et une graine déclarée | inversion du même test, {δ : p(δ) > α}, **sous le modèle déclaré d'effet constant**. Il est d'un seul tenant (monotonie, revue § 7.1) ; couverture mesurée 0,942 sous effets hétérogènes, une mesure et non une preuve | rejet possible dans une famille de taille m ssi max n₀ ≥ 1 + log₂(m/α) ; IC borné ssi m_unités ≥ 6 (C3, D4) |
+| **Permutation des rangs** : Wilcoxon par paire sur D^M_AB ; Friedman et Nemenyi sur D^M_F si k ≥ 3 | **validée** (exacte) | échangeabilité | `zero_method="wilcox"`, `method=PermutationMethod` explicite, jamais `auto` (B5) ; rangs sur `Fraction` | — | publiée comme « analyse de rangs par document », **distincte** des tests du micro et du macro ; variance nulle → « non calculé » |
+| **Holm** | **validé** | — | sur la famille confirmatoire déclarée (B4) ; un test non calculable y garde sa place (p = 1) ; aucune fusion de pipelines sur leurs résultats | — | m = taille de la famille **déclarée** |
+| **BA percentile**, **bootstrap-t**, **PS** | **non validées** (B2, B9c) | R_A = R_B | — | — | non publiées en 1.0 ; recherche (§ 6.3) |
+
+| Famille de métriques | Dénominateur | Δ micro en 1.0 | Δ macro en 1.0 |
 |---|---|---|---|
-| Taux d'édition ; proportions à dénominateur de référence ; `bow_recall`, rappel NER ; texte par région | référence | **SF** à tout n. Si max n₀ < 1 + log₂(m_famille/α) : « aucun rejet possible dans cette famille ». Si m ≤ 5 : « IC non borné » | oui |
-| Exactitudes (plancher non linéaire) ; F1 ; MER, cMER | hypothèse, ou finalisation non linéaire | **BA** (ou la procédure retenue en B9c) si n_eff_réf ≥ 20 ; sinon « non estimable (levier ou effectif) », sans p ni IC | oui (D^M fixé par la référence) |
-| Précisions, `unanchored_trigrams`, `air`, τ | hypothèse | idem | non |
-| ECE, MCE (analyses) | — | IC BA si n_eff_réf ≥ 20 (mots de référence) ; sinon « non estimable » ; aucun test confirmatoire | — |
+| Taux d'édition ; proportions à dénominateur de référence ; `bow_recall`, rappel NER ; texte par région | référence | SF | SF |
+| Exactitudes ; F1 ; MER, cMER | hypothèse, ou finalisation non linéaire | **« inférence non estimable »** (B9c) ; Δ ponctuel publié | SF (statistique linéaire des différences de scalaires sur D^M_AB, fixé par la référence) |
+| Précisions, `unanchored_trigrams`, `air`, τ | hypothèse | « inférence non estimable » ; Δ ponctuel publié | pas de macro |
+| ECE, MCE (analyses) | — | aucun test ; IC non estimable | — |
 
-- **Peu d'unités (C3).** Avec au plus 5 unités de rééchantillonnage, aucun Δ d'aucune famille ne peut être déclaré significatif : SF a p ≥ 1/16, BA est non estimable (n_eff ≤ n ≤ 5). C'est le cas des 5 grappes BNL ; le payload le dit en clair. **Avec les 10 pages Dresden et la famille par défaut (m = 720), aucun rejet n'est possible non plus (D4)** : il faudrait n₀ ≥ 15. Les familles à dénominateur d'hypothèse y sont de plus non estimables (n_eff_réf ≤ 10 < 20). Une famille déclarée plus petite, par exemple un témoin contre les autres, abaisse le n₀ requis : c'est l'objet de B4.
-- **PS est retirée (C1).** Sous le seuil de n_eff, ni PS ni BA ne tiennent le niveau. Au-dessus, BA le tient et fournit l'IC. Garder PS n'apporterait qu'une p sans IC, de niveau non garanti.
-- **Calibration (B9).** Le seuil 20 est calibré sur les scénarios à levier **borné**. Le scénario à levier non borné (r0 = 60) sert à vérifier que le diagnostic refuse : 100 % des jeux sont non estimables jusqu'à n = 100. La recalibration indépendante de la revue (§ 8.2) montre que BA percentile reste anticonservateur sous queue lourde au-dessus du seuil (lognormal, n = 60 : 0,096 parmi 1 059 jeux retenus). D'où B9b (critère décidable) et B9c (options).
-- Le niveau de chaque procédure, et le seuil de n_eff, sont des **invariants mesurés** (A3), recalculés si la procédure, le jeu de calibration ou scipy change.
-- **Macro.** Δ^M est la moyenne sur D^M_AB des différences exactes r_A,d − r_B,d. Procédure **SF** sur d_d(δ) = r_A,d − r_B,d − δ, avec p et IC par inversion du même test (statistique linéaire, valable à tout n).
-- **P2, réplicats dégénérés (BA).** Un réplicat dont la finalisation est indéfinie (Σ dénominateur = 0) est écarté et compté. Au-delà de ε, IC et p sont « non estimables » (B2).
-- **P4, analyses de rangs.** Elles sont publiées sous le nom « analyse de rangs par document », jamais comme test du micro ou du macro :
-  - Wilcoxon par paire sur D^M_AB ;
-  - Friedman et Nemenyi sur D^M_F, seulement si k ≥ 3 (k = 2 : Wilcoxon seul) ;
-  - différences et rangs calculés sur des `Fraction`, converties une fois, donc des ex æquo exacts restent ex æquo ;
-  - `zero_method="wilcox"` et `method=PermutationMethod` explicites (N8) : énumération exacte si 2^n ≤ 2^16, sinon 99 999 échanges avec une graine déclarée. Jamais `method="auto"`, dont scipy 1.18.1 change le comportement selon les ex æquo et n (`n8_wilcoxon_methode_explicite.py`) ;
-  - variance nulle : « non calculé », place gardée dans la famille.
-- **P5, P6, grappes et répétitions.** Tirages et échanges se font par grappe déclarée ; les grappes sont triées par leur plus petit id de document. Une répétition n'est jamais une unité d'inférence : la grappe d'une répétition est son document. Les statistiques sont sommées par document pour le micro et les scalaires moyennés par document pour le macro. Sous grappes, les rangs portent sur les moyennes par grappe, ou ne sont pas publiés (B3).
-- **Famille de Holm (point 10).** Définie par la spec avant exécution, elle ne dépend d'aucun résultat (B4). Un test non calculable y garde sa place (p = 1). Aucun pipeline n'est fusionné à un autre sur ses résultats.
+Règles :
+- **Familles déclarées (B4).**
+  - La spec déclare, avant l'expérience, ses hypothèses **principales** et **secondaires**, chacune sous la forme (vue, métrique, estimande, paire de pipelines). Holm s'applique à la famille confirmatoire déclarée (Q1 : une famille ou deux, § 6.2).
+  - Toute autre comparaison est descriptive (Δ ponctuel) ou exploratoire (p non corrigée de SF, étiquetée).
+  - Sans déclaration, **aucune inférence confirmatoire** n'est publiée. La famille exhaustive (720 tests sur `dresden.yaml`) n'est jamais un défaut confirmatoire.
+  - Chaque famille déclarée est publiée avec son m et le n₀ requis, ⌈1 + log₂(m/α)⌉. **La composition de la famille décide directement de ce qui est publiable** (D4).
+- **Peu d'unités (C3).** Avec au plus 5 unités (les 5 grappes BNL), aucun Δ n'est significatif : SF a p ≥ 1/16. Avec 10 pages (Dresden), un rejet n'est possible que si la famille déclarée vérifie m ≤ α·2^(n₀−1), soit m ≤ 25 pour n₀ = 10.
+- **Grappes et répétitions (P5, P6).**
+  - SF échange A et B au niveau de la grappe déclarée.
+  - Les grappes sont triées par leur plus petit id de document.
+  - Une répétition n'est jamais une unité d'inférence.
+  - Sous grappes, les rangs portent sur les moyennes par grappe, selon la pondération déclarée (B3), ou ne sont pas publiés.
+- **Diagnostic de levier (B9a).** n_eff_réf = (Σ r_d)² / Σ r_d², sur une quantité de **référence** commune à la paire. Il n'est **pas** une condition de validité : il ne mesure pas directement l'influence d'une observation sur un ratio à dénominateur d'hypothèse. Il est publié à titre descriptif à côté de chaque Δ des familles concernées, et sert à la recherche (§ 6.3).
 
 #### e. Échecs
 
@@ -306,8 +236,8 @@ Les sommes portent sur les unités de rééchantillonnage (grappes si elles sont
 
 | | |
 |---|---|
-| **Supprime** | `Observation`, `micro_ratio`, `micro_ratio_ci`, `bootstrap_batch`, `_intervals`, `_aggregate`, `_error_rate`, `missed`/`_expects`, `worst`/`_score_failed`, F1 par document, `support ≥ 1`, la famille de Holm « tests calculés », le jugement par `editops` non canonique |
-| **Bibliothèques** | `scipy.stats` (`bootstrap`, `permutation_test`, `wilcoxon`, `friedmanchisquare`) ; `rapidfuzz` (distances simple et pondérée) ; `fractions` (stdlib). Oracles : DP lexicographique (S/D/I), jiwer (S+D+I quand Σ n_réf > 0), énumération exhaustive (NER, régions), scipy |
+| **Supprime** | `Observation`, `micro_ratio`, `micro_ratio_ci` (aucune procédure d'IC marginal validée : § 6.3), `bootstrap_batch`, `_intervals`, `_aggregate`, `_error_rate`, `missed`/`_expects`, `worst`/`_score_failed`, F1 par document, `support ≥ 1`, la famille de Holm « tests calculés », le jugement par `editops` non canonique |
+| **Bibliothèques** | `scipy.stats` (`permutation_test`, `wilcoxon` avec `PermutationMethod`, `friedmanchisquare`) ; `rapidfuzz` (distances simple et pondérée) ; `fractions` (stdlib). Oracles : DP lexicographique (S/D/I), jiwer (S+D+I quand Σ n_réf > 0), énumération exhaustive (NER, régions), scipy |
 | **Couche** | `evaluation` (3) ; `partial` en `domain/usage.py` (1) ; `not_transcribed` déclaré par l'importeur (`app`, 6) ; validation préalable en `app` |
 | **Ne fait pas** | Pas d'algèbre générique, pas de méthode delta pour l'IC, pas de bornes dans `MetricSpec`, pas d'imputation par défaut |
 
@@ -405,7 +335,7 @@ ObservationId       = H(sha256 de la sortie notée, sha256 de la VT DE CE docume
 | Opération | Exécute | Résultat exigé | Coûts publiés |
 |---|---|---|---|
 | Relecture des observations | rien | octets identiques, hors horodatages | historiques, attribués à leur run |
-| Reproduction sous **définition** identique | évaluation (et moteurs en rejeu) | mêmes statistiques et scalaires (arithmétique exacte, P1 canonique), **quel que soit l'environnement** ; un environnement différent est publié comme qualification. IC et p identiques seulement à environnement égal (B8) | coûts du rejeu séparés |
+| Reproduction sous **définition** identique | évaluation (et moteurs en rejeu) | mêmes statistiques et scalaires (arithmétique exacte, P1 canonique), **quel que soit l'environnement** ; un environnement différent est publié comme qualification. Les sorties inférentielles qui reposent sur des tirages ne sont reproductibles que sous **environnement et protocole identiques** (B8) : `ProtocolDefinition` identique et environnement complet identique (plateforme, interpréteur, toutes les bibliothèques chargées), et pas seulement NumPy et SciPy | coûts du rejeu séparés |
 | Réévaluation sous nouvelle définition | évaluation | nouvelles identités, filiation vers l'archive, jamais sous l'identité d'origine | aucun coût moteur |
 
 #### e. Archive (P13)
@@ -486,14 +416,19 @@ Vérification :
 - **O** = oracle externe ;
 - **A** = test adversarial.
 
-La colonne **Revue** nomme le contre-exemple de `rapports/revue_contre_exemples/` que l'invariant doit satisfaire. Il est porté en test adversarial rouge au premier commit de la tranche indiquée (T).
+La colonne **Revue** nomme le contre-exemple de `rapports/revue_contre_exemples/` (ou de `revision2_verifications/`) que l'invariant doit satisfaire. Il est porté en test adversarial rouge au premier commit de la tranche indiquée (T).
+
+**Nature des invariants.**
+- **Métrologiques, inconditionnels** : tous les M, A1, A2, A4, A6, A7, A11, A12, tous les I et tous les F. Ils valent pour toute observation.
+- **Inférentiels, conditionnels à une procédure validée** : A3, A5, A8, A9, A10. Ils s'énoncent « pour une procédure validée (SF, permutation des rangs, Holm sur une famille déclarée), alors … ; sinon, la sortie est « inférence non estimable » ou « exploratoire » ».
+- **Recherche** : A13.
 
 ### Par métrique (M) (point 5)
 
 | # | Invariant | Vérif. | Revue | T |
 |---|---|---|---|---|
 | M1 | **Taux d'édition.** (S, D, I) canoniques (max S), égaux à la DP lexicographique. CER/WER micro égaux à jiwer quand Σ n_réf > 0 (S+D+I seulement) ; MER s'en écarte sur les ex æquo d'alignement, comme écrit. Une page à référence vide ajoute \|h\| au numérateur, avec scalaire `zero_denominator`. Corpus entièrement vide : micro indéfini pour tous, écart volontaire à jiwer (qui rend 3 et 0), Σ insertions publiée. `not_transcribed` est hors des attendus. | P ; O DP, jiwer | `k1_editops_egalites.py`, `r2_p1_mer_parite_jiwer.py` | 1a |
-| M2 | **Exactitudes** : max(0, 1 − Σe/Σn), jamais une moyenne de planchers. | P | — | 1a |
+| M2 | **Exactitudes** : valeur corpus = max(0, 1 − Σe/Σn), plancher au niveau du corpus (B1), jamais une moyenne de planchers par page. Les comptes (Σe, Σn) et le taux d'erreur **non tronqué** Σe/Σn sont publiés à côté. | P | — | 1a |
 | M3 | **F1/P/R, agrégation** : F1(Σtp, Σfp, Σfn) ; un document sans référence contribue ses fp ; une catégorie présente seulement en prédiction a P = 0, R indéfini, sans erreur ; tout vide : indéfini. Oracle : énumération par IoU d'empan, règle de Cinoc ; pas nervaluate. (La propriété d'appariement relève de M8.) | P ; O énumération | `k1_ner_oracle_nervaluate.py` | 1a |
 | M4 | **Texte par région** : le numérateur compte les éditions sur paires, le texte d'hypothèse non apparié et le texte de référence non apparié ; perdre une région n'est jamais mieux noté qu'une coquille. `line_identity_*` sont `not_applicable` sans filiation. | P | `k1_region_cer_reference_non_appariee.py` | 4 |
 | M5 | **τ** : seules les paires que la référence ordonne comptent ; les paires d'un groupe non ordonné sont exclues ; avec un ordre total sans ex æquo, la valeur égale (1 − τ)/2 de scipy. | P ; O scipy | `k1_tau_groupe_non_ordonne.py` | 4 |
@@ -507,17 +442,17 @@ La colonne **Revue** nomme le contre-exemple de `rapports/revue_contre_exemples/
 |---|---|---|---|---|
 | A1 | **Agrégat conditionnel** sur D^μ_P et D^M_P, couverture ventilée par axe ; plus d'échecs, de régions perdues ou de troncatures ne l'améliorent jamais sans que la couverture le dise ; aucune part manquante n'est notée par défaut. | P ; A | `k2_partial_impute_en_silence.py` | 1b |
 | A2 | **Quatre axes** : attendus = applicables ; `not_transcribed` distinct d'une référence vide ; statistique présente ⇔ axes 1 à 3 au vert ; `partial_output` et `truncated_output` à l'axe 3. | P ; A | `k2_partial_impute_en_silence.py` | 1b |
-| A3 | **Δ micro, une procédure par Δ** (§ 2.1 d) :<br>• **SF** (dénominateur de référence) : rejet ≤ α sous échangeabilité à tout n ; IC par inversion, d'un seul tenant et cohérent avec p ; « aucun rejet possible dans la famille » si max n₀ < 1 + log₂(m/α) (D4) ; « IC non borné » si m ≤ 5 (C3).<br>• **BA** (dénominateur d'hypothèse, ou procédure B9c) : publié seulement si n_eff_réf ≥ 20, diagnostic calculé sur la **référence** (D3) ; sinon « non estimable ».<br>• **Critère de calibration** (D2, B9b) : sur chaque case (scénario, n) à levier borné du jeu de calibration, la borne supérieure unilatérale à 95 % (Clopper-Pearson) du taux de rejet sous H0, parmi les jeux retenus, est ≤ τ_niveau, avec au moins N jeux retenus. Le scénario à levier non borné est refusé à 100 %.<br>• Un pipeline pire, par invention, n'échappe jamais au verdict (D3).<br>• Réplicats dégénérés écartés et comptés. | P (simulation par famille, n et levier) ; O scipy | `k1_permutation_ratio_niveau.py`, `k1_permutation_cer_temoin.py`, `k1_bootstrap_denominateur_nul.py`, `r2_r4_inversion_bootstrap.py`, `n1_n2_procedure_unique.py`, `r3_ps_niveau_scenarios.py`, `r3_ba_n_min_scenarios.py`, `r3_sf_inversion.py`, `c1_c2_levier_calibration.py`, `r4_ba_kish_calibration.py`, `r4_ba_kish_confirmation.py`, `r4_diagnostic_non_ancillaire.py`, `r4_levier_echappatoire.py`, `r4_sf_holm_dresden.py`, `d1_d3_options.py` | 1a |
-| A4 | **Δ macro** sur D^M_AB, avec D^M fixé par la référence (symétrique) ; procédure SF, IC par inversion. Le macro ne voit pas l'invention sur un document sans référence (N3). **« Invention hors référence »** (C5) : calculée sur le support apparié (et sur le support global pour le tableau), avec la couverture des pages sans référence par pipeline. Deux pipelines identiques sur ce support ont la même valeur, quoi que chacun ait fait hors du support. L'unité inventée est déclarée par famille, et vaut « non définie » pour les proportions à dénominateur de référence. Pas de macro pour les familles dont le scalaire dépend de l'hypothèse. | A ; O scipy | `k2_support_macro_depend_du_pipeline.py`, `r2_r5_support_reference.py`, `r3_invention_hors_reference.py` | 1a |
-| A5 | **Analyses de rangs** : nommées comme telles ; `zero_method="wilcox"` et `method=PermutationMethod` explicites (jamais `"auto"`), dont la p est égale à l'énumération faite à la main sur rangs moyens ; ex æquo exacts préservés ; Friedman seulement si k ≥ 3 ; variance nulle → « non calculé » avec place gardée. | O énumération, scipy ; A | `k1_rangs_ex_aequo.py`, `r2_p4_wilcoxon_auto.py`, `n8_wilcoxon_methode_explicite.py` | 1a |
-| A6 | **Classement** : deux pipelines ne s'ordonnent que sur leur support apparié ; aucun classement n'est composé à partir des ordres appariés ; seul le support global trie. | A | `k2_ordres_apparies_intransitifs.py`, `k2_support_macro_depend_du_pipeline.py` | 1b |
+| A3 | **Δ micro et Δ macro, inférence conditionnelle** (§ 2.1 d).<br>• Pour les familles où SF s'applique (dénominateur de référence pour le micro ; toute famille à macro publié pour le macro) : rejet ≤ α sous échangeabilité à tout seuil, y compris les seuils de Holm. L'IC par inversion est d'un seul tenant, cohérent avec p, sous le modèle déclaré d'effet constant. « Aucun rejet possible dans la famille » si max n₀ < 1 + log₂(m/α) ; « IC non borné » si m_unités ≤ 5. En tirages, B + 1 ≥ m/α.<br>• Pour les familles à dénominateur d'hypothèse (micro) : « **inférence non estimable** », le Δ ponctuel étant publié ; BA, bootstrap-t et PS ne sont jamais publiés.<br>• Hors de la famille déclarée : au plus « exploratoire », jamais « significatif ».<br>• Un pipeline pire, par invention, ne change jamais un « estimable » en « non estimable » : le diagnostic est calculé sur la référence (D3). | P (simulation SF, énumération) ; O scipy | `k1_permutation_cer_temoin.py`, `n1_n2_procedure_unique.py` (a), `r3_sf_inversion.py`, `r4_sf_holm_dresden.py`, `r4_levier_echappatoire.py`, `d1_d3_options.py` (1) ; pour la famille non estimable : `k1_permutation_ratio_niveau.py`, `r2_r4_inversion_bootstrap.py`, `r3_ps_niveau_scenarios.py`, `r3_ba_n_min_scenarios.py`, `r4_ba_kish_confirmation.py` | I |
+| A4 | **Macro et invention hors référence** (métrologique). Le macro est calculé sur D^M, fixé par la référence, avec la pondération des grappes déclarée (B3). Il ne voit pas l'invention sur un document sans référence (N3). **« Invention hors référence »** (C5) : calculée sur le support apparié (et global pour le tableau), avec la couverture des pages sans référence par pipeline. Deux pipelines identiques sur ce support ont la même valeur, quoi que chacun ait fait hors du support. L'unité inventée est déclarée par famille, et vaut « non définie » pour les proportions à dénominateur de référence. Pas de macro pour les familles dont le scalaire dépend de l'hypothèse. | A | `k2_support_macro_depend_du_pipeline.py`, `r2_r5_support_reference.py`, `r3_invention_hors_reference.py` | 1b |
+| A5 | **Analyses de rangs** (conditionnel : permutation explicite validée). Nommées comme telles, distinctes des tests du micro et du macro (B5). `zero_method="wilcox"` et `method=PermutationMethod`, jamais `"auto"` ; p égale à l'énumération faite à la main sur rangs moyens ; ex æquo exacts préservés ; Friedman seulement si k ≥ 3 ; variance nulle → « non calculé » avec place gardée. | O énumération, scipy ; A | `k1_rangs_ex_aequo.py`, `r2_p4_wilcoxon_auto.py`, `n8_wilcoxon_methode_explicite.py` | I |
+| A6 | **Classement** (métrologique) : deux pipelines ne s'ordonnent que sur leur support apparié ; aucun classement n'est composé à partir des ordres appariés ; seul le support global trie (B7). | A | `k2_ordres_apparies_intransitifs.py`, `k2_support_macro_depend_du_pipeline.py` | 1b |
 | A7 | **Échecs** : aucune imputation par défaut ; `empty_page` note vide toute part manquante (unité, région, fin tronquée) et porte ce nom. | A | `k2_partial_impute_en_silence.py` | 1b |
-| A8 | **Grappes** : grappes triées par leur plus petit id ; en singletons, l'IC est identique bit à bit à l'IC par document ; deux groupements donnent deux IC ; une répétition n'est jamais une unité d'inférence. | P ; A | `k1_grappes_singletons_ordre.py` | 1a |
-| A9 | **Famille de Holm** définie par la spec ; un test non calculable, ou à variance nulle, garde sa place. | P | `k1_rangs_ex_aequo.py` (cas 2) | 1a |
-| A10 | **Rééchantillonnage** invariant par permutation de l'ordre des documents de la spec. | P | — (violé : [0,0953 ; 0,7596] → [0,1032 ; 0,7403]) | 1a |
+| A8 | **Grappes** (conditionnel : SF par grappe). Échange A/B par grappe déclarée ; grappes triées par leur plus petit id, donc en singletons SF par grappe = SF par document, bit à bit ; deux groupements donnent deux résultats ; une répétition n'est jamais une unité d'inférence ; population cible et pondération déclarées (B3). | P ; A | `k1_grappes_singletons_ordre.py` | I |
+| A9 | **Famille de Holm** (conditionnel) : composée des seules hypothèses principales et secondaires **déclarées avant l'expérience** (B4) ; taille et membres indépendants des résultats ; un test non calculable, ou à variance nulle, garde sa place ; sans déclaration, aucune inférence confirmatoire n'est publiée. | P | `k1_rangs_ex_aequo.py` (cas 2), `r4_sf_holm_dresden.py` | I |
+| A10 | **Invariance par ordre** (conditionnel) : p et IC de SF (et des rangs) invariants par permutation de l'ordre des documents de la spec, que ce soit en énumération ou en tirages triés par id. | P | — (constaté sur `micro_ratio_ci` : [0,0953 ; 0,7596] → [0,1032 ; 0,7403]) | I |
 | A11 | **Analyses d'une vue** : étape cible et son entrée déclarée seulement. | A | — | 2 |
 | A12 | **Coûts** : coût d'un préfixe ; facture de l'étape fautive comptée ; coûts historiques jamais additionnés aux coûts du rejeu. | A | — | 2, 3 |
-| A13 | **Quantiles par ligne** : on tire des documents ; couverture de l'IC de la médiane proche du nominal avec un effet de page. | P (simulation) | `k1_quantiles_grappes.py` | 1a |
+| A13 | **Quantiles par ligne** (recherche). Les quantiles eux-mêmes sont métrologiques (multi-ensemble par document) ; leur IC n'a pas de procédure validée en 1.0. Piste : tirer des documents, couverture mesurée à 0,92 contre 0,25 en tirant des lignes (P3). | P (simulation) | `k1_quantiles_grappes.py` | R |
 
 ### Identité, provenance, archive (I)
 
@@ -546,141 +481,328 @@ La colonne **Revue** nomme le contre-exemple de `rapports/revue_contre_exemples/
 | F9 | **Parité** des capacités nouvelles. | garde existante | — | 3 |
 
 **37 invariants** (8 M, 13 A, 7 I, 9 F).
+- **31 métrologiques**, inconditionnels.
+- **5 inférentiels**, conditionnels : A3, A5, A8, A9, A10.
+- **1 de recherche** : A13.
 
-- **Revus par la révision 2 :**
-  - les 10 « faux » de la revue : M1, M3, M4, M5, M6, M8, A3, A4, A7, I1 ;
-  - les 10 « à préciser » : A2, A5, A6, A8, I3, I5, I6, F3, F5, F7.
-- **Nouveau :** A13 (P3).
-- **Changent de tranche :** M4, M5 et M7 passent en tranche 4 (ils dépendent de l'appariement et de l'ordre partiel). M3 garde l'agrégation en 1a ; son appariement passe à M8.
-- **Revus par la révision 3 :**
-  - A3 (une procédure par Δ, régimes de n : N1, N2) ;
-  - A4 (le macro ne voit pas l'invention hors référence : N3) ;
-  - A5 (`method` explicite : N8) ;
-  - I1 et F3 (validation par nom, partie calculée : N4) ;
-  - I3 et I5 (sources sur disque : N5) ;
-  - M8 (géométrie identique, id en 4ᵉ critère, calcul par composante : N6, P17) ;
-  - M7 (linéarisation canonique : N7).
-
-  Le nombre d'invariants ne change pas.
-- **Revus par la révision 4 :**
-  - A3 (PS retirée, BA conditionné à n_eff ≥ 20, seuils n₀ et m de SF, aucun Δ significatif avec au plus 5 unités : C1, C2, C3) ;
-  - A4 (invention hors référence sur le support apparié, unités par famille : C5) ;
-  - M8 (paires héritées fixées avant optimisation : C4) ;
-  - I1 et I3 (résolution sans import).
-
-  Le total reste 37.
-- **Prêts pour la tranche 1a** (tests rouges dès maintenant) : M1, M2, M3, M6, A4, A5, A8, A9, A10, A13, et A3, avec les scénarios de la revue (§ 8.2) et ceux de `d1_d3_options.py`. Correctifs : SF, les rangs et Holm attendent B4 ; l'inférence des familles à dénominateur d'hypothèse attend B9a-c.
+La révision n° 6 change la **nature** de A3, A5, A8, A9, A10 (désormais conditionnels), de A4 (devenu métrologique, son Δ passant à A3) et de A13 (recherche). Elle change le contenu de M2 (B1). Les révisions antérieures sont dans l'annexe.
 
 ---
 
 ## 4. Tests
 
-### 4.1 À reformuler avant correction
+Les chemins sont relatifs à `tests/adversarial/`. **ms** = `metriques_stats/test_ms_aggregation.py` ; **app** = `applicabilite_echecs/test_ce_applicabilite.py` ; **mx** = `applicabilite_echecs/test_ce_max_error.py` ; **st** = `metriques_stats/test_ms_statistics.py`.
+
+### 4.1 Tranches 1a et 1b : tests rouges
+
+**1a · Valides importés tels quels (9)**, aujourd'hui rouges :
+
+| Test | Invariant |
+|---|---|
+| ms `::test_reference_vide__hallucination_comptee_au_numerateur[cer-4.4]`, `[wer-7.0]`, `[ins_rate-7.0]` | M1 |
+| ms `::test_reference_vide__pipeline_qui_hallucine_est_classe_apres` | M1 |
+| ms `::test_ner_f1__micro_sur_tp_fp_fn[ner_f1]`, `[ner_f1_exact]` | M3 |
+| ms `::test_ner_f1__faux_positifs_sur_document_sans_entite_gt` | M3 |
+| ms `::test_region_detection__micro_sur_tp_fp_fn` | M3 (agrégation ; boîtes disjointes, sans dépendance à l'appariement) |
+| ms `::test_bow_f1__micro_sur_tp_hyp_ref` | M3 |
+
+**1a · Discutables, attendu fixé par B1 (3)** :
+
+| Test | Attendu reformulé |
+|---|---|
+| ms `::test_reference_vide__hallucination_comptee_au_numerateur[char_accuracy-0.0]` | `char_accuracy` corpus = max(0, 1 − 44/10) = 0,0, et le taux d'erreur non tronqué 4,4 est publié à côté avec ses comptes (44, 10). |
+| ms `::…[fca-0.0]` | `fca` corpus = 0,0 (plancher au corpus), avec ses comptes et son taux non tronqué publiés à côté. |
+| ms `::test_char_accuracy__vaut_un_moins_cer_corpus` | `char_accuracy` corpus = 1 − 0,5 = 0,5 (plancher appliqué au corpus, non atteint), et non 0,833 ; comptes publiés. |
+
+**1a · À écrire** :
+- `k1_editops_egalites.py` et `r2_p1_mer_parite_jiwer.py` (M1 : S/D/I canoniques, écart volontaire à jiwer) ;
+- M1 sur un corpus entièrement vide (micro indéfini, Σ insertions publiée) ;
+- `k1_ner_oracle_nervaluate.py` (M3 : oracle par énumération) ;
+- `k1_fsum_non_associatif.py` et `r2_r1_fraction.py` (M6) ;
+- M2 : comptes et taux non tronqué publiés ;
+- propriétés P de M1, M2, M3 et M6.
+
+Test à inverser : `tests/evaluation/test_metrics_text.py::test_cer_weight_is_reference_length`.
+
+**1b · Valides importés (6)**, plus **2 valides reformulés** :
+
+| Test | Invariant | Attendu |
+|---|---|---|
+| app `::test_applicabilite__artefact_sans_contenu_dune_unite_reussie_reste_attendu` | A2 | tel quel |
+| app `::test_applicabilite__artefact_reference_mais_absent_du_disque_nabat_que_son_unite` | A2 | tel quel |
+| app `::test_applicabilite__fanout_entierement_en_echec_nest_pas_une_unite_ok` | A2 | tel quel |
+| app `::test_applicabilite__sortie_incompatible_refusee_ou_attendue` | A2, F8 | tel quel |
+| mx `::test_max_error__un_echec_compte_comme_note_deplace_lagregat` | A7 | tel quel |
+| ms `::test_ner_payload__label_absent_de_la_gt__ne_plante_pas` | A2 (rappel indéfini à l'axe 4) | tel quel |
+| app `::test_applicabilite__reference_vide_nest_pas_comptee_notee` | A1, A4 | **reformulé (T1)** : micro de A = 12/120 = 0,100 ; 12 documents au support micro, 6 au macro (pages blanches hors de D^M). |
+| app `::test_applicabilite__pipeline_non_applicable_nannule_pas_le_test_des_autres` | A6 | **reformulé (support)** : C, non applicable, ne change pas le support apparié de (A, B), qui compte 8 documents. La p (0,0078) relève de la tranche I. |
+
+**1b · Discutables, attendu fixé par les arbitrages (6)** :
 
 | Test | Conv. | Attendu reformulé |
 |---|---|---|
-| `reference_vide_nest_pas_comptee_notee` (valide) | T1 | Micro de A = 12/120 = 0,100. Les 6 pages blanches sont au support micro et hors de D^M (n_réf = 0) : 12 au micro, 6 au macro. |
-| `test_omnibus__meme_sens_que_le_cer_micro_affiche` | C05 | Le test du Δ micro du CER (changement de signe) va dans le sens du Δ micro ou n'est pas significatif (p = 1). Le Wilcoxon n'est publié que comme analyse de rangs. |
-| `test_omnibus__p_du_ratio_micro_par_permutation_appariee` | C05 | p corrigée du Δ micro ≥ α et égale au changement de signe exact de scipy (1,0). |
-| `intervalles__meme_documents_que_le_test` | C06 | L'IC du Δ porte sur D^μ_AB ; les IC marginaux sur le support conditionnel, étiquetés ainsi. |
-| `echec_non_aleatoire__classement_sur_documents_communs` | C07 | Sur le support apparié, B (0,040) est devant A (0,050). Aucun ordre entre supports différents ; couverture 7/8 de A publiée. |
-| `max_error__un_echec_ne_note_jamais_mieux_quune_reponse` | C08 | Aucune imputation par défaut (couverture 2/3). Sous `empty_page`, l'échec vaut la valeur de l'hypothèse vide (CER 1,0). |
-| `bootstrap__grappes_documentaires_declarables` | C09 | Deux groupements, deux IC ; en singletons, IC identique bit à bit à l'IC par document. |
-| `version_manuelle__brique_modifiee_sans_relever_sa_version_reexecutee` | C17 | Deux modules aux sources différentes, de même nom et de même version, ont deux définitions. Un fichier chargé par une autre étape puis modifié fait échouer la validation. |
-| `identite_saknussemm__prompt_et_temperature_envoyes_au_llm_sont_traces` | C17 | La définition change quand le prompt ou la température envoyés changent, et pas pour un réglage opérationnel. |
+| app `::test_applicabilite__gt_referencee_mais_absente_refusee_avant_de_payer` | C13 | Refus typé avant le premier appel de moteur (F8). |
+| app `::test_applicabilite__fanout_sans_aucune_region_reconnue_reste_attendu` | C13 | La page reste attendue (2 attendus). Elle porte `partial_output`, n'est pas notée par défaut, et vaut 1,0 sous `empty_page`. |
+| app `::test_applicabilite__reference_vide_nentre_pas_dans_le_test_apparie` | C01 | **Partie support (1b)** : les 6 pages blanches sont hors de D^M, donc hors de toute analyse par document. La p (0,031) relève de la tranche I. |
+| mx `::test_max_error__un_echec_ne_note_jamais_mieux_quune_reponse` | C08 | Aucune imputation par défaut (couverture 2/3). Sous `empty_page`, l'échec vaut la valeur d'une hypothèse vide (CER 1,0), sous ce nom. |
+| mx `::test_max_error__echec_note_comme_une_page_vide[ins_rate]` | C08 | Non noté par défaut ; sous `empty_page`, `ins_rate` de l'échec = 0,0, sous ce nom. |
+| st `::test_echec_non_aleatoire__classement_sur_documents_communs` | C07 | A et B ne sont ordonnés que sur leur support apparié (B 0,040 devant A 0,050), et le tri multi-pipelines se fait sur le support global (B7). La couverture 7/8 de A est publiée. |
 
-À recibler sans changer l'attendu : `reference_vide_nentre_pas_dans_le_test_apparie` (p = 0,031, lue dans l'analyse de rangs) ; `pipeline_non_applicable…` (Wilcoxon de la paire).
+**1b · À écrire** :
+- `k2_partial_impute_en_silence.py` (A1, A2, A7) ;
+- `k2_support_macro_depend_du_pipeline.py`, `r2_r5_support_reference.py`, `r3_invention_hors_reference.py` (A4) ;
+- `k2_ordres_apparies_intransitifs.py` (A6) ;
+- A2 : troncature aval sous une vue amont complète ; unité saknussemm en repli total (`partial`) ; `not_transcribed` distinct d'une référence vide ;
+- B3 : population cible et pondération des grappes publiées, macro par grappe différent du macro par document ;
+- propriétés P de A1 et A2.
 
-### 4.2 Tests qui figent un défaut
+Tests à inverser :
+- `tests/app/test_unit_outcome.py::test_max_error_is_zero_for_a_higher_is_better_metric` ;
+- `…::test_max_error_scores_the_failure_like_an_empty_page`, qui devient le test de `empty_page` ;
+- `applicabilite_echecs/…::test_troncature__notee_attendue_et_signalee` (vert), qui devient « exclu par défaut, noté sous `empty_page` ».
+
+**Bilan 1a + 1b** : 17 valides (15 importés tels quels, 2 reformulés) et 9 discutables reformulés.
+
+Les autres tests sont répartis ainsi :
+- **valides** (34) : 3 coûts d'échec partiel, 5 `correction`/`decisions` et 5 `a5` en tranche 2 (`a5` aussi en 3) ; 2 `a7` et 7 de provenance en tranche 3 ; 12 de mise en page en tranche 4 ;
+- **discutables** (30) : C05×2, C06×2 et C09 en tranche I ; C12×3 et C18×2 en 2 ; C14×4, C15×3 et C17×2 en 3 ; C03, C04, C10×2, C11×2 et C16 en 4 ; C19×4 hors code (plan d'expérience).
+
+### 4.2 Autres reformulations (tranches I et 3)
+
+| Test | Conv. | T | Attendu reformulé |
+|---|---|---|---|
+| st `::test_test_omnibus__meme_sens_que_le_cer_micro_affiche` | C05 | I | Le test SF du Δ micro du CER va dans le sens du Δ micro ou n'est pas significatif (p = 1). Le Wilcoxon n'est publié que comme analyse de rangs. |
+| st `::test_test_omnibus__p_du_ratio_micro_par_permutation_appariee` | C05 | I | La p de SF du Δ micro est égale au changement de signe exact (1,0). Elle est corrigée par Holm seulement si la comparaison est déclarée. |
+| st `::test_intervalles__ic_apparie_sur_la_difference_micro` | C06 | I | L'IC du Δ micro du CER par inversion de SF exclut 0 (Δ constant de 0,01). |
+| st `::test_intervalles__meme_documents_que_le_test` | C06 | I | L'IC du Δ porte sur D^μ_AB, les mêmes documents que le test ; aucun IC marginal n'est publié en 1.0. |
+| st `::test_bootstrap__grappes_documentaires_declarables` | C09 | I | Deux groupements donnent deux résultats SF ; en singletons, résultat identique à SF par document. |
+| `version_manuelle__brique_modifiee…`, `identite_saknussemm__prompt…` | C17 | 3 | Inchangés par rapport à la révision 2 : la définition change avec les sources sur disque et avec les réglages envoyés. |
+
+### 4.3 Tests qui figent un défaut
 
 À inverser dans le commit du correctif.
 
 | Test | Défaut figé | T |
 |---|---|---|
 | `test_metrics_text.py::test_cer_weight_is_reference_length` | page blanche hors du micro | 1a |
-| `test_micro_interval.py::test_zero_weight_documents_weigh_nothing` | idem pour l'IC | 1a |
-| `test_inference_scipy_parity.py` (`family_size == len(computed)`) ; `test_inference.py::test_not_computed_says_why` (`family_size == 0`) | famille dépendante des résultats | 1a |
-| `test_unit_outcome.py::test_max_error_is_zero_for_a_higher_is_better_metric`, `::test_max_error_scores_the_failure_like_an_empty_page` | `max_error` ; la seconde devient le test de `empty_page` | 1b |
-| `adversarial/applicabilite_echecs/…::test_troncature__notee_attendue_et_signalee` (vert) | troncature notée par défaut (R6) ; devient le test de `empty_page` | 1b |
-| `adversarial/applicabilite_echecs/…::le_type_interdit_bien_les_artefacts_dune_unite_failed` (vert) | « échec ⇒ aucun artefact » | 2 |
+| `test_unit_outcome.py::test_max_error_is_zero_for_a_higher_is_better_metric`, `::test_max_error_scores_the_failure_like_an_empty_page` | `max_error` | 1b |
+| `adversarial/…::test_troncature__notee_attendue_et_signalee` (vert) | troncature notée par défaut (R6) | 1b |
+| `adversarial/…::le_type_interdit_bien_les_artefacts_dune_unite_failed` (vert) | « échec ⇒ aucun artefact » | 2 |
 | `test_appariement_geometrique.py::test_identifiants_partages_inchanges` | id prioritaire sans filiation | 4 |
 | `test_calibration.py::test_analysis_scores_tokens_against_reference_multiset` | multi-ensemble (si O3) | 4 |
+| `test_micro_interval.py::test_zero_weight_documents_weigh_nothing` | IC marginal du micro (procédure retirée) | I |
+| `test_inference_scipy_parity.py` (`family_size == len(computed)`) ; `test_inference.py::test_not_computed_says_why` (`family_size == 0`) | famille dépendante des résultats | I |
 
-### 4.3 À écrire, rouges d'abord
+### 4.4 Autres tests à écrire
 
-**Les 23 scripts de la revue, ses 10 scripts `r2_*.py` et ses 7 scripts `r3_*.py`**, plus `n1_n2_procedure_unique.py`, `n8_wilcoxon_methode_explicite.py`, `c1_c2_levier_calibration.py` et `n5_resolution_sans_import.py` (`revision2_verifications/`), portés dans la tranche indiquée au § 3 et aux préalables du § 5.
-
-S'y ajoutent :
-- M1 (corpus entièrement vide) ;
-- A10 (ordre des documents) ;
-- A3 (niveau par famille, simulation) ;
-- A12 (historique contre rejeu) ;
-- I7 (distant sans modèle servi) ;
+Tous les scripts de la revue (`revue_contre_exemples/`) et de l'auteur (`revision2_verifications/`), dans la tranche que leur donne le § 3, et :
+- A12 (coûts historiques contre rejeu) ;
+- I7 (modèle distant sans modèle servi) ;
 - F2 (annulation) ;
 - F4 (même dossier) ;
 - F5 (panne simulée) ;
 - F9 (entrées de parité) ;
-- M8 (filiation **vérifiée** conservée) ;
-- les propriétés P de M1 à M8, A1, A2, A8, A9, A10, A13, I2, I4 et F3.
+- M8 (filiation vérifiée conservée) ;
+- les propriétés P de M4, M5, M7, M8, A8, A9, A10, I2, I4 et F3.
 
 ---
 
 ## 5. Tranches
 
-Le premier commit d'une tranche ne contient que des tests rouges. 1a et 1b partagent la conception du § 2.1. La tranche 4 ne dépend que de 1a et 1b.
+**Ordre.** Les tranches **métrologiques** passent d'abord : 1a, 1b, 2, 3, 4. Elles ne dépendent d'aucune question statistique ouverte. La tranche **I**, inférence conditionnelle, suit 1a et 1b et ne dépend pas de 2 à 4. La rubrique **R** (recherche, § 6.3) n'a pas d'échéance. Le premier commit de chaque tranche ne contient que des tests rouges (§ 4).
 
-**Préalables de clôture de la revue** (révision n° 3), à porter en tests rouges **avant** le premier correctif de la tranche :
-
-| Avant | Points | Scripts à porter en tests |
-|---|---|---|
-| **1a** | N1, N2, N3, N8, C1, C2, C3, C5, D1, D2, D3, D4 (et B4, B9a-c tranchés) | `r2_r4_inversion_bootstrap.py`, `n1_n2_procedure_unique.py`, `r2_r5_support_reference.py`, `r2_p4_wilcoxon_auto.py`, `n8_wilcoxon_methode_explicite.py`, `r2_r1_fraction.py`, `r2_p1_mer_parite_jiwer.py`, `r3_ps_niveau_scenarios.py`, `r3_ba_n_min_scenarios.py`, `r3_sf_inversion.py`, `r3_invention_hors_reference.py`, `c1_c2_levier_calibration.py`, `r4_ba_kish_calibration.py`, `r4_ba_kish_confirmation.py`, `r4_diagnostic_non_ancillaire.py`, `r4_levier_echappatoire.py`, `r4_sf_holm_dresden.py`, `d1_d3_options.py` |
-| **3** | N4, N5 (et la remarque `find_spec`) | `r2_p10_recherche_validation.py`, `r2_p11_definition_chargee.py`, `r3_n4_n5_rejeu.py`, `n5_resolution_sans_import.py` |
-| **4** | N6, N7, C4 (et P17) | `r2_r11_filiation_permutee.py`, `r2_r3_groupe_non_ordonne_cer.py`, `r2_p17_poids_entier_cout.py`, `r3_n6_heritage_hors_optimum.py`, `r3_n7_rejeu.py`, `r4_c4_c5_rejeu.py` |
-
-| Tranche | Invariants | Critère de fin |
-|---|---|---|
-| **1a · Statistiques et inférence** (K1) | M1, M2, M3, M6, A3, A4, A5, A8, A9, A10, A13 | Invariants établis contre les oracles. Prévisions vérifiées en re-notant les deux `RunResult` commités : CER/WER micro BNL et Dresden inchangés ; `char_accuracy` Dresden E5 de 0,3125 à 0. Δ micro du CER E5−E0 BNL par SF : par document (37 unités), p et IC par inversion à calculer et à consigner **avant** le correctif comme prévision ; par grappe (5 unités), « aucun rejet possible ; IC non borné ». L'ancien IC bootstrap [−0,041 ; −0,010] n'est plus une prévision valide. |
-| **1b · Axes et supports** (K2) | A1, A2, A6, A7, F8 | Invariants établis. Dresden E5 publié « conditionnel 4/10 », avec la page tronquée 177 hors du défaut et dans `empty_page`. Amendement CLAUDE.md §3 (B6). |
-| **2 · Étape** (K3) | A11, A12 (préfixe), I7, F1, F2, F3 (recherche, réutilisabilité), F4, F5 | Socle `tesseract → deskew → tesseract` : chaque vue garde sa lecture. Une panne simulée ne perd aucune étape payée. |
-| **3 · Identité et archive** (K4) | I1 à I6, A12 (historique/rejeu), F3 (validation), F6, F7, F9 | Une archive de campagne est scellée, validée, relue, reproduite sous la même définition, réseau et corpus retirés. Son empreinte racine est publiée. |
-| **4 · Correspondance** (K5) | M4, M5, M7, M8 | Optimum égal à l'énumération ; ordre partiel représenté ; NER sous l'appariement unique ; CER par région E1/E3/E4 re-notés. |
+| Tranche | Nature | Invariants | Préalables (scripts portés en tests rouges) | Critère de fin |
+|---|---|---|---|---|
+| **1a · Statistiques suffisantes et agrégation** (K1) | métrologique | M1, M2, M3, M6 | § 4.1 (1a) ; `k1_editops_egalites.py`, `r2_p1_mer_parite_jiwer.py`, `k1_ner_oracle_nervaluate.py`, `k1_fsum_non_associatif.py`, `r2_r1_fraction.py` | Invariants établis contre les oracles (DP, jiwer, énumération). Prévisions vérifiées en re-notant les deux `RunResult` commités : CER/WER micro BNL et Dresden inchangés ; `char_accuracy` Dresden E5 de 0,3125 à 0,0, avec le taux d'erreur non tronqué 1,8614 publié à côté. |
+| **1b · Non-mesure et supports** (K2) | métrologique | A1, A2, A4, A6, A7, F8 | § 4.1 (1b) ; `k2_partial_impute_en_silence.py`, `k2_support_macro_depend_du_pipeline.py`, `r2_r5_support_reference.py`, `r3_invention_hors_reference.py`, `k2_ordres_apparies_intransitifs.py` | Invariants établis. Dresden E5 publié « conditionnel 4/10 », avec la page tronquée 177 hors du défaut et dans `empty_page`. Grappes, population cible et pondération déclarées (B3). Amendement CLAUDE.md §3 (B6). |
+| **2 · Étape** (K3) | métrologique et fonctionnelle | A11, A12 (préfixe), I7, F1, F2, F3 (recherche, réutilisabilité), F4, F5 | `k3_reprise_record_non_ok.py` | Socle `tesseract → deskew → tesseract` : chaque vue garde sa lecture. Une panne simulée ne perd aucune étape payée. |
+| **3 · Identité et archive** (K4) | métrologique et fonctionnelle | I1 à I6, A12 (historique/rejeu), F3 (validation), F6, F7, F9 | `r2_p10_recherche_validation.py`, `r2_p11_definition_chargee.py`, `r3_n4_n5_rejeu.py`, `n5_resolution_sans_import.py`, scripts `k4_*` | Une archive de campagne est scellée, validée, relue et reproduite sous la même définition, réseau et corpus retirés. Son empreinte racine est publiée. |
+| **4 · Correspondance** (K5) | métrologique | M4, M5, M7, M8 | `r2_r11_filiation_permutee.py`, `r2_r3_groupe_non_ordonne_cer.py`, `r2_p17_poids_entier_cout.py`, `r3_n6_heritage_hors_optimum.py`, `r3_n7_rejeu.py`, `r4_c4_c5_rejeu.py`, scripts `k5_*` | Optimum égal à l'énumération ; ordre partiel représenté ; NER sous l'appariement unique ; CER par région E1/E3/E4 re-notés. |
+| **I · Inférence conditionnelle** | inférentielle (après 1a, 1b) | A3, A5, A8, A9, A10 | § 4.2 ; `k1_permutation_cer_temoin.py`, `n1_n2_procedure_unique.py` (a), `r3_sf_inversion.py`, `r4_sf_holm_dresden.py`, `k1_rangs_ex_aequo.py`, `r2_p4_wilcoxon_auto.py`, `n8_wilcoxon_methode_explicite.py`, `k1_grappes_singletons_ordre.py` ; pour la non-estimabilité : `k1_permutation_ratio_niveau.py`, `r2_r4_inversion_bootstrap.py`, `r3_ps_niveau_scenarios.py`, `r3_ba_n_min_scenarios.py`, `r4_ba_kish_confirmation.py`, `r4_levier_echappatoire.py`, `d1_d3_options.py` | Seules SF, la permutation des rangs et Holm sur la famille **déclarée** produisent des sorties confirmatoires ; toute autre sortie est « non estimable » ou « exploratoire ». Prévision : Δ micro du CER E5−E0 BNL par SF, par document (37 unités), p et IC par inversion calculés avant le correctif ; par grappe (5 unités), « aucun rejet possible ; IC non borné ». Chaque spec de campagne déclare sa famille, et son n₀ requis est publié. |
+| **R · Recherche** | sans échéance | A13 et § 6.3 | `c1_c2_levier_calibration.py`, `r4_ba_kish_calibration.py`, `r4_diagnostic_non_ancillaire.py`, `d1_d3_options.py` (2), `k1_quantiles_grappes.py` | Aucun critère de livraison. Une procédure ne quitte R qu'en devenant validée, par une décision du mainteneur. |
 
 ---
 
-## 6. Ce qui reste ouvert (liste fermée)
+## 6. Arbitrages
 
-### Bloquants pour la tranche 1 (K1 + K2)
+### 6.1 Rendus (intégrés au corps, retirés des questions ouvertes)
 
-| # | Question | Recommandation |
+| # | Décision | Où |
 |---|---|---|
-| B1 | **C02** : plancher des exactitudes après combinaison, ou pas de plancher (ISRI) | plancher au corpus ; macro à part |
-| B2 | **IC bootstrap (procédure BA)** : méthode et taux ε de réplicats dégénérés | percentile `inverted_cdf`, p tirée des mêmes réplicats (N2) ; ε = 1 %, au-delà « non estimable » ; 9 999 réplicats |
-| B3 | **C09 + P6** : déclaration des grappes, et rangs sous grappes | champ déclaré par le corpus (BNL : 5 grappes, dont un singleton) ; rangs sur moyennes par grappe, sinon non publiés. Le seuil « non estimable » n'est plus à chiffrer ici : il découle de n₀, m et m_famille (SF, D4) et de n_eff_réf ≥ 20 (BA, B9a), calculés sur les grappes (C2, C3) |
-| B4 | **Famille de Holm par défaut** (a priori). **Elle décide directement de ce qui est publiable** (D4) : le n₀ requis pour un rejet vaut ⌈1 + log₂(m/α)⌉, soit 15 pour la famille par défaut de `dresden.yaml` (m = 720) | Défaut : toutes les paires de la spec × métriques établies × vues × {micro, macro publié}, analyses de rangs hors famille. Recommandé en plus : permettre à la spec de déclarer une famille plus petite (comparaisons au témoin, ou les seules questions de la campagne), puisque c'est le seul levier honnête sur le n₀ requis. La famille est publiée avec son m et son n₀ requis |
-| B5 | **Paramètres des rangs** (`zero_method`, `method`) | `zero_method="wilcox"` ; `method=PermutationMethod` explicite, avec énumération exacte si 2^n ≤ 2^16, sinon 99 999 échanges avec une graine déclarée (N8). Jamais `"auto"` : en 1.18.1, il change de méthode selon n et les ex æquo. Écrits dans la définition du protocole ; la version de scipy dans l'environnement |
-| B6 | **Amendement CLAUDE.md §3** (« niveau absent → `None` ») | VT absente → `no_ground_truth` ; VT non transcrite → `not_transcribed` ; niveau absent de l'hypothèse → statistique valide (texte vide) ou indisponible, avec motif ; `partial` |
-| B7 | **C07** : tri par défaut du tableau | aucun tri entre supports différents ; tri sur le support global de la famille, avec couverture |
-| B8 | **H3** : IC et p dépendants des versions de numpy et scipy | accepter « identiques à environnement égal » pour BA et pour les SF tirés ; les SF énumérés et les statistiques et scalaires restent exacts et portables (I5) |
-| B9 | **Inférence des familles à dénominateur d'hypothèse** (F1, MER, cMER, exactitudes, précisions, τ, ECE), en trois sous-points | voir B9a, B9b, B9c |
-| B9a | **Diagnostic** | n_eff_réf = (Σ r_d)² / Σ r_d² sur une quantité de **référence** commune à la paire (tp+fn, n_réf, taille de la référence), seuil 20. Corrige D3 et rend publiable MER à n = 20 |
-| B9b | **Critère de calibration** (D2) : tolérance sur le niveau vrai et nombre de simulations | τ_niveau à choisir, **0,06 proposé**. Une case passe si la borne supérieure unilatérale à 95 % de Clopper-Pearson est ≤ τ_niveau, avec **N ≥ 4 600** jeux retenus par case (binomiale exacte) : un niveau vrai de 0,05 passe avec une probabilité de 0,905 ; un niveau vrai de 0,06 n'est accepté qu'avec une probabilité ≤ 0,05, à tout N, par la couverture de Clopper-Pearson. Coût : environ 4 600 jeux × 9 999 réplicats par case, à chiffrer en temps machine avant de lancer la calibration complète |
-| B9c | **Queue lourde** (D1) : que faire quand BA percentile dépasse la tolérance au-dessus du seuil ? | Options, mesurées par `d1_d3_options.py` (Kish(réf) ≥ 20, 2 000 jeux ; niveaux revue n = 25 / lognormal n = 60 / lognormal n = 100) :<br>• **(a)** accepter BA et publier la limite : 0,062 / 0,082 / 0,073 ; la revue mesure jusqu'à 0,096. Ne passe pas τ_niveau = 0,06 ;<br>• **(b)** bootstrap-t apparié, studentisé par l'écart-type linéarisé (une seule linéarisation, u_d = (num_d − R·den_d)/moyenne(den), pour tous les ratios de sommes), avec p et IC des mêmes réplicats : 0,055 / 0,071 / 0,060. Meilleur, mais pas sous 0,06 à n = 60 ;<br>• **(c)** BA plus un diagnostic de queue (kurtosis des r_d ≤ 10) : 0,062 / 0,075 / 0,063, avec 35 % à 65 % de jeux refusés sur le lognormal ;<br>• **(b)+(c)** : 0,055 / 0,062 / 0,054 ; c'est la seule combinaison proche de 0,06 partout.<br>Ce qui est connu par ailleurs : BCa et la permutation studentisée corrigent l'asymétrie au second ordre, mais pas une queue lourde à n modéré. La PS mesurée en révision 4 dépasse elle aussi sous lognormal. Aucune n'est mesurée sous le critère B9b.<br>**Recommandation de l'auteur (non décidée)** : (b)+(c), calibrés sous B9b, et sinon « non estimable » ; la puissance perdue est publiée par la couverture |
+| B1 | Plancher des exactitudes au niveau du corpus, explicitement documenté ; comptes et taux d'erreur non tronqués conservés et publiés à côté. | § 2.1 a, M2 |
+| B2 | Bootstrap percentile et bootstrap-t sont distincts ; la cohérence de leurs p et IC n'est pas présumée ; toute procédure non validée reste exploratoire. | § 2.1 d |
+| B3 | Grappes déclarées par le corpus ; population cible et pondération des grappes documentées. | § 2.1 c, A8 |
+| B4 | Pas de famille exhaustive comme défaut confirmatoire. La spec déclare avant l'expérience les hypothèses principales et secondaires ; le reste est descriptif ou exploratoire ; Holm s'applique à la famille confirmatoire déclarée ; sans déclaration, aucune inférence confirmatoire. | § 2.1 d, A9 |
+| B5 | Méthode de permutation explicite, jamais `auto` ; analyses de rangs distinctes des tests du micro et du macro. | § 2.1 d, A5 |
+| B6 | Amendement de CLAUDE.md §3 (niveau absent → axes, `not_transcribed`, `partial`), validé. | tranche 1b |
+| B7 | Tri multi-pipelines sur le support global seulement, validé. | § 2.1 c, A6 |
+| B8 | Reproductibilité sous environnement **et** protocole identiques, pas seulement les versions de NumPy et SciPy. | § 2.3 d |
+| B9a | Kish(réf) est utile et descriptif ; il ne mesure pas directement l'influence ; ce n'est pas une garantie de validité. | § 2.1 d, § 6.3 |
+| B9b | Calibration empirique validée en principe, pas comme preuve générale ; une calibration à α = 0,05 ne démontre rien aux seuils extrêmes de Holm. | § 6.3 |
+| B9c | Aucune solution validée : les familles à dénominateur d'hypothèse rendent « inférence non estimable » ; les options vont en recherche. | § 2.1 d, § 6.3 |
 
-### Autres (tranches 2 à 4 ou publication)
+Décisions antérieures, toujours en vigueur :
+- BagIt ;
+- Hypothesis ;
+- plancher SciPy ;
+- rupture du schéma `RunResult` ;
+- enregistrements par étape ;
+- persistance atomique immédiate ;
+- RO-Crate reporté à la publication ;
+- fan-out multipage à image unique refusé en 1.0.
 
-| # | Question | Recommandation |
+### 6.2 Encore ouverts (aucun ne bloque 1a ni 1b)
+
+| # | Question | Tranche | Recommandation |
+|---|---|---|---|
+| Q1 | **Principales et secondaires** (B4) : une seule famille de Holm, ou deux familles corrigées séparément ? | I | Deux familles, chacune corrigée par Holm, les secondaires publiées comme telles. Pas de procédure hiérarchique en 1.0. |
+| O1 | **C04** : lignes fantômes | 4 | insertions comptées |
+| O2 | **C10 + P20** : seuil inclusif ou strict, unique pour boîtes et empans ; θ_m | 4 | inclusif (2·\|∩\| ≥ \|∪\|), la convention actuelle de NER et des régions, en arithmétique exacte ; θ_m = 0,5 |
+| O3 | **C11** : jugement d'un jeton en calibration | 4 | alignement LCS |
+| O4 | **C17** (résiduel) : stdlib et interpréteur, `dlopen` des sous-processus | 3 | stdlib non hachée, version de l'interpréteur dans l'environnement ; limite `dlopen` écrite |
+| O5 | **C19** : plan d'expérience | hors code | témoin obligatoire ; `max_tokens` aligné ou montré non limitant ; recopie `repetition-1 → 2…5` retirée |
+| O6 | **H2** : `shapely` | 4 | boîtes, faute de consommateur exigeant des polygones |
+| O7 | **H4** : images IIIF | 3 | empreinte obligatoire, octets selon la licence |
+| O8 | **H5** : faces des capacités d'archive et des modes | 3 | options de `cinoc run` ; web `front-absent` déclaré |
+| O9 | **Authenticité** | 3 | ancrage de l'empreinte racine en 1.0 ; signature hors 1.0 |
+| O10 | **Mutualisation** par défaut | 3 | reflink, sinon copie ; lien dur sur option |
+| O11 | **Archives S30/S31** | 3 | script de conversion ponctuel hors produit, ou réexécution des parties gratuites |
+| O12 | **Séparateur de blocs** de la projection unique | 4 | `\n` |
+| O13 | **Filiation sous transformation géométrique déclarée** (redressement, recadrage) | 4 | hors 1.0 : sans géométrie identique, pas de filiation (N6) |
+| O14 | **Groupe non ordonné dans la vue texte** (N7) : ordre géométrique canonique (retenu) ou appariement des membres à l'hypothèse avant concaténation | 4 | ordre canonique en 1.0, publié dans la fiche de la vue ; `fca` comme lecture insensible à l'ordre ; appariement des membres seulement si un consommateur l'exige |
+
+### 6.3 Recherche (sans échéance de livraison)
+
+| # | Sujet | État au moment de la révision n° 6 |
 |---|---|---|
-| O1 | **C04** : lignes fantômes | insertions comptées |
-| O2 | **C10 + P20** : seuil inclusif ou strict, unique pour boîtes et empans ; θ_m | inclusif (2·\|∩\| ≥ \|∪\|), la convention actuelle de NER et des régions, en arithmétique exacte ; θ_m = 0,5 |
-| O3 | **C11** : jugement d'un jeton en calibration | alignement LCS |
-| O4 | **C17** (résiduel) : stdlib et interpréteur, `dlopen` des sous-processus | stdlib non hachée, version de l'interpréteur dans l'environnement ; limite `dlopen` écrite |
-| O5 | **C19** : plan d'expérience | témoin obligatoire ; `max_tokens` aligné ou montré non limitant ; recopie `repetition-1 → 2…5` retirée |
-| O6 | **H2** : `shapely` | boîtes, faute de consommateur exigeant des polygones |
-| O7 | **H4** : images IIIF | empreinte obligatoire, octets selon la licence |
-| O8 | **H5** : faces des capacités d'archive et des modes | options de `cinoc run` ; web `front-absent` déclaré |
-| O9 | **Authenticité** | ancrage de l'empreinte racine en 1.0 ; signature hors 1.0 |
-| O10 | **Mutualisation** par défaut | reflink, sinon copie ; lien dur sur option |
-| O11 | **Archives S30/S31** | script de conversion ponctuel hors produit, ou réexécution des parties gratuites |
-| O12 | **Séparateur de blocs** de la projection unique | `\n` |
-| O13 | **Filiation sous transformation géométrique déclarée** (redressement, recadrage) | hors 1.0 : sans géométrie identique, pas de filiation (N6) |
-| O14 | **Groupe non ordonné dans la vue texte** (N7) : ordre géométrique canonique (retenu) ou appariement des membres à l'hypothèse avant concaténation | ordre canonique en 1.0, publié dans la fiche de la vue ; `fca` comme lecture insensible à l'ordre ; appariement des membres seulement si un consommateur l'exige |
+| R1 | **Procédure pour les familles à dénominateur d'hypothèse** (F1, MER, cMER, exactitudes, précisions, τ) : BA percentile, bootstrap-t apparié, diagnostic de queue | Niveaux mesurés (`d1_d3_options.py` (2), chiffres inchangés après correction du générateur ; revue n = 25 / lognormal n = 60 / lognormal n = 100) :<br>• BA : 0,062 / 0,082 / 0,073 ;<br>• bootstrap-t : 0,055 / 0,071 / 0,060 ;<br>• BA + kurtosis ≤ 10 : 0,062 / 0,075 / 0,063 ;<br>• bootstrap-t + kurtosis ≤ 10 : 0,055 / 0,062 / 0,054.<br>La revue mesure BA jusqu'à 0,096 (§ 8.2). Aucune n'est validée (B9c). |
+| R2 | **Critère de calibration** : tolérance sur le niveau vrai, nombre de simulations | Proposé : borne de Clopper-Pearson à 95 % ≤ τ_niveau = 0,06, avec N ≥ 4 600 jeux retenus par case. C'est une calibration en principe, pas une preuve (B9b). Elle ne dit rien des seuils extrêmes de Holm, α/m. |
+| R3 | **Diagnostic d'influence** propre aux ratios à dénominateur d'hypothèse, au-delà de Kish(réf) (B9a) | à concevoir |
+| R4 | **IC marginaux** d'un pipeline, IC de l'ECE, IC des quantiles (A13) | aucune procédure validée ; pour les quantiles, la piste est le tirage par documents (P3) |
+| R5 | **Puissance** perdue par la non-estimabilité | chiffrée par la revue : MER n = 20, 0,43 → 0 sous Kish(den) ; corrélé n = 30, 0,41 → 0,08 ; à mesurer sous la règle finale |
+
+---
+
+## Annexe : historique des révisions 1 à 5
+
+Ces tables sont conservées telles qu'elles ont été arrêtées à chaque révision. Leurs chiffres et leurs recommandations ont été remplacés par le corps du document et par les arbitrages de la révision n° 6 (§ 6.1).
+
+### Révision n° 5 (clôture de la révision n° 4, `REVUE_CONTRATS.md` § 8)
+
+La revue conclut que rien n'empêche la tranche 1a, sauf le paramétrage de B9. Un script a été ajouté : `revision2_verifications/d1_d3_options.py`, 2 000 jeux par case, qui reprend les générateurs de la revue.
+
+| Point | Section | Ce qui change |
+|---|---|---|
+| **D3** échappatoire par invention | § 2.1 d, A3, B9a | Le diagnostic porte sur des **quantités de référence**, les mêmes pour les deux pipelines : n_eff_réf = (Σ r_d)² / Σ r_d². r_d vaut tp+fn pour les F1 et rappels, n_réf pour les taux d'édition, MER et exactitudes, la taille de la référence (mots, entités, régions, paires ordonnées) pour les précisions et τ, et le nombre de mots de référence pour l'ECE. Ce diagnostic ne dépend d'aucune sortie et ne peut donc pas être contourné. Vérifié sur l'exemple de la revue : B, qui invente 2 000 entités, reste jugé (Kish(réf) = 40, aucun réplicat de signe contraire sur 4 999, soit p < 2·10⁻⁴), alors que Kish(den) tombait à 1,4 (chiffres du générateur corrigé en révision n° 6). Effet secondaire : pour MER à n = 20 (n_réf constant), Kish(réf) = n = 20, donc la comparaison redevient publiable. La perte de puissance chiffrée par la revue (0,43 → 0) disparaît par construction pour ce cas. |
+| **D4** seuils de SF sans Holm | § 2.1 d, A3, B4 | Seuil écrit à l'échelle de la famille. Holm compare la plus petite p à α/m : **un rejet est possible dans une famille de taille m ssi max_i n₀,i ≥ 1 + log₂(m/α)**. Le test i n'est jamais rejeté si 2^(1−n₀,i) > α. La phrase sur Dresden est corrigée : avec la famille par défaut B4 sur `dresden.yaml` (m = 720), il faut **n₀ ≥ 15** ; les 10 pages Dresden **ne permettent aucun rejet** (p minimale corrigée 1,0, `r4_sf_holm_dresden.py`). Chaque campagne publie le n₀ requis par sa famille. **La composition de la famille (B4) décide donc directement de ce qui est publiable.** |
+| **D2** critère d'A3 dépendant du nombre de simulations | A3, B9b | Le critère porte sur le **niveau vrai** : tolérance τ_niveau. Règle de décision : une case passe si la borne supérieure unilatérale à 95 % (Clopper-Pearson) du taux de rejet observé est ≤ τ_niveau, avec un nombre de jeux retenus N tel qu'un niveau vrai de 0,05 passe avec une probabilité d'au moins 0,9 lorsque τ_niveau = 0,06 : **N ≥ 4 600** par case. Calcul binomial exact de Clopper-Pearson : 0,905 à 4 600, 0,886 à 4 400. Un niveau vrai de 0,06 n'est accepté qu'avec une probabilité ≤ 0,05, à tout N, par construction. Les valeurs sont proposées, non décidées (B9b). |
+| **D1** BA anticonservateur sous queue lourde | § 2.1 d, B9c | Rien n'est décidé. Les options sont présentées dans B9c avec leur niveau mesuré (Kish(réf) ≥ 20, 2 000 jeux, erreur Monte-Carlo ≈ 0,005-0,006), sur la revue (n = 25) puis le lognormal (n = 60 et 100) :<br>• (a) BA tel quel : 0,062 / 0,082 / 0,073 ;<br>• (b) **bootstrap-t apparié** (studentisé par l'écart-type linéarisé, une seule linéarisation pour tous les ratios de sommes ; p et IC des mêmes réplicats) : 0,055 / 0,071 / 0,060 ;<br>• (c) BA + diagnostic de queue (kurtosis des tailles de référence ≤ 10) : 0,062 / 0,075 / 0,063, avec 35 % à 65 % de jeux refusés sur le lognormal ;<br>• (b)+(c) : 0,055 / **0,062** / **0,054**. |
+
+**Prêts pour la tranche 1a** (tests rouges dès maintenant) : M1, M2, M3, M6, A4, A5, A8, A9, A10, A13 ; et **A3**, avec les sept scénarios de la revue (§ 8.2) et ceux de `d1_d3_options.py`. Le correctif d'inférence des familles à dénominateur d'hypothèse attend B9a-c. SF, les rangs et Holm n'attendent que B4 (taille de la famille).
+
+### Révision n° 4 (clôture de la révision n° 3, `REVUE_CONTRATS.md` § 7)
+
+La revue lève 6 points de la révision n° 3 (N2, N3, N4, N5, N7, N8). Elle en lève 2 en partie, N1 et N6, et relève 5 contradictions nouvelles. Toutes sont traitées et **aucune n'est rejetée**. Deux scripts ont été ajoutés dans `revision2_verifications/` :
+- `c1_c2_levier_calibration.py` : 5 scénarios, 8 valeurs de n, 600 simulations par case ;
+- `n5_resolution_sans_import.py`.
+
+Les 7 scripts `r3_*.py` de la revue deviennent des tests des tranches indiquées.
+
+| Point | Section | Ce qui change |
+|---|---|---|
+| **C1** PS hors niveau sous fort levier (0,35-0,54) et dénominateurs lognormaux (0,10-0,14) | § 2.1 d, A3, B9 | **PS est retirée du contrat.** Sous le seuil du diagnostic, aucune procédure ne tient, ni PS ni BA (C2). Au-dessus, BA tient et fournit en plus l'IC. Les familles à dénominateur d'hypothèse n'ont donc qu'une procédure, BA, conditionnée au diagnostic. |
+| **C2** BA hors niveau sous levier et lognormal, même à n = 50-100 | § 2.1 d, A3, B9 | **Diagnostic de levier déclaré** : taille effective de Kish n_eff = (Σ_d den_d)² / Σ_d den_d², calculée pour chaque pipeline de la paire, et l'on garde le minimum. On a toujours n_eff ≤ n, et n_eff ≈ 1/(part maximale) quand une unité domine. La p et l'IC de BA ne sont publiés que si **n_eff ≥ 20**, quel que soit n ; sinon « non estimable (levier ou effectif) ». Valeur calibrée sur les scénarios à levier borné (F1, levier r0 = 10, lognormal, MER) : au seuil 20, aucune case ne dépasse α + 3 erreurs Monte-Carlo, ni pour BA ni pour PS. La case la plus serrée est F1 à n = 50 (BA 0,073 pour une borne de 0,077). À 15, des cases dépassent : F1 n = 20 (BA 0,108) ; levier r0 = 60 à n = 100 (BA 0,116). Le scénario à levier **non borné** (r0 = 60) est déclaré non estimable dans 100 % des jeux jusqu'à n = 100 (n_eff médian 16,7). Le seuil sur n_eff remplace n_min, puisque n ≥ n_eff ≥ 20. |
+| **C3** seuil « n ≤ 5 » de SF | § 2.1 d, A3 | Deux comptes distincts. **Rejet possible** ssi n₀ = #{unités à r_d(0) ≠ 0} ≥ 6, car la p minimale vaut 2^(1−n₀). **IC borné** ssi m = #{unités à n_d > 0} ≥ 6, car p(δ → ±∞) → 2^(1−m). Dans le contre-exemple n = 8 dont 3 pages vides, p(0) = 0,016 rejette, mais m = 5 donne un IC non borné, et c'est ce qui est publié. **Avec au plus 5 unités** (les 5 grappes BNL), **aucun Δ d'aucune famille ne peut être déclaré significatif** : SF a p ≥ 2^(1−5) = 1/16, BA est non estimable (n_eff ≤ 5 < 20), et la PS retirée aurait eu p ≥ 2/32. La même borne vaut pour le Wilcoxon de la paire. |
+| **C4** paire héritée hors de l'optimum quand la VT se recouvre | § 2.4 a, M8 | Choix : **les paires héritées sont fixées avant l'optimisation**, qui ne porte que sur les régions restantes. Une filiation démontrée par les empreintes, avec une géométrie identique, est une preuve de correspondance (arbitrage 6) ; elle prime sur une coïncidence géométrique. La phrase « appartient toujours à un optimum » est retirée, de même que le critère 4. Invariant M8 : sans filiation, l'optimum est égal à l'énumération ; sous filiation, les paires héritées plus l'optimum de l'énumération sur le reste. Dans `r3_n6_heritage_hors_optimum.py` (b), `region_cer` vaut 0,76 (paire gardée) et non 0,84. |
+| **C5** « invention hors référence » | § 2.1 c, A4 | Calculée sur le **support apparié** de la paire, et sur le support global pour le tableau. La couverture des pages sans référence est publiée par pipeline. L'unité inventée est déclarée par famille : insertions pour les taux d'édition, MER et exactitudes ; fp pour les F1 et rappels ; texte d'hypothèse non apparié pour le texte par région. Pour les proportions à dénominateur de référence (`numseq_*`, `searchability`, `diacritic_err`, `mufi_err`, `hcpr`, préservation, couvertures), elle est « **non définie** » : leur statistique ne compte aucune unité de l'hypothèse. Leur macro reste publié, avec la mention « insensible à l'invention par construction ». |
+| Remarque `find_spec` (N5) | § 2.2, § 2.3 c | `importlib.util.find_spec("pkg.sub")` importe `pkg`. La résolution interroge donc les chercheurs de `sys.meta_path`, composant par composant, avec les `submodule_search_locations` du parent, sans l'importer. Vérifié : un `__init__` à effet de bord n'est pas exécuté, et `cinoc.evaluation.metric`, installé en éditable, est résolu sans importer `cinoc`. Limite écrite : un paquet qui modifie son `__path__` dans son `__init__` est résolu statiquement, et l'observation porte l'étiquette `resolution_statique`. |
+| N1 (partiel) | § 2.1 d | levé par C1, C2, C3 |
+| N6 (partiel) | § 2.4 a | levé par C4 |
+
+**Prêts pour la tranche 1a** (tests rouges dès maintenant) : M1, M2, M3, M6, A4, A5, A8, A9, A10, A13. **A3** l'est aussi, B9 étant reformulé ci-dessus ; le correctif d'inférence attend la décision du mainteneur sur B9.
+
+### Révision n° 3 (clôture de la revue, `REVUE_CONTRATS.md` § 6)
+
+La revue lève 25 points de la révision n° 2, en lève 6 en partie (R4, R5, R11, P4, P10, P11) et relève 8 contradictions nouvelles. Toutes sont traitées ci-dessous et **aucune n'est rejetée**. Trois scripts ont été ajoutés :
+- `revision2_verifications/n1_n2_procedure_unique.py` (N1, N2) ;
+- `revision2_verifications/n8_wilcoxon_methode_explicite.py` (N8) ;
+- les scripts `r2_*.py` de la revue, qui deviennent des tests des tranches indiquées.
+
+| Point | Section | Ce qui change |
+|---|---|---|
+| **N1** niveau de l'inversion du bootstrap aux petits n (0,188 à n = 5, 0,117 à n = 10) | § 2.1 d, A3 | *(Remplacé en révision n° 4 par C1-C3 : PS retirée, n_min remplacé par le diagnostic de levier.)* Procédure fixée selon la famille et n, l'effectif des unités de rééchantillonnage (grappes si elles sont déclarées). **Dénominateur fixé par la référence** : changement de signe exact, valable à tout n (rejet sous H0 mesuré à 0,000 à n = 5 et 0,037 à n = 10). Quand 2^(1−n) > α, soit n ≤ 5, on publie « aucun rejet possible ; IC non borné ». **Dénominateur d'hypothèse** : si n ≥ n_min = 30, bootstrap apparié, avec un niveau mesuré de 0,050 à n = 30 et 0,061 à n = 50, mais 0,087 à n = 20. Si n < n_min, p par **permutation studentisée** (rejet mesuré entre 0,000 et 0,060 pour n de 5 à 30) et **pas d'IC** (« IC non estimable : n < 30 »). n_min et le jeu de scénarios de calibration sont l'arbitrage bloquant B9. Le BNL à 5 grappes et le Dresden à 10 pages sont donc dans le régime petit n. |
+| **N2** p et IC contradictoires pour un même Δ | § 2.1 d, A3 | **Une seule procédure par Δ.** Changement de signe : l'IC est l'**inversion du même test**, {δ : p(δ) > α}, sous un modèle d'effet de taux constant. Mesuré sur 800 jeux : l'IC est toujours d'un seul tenant, et p et IC ne se contredisent jamais. Bootstrap : p et IC percentile (`quantile(method="inverted_cdf")`) viennent des **mêmes réplicats** ; aucune contradiction sur 6 000 jeux. Sous n_min, le seul objet publié est la p de permutation. |
+| **N3** A4 faux | § 2.1 c, A4 | A4 dit désormais que le macro **ne voit pas** l'invention sur un document hors de D^M. Elle est visible au **micro** (insertions, fp) et dans une analyse dédiée, « invention hors référence » : par pipeline, nombre de documents sans référence à sortie non vide, et somme des unités inventées. |
+| **N4** clé en deux temps incomplète | § 2.2, § 2.3 c ; I1, F3 | La validation porte sur toute la partie **calculée** de la définition (sources de la brique, fichiers de poids) **et** sur l'environnement. Chaque module est **résolu par son nom** dans le processus courant (`importlib.util.find_spec(nom).origin`), puis haché et comparé à l'empreinte enregistrée sous ce nom, et non sous un chemin. De même, les poids sont résolus par les réglages effectifs et les binaires par `shutil.which`. |
+| **N5** définition dépendante des modules chargés | § 2.3 c, d ; I3, I5 | La définition hache les sources **sur disque** : tous les `.py` du paquet déclaré par la brique et de sa fermeture d'imports **statique** (graphe AST, résolu par `find_spec` sans exécuter), limitée à sa distribution. Pour le protocole, ce sont tous les `.py` sur disque de `cinoc.domain`, `cinoc.formats` et `cinoc.evaluation` (fermeture statique d'`evaluation`), plus les profils de normalisation. Le résultat ne dépend pas de ce que le processus a chargé. Ce qui est chargé ne sert qu'à l'**environnement**. |
+| **N6** filiation trompée par un échange d'ids | § 2.4 a, M8 | Sous héritage, une paire par id n'existe que si la géométrie de l'hypothèse est **identique** à celle de la VT de même id (boîte et polygone égaux). L'id n'intervient alors **qu'en 4ᵉ critère**, entre des ex æquo exacts des trois premiers. L'optimum reste celui de l'énumération (M8). Dans le contre-exemple, les géométries échangées ne sont plus identiques, donc l'optimum géométrique s'applique et `region_cer` = 0. |
+| **N7** linéarisation d'un groupe non ordonné | § 2.4 b, M7 | Convention écrite : la vue texte linéarise les membres d'un groupe non ordonné dans un **ordre géométrique canonique** (y0, x0 de leur boîte), jamais dans l'ordre de déclaration XML. Un membre sans géométrie est rangé en dernier par id, et l'observation porte l'étiquette `order_by_id`. Invariant : permuter les déclarations ne change ni la projection ni le CER. La vue texte pénalise donc la liberté que laisse la VT, ce que publie la fiche de la vue. La métrique insensible à l'ordre des lignes est `fca`, qui apparie les lignes par le hongrois. L'appariement des membres avant concaténation reste ouvert (O14). |
+| **N8** `method="auto"` de scipy mal décrit | § 2.1 d, A5, B5 | Ce que fait réellement scipy 1.18.1 (`_wilcoxon.py`, l. 128-242) : n > 50, asymptotique ; n ≤ 50 sans zéro ni ex æquo, loi exacte ; zéros ou ex æquo et n ≤ 13, énumération des 2^n ; zéros ou ex æquo et 13 < n ≤ 50, asymptotique avec correction de continuité. **Contrat** : `method=PermutationMethod` explicite, énumération exacte si 2^n ≤ 2^16, sinon 99 999 échanges avec une graine déclarée. Vérifié égal à une énumération écrite à la main sur rangs moyens (n = 7 : 0,2656, alors que `method="exact"` donne 0,2188 ; n = 20 : 0,4366, alors que `auto` donne 0,4271). |
+| R4 (partiel) | § 2.1 d | levé par N1 et N2 |
+| R5 (partiel) | A4 | levé par N3 |
+| R11 (partiel) | § 2.4 a | levé par N6 |
+| P4 (partiel) | B5 | levé par N8 |
+| P10 (partiel) | § 2.2 | levé par N4 |
+| P11 (partiel) | § 2.3 c-d | levé par N5 |
+| Remarque P17 (coût du ppcm) | § 2.4 a | Calcul exact par **composante connexe** du graphe d'admissibilité. Le dénominateur commun ne porte que sur les unions des paires **admissibles** de la composante. |
+| Remarque : un seul emplacement pour les scripts | en-tête | `revision2_verifications/` seulement |
+
+### Révision n° 2 (revue adverse `rapports/REVUE_CONTRATS.md`)
+
+Les 23 contre-exemples de la revue se reproduisent sur la copie (`run_all.sh` : 23/23). **Aucun point n'est rejeté.**
+
+Trois points sont acceptés avec une précision vérifiable :
+- **P1** : le départage canonique est calculé et vérifié (`revision2_verifications/p1_departage_canonique.py`) ;
+- **R4** : niveau mesuré par `revision2_verifications/r4_bootstrap_niveau.py`, complété en révision n° 3 par N1 et N2 ;
+- **R10** : la résolution des bibliothèques d'un binaire est précisée.
+
+| Point | Section | Ce qui change |
+|---|---|---|
+| **R1** `fsum` non associatif | § 2.1 a, M6 | Statistiques réelles stockées **exactes** : entiers quand la grandeur est discrète (jetons, ns, micro-unités), sinon `Fraction`. Combinaison = addition exacte ; une seule conversion en flottant, à la finalisation. Propriété : pour toute partition et tout ordre des documents, la statistique combinée est égale (`==`). |
+| **R2** régions de référence non appariées | § 2.1 a, M4 | Le numérateur compte aussi le texte des régions de référence non appariées (suppressions), comme le code actuel (`layout.py:103-108`). |
+| **R3** ordre partiel | § 2.4 b, M5 | `LayoutPage.reading_order` devient un arbre de groupes ordonnés et non ordonnés (domain, couche 1). Le τ ne compte que les paires que la référence ordonne. M5 passe en tranche 4. |
+| **R4** inférence du Δ micro | § 2.1 d (table par famille), A3 | Permutation (changement de signe) seulement si le dénominateur est fixé par la référence. Sinon, bootstrap apparié par document, et p par inversion du bootstrap. Niveau mesuré sur le scénario de la revue : 0,063 (n = 30 et 100, 300 simulations) contre 0,30 pour la permutation. La H0 de chaque test est nommée. |
+| **R5** support macro | § 2.1 c, A4, A6 | D^M est fixé **par la référence** (n_réf > 0, ou tp + fn > 0), le même pour tous les pipelines. Pas de macro publié quand le scalaire dépend de l'hypothèse (précisions, τ). |
+| **R6** `partial`/`truncated` imputés en silence | § 2.1 b, e ; A1, A2, A7 | La part manquante porte un motif d'axe 3 (`partial_output`, `truncated_output`). L'observation est exclue par défaut et notée telle quelle sous la seule sensibilité `empty_page`, qui couvre toute part manquante. |
+| **R7** jiwer sur référence vide | M1 | « Égal à jiwer quand Σ n_réf > 0, pour S+D+I seulement ». Les écarts volontaires sont écrits : jiwer rend `cer([""], ["xyz"]) = 3` et `cer([""], [""]) = 0` ; Cinoc rend « indéfini ». |
+| **R8** oracle NER | M3, M8 | nervaluate est retiré. L'oracle devient l'énumération exhaustive de l'appariement par IoU d'empan, la règle même de Cinoc. Constat associé : l'appariement NER actuel est glouton (`ner.py`, `align_entities`), donc il passe sous l'appariement unique de K5. |
+| **R9** différence de `sys.modules` | § 2.3 c, I1 | Instantané du **processus entier** à la fin de chaque étape : modules hors stdlib et bibliothèques partagées mappées. C'est une sur-approximation sûre, indépendante de l'historique, mémoïsée par run. |
+| **R10** binaire coquille | § 2.3 c, I1 | Sont hachés l'exécutable **et** les bibliothèques qu'il charge (`ld.so --list` sous Linux, `otool -L` sous macOS ; Cinoc exécute déjà ce binaire, donc aucune frontière de confiance nouvelle). La sortie complète de `--version` reste tracée. |
+| **R11** filiation déclarée | § 2.4 a, M8 | La filiation est **vérifiée** : chaîne d'empreintes jusqu'à la VT, plus déclaration du module, plus id identique **et** paire admissible. Les ids ne font que choisir parmi des paires admissibles. `region_detection` est `not_applicable` quand les régions sont héritées de la VT. |
+| **P1** départage S/D/I | § 2.1 a, M1 | Règle canonique : parmi les alignements optimaux, **maximiser S**. Les comptes (S, D, I) deviennent uniques et indépendants de la bibliothèque. Calcul : deux appels `rapidfuzz` (distance d, distance pondérée W avec (K, K, K−1), K = \|r\|+\|h\|+1, S = K·d − W). Vérifié contre une DP lexicographique sur 3 000 cas. |
+| **P2** réplicats dégénérés | § 2.1 d, A3 | Un réplicat dont la finalisation est indéfinie est écarté et compté. Au-delà d'un taux ε, IC et p sont « non estimables ». Méthode percentile nommée (§ 6, B2). |
+| **P3** quantiles | § 2.1 a, A13 | La statistique d'un document est le multi-ensemble de ses lignes ; on tire des **documents**. |
+| **P4** analyses de rangs | § 2.1 d, A5, A9 | `zero_method` et `method` fixés (§ 6, B5). Rangs calculés sur des scalaires exacts (`Fraction`, convertis une fois). Friedman seulement si k ≥ 3. « Non calculé » si la variance est nulle, et le test garde sa place dans la famille. |
+| **P5** grappes et ordre | § 2.1 d, A8 | Les grappes sont triées par le plus petit id de document qu'elles contiennent : en singletons, l'IC est identique bit à bit à l'IC par document. |
+| **P6** grappes et répétitions dans l'inférence | § 2.1 d, A8 | Une répétition n'est jamais une unité d'inférence ; la grappe d'une répétition est son document. Sous grappes déclarées, les analyses de rangs portent sur les moyennes par grappe, ou ne sont pas publiées. |
+| **P7** VT non transcrite | § 2.1 b, A2, M1, M4 | Axe 1 : `not_transcribed`, déclaré par l'importeur, distinct d'une référence vide (page blanche). Hors des attendus. |
+| **P8** ordres appariés intransitifs | § 2.1 c, A6 | Les ordres appariés ne composent pas un classement. Seul le support global trie. |
+| **P9** reprise d'un record `partial` | § 2.2, F3 | Seuls les records `ok` et `truncated` (cause de la coupure incluse dans la clé) sont réutilisables en `resume`. `partial` et `failed` sont retentés ; ils ne sont relus qu'en `rescore`. |
+| **P10** clé circulaire | § 2.2, § 2.3 c, F3 | Clé en deux temps : **recherche** sur la partie déclarée et les entrées consommées ; **validation** du record trouvé sur l'environnement enregistré à la première exécution. |
+| **P11** protocole dépendant de la plateforme | § 2.3 c, d ; I3, I5 | Deux identités : **définition** (portable : sources `.py`, réglages, profils, Unicode, règles de calcul) et **environnement** (extensions compilées, bibliothèques, plateforme). Elle est enregistrée, qualifie une reproduction sans la bloquer, et sert à valider le cache sur la même machine. |
+| **P12** `ObservationId` dépendant du corpus | § 2.3 d, I3 | Les VT du corpus sortent de l'identité du protocole. L'`ObservationId` ne contient que la VT de son document. `CorpusIdentity` est séparée. |
+| **P13** BagIt : fichiers hors manifeste, liens durs, 0444 | § 2.3 b, e ; I6, F7 | Tout le contenu est sous `data/`. Tout fichier non listé dans un manifeste est refusé. Un « lien » est un lien symbolique ou un fichier avec `st_nlink > 1` hors option. Le mode 0444 n'est pas présenté comme une protection. |
+| **P14** durabilité | § 2.2, F5 | Ordre imposé : `fsync` des blobs → record écrit et `fsync` → `os.replace` → `fsync` du répertoire. |
+| **P15** poids | § 2.3 c | Les fichiers de poids chargés sont hachés, pas seulement le commit du Hub. |
+| **P16** ex æquo géométriques | § 2.4 a, M8 | 3ᵉ critère lexicographique : Σ distance d'édition des textes appariés ; ensuite l'ordre géométrique canonique, sans le texte. |
+| **P17** IoU flottante au seuil | § 2.4 a, M8 | Admissibilité en arithmétique exacte : 2·\|∩\| ≥ \|∪\| en entiers, dans un repère commun, en `Fraction` si les dimensions des pages diffèrent. |
+| **P18** justification Kirillov | § 2.4 c, § 6 | Justification retirée. Les relations de fusion et de scission entre régions de VT qui se recouvrent sont `not_applicable` (`ref_overlap`), et leur nombre est publié. |
+| **P19** `line_identity_*` sans filiation | § 2.4 a, M4 | Applicables seulement sous filiation vérifiée des lignes ; `not_applicable` sinon. |
+| **P20** deux conventions de seuil | § 2.4 a, § 6 (O2) | Un seul appariement et une seule règle d'admissibilité pour les boîtes et les empans NER. |
+
+Les deux mécanismes à re-spécifier, signalés par la revue, sont l'**inférence du Δ micro par famille** (R4, § 2.1 d) et l'**identité d'exécution** (R9, R10, P10, P11, § 2.3 c-d). Le correctif le plus transversal, **R5**, est propagé dans K2 et dans A4 à A6.
+
+### Révision n° 1 (rappel)
+
+Statistiques par famille (point 1) · micro et macro chacun avec son inférence, rangs à part (2) · quatre axes (3) · trois supports (4) · propriétés par métrique (5) · clé sur artefacts consommés et répétitions (6) · intégrité contre authenticité, liens, fichiers exécutés (7) · appariement lexicographique et filiation (8) · relecture, reproduction et réévaluation (9) · familles de Holm a priori (10).
+
+Décisions rendues et intégrées :
+- BagIt ;
+- Hypothesis (extra `dev`) ;
+- `scipy>=1.15` ;
+- rupture du schéma `RunResult` (v6, un JSON antérieur est re-noté depuis son archive) ;
+- enregistrements par étape ;
+- persistance atomique immédiate ;
+- RO-Crate reporté à la publication ;
+- refus du fan-out multipage à image unique en 1.0 ;
+- K1 et K2 conçus ensemble.

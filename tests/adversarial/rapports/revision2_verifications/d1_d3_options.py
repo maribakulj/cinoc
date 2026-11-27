@@ -1,4 +1,4 @@
-"""Révision 5, D3 et D1.
+"""Révision 5, D3 et D1 (générateur corrigé en révision 6 : TP + FN = taille de référence).
 
 (1) D3 : diagnostic de levier calculé sur la RÉFÉRENCE (r_d = tp+fn, ou n_réf),
     commune à la paire, sur l'exemple `r4_levier_echappatoire.py` : B pire par
@@ -36,19 +36,28 @@ def boot_t_p(nA, dA, nB, dB, idx):
 def kurt(x):
     z = (x - x.mean()) / x.std() if x.std() > 0 else np.zeros_like(x); return float((z ** 4).mean() - 3)
 def f1_docs(r, q=1/3):
+    """A : (tp, fp, fn) = (r, 2r, 0) ; B : (r, 0, 0) avec proba q, sinon (0, 0, r).
+    TP + FN = r pour chaque document et chaque pipeline (vérifié)."""
     good = rng.random(len(r)) < q
-    return 2.0 * r, 4.0 * r, np.where(good, 2.0 * r, 0.0), np.where(good, 2.0 * r, r)
+    tpA, fpA, fnA = r, 2.0 * r, np.zeros_like(r)
+    tpB, fpB, fnB = np.where(good, r, 0.0), np.zeros_like(r), np.where(good, 0.0, r)
+    assert np.all(tpA + fnA == r) and np.all(tpB + fnB == r)
+    return 2 * tpA, 2 * tpA + fpA + fnA, 2 * tpB, 2 * tpB + fpB + fnB
 
-print("(1) D3 : 40 documents de 5 entités ; A (4±1, 1, 1), B (3±1, 2, 2)")
+print("(1) D3 : 40 documents de 5 entités de référence ; A : tp = 4±1, fp = 1 ; B : tp = 3±1, fp = 2 ;"
+      " fn = 5 − tp (TP + FN = 5 pour chaque document et chaque pipeline)")
 n = 40
+REF = 5.0
 tpA = 4.0 + rng.integers(-1, 2, n); tpB = 3.0 + rng.integers(-1, 2, n)
-ref = np.full(n, 5.0)
+fnA, fnB = REF - tpA, REF - tpB
+ref = tpA + fnA
+assert np.all(tpA + fnA == REF) and np.all(tpB + fnB == REF)   # correctif : TP + FN = taille de référence
 for label, extra in (("B", 0.0), ("B + 2 000 fp sur un document", 2000.0)):
     fpB = np.full(n, 2.0); fpB[0] += extra
-    nA, dA = 2 * tpA, 2 * tpA + 1 + 1; nB, dB = 2 * tpB, 2 * tpB + fpB + 2
+    nA, dA = 2 * tpA, 2 * tpA + 1 + fnA; nB, dB = 2 * tpB, 2 * tpB + fpB + fnB
     idx = rng.integers(0, n, (4999, n))
     print(f"   {label:30s} F1 B = {nB.sum()/dB.sum():.3f} | Kish(den) = {min(kish(dA), kish(dB)):5.1f} | "
-          f"Kish(réf) = {kish(ref):5.1f} -> p BA = {ba_p(nA, dA, nB, dB, idx):.4f}")
+          f"Kish(réf) = {kish(ref):5.1f} -> p BA = {ba_p(nA, dA, nB, dB, idx):.4f} (F1 A = {nA.sum()/dA.sum():.3f})")
 
 print("(2) D1 : niveau sous H0 parmi les jeux retenus par Kish(réf) ≥ 20, 2 000 jeux par case")
 SCEN = {"revue n=25": (25, lambda n: np.full(n, 2.0)),
