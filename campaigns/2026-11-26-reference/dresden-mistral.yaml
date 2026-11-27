@@ -1,0 +1,422 @@
+run_id: reference-dresden-mistral
+corpus:
+  name: dresden-k80-1665
+  documents:
+  - id: Mscr.Dresd.K80_177
+    image_uri: https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_177/full/1600,/0/default.jpg
+    ground_truths:
+    - type: raw_text
+      uri: ground_truth/Mscr.Dresd.K80_177.gt.txt
+    metadata:
+      stratum: de/17e/kurrent
+  - id: Mscr.Dresd.K80_178
+    image_uri: https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_178/full/1600,/0/default.jpg
+    ground_truths:
+    - type: raw_text
+      uri: ground_truth/Mscr.Dresd.K80_178.gt.txt
+    metadata:
+      stratum: de/17e/kurrent
+  - id: Mscr.Dresd.K80_179
+    image_uri: https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_179/full/1600,/0/default.jpg
+    ground_truths:
+    - type: raw_text
+      uri: ground_truth/Mscr.Dresd.K80_179.gt.txt
+    metadata:
+      stratum: de/17e/kurrent
+  - id: Mscr.Dresd.K80_180
+    image_uri: https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_180/full/1600,/0/default.jpg
+    ground_truths:
+    - type: raw_text
+      uri: ground_truth/Mscr.Dresd.K80_180.gt.txt
+    metadata:
+      stratum: de/17e/kurrent
+  - id: Mscr.Dresd.K80_181
+    image_uri: https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_181/full/1600,/0/default.jpg
+    ground_truths:
+    - type: raw_text
+      uri: ground_truth/Mscr.Dresd.K80_181.gt.txt
+    metadata:
+      stratum: de/17e/kurrent
+  - id: Mscr.Dresd.K80_182
+    image_uri: https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_182/full/1600,/0/default.jpg
+    ground_truths:
+    - type: raw_text
+      uri: ground_truth/Mscr.Dresd.K80_182.gt.txt
+    metadata:
+      stratum: de/17e/kurrent
+  - id: Mscr.Dresd.K80_183
+    image_uri: https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_183/full/1600,/0/default.jpg
+    ground_truths:
+    - type: raw_text
+      uri: ground_truth/Mscr.Dresd.K80_183.gt.txt
+    metadata:
+      stratum: de/17e/kurrent
+  - id: Mscr.Dresd.K80_184
+    image_uri: https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_184/full/1600,/0/default.jpg
+    ground_truths:
+    - type: raw_text
+      uri: ground_truth/Mscr.Dresd.K80_184.gt.txt
+    metadata:
+      stratum: de/17e/kurrent
+  - id: Mscr.Dresd.K80_185
+    image_uri: https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_185/full/1600,/0/default.jpg
+    ground_truths:
+    - type: raw_text
+      uri: ground_truth/Mscr.Dresd.K80_185.gt.txt
+    metadata:
+      stratum: de/17e/kurrent
+  - id: Mscr.Dresd.K80_186
+    image_uri: https://huggingface.co/datasets/Ma-Ri-Ba-Ku/Cinoc-Dresdner.Hofdiarium.1665-Mscr.Dresd.K.80/resolve/db171cc5d4117cfce3315ffc9bce01f29f4da7b7/iiif/Mscr.Dresd.K80_186/full/1600,/0/default.jpg
+    ground_truths:
+    - type: raw_text
+      uri: ground_truth/Mscr.Dresd.K80_186.gt.txt
+    metadata:
+      stratum: de/17e/kurrent
+  metadata:
+    source: curated
+    revision: db171cc5d4117cfce3315ffc9bce01f29f4da7b7
+    license_images: Public Domain Mark (SLUB Dresden)
+    license_transcription: cc-by-nc-sa-4.0
+pipelines:
+- name: E0 · mistral-ocr
+  description: OCR seul (Mistral OCR).
+  initial_inputs:
+  - image
+  steps:
+  - id: lecture
+    kind: ocr
+    adapter_name: mistral_ocr:lecture
+    input_types:
+    - image
+    output_types:
+    - raw_text
+    inputs_from:
+      image: __initial__
+- name: E2 · tesseract → mistral
+  description: OCR Tesseract puis correction LLM (texte).
+  initial_inputs:
+  - image
+  steps:
+  - id: lecture
+    kind: ocr
+    adapter_name: tesseract:lecture
+    input_types:
+    - image
+    output_types:
+    - raw_text
+    inputs_from:
+      image: __initial__
+  - id: correction
+    kind: correction
+    adapter_name: mistral:correction
+    input_types:
+    - raw_text
+    output_types:
+    - corrected_text
+    inputs_from:
+      raw_text: lecture
+- name: E2 · mistral-ocr → mistral
+  description: OCR Mistral puis correction LLM (texte).
+  initial_inputs:
+  - image
+  steps:
+  - id: lecture
+    kind: ocr
+    adapter_name: mistral_ocr:lecture
+    input_types:
+    - image
+    output_types:
+    - raw_text
+    inputs_from:
+      image: __initial__
+  - id: correction
+    kind: correction
+    adapter_name: mistral:correction
+    input_types:
+    - raw_text
+    output_types:
+    - corrected_text
+    inputs_from:
+      raw_text: lecture
+- name: E1 · segmentation → mistral (VLM par région)
+  description: Segmentation Tesseract, chaque région lue par le VLM.
+  initial_inputs:
+  - image
+  steps:
+  - id: seg
+    kind: segmenter
+    adapter_name: tesseract_layout:seg
+    input_types:
+    - image
+    output_types:
+    - layout
+    inputs_from:
+      image: __initial__
+  - id: reco
+    kind: region_recognizer
+    adapter_name: mistral:reco
+    input_types:
+    - layout
+    - image
+    output_types:
+    - layout
+    inputs_from:
+      layout: seg
+      image: __initial__
+    fanout: true
+    crop: true
+  - id: lecture
+    kind: projection
+    adapter_name: layout_to_text:lecture
+    input_types:
+    - layout
+    output_types:
+    - raw_text
+    inputs_from:
+      layout: reco
+- name: E3 · segmentation → tesseract → saknussemm (mistral)
+  description: Correction structurée intégrale, chaque ligne au modèle.
+  initial_inputs:
+  - image
+  steps:
+  - id: seg
+    kind: segmenter
+    adapter_name: tesseract_layout:seg
+    input_types:
+    - image
+    output_types:
+    - layout
+    inputs_from:
+      image: __initial__
+  - id: reco
+    kind: region_recognizer
+    adapter_name: tesseract:reco
+    input_types:
+    - layout
+    - image
+    output_types:
+    - layout
+    inputs_from:
+      layout: seg
+      image: __initial__
+    fanout: true
+    crop: true
+  - id: lecture
+    kind: projection
+    adapter_name: layout_to_text:lecture
+    input_types:
+    - layout
+    output_types:
+    - raw_text
+    inputs_from:
+      layout: reco
+  - id: correction
+    kind: structured_correction
+    adapter_name: saknussemm:mistral
+    input_types:
+    - layout
+    output_types:
+    - layout
+    - corrected_text
+    - decisions
+    - native_json
+    inputs_from:
+      layout: reco
+- name: E3 · segmentation → tesseract → saknussemm (ministral-8b)
+  description: Correction structurée intégrale, chaque ligne au modèle ministral-8b-latest (texte seul,
+    comme E3 mistral-small).
+  initial_inputs:
+  - image
+  steps:
+  - id: seg
+    kind: segmenter
+    adapter_name: tesseract_layout:seg
+    input_types:
+    - image
+    output_types:
+    - layout
+    inputs_from:
+      image: __initial__
+  - id: reco
+    kind: region_recognizer
+    adapter_name: tesseract:reco
+    input_types:
+    - layout
+    - image
+    output_types:
+    - layout
+    inputs_from:
+      layout: seg
+      image: __initial__
+    fanout: true
+    crop: true
+  - id: lecture
+    kind: projection
+    adapter_name: layout_to_text:lecture
+    input_types:
+    - layout
+    output_types:
+    - raw_text
+    inputs_from:
+      layout: reco
+  - id: correction
+    kind: structured_correction
+    adapter_name: saknussemm:ministral_8b
+    input_types:
+    - layout
+    output_types:
+    - layout
+    - corrected_text
+    - decisions
+    - native_json
+    inputs_from:
+      layout: reco
+- name: E3 · segmentation → tesseract → saknussemm (ministral-3b)
+  description: Correction structurée intégrale, chaque ligne au modèle ministral-3b-latest (texte seul,
+    comme E3 mistral-small).
+  initial_inputs:
+  - image
+  steps:
+  - id: seg
+    kind: segmenter
+    adapter_name: tesseract_layout:seg
+    input_types:
+    - image
+    output_types:
+    - layout
+    inputs_from:
+      image: __initial__
+  - id: reco
+    kind: region_recognizer
+    adapter_name: tesseract:reco
+    input_types:
+    - layout
+    - image
+    output_types:
+    - layout
+    inputs_from:
+      layout: seg
+      image: __initial__
+    fanout: true
+    crop: true
+  - id: lecture
+    kind: projection
+    adapter_name: layout_to_text:lecture
+    input_types:
+    - layout
+    output_types:
+    - raw_text
+    inputs_from:
+      layout: reco
+  - id: correction
+    kind: structured_correction
+    adapter_name: saknussemm:ministral_3b
+    input_types:
+    - layout
+    output_types:
+    - layout
+    - corrected_text
+    - decisions
+    - native_json
+    inputs_from:
+      layout: reco
+- name: E5 · mistral (VLM)
+  description: VLM cloud zero-shot sur la page entière.
+  initial_inputs:
+  - image
+  steps:
+  - id: lecture
+    kind: zero_shot
+    adapter_name: mistral:vlm
+    input_types:
+    - image
+    output_types:
+    - raw_text
+    inputs_from:
+      image: __initial__
+evaluation:
+  views:
+  - name: texte
+    description: 'Défaut (flat_text) : la sortie la plus aval de chaque chaîne. cer_diplo = convention
+      BNL ſ = s (repli des deux côtés).'
+    candidate_types:
+    - raw_text
+    - corrected_text
+    normalization_profile: flat_text
+    metric_names:
+    - cer
+    - wer
+    - cer_diplo
+    - cmer
+    - mer
+    - unanchored_trigrams
+  - name: texte (lignes)
+    description: 'Défaut (keep_line_breaks) : sauts de ligne comptés — le chiffre comparable à dinglehopper.'
+    candidate_types:
+    - raw_text
+    - corrected_text
+    normalization_profile: keep_line_breaks
+    metric_names:
+    - cer
+  - name: lecture
+    description: 'Ablation : l''étape « lecture » de chaque chaîne, avant toute correction (E0/E1 dans
+      les chaînes E2/E3/E4).'
+    candidate_types:
+    - raw_text
+    normalization_profile: flat_text
+    target_step: lecture
+    metric_names:
+    - cer
+    - wer
+    - cer_diplo
+  - name: sans césure
+    description: 'Convention ⸗ : un mot coupé en fin de ligne (⸗, -, ‐, ‑, –, ¬ + saut) est recollé des
+      deux côtés ; sauts de ligne comptés comme dans « texte (lignes) ».'
+    candidate_types:
+    - raw_text
+    - corrected_text
+    normalization_profile: dehyphenated
+    metric_names:
+    - cer
+adapter_kwargs:
+  tesseract:lecture:
+    label: lecture
+    lang: Fraktur
+  tesseract_layout:seg:
+    label: seg
+    lang: Fraktur
+  tesseract:reco:
+    label: reco
+    lang: Fraktur
+  layout_to_text:lecture:
+    label: lecture
+  mistral_ocr:lecture:
+    label: lecture
+    model: mistral-ocr-latest
+  mistral:correction:
+    label: correction
+    model: mistral-small-latest
+    role: text_only
+    max_tokens: 2048
+  mistral:reco:
+    label: reco
+    model: mistral-small-latest
+    role: zero_shot
+    max_tokens: 1024
+  mistral:vlm:
+    label: vlm
+    model: mistral-small-latest
+    role: zero_shot
+    max_tokens: 2048
+  saknussemm:mistral:
+    label: mistral
+    producer: mistral
+    model: mistral-small-latest
+  saknussemm:ministral_8b:
+    label: ministral_8b
+    producer: mistral
+    model: ministral-8b-latest
+  saknussemm:ministral_3b:
+    label: ministral_3b
+    producer: mistral
+    model: ministral-3b-latest

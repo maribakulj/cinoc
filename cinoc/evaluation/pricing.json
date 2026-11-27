@@ -3,7 +3,7 @@
     "currency": "EUR",
     "last_updated": "2026-11-25",
     "valid_until": "2027-05-25",
-    "note": "Tarifs INDICATIFS, prix publics hors remises/volumes, convertis depuis l'USD au taux de référence BCE du 2026-11-25 (1 EUR = 1,0935 USD), sauf Azure (prix EUR publié). Sources : pages de tarifs OpenAI, Anthropic, Mistral (cartes de modèle), Google Cloud Vision, API Azure Retail Prices. Lecture en cache (cache_read_eur_per_mtok, vérifiée le 2026-11-26) : colonnes « Cached input » d'OpenAI (developers.openai.com/api/docs/pricing : gpt-4o-mini 0,075 $, gpt-4o 1,25 $) et « Cache hits and refreshes » d'Anthropic (platform.claude.com/docs/en/about-claude/pricing : Haiku 4.5 0,10 $, Sonnet 4.6 0,30 $) ; aucun tarif de cache publié pour les modèles Mistral listés ; aucun tarif d'écriture en cache (il dépend de la durée de vie). À réviser avant valid_until ; le rapport avertit au-delà.",
+    "note": "Tarifs INDICATIFS, prix publics hors remises/volumes, convertis depuis l'USD au taux de référence BCE du 2026-11-25 (1 EUR = 1,0935 USD), sauf Azure (prix EUR publié). Sources : pages de tarifs OpenAI, Anthropic, Mistral (cartes de modèle), Google Cloud Vision, API Azure Retail Prices. Ministral 3 (ministral-8b-latest = ministral-8b-2512 : 0,15 $ entrée et sortie ; ministral-3b-latest = ministral-3b-2512 : 0,10 $) : cartes de modèle docs.mistral.ai/models (ministral-3-8b-25-12, ministral-3-3b-25-12), lues le 2026-11-27, même taux BCE ; mistral-small-latest y sert mistral-small-2603 (0,15 $ / 0,60 $). Lecture en cache (cache_read_eur_per_mtok, vérifiée le 2026-11-26) : colonnes « Cached input » d'OpenAI (developers.openai.com/api/docs/pricing : gpt-4o-mini 0,075 $, gpt-4o 1,25 $) et « Cache hits and refreshes » d'Anthropic (platform.claude.com/docs/en/about-claude/pricing : Haiku 4.5 0,10 $, Sonnet 4.6 0,30 $) ; aucun tarif de cache publié pour les modèles Mistral listés ; aucun tarif d'écriture en cache (il dépend de la durée de vie). À réviser avant valid_until ; le rapport avertit au-delà.",
     "hourly_rate_local_cpu_eur": 0.08,
     "time_per_error_seconds": 5.0
   },
@@ -36,6 +36,16 @@
       "input_eur_per_mtok": 0.14,
       "output_eur_per_mtok": 0.55,
       "pricing_date": "2026-11-25"
+    },
+    "mistral/ministral-8b-latest": {
+      "input_eur_per_mtok": 0.14,
+      "output_eur_per_mtok": 0.14,
+      "pricing_date": "2026-11-27"
+    },
+    "mistral/ministral-3b-latest": {
+      "input_eur_per_mtok": 0.09,
+      "output_eur_per_mtok": 0.09,
+      "pricing_date": "2026-11-27"
     },
     "mistral/mistral-large": {
       "input_eur_per_mtok": 0.64,

@@ -333,6 +333,104 @@ pipelines:
     - native_json
     inputs_from:
       layout: reco
+- name: E3 · segmentation → tesseract → saknussemm (ministral-8b)
+  description: Correction structurée intégrale, chaque ligne au modèle ministral-8b-latest (texte seul,
+    comme E3 mistral-small).
+  initial_inputs:
+  - image
+  steps:
+  - id: seg
+    kind: segmenter
+    adapter_name: tesseract_layout:seg
+    input_types:
+    - image
+    output_types:
+    - layout
+    inputs_from:
+      image: __initial__
+  - id: reco
+    kind: region_recognizer
+    adapter_name: tesseract:reco
+    input_types:
+    - layout
+    - image
+    output_types:
+    - layout
+    inputs_from:
+      layout: seg
+      image: __initial__
+    fanout: true
+    crop: true
+  - id: lecture
+    kind: projection
+    adapter_name: layout_to_text:lecture
+    input_types:
+    - layout
+    output_types:
+    - raw_text
+    inputs_from:
+      layout: reco
+  - id: correction
+    kind: structured_correction
+    adapter_name: saknussemm:ministral_8b
+    input_types:
+    - layout
+    output_types:
+    - layout
+    - corrected_text
+    - decisions
+    - native_json
+    inputs_from:
+      layout: reco
+- name: E3 · segmentation → tesseract → saknussemm (ministral-3b)
+  description: Correction structurée intégrale, chaque ligne au modèle ministral-3b-latest (texte seul,
+    comme E3 mistral-small).
+  initial_inputs:
+  - image
+  steps:
+  - id: seg
+    kind: segmenter
+    adapter_name: tesseract_layout:seg
+    input_types:
+    - image
+    output_types:
+    - layout
+    inputs_from:
+      image: __initial__
+  - id: reco
+    kind: region_recognizer
+    adapter_name: tesseract:reco
+    input_types:
+    - layout
+    - image
+    output_types:
+    - layout
+    inputs_from:
+      layout: seg
+      image: __initial__
+    fanout: true
+    crop: true
+  - id: lecture
+    kind: projection
+    adapter_name: layout_to_text:lecture
+    input_types:
+    - layout
+    output_types:
+    - raw_text
+    inputs_from:
+      layout: reco
+  - id: correction
+    kind: structured_correction
+    adapter_name: saknussemm:ministral_3b
+    input_types:
+    - layout
+    output_types:
+    - layout
+    - corrected_text
+    - decisions
+    - native_json
+    inputs_from:
+      layout: reco
 - name: E5 · mistral (VLM)
   description: VLM cloud zero-shot sur la page entière.
   initial_inputs:
@@ -434,3 +532,11 @@ adapter_kwargs:
     label: mistral
     producer: mistral
     model: mistral-small-latest
+  saknussemm:ministral_8b:
+    label: ministral_8b
+    producer: mistral
+    model: ministral-8b-latest
+  saknussemm:ministral_3b:
+    label: ministral_3b
+    producer: mistral
+    model: ministral-3b-latest
