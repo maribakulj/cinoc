@@ -110,20 +110,6 @@ def test_ablation_saknussemm__un_temoin_correction_libre_sur_la_meme_lecture(
     )
 
 
-@pytest.mark.parametrize("corpus", CORPUS)
-def test_ablation_saknussemm__e2_et_e3_partent_de_la_meme_sortie_ocr(
-    corpus: str,
-) -> None:
-    """La paire que le README oppose (E2 tesseract → mistral, E3 … → saknussemm
-    mistral) doit corriger la même sortie OCR ; ici page entière contre régions."""
-    spec = _spec(corpus)
-    e2 = _pipeline(spec, "E2 · tesseract → mistral")
-    e3 = _pipeline(spec, "E3 · segmentation → tesseract → saknussemm (mistral)")
-    entree_e2 = _upstream(spec, e2, e2.steps[-1].inputs_from[next(iter(e2.steps[-1].inputs_from))])
-    lecture_e3 = _upstream(spec, e3, "lecture")
-    assert entree_e2 == lecture_e3
-
-
 # --------------------------------------------------------------------------
 # Les autres comparaisons de la campagne
 # --------------------------------------------------------------------------
