@@ -66,6 +66,12 @@ class Job(BaseModel):
     #: inconnu (job pas encore démarré). Alimente la barre de progression (SSE).
     done: int = 0
     total: int = 0
+    #: L'unité dont la fin a produit cet instantané (``progress``) : chaîne,
+    #: document et issue (``ok``/``truncated``/``failed``/``resumed``) — le
+    #: journal de la page les nomme. ``None`` sur une transition d'état.
+    pipeline: str | None = None
+    document_id: str | None = None
+    outcome: str | None = None
 
 
 class JobStore:
@@ -116,6 +122,9 @@ class JobStore:
                     "report_name": report_name,
                     "error": error,
                     "published_url": published_url,
+                    "pipeline": None,
+                    "document_id": None,
+                    "outcome": None,
                     "updated_at": utcnow().isoformat(),
                 }
             )
@@ -123,7 +132,16 @@ class JobStore:
             self._history[job_id].append(updated)
         return updated
 
-    def progress(self, job_id: str, done: int, total: int) -> Job:
+    def progress(
+        self,
+        job_id: str,
+        done: int,
+        total: int,
+        *,
+        pipeline: str | None = None,
+        document_id: str | None = None,
+        outcome: str | None = None,
+    ) -> Job:
         """Met à jour la progression (``done``/``total``) **sans changer l'état**.
 
         Ajoute un instantané au journal → un **événement SSE** (de type ``running``)
@@ -138,6 +156,9 @@ class JobStore:
                 update={
                     "done": done,
                     "total": total,
+                    "pipeline": pipeline,
+                    "document_id": document_id,
+                    "outcome": outcome,
                     "updated_at": utcnow().isoformat(),
                 }
             )

@@ -48,6 +48,17 @@ publier, et son moment, appartiennent au mainteneur.
 
 ### Corrigé
 
+- **La page, relue par un testeur.** Le surtitre de la bibliothèque n'est plus
+  en anglais dans la page française (`Vitrine · bibliothèque`) ; l'apostrophe
+  droite, que la police d'accent dessine comme un accent espacé (« l ’
+  instant »), retombe sur la police suivante (page et rapport) ; un corpus
+  déposé `pages.zip` s'appelle `pages`, comme par `cinoc corpus import zip`
+  (une fonction pour les deux) ; les vignettes de la galerie montrent la page
+  entière au lieu d'en rogner les bords ; le journal d'un run nomme chaque
+  unité (`[1/2] ocr_simple · tesseract · page_002 — fait`, la ligne de `cinoc
+  run`) et traduit les états ; chaque champ de réglage a un `id`, un `name` et
+  son `label for`.
+
 - **`docs/PLUGINS.md` suffit pour écrire un module.** L'exemple s'arrêtait sur
   `StepOutput(artifacts={ArtifactType.RAW_TEXT: ...})`. La page, désormais en
   anglais comme le README et le guide et sans renvoi au contrat interne, donne

@@ -150,7 +150,14 @@ class JobRunner:
                 spec = build_spec(Path(workspace))
 
                 def _on_progress(unit: UnitProgress) -> None:
-                    self._store.progress(job_id, unit.done, unit.total)
+                    self._store.progress(
+                        job_id,
+                        unit.done,
+                        unit.total,
+                        pipeline=unit.pipeline,
+                        document_id=unit.document_id,
+                        outcome=unit.outcome,
+                    )
 
                 result = run_orchestrator(
                     spec,

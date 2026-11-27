@@ -247,10 +247,18 @@
       }
     }
 
+    // Une unité terminée : « [3/16] pipeline · document — fait », la ligne
+    // de `cinoc run` ; une transition d'état : l'heure et l'état, traduit.
     function appendLog(state, job) {
       if (!logEl) return;
       var line = document.createElement("div");
-      line.textContent = (job.updated_at || "—") + "  ·  " + state;
+      if (job.document_id) {
+        var issue = logEl.getAttribute("data-outcome-" + job.outcome) || job.outcome;
+        line.textContent = "[" + job.done + "/" + job.total + "] " +
+          job.pipeline + " · " + job.document_id + " — " + issue;
+      } else {
+        line.textContent = (job.updated_at || "—") + "  ·  " + stateText(state);
+      }
       logEl.appendChild(line);
     }
 

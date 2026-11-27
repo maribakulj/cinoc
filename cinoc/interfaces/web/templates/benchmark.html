@@ -226,7 +226,11 @@
 
       <details class="run-log-shell" id="run-log-shell" hidden>
         <summary>{{ t.bench_log }}</summary>
-        <pre id="run-log" class="run-log" aria-live="polite"></pre>
+        <pre id="run-log" class="run-log" aria-live="polite"
+             data-outcome-ok="{{ t.bench_outcome_ok }}"
+             data-outcome-truncated="{{ t.bench_outcome_truncated }}"
+             data-outcome-failed="{{ t.bench_outcome_failed }}"
+             data-outcome-resumed="{{ t.bench_outcome_resumed }}"></pre>
       </details>
     </div>
   </div>

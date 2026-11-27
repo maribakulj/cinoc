@@ -44,7 +44,11 @@ from cinoc.app.corpus_import import (
     materialize_corpus,
     resolve_curated_author,
 )
-from cinoc.app.corpus_upload import LOCAL_MAX_ZIP_BYTES, extract_corpus_zip
+from cinoc.app.corpus_upload import (
+    LOCAL_MAX_ZIP_BYTES,
+    archive_corpus_name,
+    extract_corpus_zip,
+)
 from cinoc.app.dataset_standardize import StandardizeConfig, standardize_corpus
 from cinoc.app.loader import dump_corpus_spec
 from cinoc.domain.corpus import CorpusSpec
@@ -98,7 +102,7 @@ def _builder(args: argparse.Namespace) -> Callable[[Path], CorpusSpec]:
             return lambda dest: extract_corpus_zip(
                 archive,
                 dest,
-                name=args.name or Path(args.archive).stem,
+                name=args.name or archive_corpus_name(args.archive),
                 max_zip_bytes=LOCAL_MAX_ZIP_BYTES,
             )
         case _:  # pragma: no cover — argparse borne déjà les choix
