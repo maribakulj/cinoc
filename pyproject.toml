@@ -65,7 +65,7 @@ dependencies = [
 dev = [
     "ruff", "mypy", "pytest", "pytest-cov", "pytest-xdist", "lxml-stubs",
     "types-PyYAML", "jiwer", "fastapi", "jinja2",
-    "python-multipart", "Pillow",
+    "python-multipart", "Pillow", "hypothesis",
 ]
 kraken = ["kraken"]
 pero = ["pero-ocr"]  # OCR/HTR local (imprimé ancien + manuscrit) — non déployé au Space
@@ -199,6 +199,7 @@ markers = [
     "network: tests qui touchent le réseau (opt-in)",
     "live: tests contre une vraie API/binaire (opt-in)",
     "oracle: tests contre un outil de référence exécuté (dinglehopper, roman) — job CI `oracle`, extra `oracle`",
+    "tranche(id): tranche de la refonte des contrats qui rend ce test vert (tests/adversarial/CONTRATS.md, § 5)",
 ]
 filterwarnings = [
     # `starlette.testclient` (versions 2026) émet une dépréciation httpx→httpx2

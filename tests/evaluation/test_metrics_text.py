@@ -17,6 +17,7 @@ from cinoc.evaluation.metrics.text import (
     wer,
     word_accuracy,
 )
+from tests.adversarial._contrat import composantes, motif_scalaire
 
 
 def test_char_accuracy_is_one_minus_cer_bounded() -> None:
@@ -84,10 +85,19 @@ def test_cer_nonempty_reference_empty_hypothesis() -> None:
     assert cer.fn(_ctx("abc", "")).value == 1.0
 
 
-def test_cer_weight_is_reference_length() -> None:
-    # le poids = dénominateur (longueur de réf) : sert au micro-agrégat corpus.
-    assert cer.fn(_ctx("abcd", "abxd")).weight == 4
-    assert cer.fn(_ctx("", "xyz")).weight == 0  # réf vide → poids nul → exclue du micro
+@pytest.mark.tranche("1a")
+def test_cer_statistic_keeps_the_insertions_of_a_blank_page() -> None:
+    """Inverse ``test_cer_weight_is_reference_length``, qui figeait « page
+    blanche hors du micro » (poids nul). Contrat révisé (CONTRATS.md § 2.1 a,
+    M1) : l'observation porte la statistique (S, D, I, n_réf) ; une page à
+    référence vide garde ses |h| = 3 insertions pour le micro, et son scalaire
+    est indéfini (``zero_denominator``), pas 1,0."""
+    edits = ("substitutions", "deletions", "insertions", "reference_length")
+    assert composantes(cer.fn(_ctx("abcd", "abxd")), *edits) == (1, 0, 0, 4)
+    blank = cer.fn(_ctx("", "xyz"))
+    assert composantes(blank, *edits) == (0, 0, 3, 0)
+    assert blank.value is None
+    assert motif_scalaire(blank) == "zero_denominator"
 
 
 # ── WER ──────────────────────────────────────────────────────────────────

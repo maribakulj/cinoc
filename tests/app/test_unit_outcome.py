@@ -19,6 +19,7 @@ from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from cinoc.app import run
 from cinoc.app.loader import load_run_spec
@@ -36,6 +37,7 @@ from cinoc.interfaces.cli import main
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext, StepOutput
 from cinoc.reports.renderer import default_report_renderer
+from tests.adversarial._contrat import composante, politique_empty_page
 
 EXAMPLES = Path(__file__).resolve().parents[2] / "examples"
 
@@ -171,34 +173,49 @@ def test_nothing_is_marked_when_every_unit_succeeds(tmp_path: Path) -> None:
     assert "Unités en échec" not in html
 
 
-def test_max_error_scores_the_failure_like_an_empty_page(tmp_path: Path) -> None:
-    """``max_error`` : le CER du document en échec vaut 1, pondéré par sa
-    référence — exactement le CER d'une page rendue vide (0,1667 à l'agrégat)."""
+@pytest.mark.tranche("1b")
+def test_empty_page_scores_the_failure_like_an_empty_page(tmp_path: Path) -> None:
+    """Inverse ``test_max_error_scores_the_failure_like_an_empty_page`` : la
+    sensibilité s'appelle ``empty_page`` et elle **est** une page vide
+    (CONTRATS.md § 2.1 e) — le CER du document en échec vaut celui d'une page
+    rendue vide (1, donc 0,1667 à l'agrégat), et le résultat porte ce nom."""
     failed = _run(
-        _example_copy(tmp_path / "a", pero_folio_002=None), failure_policy="max_error"
+        _example_copy(tmp_path / "a", pero_folio_002=None),
+        failure_policy=politique_empty_page(),
     )
     empty = _run(_example_copy(tmp_path / "b", pero_folio_002=""))
 
     pero = _agg(failed, "pero")
-    assert (pero.support, pero.expected) == (5, 5)
+    assert pero.expected == 5
     assert pero.value == pytest.approx(_agg(empty, "pero").value)
     assert pero.value == pytest.approx(0.1667, abs=1e-4)
     assert _doc(failed, "pero", "folio_002").value == 1.0
-    assert failed.manifest.failure_policy == "max_error"
+    assert str(failed.manifest.failure_policy) == "empty_page"
     html = default_report_renderer().render(failed)
-    assert "erreur maximale" in html
+    assert "page vide" in html
 
 
-def test_max_error_is_zero_for_a_higher_is_better_metric(tmp_path: Path) -> None:
+@pytest.mark.tranche("1b")
+def test_max_error_is_gone_and_empty_page_scores_char_accuracy_as_empty(
+    tmp_path: Path,
+) -> None:
+    """Inverse ``test_max_error_is_zero_for_a_higher_is_better_metric``, qui
+    figeait ``worst = 0.0 if higher_is_better else 1.0``. ``max_error`` est
+    retiré (CONTRATS.md § 2.1 e : ``FailurePolicy = exclude | empty_page``) ;
+    sous ``empty_page``, l'``char_accuracy`` de l'échec est celle de la page
+    vide — 0, parce que toute la référence est en suppressions, et non parce
+    que la métrique « monte »."""
     view = EvaluationView(
         name="text",
         candidate_types=frozenset({ArtifactType.RAW_TEXT}),
         metric_names=("char_accuracy",),
     )
+    with pytest.raises(ValidationError):
+        EvaluationSpec(views=(view,), failure_policy="max_error")  # type: ignore[arg-type]
     result = _run(
         _example_copy(tmp_path, pero_folio_002=None),
         views=(view,),
-        failure_policy="max_error",
+        failure_policy=politique_empty_page(),
     )
     entry = next(
         d
@@ -206,7 +223,9 @@ def test_max_error_is_zero_for_a_higher_is_better_metric(tmp_path: Path) -> None
         if (d.pipeline, d.document_id) == ("pero", "folio_002")
     )
     assert entry.scores[0].value == 0.0
-    assert entry.scores[0].support is not None and entry.scores[0].support > 0
+    assert composante(entry.scores[0], "errors") == composante(
+        entry.scores[0], "reference_length"
+    )
 
 
 def test_a_failure_without_ground_truth_is_not_expected(tmp_path: Path) -> None:
