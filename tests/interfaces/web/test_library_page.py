@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -268,3 +269,30 @@ def test_no_curated_section_without_author(
     )
     body = _client(tmp_path, monkeypatch).get("/library").text
     assert "data-repo-id=" not in body  # pas de carte curée découverte
+
+
+@pytest.mark.parametrize(
+    ("public_mode", "lang", "attendu"),
+    [
+        (False, "fr", "200 Mo"),
+        (True, "fr", "25 Mo"),
+        (False, "en", "200 MB"),
+        (True, "en", "25 MB"),
+    ],
+)
+def test_library_shows_the_effective_archive_cap(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    public_mode: bool,
+    lang: str,
+    attendu: str,
+) -> None:
+    """La zone de dépôt dit le plafond que le serveur applique (elle annonçait
+    « 500 MB » quand le serveur refusait au-delà de 25), et le message d'un
+    refus pour taille le redit, dans la langue de la page (D-310)."""
+    body = _client(tmp_path, monkeypatch, public_mode=public_mode).get(
+        "/library", params={"lang": lang}
+    ).text
+    assert attendu in body
+    assert "500 MB" not in body
+    assert re.search(rf'data-error-413="[^"]*{attendu}', body)

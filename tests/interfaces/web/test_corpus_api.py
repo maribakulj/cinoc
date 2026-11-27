@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import random
 import zipfile
 from pathlib import Path
 
@@ -72,7 +73,44 @@ def test_stem_collision_is_422_not_500(tmp_path: Path) -> None:
 def test_oversized_upload_is_413(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # plafond abaissé (≠ envoyer 25 Mo) : au-delà → 413 net, avant tout dézippage.
-    monkeypatch.setattr("cinoc.interfaces.web.routers.corpus.MAX_ZIP_BYTES", 64)
+    # plafond abaissé (≠ envoyer 200 Mo) : au-delà → 413 net, avant tout dézippage.
+    monkeypatch.setattr("cinoc.app.corpus_upload.LOCAL_MAX_ZIP_BYTES", 64)
     resp = _upload(_client(tmp_path), b"x" * 256)
     assert resp.status_code == 413
+
+
+def _over_public_cap() -> bytes:
+    """Un ZIP **réel** de plus de 25 Mo, fabriqué à la volée : deux pages de
+    13 Mo d'octets pseudo-aléatoires (incompressibles), rangées sans
+    compression — rien de lourd n'est committé."""
+    page = b"\x89PNG\r\n\x1a\n" + random.Random(0).randbytes(13 * 2**20)
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_STORED) as zf:
+        zf.writestr("p1.png", page)
+        zf.writestr("p2.png", page)
+    data = buf.getvalue()
+    assert len(data) > 25 * 2**20
+    return data
+
+
+def _client_in(tmp_path: Path, *, public_mode: bool) -> TestClient:
+    return TestClient(
+        create_app(reports_dir=tmp_path / "rep", uploads_dir=tmp_path / "up",
+                   data_dir=tmp_path / "data", rate_limit=1000,
+                   public_mode=public_mode)
+    )
+
+
+def test_a_local_server_accepts_an_archive_over_the_public_cap(tmp_path: Path) -> None:
+    """Hors mode public, le dépôt web prend le plafond d'une archive locale (celui
+    de ``cinoc corpus import zip``) : un corpus de 29 Mo ne se refuse plus à la
+    page d'un serveur que son opérateur lance chez lui (D-310)."""
+    resp = _upload(_client_in(tmp_path, public_mode=False), _over_public_cap())
+    assert resp.status_code == 201, resp.text[:300]
+    assert resp.json()["n_documents"] == 2
+
+
+def test_a_public_server_refuses_it_and_names_its_cap(tmp_path: Path) -> None:
+    resp = _upload(_client_in(tmp_path, public_mode=True), _over_public_cap())
+    assert resp.status_code == 413
+    assert "25 Mo" in resp.json()["detail"]

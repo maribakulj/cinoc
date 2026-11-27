@@ -51,9 +51,10 @@
           <label class="dropzone dropzone-large" id="dropzone" for="corpus-file">
             <input type="file" id="corpus-file" accept=".zip,application/zip">
             <span class="dropzone-hint">{{ t.library_drop_hint }}</span>
-            <span class="dropzone-meta">{{ t.library_zip_meta }}</span>
+            <span class="dropzone-meta">{{ zip_meta }}</span>
           </label>
-          <span id="corpus-status" class="run-status"></span>
+          <span id="corpus-status" class="run-status"
+                data-error-413="{{ zip_too_large }}"></span>
         </div>
 
         <div class="corpus-stack">
@@ -118,9 +119,10 @@
         <label class="dropzone dropzone-large" id="dropzone" for="corpus-file">
           <input type="file" id="corpus-file" accept=".zip,application/zip">
           <span class="dropzone-hint">{{ t.library_drop_hint }}</span>
-          <span class="dropzone-meta">{{ t.library_zip_meta }}</span>
+          <span class="dropzone-meta">{{ zip_meta }}</span>
         </label>
-        <span id="corpus-status" class="run-status"></span>
+        <span id="corpus-status" class="run-status"
+                data-error-413="{{ zip_too_large }}"></span>
         <div class="empty-panel">{{ t.library_corpora_empty }}</div>
       </div>
       {% endif %}

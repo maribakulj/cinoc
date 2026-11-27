@@ -9,7 +9,8 @@ Défenses (toutes testées) :
   et on repasse chaque nom par ``validated_path`` (défense en profondeur) ;
 - **anti-zip-bomb** : la taille **réellement décompressée** est plafonnée par
   fichier *et* au total (on ne fait pas confiance au ``file_size`` du header) ;
-- **quotas** : taille de l'archive, nombre d'entrées, taille par fichier ;
+- **quotas** : taille de l'archive (selon le déploiement :
+  :func:`upload_zip_limit`), nombre d'entrées, taille par fichier ;
 - **dédup** : un basename en double est refusé ;
 - **liste blanche d'extensions** + **signature** des images (magic bytes) ;
 - **noms** restreints à un charset sûr (→ ``DocumentRef.id`` valide).
@@ -20,8 +21,8 @@ radical) matérialisée sous ``dest`` — prête pour un run.
 
 from __future__ import annotations
 
-import io
 import logging
+import os
 import re
 import shutil
 import threading
@@ -29,6 +30,7 @@ import uuid
 import zipfile
 from collections.abc import Callable, Mapping
 from pathlib import Path, PurePath
+from typing import BinaryIO
 
 from pydantic import ValidationError
 
@@ -44,8 +46,9 @@ from cinoc.evaluation.projectors import layout_to_text
 from cinoc.formats.images import IMAGE_SUFFIXES, looks_like_image
 from cinoc.formats.layout_xml import layout_xml_kind, parse_layout_xml
 
-#: Quotas (généreux mais bornés) — un Space gratuit n'est pas un entrepôt.
-MAX_ZIP_BYTES = 25 * 1024 * 1024
+#: Plafond de l'archive déposée sur un serveur **exposé** (mode public) : un
+#: Space gratuit n'est pas un entrepôt.
+PUBLIC_MAX_ZIP_BYTES = 25 * 1024 * 1024
 MAX_TOTAL_UNCOMPRESSED = 200 * 1024 * 1024
 logger = logging.getLogger(__name__)
 
@@ -55,9 +58,10 @@ logger = logging.getLogger(__name__)
 #: reste lisible.
 CORPUS_FILE = "corpus.yaml"
 
-#: Une archive **locale** (``cinoc corpus import zip``) n'est pas un dépôt sur
-#: un serveur partagé : seul le plafond décompressé (anti-bombe) la borne. Le
-#: quota du dépôt web refusait `37-GT-BNL` (29 Mo zippé) à la CLI.
+#: Une archive **locale** (``cinoc corpus import zip``, ou la page d'un serveur
+#: hors mode public) n'est pas un dépôt sur un serveur exposé : seul le plafond
+#: décompressé (anti-bombe) la borne. Le quota du Space refusait `37-GT-BNL`
+#: (29 Mo zippé) à la CLI, puis à la page d'un serveur local (D-304, D-310).
 LOCAL_MAX_ZIP_BYTES = MAX_TOTAL_UNCOMPRESSED
 MAX_FILE_BYTES = 25 * 1024 * 1024
 MAX_ENTRIES = 1000
@@ -82,6 +86,27 @@ class CorpusUploadError(CinocError):
     """Archive rejetée (non sûre, hors quota, vide, ou mal formée)."""
 
 
+class ArchiveTooLargeError(CorpusUploadError):
+    """Archive plus lourde que le plafond de son déploiement — refusée avant
+    tout dézippage (le web répond ``413``, pas ``422``)."""
+
+
+def upload_zip_limit(*, public_mode: bool) -> int:
+    """Plafond, en octets, d'une archive ZIP de corpus **selon le déploiement**.
+
+    Serré sur un serveur exposé (mode public : :data:`PUBLIC_MAX_ZIP_BYTES`),
+    celui d'une archive locale ailleurs (:data:`LOCAL_MAX_ZIP_BYTES`) — la page
+    d'un ``cinoc serve`` lancé chez soi comme ``cinoc corpus import zip``. La
+    seule règle : le dépôt web et la CLI la lisent, aucun ne la refait. Les
+    autres garde-fous (décompressé total, entrées, taille par fichier, chemins,
+    signatures) ne dépendent pas du déploiement."""
+    return PUBLIC_MAX_ZIP_BYTES if public_mode else LOCAL_MAX_ZIP_BYTES
+
+
+def _megabytes(n_bytes: int) -> str:
+    return f"{n_bytes // 2**20} Mo" if n_bytes >= 2**20 else f"{n_bytes} octets"
+
+
 def archive_corpus_name(filename: str) -> str:
     """Le nom d'un corpus importé d'une archive : le nom du fichier, sans
     dossier ni ``.zip`` (``pages.zip`` → ``pages``). Une règle pour le dépôt
@@ -91,17 +116,28 @@ def archive_corpus_name(filename: str) -> str:
 
 
 def extract_corpus_zip(
-    data: bytes, dest: Path, *, name: str, max_zip_bytes: int | None = None
+    source: BinaryIO, dest: Path, *, name: str, max_zip_bytes: int | None = None
 ) -> CorpusSpec:
-    """Valide et extrait ``data`` (ZIP) sous ``dest`` → ``CorpusSpec``.
+    """Valide et extrait l'archive ``source`` (ZIP) sous ``dest`` → ``CorpusSpec``.
 
-    ``max_zip_bytes`` : plafond de l'archive compressée ; absent, celui du dépôt
-    web (:data:`MAX_ZIP_BYTES`) ; la CLI passe :data:`LOCAL_MAX_ZIP_BYTES`.
+    ``source`` : un flux binaire **positionnable** — le fichier où le serveur a
+    déjà recopié le dépôt, ou l'archive locale ouverte. Il est lu en place,
+    entrée par entrée : jamais recopié en mémoire d'un bloc (une archive locale
+    peut peser :data:`LOCAL_MAX_ZIP_BYTES`).
+
+    ``max_zip_bytes`` : plafond de l'archive compressée (:func:`upload_zip_limit`) ;
+    absent, le plus serré (mode public) — un appelant qui l'oublie refuse trop,
+    jamais trop peu.
     """
-    if len(data) > (MAX_ZIP_BYTES if max_zip_bytes is None else max_zip_bytes):
-        raise CorpusUploadError("archive trop volumineuse.")
+    cap = upload_zip_limit(public_mode=True) if max_zip_bytes is None else max_zip_bytes
+    size = source.seek(0, os.SEEK_END)
+    source.seek(0)
+    if size > cap:
+        raise ArchiveTooLargeError(
+            f"archive trop volumineuse : {_megabytes(cap)} au plus."
+        )
     try:
-        archive = zipfile.ZipFile(io.BytesIO(data))
+        archive = zipfile.ZipFile(source)
     except zipfile.BadZipFile as exc:
         raise CorpusUploadError("archive ZIP invalide.") from exc
 
@@ -320,14 +356,20 @@ class CorpusStore:
         with self._lock:
             self._corpora[corpus_id] = spec
 
-    def save(self, name: str, data: bytes) -> tuple[str, CorpusSpec]:
+    def save(
+        self, name: str, source: BinaryIO, *, max_zip_bytes: int
+    ) -> tuple[str, CorpusSpec]:
         """Extrait l'archive dans un dossier neuf et enregistre la ``CorpusSpec``.
 
         ``name`` : le nom du fichier déposé — le corpus prend son radical
-        (``archive_corpus_name``), comme ``cinoc corpus import zip``."""
+        (``archive_corpus_name``), comme ``cinoc corpus import zip``.
+        ``max_zip_bytes`` : le plafond du déploiement (:func:`upload_zip_limit`)."""
         corpus_id = uuid.uuid4().hex
         spec = extract_corpus_zip(
-            data, self._base / corpus_id, name=archive_corpus_name(name) or corpus_id
+            source,
+            self._base / corpus_id,
+            name=archive_corpus_name(name) or corpus_id,
+            max_zip_bytes=max_zip_bytes,
         )
         self._register(corpus_id, spec)
         return corpus_id, spec
@@ -377,10 +419,12 @@ __all__ = [
     "CORPUS_FILE",
     "GT_SOURCE_KEY",
     "LOCAL_MAX_ZIP_BYTES",
-    "MAX_ZIP_BYTES",
+    "PUBLIC_MAX_ZIP_BYTES",
+    "ArchiveTooLargeError",
     "CorpusStore",
     "CorpusUploadError",
     "archive_corpus_name",
     "extract_corpus_zip",
     "truths_beside",
+    "upload_zip_limit",
 ]

@@ -140,7 +140,11 @@
       fetchJson("/api/corpus", { method: "POST", headers: headers, body: form })
         .then(function (response) {
           if (!response.ok) {
-            if (statusEl) statusEl.textContent = errorText(response);
+            // Refus pour taille : le message de la page, dans sa langue, qui
+            // nomme le plafond que le serveur applique (D-310).
+            var localized =
+              statusEl && statusEl.getAttribute("data-error-" + response.status);
+            if (statusEl) statusEl.textContent = localized || errorText(response);
             return;
           }
           window.location.reload();

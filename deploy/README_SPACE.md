@@ -44,8 +44,10 @@ Si vous tenez à exposer un Space **public** *tout en* gardant une clé posée s
 qu'un visiteur puisse la dépenser, activez le verrou **fail-closed** : variable
 `CINOC_PUBLIC_MODE` = `true` (Settings → Variables and secrets). Alors seul le
 **socle gratuit** (Tesseract) s'exécute ; les moteurs **cloud**, les **imports
-distants** (IIIF/Gallica/…) et les **plugins tiers** sont **refusés** (`403`). Le
-verrou est **désactivé par défaut** : ne le posez que si ce scénario est le vôtre.
+distants** (IIIF/Gallica/…) et les **plugins tiers** sont **refusés** (`403`), et
+une archive ZIP déposée est plafonnée à 25 Mo (200 Mo sans le verrou, comme en
+local). Le verrou est **désactivé par défaut** : ne le posez que si ce scénario
+est le vôtre.
 
 > Ce fichier est l'en-tête de configuration du Space Hugging Face (`sdk: docker`).
 > Au déploiement, il devient le `README.md` racine du dépôt du Space ; le

@@ -101,7 +101,7 @@ def test_the_web_recipe_reads_a_deposited_cinoc_alto(tmp_path: Path) -> None:
         zf.writestr("page.png", b"\x89PNG\r\n\x1a\n" + b"\x00" * 32)
         zf.writestr("page.ocr_simple_tesseract.alto.xml", alto)
         zf.writestr("page.gt.txt", "texte")
-    corpus = extract_corpus_zip(buf.getvalue(), tmp_path / "c", name="c")
+    corpus = extract_corpus_zip(buf, tmp_path / "c", name="c")
     (document,) = corpus.documents
     assert {t.type for t in document.ground_truths} == {ArtifactType.RAW_TEXT}
     spec = plan_recipe_run(

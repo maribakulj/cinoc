@@ -45,9 +45,9 @@ from cinoc.app.corpus_import import (
     resolve_curated_author,
 )
 from cinoc.app.corpus_upload import (
-    LOCAL_MAX_ZIP_BYTES,
     archive_corpus_name,
     extract_corpus_zip,
+    upload_zip_limit,
 )
 from cinoc.app.dataset_standardize import StandardizeConfig, standardize_corpus
 from cinoc.app.loader import dump_corpus_spec
@@ -98,15 +98,21 @@ def _builder(args: argparse.Namespace) -> Callable[[Path], CorpusSpec]:
                 args.repo_id, dest, revision=args.revision, name=args.name
             )
         case "zip":
-            archive = Path(args.archive).read_bytes()
-            return lambda dest: extract_corpus_zip(
-                archive,
-                dest,
-                name=args.name or archive_corpus_name(args.archive),
-                max_zip_bytes=LOCAL_MAX_ZIP_BYTES,
-            )
+            return lambda dest: _extract_local_zip(Path(args.archive), dest, args.name)
         case _:  # pragma: no cover — argparse borne déjà les choix
             raise CinocError(f"source de corpus inconnue : {args.source!r}.")
+
+
+def _extract_local_zip(archive: Path, dest: Path, name: str | None) -> CorpusSpec:
+    """Une archive sur son disque : lue en place, au plafond d'une archive
+    locale (la règle du dépôt web hors mode public, ``upload_zip_limit``)."""
+    with archive.open("rb") as source:
+        return extract_corpus_zip(
+            source,
+            dest,
+            name=name or archive_corpus_name(str(archive)),
+            max_zip_bytes=upload_zip_limit(public_mode=False),
+        )
 
 
 def _dossier_neuf(dest: Path) -> None:

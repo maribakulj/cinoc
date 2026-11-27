@@ -30,7 +30,7 @@ def _client(tmp_path: Path) -> TestClient:
 
 def test_store_delete_removes_registry_and_folder(tmp_path: Path) -> None:
     store = CorpusStore(tmp_path)
-    corpus_id, _ = store.save("c", _zip_bytes())
+    corpus_id, _ = store.save("c", io.BytesIO(_zip_bytes()), max_zip_bytes=2**20)
     assert store.get(corpus_id) is not None
     assert (tmp_path / corpus_id).is_dir()
     assert store.delete(corpus_id) is True

@@ -261,7 +261,9 @@ _STRINGS: dict[str, dict[str, str]] = {
         "un Space, vos datasets tagués cinoc-corpus apparaissent ici sans réglage ; "
         "en local, posez un jeton HF ou CINOC_HF_AUTHOR. Sinon, importez par "
         "identifiant ci-dessous.",
-        "library_zip_meta": "ZIP · max 500 MB · paires auto-détectées",
+        # {max_mb} : le plafond que le serveur applique (mode public ou non).
+        "library_zip_meta": "ZIP · {max_mb} Mo au plus · paires auto-détectées",
+        "library_zip_too_large": "Archive trop volumineuse : {max_mb} Mo au plus.",
         "library_ready": "prêt pour benchmark",
         "library_add_desc": "Téléversez un ZIP (glisser-déposer) ou importez "
         "depuis une source distante.",
@@ -515,7 +517,8 @@ _STRINGS: dict[str, dict[str, str]] = {
         "library_curated_empty": "No curated dataset detected automatically. On a "
         "Space, your cinoc-corpus-tagged datasets appear here with no setup; locally, "
         "set an HF token or CINOC_HF_AUTHOR. Otherwise, import by id below.",
-        "library_zip_meta": "ZIP · max 500 MB · pairs auto-detected",
+        "library_zip_meta": "ZIP · up to {max_mb} MB · pairs auto-detected",
+        "library_zip_too_large": "Archive too large: {max_mb} MB at most.",
         "library_ready": "ready for benchmark",
         "library_add_desc": "Upload a ZIP (drag-and-drop) or import from a "
         "remote source.",

@@ -60,7 +60,7 @@ def test_the_zip_upload_accepts_the_table(tmp_path: Path, suffix: str) -> None:
     with zipfile.ZipFile(buffer, "w") as archive:
         archive.writestr(f"p1{suffix}", _image(suffix))
         archive.writestr("p1.gt.txt", "texte")
-    corpus = extract_corpus_zip(buffer.getvalue(), tmp_path / "c", name="c")
+    corpus = extract_corpus_zip(buffer, tmp_path / "c", name="c")
     (document,) = corpus.documents
     assert (document.id, Path(document.image_uri or "").suffix) == ("p1", suffix)
 
@@ -71,7 +71,7 @@ def test_the_zip_upload_still_checks_the_signature(tmp_path: Path) -> None:
         archive.writestr("p1.webp", b"RIFF\x00\x00\x00\x00WAVEfmt ")
         archive.writestr("p1.gt.txt", "texte")
     with pytest.raises(CorpusUploadError, match="image non reconnue"):
-        extract_corpus_zip(buffer.getvalue(), tmp_path / "c", name="c")
+        extract_corpus_zip(buffer, tmp_path / "c", name="c")
 
 
 def test_a_remote_webp_keeps_its_suffix() -> None:

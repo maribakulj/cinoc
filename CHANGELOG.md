@@ -118,6 +118,10 @@ suivantes ne les répètent pas.
   retirés).
 - Les trois clients de la post-correction structurée quittent
   `cinoc.adapters.llm` pour `cinoc.adapters.correction`.
+- `cinoc.app.corpus_upload` : `MAX_ZIP_BYTES` s'appelle `PUBLIC_MAX_ZIP_BYTES`,
+  le plafond d'un déploiement se lit par `upload_zip_limit(public_mode=…)` ;
+  `extract_corpus_zip` lit un flux binaire positionnable (un fichier ouvert) et
+  non plus des octets, et `CorpusStore.save` exige `max_zip_bytes`.
 
 ### Ajouté
 
@@ -202,8 +206,9 @@ suivantes ne les répètent pas.
   de 2 runs côté client, glossaire, **bilingue FR/EN** (`--lang en` sur
   `cinoc demo`, `cinoc run` et `cinoc compare`, la console restant en
   français ; nombres localisés à l'affichage, couches machine en point).
-- **Saveurs** : fichier unique (images inline), dossier/ZIP (images séparées),
-  références IIIF/HF (images chargées depuis HuggingFace).
+- **Saveurs** : fichier unique (images inline), dossier/ZIP (images séparées) ;
+  le rapport prend tels quels des liens IIIF/HF (images chargées depuis
+  HuggingFace), qu'aucune commande n'écrit encore.
 - **Composition des chaînes** : les étapes réellement exécutées, la forme du
   graphe, le fan-out et les réglages effectifs de chaque brique, lus du
   manifeste. Deux chaînes de même nom disent ce qui les distingue à côté du nom
@@ -278,6 +283,12 @@ suivantes ne les répètent pas.
   d'une seconde au lieu de deux minutes.
 - `RunResult` est déterministe et ne cite aucun chemin local : images relatives
   au dossier de la spec, aucun chemin de la machine dans l'ALTO de Tesseract.
+- **Le dépôt ZIP de la page accepte un gros corpus hors mode public** : 200 Mo,
+  le plafond de `cinoc corpus import zip`, au lieu de 25 ; le mode public
+  (`CINOC_PUBLIC_MODE=true`) garde 25 Mo — un Space qui ne le pose pas prend
+  donc 200 Mo. La page dit le plafond qu'elle applique (elle annonçait 500 Mo),
+  un refus le redit dans sa langue, et l'archive déposée n'est plus recopiée
+  en mémoire.
 - `cinoc correct` lit la vérité comme le dépôt ZIP : `<nom>.gt.txt` (ou
   `<nom>.txt`) pour le texte, `<nom>.gt.xml` pour la mise en page, et dit avant
   le run ce que mesureront les chiffres ; `--pipeline <p>` relit l'ALTO d'un
