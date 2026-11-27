@@ -1,0 +1,6 @@
+D^M_A = ['d1', 'd2']  D^M_B = ['d1']  D^M_AB = ['d1']
+macro conditionnel : {'A': 0.5, 'B': 1.0}
+Δ macro apparié (A-B) = 0.0  -> A et B ex aequo sur le support apparié
+micro : {'A': 0.6666666666666666, 'B': 1.0}
+B domine A sur chaque document, mais A6 interdit tout ordre hors D^M_AB : le Δ macro apparié est aveugle à l'hallucination.
+MER d2 : A = 1.0  B = None

@@ -1,0 +1,10 @@
+   lxml/_elementpath.cpython-313-x86_64-linux-gnu.so
+   lxml/etree.cpython-313-x86_64-linux-gnu.so
+   numpy/_core/_multiarray_umath.cpython-313-x86_64-linux-gnu.so
+   numpy/fft/_pocketfft_umath.cpython-313-x86_64-linux-gnu.so
+   numpy/linalg/_umath_linalg.cpython-313-x86_64-linux-gnu.so
+   numpy/random/_bounded_integers.cpython-313-x86_64-linux-gnu.so
+   numpy/random/_common.cpython-313-x86_64-linux-gnu.so
+   numpy/random/_generator.cpython-313-x86_64-linux-gnu.so
+   ... 103 extensions C chargées ; étiquette : cpython-313, linux
+=> séparer l'identité de la DÉFINITION (sources de cinoc/evaluation et formats, profils, Unicode, VT) de l'identité d'ENVIRONNEMENT (extensions, versions), publiée à part.

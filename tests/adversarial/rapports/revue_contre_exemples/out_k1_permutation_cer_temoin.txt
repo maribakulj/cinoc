@@ -1,0 +1,3 @@
+CER, n =  10 : taux de rejet 0.020 (nominal 0,05)
+CER, n =  30 : taux de rejet 0.044 (nominal 0,05)
+CER, n = 100 : taux de rejet 0.044 (nominal 0,05)

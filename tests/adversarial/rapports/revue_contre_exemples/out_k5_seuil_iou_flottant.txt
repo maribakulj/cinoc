@@ -1,0 +1,3 @@
+page de largeur 3 px, r = [0,0,1,7], h = [0,0,2,7] : IoU exact 1/2, flottant 0.49999999999999994 (< 0,5)
+page de largeur 7 px, r = [0,0,3,7], h = [0,0,6,7] : IoU exact 1/2, flottant 0.5000000000000001 (> 0,5)
+=> admissibilité à décider en entiers : 2·|r∩h| > |r∪h| sur les pixels (ou Fraction).

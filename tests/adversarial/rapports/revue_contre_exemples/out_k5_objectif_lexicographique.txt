@@ -1,0 +1,11 @@
+1) Ex æquo géométrique départagé par l'ordre ALPHABÉTIQUE du texte hypothèse
+   paire retenue : [('Zurich', 'Aaaaaa')]  region_cer = 2.0
+   paire alternative de même objectif : [('Zurich', 'Zurich')]  region_cer = 1.0
+   en remplaçant le texte fautif par « Zzzzzz » (trié APRÈS « Zurich ») : [('Zurich', 'Zurich')]
+2) VT emboîtée : plusieurs hypothèses à IoU > 0,5 avec une même région (Kirillov ne s'applique pas)
+    r1 {'h1': 0.95, 'h2': 0.6}
+    r2 {'h1': 0.632, 'h2': 0.2}
+   bijection lexicographique : [('AAAA', 'AAAA BBBB'), ('AAAA BBBB', 'BBBB')]
+   oracle exhaustif : (2, 1.2315789473684209) [('AAAA', 'AAAA BBBB'), ('AAAA BBBB', 'BBBB')]
+   region_cer = 0.769 alors que h1 ≡ r1 au texte près ; tp = 2 (F1 = 1)
+   IoGT(r1,h1) = 0.95  IoGT(r2,h1) = 1.0 => h1 publié comme FUSION de r1 et r2, alors que r2 ⊂ r1 dans la VT

@@ -1,0 +1,4 @@
+IoU des paires par id : {'r1': 0.0, 'r2': 0.0}
+tp sous filiation (ids = appariement) : 2 → region_detection F1 = 1.0
+tp si l'admissibilité restait exigée : 0
+=> exiger l'admissibilité géométrique AUSSI sous filiation (les ids ne servent qu'à départager), et déclarer `region_detection` non applicable quand les régions sont héritées de la VT.

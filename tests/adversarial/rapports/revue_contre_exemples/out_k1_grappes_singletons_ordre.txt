@@ -1,0 +1,3 @@
+ordre des documents : ['d01', 'd02', 'd03'] ... IC = ConfidenceInterval(low=np.float64(0.03010726589414344), high=np.float64(0.06913637937002423))
+ordre des grappes   : ['d01', 'd10', 'd02'] ... IC = ConfidenceInterval(low=np.float64(0.029), high=np.float64(0.07008591065292097))
+=> trier les grappes par le plus petit id de document qu'elles contiennent (singletons = documents).

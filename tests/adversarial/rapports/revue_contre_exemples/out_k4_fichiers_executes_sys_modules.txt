@@ -1,0 +1,5 @@
+étape A, executed_files : {'shared_norm.py': '1582bce6', 'step_a.py': 'a8ba096c'}
+étape B, document 1    : {'step_b.py': 'b178b242', 'lazy_helper.py': '0abae1e0'}   <- shared_norm absent (déjà chargé par A)
+étape B, document 2    : {}   <- vide : tout est déjà chargé
+B réutilisable après modification de shared_norm ? True
+=> enregistrer l'ensemble des modules chargés (hors stdlib) au moment de l'exécution, par étape et une fois pour le run, pas une différence de sys.modules ; et séparer clé de recherche (déclarée) et prédicat de réutilisation (fichiers).

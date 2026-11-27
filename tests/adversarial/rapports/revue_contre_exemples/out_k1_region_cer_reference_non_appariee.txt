@@ -1,0 +1,3 @@
+P (moitié manquante)   formule CONTRATS (dén. total) = 0.000 | (dén. apparié) = 0.000 | code actuel = 0.500
+Q (tout, 1 faute)      formule CONTRATS (dén. total) = 0.050 | (dén. apparié) = 0.050 | code actuel = 0.050
+=> sous la formule révisée, perdre une région entière note mieux qu'une faute de frappe.

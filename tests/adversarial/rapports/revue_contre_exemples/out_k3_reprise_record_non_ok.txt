@@ -1,0 +1,2 @@
+clé run 1 = clé run 2 : True -> {'outcome': 'partial', 'reason': 'lignes en repli (délai 5 s)'}
+=> préciser : seul un record `ok` est réutilisable ; ou les réglages opérationnels qui ont produit un `partial`/`truncated` entrent dans la clé de ce record.

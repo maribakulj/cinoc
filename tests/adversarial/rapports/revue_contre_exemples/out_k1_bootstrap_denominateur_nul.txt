@@ -1,0 +1,5 @@
+Δ micro observé = 0.6
+P(rééchantillon sans page non vide) = (2/3)^3 = 0.2962962962962962
+percentile IC = ConfidenceInterval(low=np.float64(-0.1), high=np.float64(inf)) | avertissements : ['RuntimeWarning']
+BCa        IC = ConfidenceInterval(low=np.float64(nan), high=np.float64(nan)) | avertissements : ['DegenerateDataWarning', 'RuntimeWarning']
+T1 : P(au moins un réplicat dégénéré sur 9999) = 0.9129663236991136

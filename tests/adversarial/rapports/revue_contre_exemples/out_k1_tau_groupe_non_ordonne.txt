@@ -1,0 +1,4 @@
+groupe parsé : ordered = False
+CanonicalLayout.reading_order = ('m1', 'm2') (l'information « non ordonné » a disparu)
+distance de Kendall pour l'hypothèse (m2, m1) : 1.0
+=> attendu : aucune paire ordonnée par la référence (τ non défini, 'no_pairs').

@@ -1,0 +1,22 @@
+|D^M_AB| = 8  différences nulles : 3
+  zero_method=wilcox method=auto   p = 0.3125
+  zero_method=wilcox method=exact  p = 0.3125
+  zero_method=wilcox method=approx p = 0.2164
+  zero_method=pratt  method=auto   p = 0.3125
+  zero_method=pratt  method=exact  p = 0.1094
+  zero_method=pratt  method=approx p = 0.1893
+  zero_method=zsplit method=auto   p = 0.3125
+  zero_method=zsplit method=exact  p = 0.2500
+  zero_method=zsplit method=approx p = 0.2031
+(2) pipelines identiques
+  wilcoxon(a, a) : 1.0
+  friedman(a, a, a) : nan
+(3) friedman à 2 pipelines
+   ValueError At least 3 samples must be given for Friedman test, got 2.
+(4) ex aequo mathématiques cassés par l'arrondi flottant
+  |Δ| flottants : ['np.float64(0.1)', 'np.float64(0.1)', 'np.float64(0.1)', 'np.float64(0.10000000000000003)', 'np.float64(0.09999999999999999)']
+  |Δ| exacts    : ['1/10', '1/10', '1/10', '1/10', '1/10']
+  rangs flottants : [3. 3. 3. 5. 1.]  rangs exacts : [3. 3. 3. 3. 3.]
+  Δ flottants : ['np.float64(0.1)', 'np.float64(0.09999999999999998)', 'np.float64(-0.1)', 'np.float64(0.10000000000000003)', 'np.float64(-0.09999999999999999)']
+  Δ exacts    : ['np.float64(0.1)', 'np.float64(0.1)', 'np.float64(-0.1)', 'np.float64(0.1)', 'np.float64(-0.1)']
+  Wilcoxon (approx) sur Δ flottants p = 0.587937 ; sur Δ exacts p = 0.654721

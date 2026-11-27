@@ -1,0 +1,4 @@
+A vs B sur ['d2', 'd4'] : 0.040 vs 0.025 -> B meilleur
+B vs C sur ['d3', 'd4'] : 0.045 vs 0.020 -> C meilleur
+C vs A sur ['d1', 'd4'] : 0.035 vs 0.020 -> A meilleur
+support global ['d4'] : {'A': 0.03, 'B': 0.03, 'C': 0.03} -> aucun ordre

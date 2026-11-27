@@ -1,0 +1,12 @@
+triplets (S,D,I) optimaux pour ('ab', 'ba') : [(0, 1, 1), (2, 0, 0)]
+  S=0 D=1 I=1  CER=1.000  ins_rate=0.500  del_rate=0.500  MER=0.667
+  S=2 D=0 I=0  CER=1.000  ins_rate=0.000  del_rate=0.000  MER=1.000
+rapidfuzz choisit : [('insert', 0, 0, 0, 1), ('equal', 0, 1, 1, 2), ('delete', 1, 2, 2, 2)]
+jiwer 
+jiwer.mer('a b', 'b a') = 0.6666666666666666
+jiwer.cer(['', 'abc'], ['xyz', 'abc']) = 1.0
+jiwer.cer([''], ['xyz']) = 3
+jiwer corpus vide [''] [''] cer = 0 wer = 0
+jiwer corpus vide [''] ['xyz'] cer = 3 wer = 1
+jiwer corpus vide ['', ''] ['a b', ''] cer = 3 wer = 2
+=> jiwer donne un nombre là où M1 exige « indéfini » : l'oracle et l'invariant se contredisent sur le corpus entièrement vide (il faut exclure ce cas de l'égalité à jiwer).

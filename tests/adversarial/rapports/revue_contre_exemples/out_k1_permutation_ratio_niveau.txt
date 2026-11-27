@@ -1,0 +1,5 @@
+R_A = 0.5  R_B ≈ 0.5015
+n =  10 docs : taux de rejet sous R_A = R_B : 0.168 (nominal 0,05)
+n =  30 docs : taux de rejet sous R_A = R_B : 0.298 (nominal 0,05)
+n = 100 docs : taux de rejet sous R_A = R_B : 0.310 (nominal 0,05)
+=> la permutation appariée n'est pas un test de niveau α pour « Δ micro F1 = 0 » ; elle teste l'échangeabilité. À déclarer (H0 forte) ou remplacer (bootstrap studentisé / permutation studentisée).

@@ -1,0 +1,14 @@
+tagmanifest liste : ['bag-info.txt', 'bagit.txt', 'manifest-sha256.txt', 'run_result.json', 'spec.json']
+b938375adcb17bad3530e9dada1d7f18f5d9e4f3b81459c842b27ff55e623db5 manifest-sha256.txt
+542b3ea129d56aa4efd0b1be727d624fd150a3f180c6cadcfe8d6e291f40575c run_result.json
+1381eccec3f8d7350855ae10fe5c6e8f363bba54fc77b060a90665b32c1fc28c bag-info.txt
+54d8e77ef321003c3faa0c6cdf1e808674e396b3e1a14200a60707b08743256d spec.json
+e91f941be5973ff71f1dccbdd1a32d598881893a7f21be516aca743da38b1689 bagit.txt
+
+run_result.json sha256 validation failed: expected="542b3ea129d56aa4efd0b1be727d624fd150a3f180c6cadcfe8d6e291f40575c" found="4115a3ec182303d0f0a25e4d14cb2ba28b386269b6fc429acb2e55d7bd94189b"
+tag listé altéré : refusé (tient)
+validate() après AJOUT de observations.json et overrides/spec.json hors manifeste : OK (aucune erreur)
+empreinte racine inchangée : True
+témoin data/ altéré : refusé — Payload-Oxum validation failed. Expected 1 files and 10 bytes but found 1 files and 18 byt
+lien dur : S_ISLNK = False  st_nlink = 2
+uid = 0 ; écriture en place sur un blob 0444 réussie : b'Xortie OCR a'

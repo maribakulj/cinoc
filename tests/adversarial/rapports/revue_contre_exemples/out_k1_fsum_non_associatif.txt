@@ -1,0 +1,6 @@
+poolé       : 0.6
+par document: 0.6000000000000001
+(a+b)+c = 0.6000000000000001  a+(b+c) = 0.6
+ECE poolé 0.19999999999999998 ECE par histogrammes 0.20000000000000004
+exact (Fraction) : 0.2
+=> la statistique réelle n'est pas un monoïde : garder des entiers (confiances quantifiées) ou les partiels de Shewchuk, ou fsum sur la liste plate des jetons à la finalisation.

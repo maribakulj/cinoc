@@ -1,0 +1,7 @@
+nervaluate ent_type : correct=1 partial=0 f1=1.000
+nervaluate partial  : correct=0 partial=1 f1=0.500
+nervaluate strict   : correct=0 partial=0 f1=0.000
+nervaluate exact    : correct=0 partial=0 f1=0.000
+ner_f1 (IoU ≥ 0,5) : IoU = 0.333 -> tp=0, fp=1, fn=1, F1 = 0
+=> oracle à reconstruire (énumération sur l'IoU d'empan), nervaluate seulement pour strict ⇔ bornes exactes, ce que ner_f1_exact n'est pas non plus.
+Cinoc compute_ner : (0, 1, 1)

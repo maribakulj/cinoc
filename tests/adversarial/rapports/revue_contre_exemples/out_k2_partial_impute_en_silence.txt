@@ -1,0 +1,3 @@
+P (1 échec de région, partial) CER micro = 0.2619
+Q (2 échecs de région, failed) CER micro = 0.0
+=> Q échoue davantage et note mieux : `partial` impute « page vide » à la région en échec, contrairement à A7. Il faut un axe/motif pour la part manquante, ou la même règle pour `partial` et `failed`.
