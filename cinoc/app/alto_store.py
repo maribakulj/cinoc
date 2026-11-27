@@ -18,6 +18,7 @@ import threading
 import zipfile
 from pathlib import Path
 
+from cinoc.adapters.layout.alto_source import alto_file_name
 from cinoc.app.security import PathSecurityError, safe_stem, validated_path
 
 
@@ -31,12 +32,24 @@ class AltoStore:
     def save(
         self, run_id: str, document_id: str, pipeline_name: str, xml: bytes
     ) -> None:
-        """Persiste un ALTO XML pour ``(run_id, pipeline_name, document_id)``."""
+        """Persiste un ALTO XML pour ``(run_id, pipeline_name, document_id)``.
+
+        Nommé comme le fait la CLI (``alto_file_name``) : une archive web
+        décompressée à côté des images se relit par ``cinoc correct --pipeline``
+        ou ``alto_source``, comme un ``--alto-dir`` (D-307). Deux pipelines qui
+        se réduiraient au même nom : le second est refusé (``FileExistsError``),
+        jamais écrit par-dessus le premier.
+        """
         with self._lock:
             folder = self._base / safe_stem(run_id)
             folder.mkdir(parents=True, exist_ok=True)
-            stem = safe_stem(f"{pipeline_name}::{document_id}")
-            (folder / f"{stem}.alto.xml").write_bytes(xml)
+            target = folder / alto_file_name(document_id, pipeline_name)
+            if target.exists():
+                raise FileExistsError(
+                    f"ALTO {target.name!r} déjà écrit pour ce run : "
+                    f"{pipeline_name!r} se réduit au nom d'un autre pipeline."
+                )
+            target.write_bytes(xml)
 
     def has(self, run_id: str) -> bool:
         """``True`` si au moins un ALTO est persisté pour ce run."""

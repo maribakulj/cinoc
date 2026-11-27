@@ -13,6 +13,7 @@ import sys
 from collections import Counter
 from collections.abc import Sequence
 
+from cinoc.app.orchestrator import UnitProgress
 from cinoc.evaluation.result import RunResult
 from cinoc.reports.sections.overview import REASON_LABELS
 
@@ -48,4 +49,31 @@ def unit_summary(results: Sequence[RunResult]) -> int:
     return EXIT_UNITS_FAILED
 
 
-__all__ = ["EXIT_UNITS_FAILED", "unit_summary"]
+#: Issue d'une unité terminée, telle que la ligne de progression la dit.
+_ISSUES = {
+    "ok": "fait",
+    "truncated": "tronquée",
+    "failed": "échec",
+    "resumed": "relue de l'archive",
+}
+
+
+def print_progress(unit: UnitProgress) -> None:
+    """Une ligne par unité terminée, **sur la sortie d'erreur** (D-307).
+
+    Le rappel est celui dont la vitrine tire sa barre (SSE) : un run de sept
+    minutes ne reste plus muet en ligne de commande. La sortie standard reste
+    celle qu'un script lit ; le bilan d'un échec, lui, détaille les motifs.
+    """
+    issue = _ISSUES.get(unit.outcome, unit.outcome)
+    ligne = f"[{unit.done}/{unit.total}] {unit.pipeline} · {unit.document_id} — {issue}"
+    try:
+        ligne.encode(sys.stderr.encoding or "utf-8")
+    except (UnicodeEncodeError, LookupError):
+        # Console cp1252 (Windows) : le « → » d'un nom de recette s'y écrirait
+        # « \u2192 » ; la flèche ASCII se lit.
+        ligne = ligne.replace("→", "->")
+    print(ligne, file=sys.stderr, flush=True)
+
+
+__all__ = ["EXIT_UNITS_FAILED", "print_progress", "unit_summary"]

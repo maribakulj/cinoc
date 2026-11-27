@@ -117,7 +117,7 @@ def test_progress_ticks_once_per_unit(tmp_path: Path) -> None:
         registry=_registry(),
         code_version="1.0",
         max_workers=4,
-        on_progress=lambda done, total: calls.append((done, total)),
+        on_progress=lambda unit: calls.append((unit.done, unit.total)),
     )
     total = 2 * 5
     assert len(calls) == total

@@ -8,9 +8,10 @@ les deux bouts que le transport câble autour de la recette hybride
 - ``corpus_from_images`` : un dossier d'images → ``CorpusSpec`` (1 image = 1
   document, id dérivé du nom de fichier, **aucune GT**) ;
 - ``write_alto_files`` : copie chaque ``ALTO_XML`` produit vers
-  ``<out>/<doc>.alto.xml``. Branché en **sink d'orchestrateur** par l'appelant
-  (CLI / web) → écrit **avant** le nettoyage du workspace (URIs encore lisibles,
-  même mécanisme que le sink de segmentation).
+  ``<out>/<doc>.<pipeline>.alto.xml`` (``alto_file_name``). Branché en
+  **sink d'orchestrateur** par l'appelant (CLI / web) → écrit **avant** le
+  nettoyage du workspace (URIs encore lisibles, même mécanisme que le sink de
+  segmentation).
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ import re
 import shutil
 from pathlib import Path
 
+from cinoc.adapters.layout.alto_source import alto_file_name
 from cinoc.app.orchestrator import PipelineOutputs
 from cinoc.domain.artifacts import ArtifactType, latest_by_type
 from cinoc.domain.corpus import CorpusSpec
@@ -89,40 +91,38 @@ def corpus_from_images(
 def write_alto_files(out_dir: Path, outputs: PipelineOutputs) -> list[Path]:
     """Écrit un ALTO par **(pipeline, document)**. Retourne les chemins.
 
-    Nom de sortie ``<doc>.<pipeline>.alto.xml`` (``/`` → ``_`` ; les ``id`` de
-    document sont déjà sans ``..`` ni absolu, garanti par ``DocumentRef``, et le
-    nom de pipeline est assaini de la même façon).
+    Nom de sortie : :func:`alto_file_name` — ``<doc>.<pipeline>.alto.xml``,
+    celui de l'export web et celui que relit ``alto_source`` (réglage
+    ``pipeline``), donc ``cinoc correct --pipeline`` (D-307). L'identifiant de
+    document y garde ses points (``page.v2``) ; il les perdait (``page_v2``),
+    et le fichier ne se rapportait plus à son image.
 
     **Le nom portait le seul document.** Comparer deux chaînes qui produisent
     toutes deux de l'ALTO — exactement ce qu'un banc fait — les faisait donc
     écrire dans le même fichier : le dernier écrasait l'autre, sans un mot, et
     le compte annoncé (« 2 ALTO écrits ») restait juste alors qu'un seul
-    survivait. Découvert en exécutant les deux chaînes NDNP côte à côte.
+    survivait. Découvert en exécutant les deux chaînes NDNP côte à côte. Deux
+    pipelines dont les noms se réduisent au même fichier sont **refusés**.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
-    written: list[Path] = []
+    written: dict[Path, str] = {}
     for pipeline_name, by_document in outputs.items():
-        pipeline = _safe(pipeline_name)
         for document_id, by_step in by_document.items():
             artifact = latest_by_type(by_step).get(ArtifactType.ALTO_XML)
             if artifact is None or artifact.uri is None:
                 continue
-            target = out_dir / f"{_safe(document_id)}.{pipeline}.alto.xml"
+            target = out_dir / alto_file_name(document_id, pipeline_name)
+            if target in written:
+                raise TranscriptionError(
+                    f"deux pipelines écriraient le même ALTO {target.name!r} : "
+                    f"{written[target]!r} et {pipeline_name!r} — renommez l'un."
+                )
             shutil.copyfile(artifact.uri, target)
-            written.append(target)
+            written[target] = pipeline_name
             logger.info(
                 "[transcription] %s · %s → %s", pipeline_name, document_id, target
             )
     return sorted(written)
-
-
-def _safe(name: str) -> str:
-    """Composant de nom de fichier sûr : ``/`` et ``.`` ne doivent pas creuser
-    d'arborescence ni couper l'extension attendue, et un nom de pipeline
-    (``segmentation_puis_lecture · tesseract_layout → tesseract + alto``,
-    D-298) n'a rien à faire d'espaces ni de flèches dans un nom de fichier :
-    chaque suite de caractères hors ``[A-Za-z0-9_-]`` devient un ``_``."""
-    return re.sub(r"[^A-Za-z0-9_-]+", "_", name).strip("_")
 
 
 def write_layout_files(out_dir: Path, outputs: PipelineOutputs) -> list[Path]:

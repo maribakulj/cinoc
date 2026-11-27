@@ -23,7 +23,7 @@ from typing import Annotated
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
-from cinoc.app.alto_corpus import ground_truth_is_its_own_source
+from cinoc.app.alto_corpus import refuse_self_reference
 from cinoc.app.evaluation_views import EvaluationOptions, plan_evaluation
 from cinoc.app.modules.params import secret_names
 from cinoc.app.modules.registry import socle_params
@@ -106,7 +106,6 @@ def plan_recipe_run(
             params=entree.params,
             optional=entree.optional,
         )
-        _source_sans_reference(pipeline, reglages, corpus)
         pipeline = _sans_collision(pipeline, reglages, kwargs, rang)
         vus[pipeline.name] = vus.get(pipeline.name, 0) + 1
         if vus[pipeline.name] > 1:
@@ -118,7 +117,7 @@ def plan_recipe_run(
         notation = plan_evaluation(pipelines, corpus, options)
     except CinocError as exc:
         raise RecipeError(str(exc)) from exc
-    return RunSpec(
+    spec = RunSpec(
         corpus=corpus,
         pipelines=tuple(pipelines),
         evaluation=notation.evaluation,
@@ -126,31 +125,11 @@ def plan_recipe_run(
         run_id=run_id,
         metadata=notation.metadata,
     )
-
-
-def _source_sans_reference(
-    pipeline: PipelineSpec, reglages: Settings, corpus: CorpusSpec
-) -> None:
-    """Refuse de corriger l'ALTO **dont la vérité terrain est extraite**.
-
-    Un corpus déposé en images + ALTO, sans transcription à part, voit sa vérité
-    terrain dérivée de cet ALTO : le correcteur partirait du texte auquel on le
-    compare, et le CER vaudrait zéro par construction — un verdict inversé qui
-    ressemble à un excellent résultat. Seule issue : lire l'OCR d'ailleurs
-    (``ocr_sidecar``). La règle vit ici, pour toute entrée — la page, la CLI.
-    """
-    for etape in pipeline.steps:
-        if etape.adapter_name.split(":", 1)[0] != "alto_source":
-            continue
-        if not reglages[etape.adapter_name].get("ocr_sidecar") and (
-            ground_truth_is_its_own_source(corpus)
-        ):
-            raise RecipeError(
-                "la vérité terrain de ce corpus est extraite de son propre "
-                "ALTO : le correcteur partirait du texte auquel on le compare, "
-                "et le CER vaudrait zéro par construction. Dépose une "
-                "transcription à part (<nom>.gt.txt) à côté de chaque ALTO."
-            )
+    try:
+        refuse_self_reference(spec)
+    except CinocError as exc:
+        raise RecipeError(str(exc)) from exc
+    return spec
 
 
 def _secrets_de(recette: Recipe, entree: RecipeEntry, etape: str) -> frozenset[str]:

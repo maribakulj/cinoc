@@ -40,7 +40,9 @@ avant d'écrire la moindre ligne.**
   README court, parcours testés sur la roue installée) sont livrées (A4, A5 et
   `v1.0.0rc1` attendent le mainteneur), la suivante est S31 (exécution Mistral
   — clé et accord du mainteneur sur l'estimation) ; S32, S34 et S35 attendent
-  aussi le mainteneur (publication, testeurs sur `rc1`, tag). Les arbitrages
+  aussi le mainteneur (publication, testeurs sur `rc1`, tag) — de S34, la
+  partie S34a (frictions d'un testeur extérieur simulé, D-307) est livrée,
+  S34b (les autres frictions) suit, sans attendre le mainteneur. Les arbitrages
   A1, A2, A3, A6, A9 sont rendus (D-271). Née d'un audit sur le produit et non sur la CI : un
   `pip install cinoc` sans extra ne démarrait pas, et plusieurs chiffres
   affichés ne mesuraient pas ce qu'annonçait leur nom. Cette route **remplace**

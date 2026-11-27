@@ -321,6 +321,7 @@ cinoc/reports/
 
 - [~] **Supprimé** : `narrative/` (D2) · `generator` legacy + `html/data/` + i18n/glossary d'office + Chart.js + SPA. **Différé** : 1 section/métrique à sa tranche (jamais en avance). **Interactivité what-if** = question ouverte (sélection, jamais re-mesure ; cf. §2.7).
 - [x] **S28b (D-301)** : le CSS du rapport vit dans `reports/_assets/report.css` (une ligne par fragment, commentée ; lignes concaténées et commentaires retirés au chargement) — `html.py` 702 → 147 lignes, exemption de budget libérée, rapport **identique à l'octet** (démo comparée avant/après), toujours inliné (autonome ; `style-src 'unsafe-inline'`, aucune empreinte) ; `cinoc compare` FR/EN (`--lang`), décimales localisées, chaque côté nommé par son run, le **nom** de son fichier et son heure (D22).
+- [x] **S34a (D-307)** : une vue sans aucun chiffre dit pourquoi (pas de vérité terrain, ou toutes ses unités en échec), FR/EN, au lieu d'un tableau d'en-têtes vide (`overview._unscored_note`). — *preuve : `test_no_ground_truth_says_why_the_table_is_empty`, `test_an_ocr_alto_no_longer_scores_against_itself`*
 
 ### i18n FR/EN du rapport (D-136) — **R7 honorée : inline, sur demande réelle**
 

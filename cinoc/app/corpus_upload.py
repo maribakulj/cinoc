@@ -21,17 +21,19 @@ radical) matérialisée sous ``dest`` — prête pour un run.
 from __future__ import annotations
 
 import io
+import logging
 import re
 import shutil
 import threading
 import uuid
 import zipfile
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
 
 from pydantic import ValidationError
 
 from cinoc.app.corpus_import import materialize_corpus
+from cinoc.app.loader import dump_corpus_spec, load_corpus_spec
 from cinoc.app.security import validated_path
 from cinoc.domain.artifacts import ArtifactType
 from cinoc.domain.corpus import CorpusSpec
@@ -45,6 +47,14 @@ from cinoc.formats.layout_xml import layout_xml_kind, parse_layout_xml
 #: Quotas (généreux mais bornés) — un Space gratuit n'est pas un entrepôt.
 MAX_ZIP_BYTES = 25 * 1024 * 1024
 MAX_TOTAL_UNCOMPRESSED = 200 * 1024 * 1024
+logger = logging.getLogger(__name__)
+
+#: Description d'un corpus déposé, écrite dans son dossier : c'est elle que le
+#: registre relit au démarrage (D-307). Le format est celui de ``cinoc corpus
+#: import`` — chemins relatifs au fichier, donc un dossier de données déplacé
+#: reste lisible.
+CORPUS_FILE = "corpus.yaml"
+
 #: Une archive **locale** (``cinoc corpus import zip``) n'est pas un dépôt sur
 #: un serveur partagé : seul le plafond décompressé (anti-bombe) la borne. Le
 #: quota du dépôt web refusait `37-GT-BNL` (29 Mo zippé) à la CLI.
@@ -180,48 +190,63 @@ def _pair_documents(written: dict[str, Path]) -> tuple[DocumentRef, ...]:
     return tuple(documents)
 
 
+def truths_beside(
+    stem: str, files: Mapping[str, Path]
+) -> tuple[tuple[GroundTruthRef, ...], str]:
+    """Vérités-terrain **déposées** à côté d'une image, et la provenance du texte.
+
+    Une seule règle pour un ZIP déposé (web, ``cinoc corpus import zip``) et un
+    dossier d'ALTO à corriger (``cinoc correct``, D-307) :
+
+    - texte (``RAW_TEXT``) : ``<rad>.gt.txt`` puis ``<rad>.txt`` → ``"text"`` ;
+    - mise en page (``LAYOUT``) : ``<rad>.gt.xml`` **seul** — une mise en page
+      n'est une vérité que nommée comme telle. ``<rad>.xml`` est la source que
+      lit ``alto_source`` (l'ALTO à corriger, le plus souvent celui d'un OCR) :
+      en faire la vérité de la vue ``structure`` noterait ``alto_corrige``
+      contre son propre ALTO, et tout autre pipeline contre l'accord avec un
+      OCR. ``alto_source`` ne lit jamais ``<rad>.gt.xml`` : l'auto-comparaison
+      est impossible par construction.
+
+    ``files`` : nom de fichier → chemin, pour les fichiers du dossier.
+    """
+    layout: tuple[GroundTruthRef, ...] = ()
+    if (gt_xml := f"{stem}.gt.xml") in files:
+        _read_layout(files[gt_xml])  # illisible → 422, comme le texte
+        layout = (GroundTruthRef(type=ArtifactType.LAYOUT, uri=str(files[gt_xml])),)
+    txt = next((c for c in (f"{stem}.gt.txt", f"{stem}.txt") if c in files), None)
+    if txt is None:
+        return layout, ""
+    ref = GroundTruthRef(type=ArtifactType.RAW_TEXT, uri=str(files[txt]))
+    return (ref, *layout), "text"
+
+
 def _ground_truth_for(
     stem: str, written: dict[str, Path]
 ) -> tuple[tuple[GroundTruthRef, ...], str]:
-    """Vérités-terrain d'un radical, **et la provenance de son texte**.
+    """Vérités-terrain d'un radical déposé par ZIP, **et la provenance de son texte**.
 
-    Texte (``RAW_TEXT``) :
-
-    1. ``.txt`` manuel (``<rad>.gt.txt`` puis ``<rad>.txt``) — chemin direct.
-    2. À défaut, ALTO/PAGE (``<rad>.gt.xml`` puis ``<rad>.xml``) : texte d'ordre
-       de lecture extrait par ``layout_to_text`` (la **projection même** du
-       scoring), matérialisé en ``<rad>.gt.txt`` dérivé → le GT reste un
+    1. Ce qui est déposé comme vérité (:func:`truths_beside`).
+    2. À défaut de texte, ALTO/PAGE (``<rad>.gt.xml`` puis ``<rad>.xml``) : texte
+       d'ordre de lecture extrait par ``layout_to_text`` (la **projection même**
+       du scoring), matérialisé en ``<rad>.gt.txt`` dérivé → le GT reste un
        ``RAW_TEXT``, un seul chemin d'évaluation, déterministe.
     3. Sinon ``()`` : le run reste exécutable, simplement non scoré.
-
-    Mise en page (``LAYOUT``, S29a) : ``<rad>.gt.xml`` **seul** — une mise en
-    page n'est une vérité que nommée comme telle. ``<rad>.xml`` est la source
-    que lit ``alto_source`` (l'ALTO à corriger, le plus souvent celui d'un
-    OCR) : en faire la vérité de la vue ``structure`` noterait ``alto_corrige``
-    contre son propre ALTO, et tout autre pipeline contre l'accord avec un OCR.
-    ``alto_source`` ne lit jamais ``<rad>.gt.xml`` : l'auto-comparaison est
-    impossible par construction.
 
     La **provenance** est retournée avec les références (``"text"`` /
     ``"layout"`` / ``""``) : elle seule distingue une transcription fournie d'un
     texte **extrait de l'ALTO du document**, et cette différence décide si un
     run de post-correction mesure quelque chose ou se compare à lui-même.
     """
-    layout: tuple[GroundTruthRef, ...] = ()
-    if (gt_xml := f"{stem}.gt.xml") in written:
-        _read_layout(written[gt_xml])  # illisible → 422, comme le texte
-        layout = (GroundTruthRef(type=ArtifactType.LAYOUT, uri=str(written[gt_xml])),)
-    txt = next((c for c in (f"{stem}.gt.txt", f"{stem}.txt") if c in written), None)
-    if txt is not None:
-        ref = GroundTruthRef(type=ArtifactType.RAW_TEXT, uri=str(written[txt]))
-        return (ref, *layout), "text"
+    refs, source = truths_beside(stem, written)
+    if source:
+        return refs, source
     xml = next((c for c in (f"{stem}.gt.xml", f"{stem}.xml") if c in written), None)
     if xml is None:
-        return (), ""
+        return refs, ""
     derived = written[xml].with_name(f"{stem}.gt.txt")
     derived.write_text(_xml_to_text(written[xml]), encoding="utf-8")
     ref = GroundTruthRef(type=ArtifactType.RAW_TEXT, uri=str(derived))
-    return (ref, *layout), "layout"
+    return (ref, *refs), "layout"
 
 
 def _xml_to_text(path: Path) -> str:
@@ -252,23 +277,46 @@ def _read_layout(path: Path) -> CanonicalLayout:
 
 
 class CorpusStore:
-    """Registre **en mémoire** des corpus uploadés (id → ``CorpusSpec`` + dossier).
+    """Registre des corpus déposés (id → ``CorpusSpec`` + dossier).
 
-    Le contenu vit sous ``base_dir`` (éphémère sur HF — acceptable : ce sont des
-    **entrées** de travail ; les *résultats* sont, eux, publiés vers un dépôt distant).
+    Chaque corpus vit sous ``base_dir/<id>/`` avec sa description
+    (:data:`CORPUS_FILE`) ; le registre **relit** ce dossier à sa construction.
+    Un serveur relancé sur le même dossier de données retrouve donc ses corpus —
+    il les perdait tous, le dossier étant temporaire et le registre en mémoire
+    (D-307). Un dossier dont la description ne se relit pas est **ignoré, dit**
+    (avertissement), jamais un démarrage en échec.
     """
 
     def __init__(self, base_dir: Path) -> None:
         self._base = base_dir
         self._corpora: dict[str, CorpusSpec] = {}
         self._lock = threading.Lock()
+        self._reload()
+
+    def _reload(self) -> None:
+        if not self._base.is_dir():
+            return
+        for folder in sorted(self._base.iterdir()):
+            description = folder / CORPUS_FILE
+            if not description.is_file():
+                continue
+            try:
+                self._corpora[folder.name] = load_corpus_spec(description)
+            except CinocError as exc:
+                logger.warning(
+                    "[corpus_upload] dégradé : corpus %s ignoré (%s)", folder.name, exc
+                )
+
+    def _register(self, corpus_id: str, spec: CorpusSpec) -> None:
+        dump_corpus_spec(spec, self._base / corpus_id / CORPUS_FILE)
+        with self._lock:
+            self._corpora[corpus_id] = spec
 
     def save(self, name: str, data: bytes) -> tuple[str, CorpusSpec]:
         """Extrait l'archive dans un dossier neuf et enregistre la ``CorpusSpec``."""
         corpus_id = uuid.uuid4().hex
         spec = extract_corpus_zip(data, self._base / corpus_id, name=name or corpus_id)
-        with self._lock:
-            self._corpora[corpus_id] = spec
+        self._register(corpus_id, spec)
         return corpus_id, spec
 
     def materialize(
@@ -290,8 +338,7 @@ class CorpusStore:
         corpus_id = uuid.uuid4().hex
         dest = self._base / corpus_id
         spec = materialize_corpus(dest, builder)
-        with self._lock:
-            self._corpora[corpus_id] = spec
+        self._register(corpus_id, spec)
         return corpus_id, spec
 
     def get(self, corpus_id: str) -> CorpusSpec | None:
@@ -314,10 +361,12 @@ class CorpusStore:
 
 
 __all__ = [
+    "CORPUS_FILE",
     "GT_SOURCE_KEY",
     "LOCAL_MAX_ZIP_BYTES",
     "MAX_ZIP_BYTES",
     "CorpusStore",
     "CorpusUploadError",
     "extract_corpus_zip",
+    "truths_beside",
 ]

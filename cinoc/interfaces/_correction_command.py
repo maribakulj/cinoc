@@ -12,11 +12,17 @@ ce qui a été **refusé**, et pourquoi.
 
 from __future__ import annotations
 
+import argparse
+from collections.abc import Callable
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from cinoc.app import resolve_code_version
 from cinoc.app import run as run_orchestrator
-from cinoc.app.alto_corpus import corpus_from_alto
+
+# Les producteurs de correction sont lus en couche `app`, pas recopiés ici :
+# une interface qui énumère est une interface qui dérive.
+from cinoc.app.alto_corpus import PRODUCERS, corpus_from_alto, truth_summary
 from cinoc.app.evaluation_views import EvaluationOptions
 from cinoc.app.modules import (
     ModuleRegistry,
@@ -27,8 +33,81 @@ from cinoc.app.recipe_queue import RecipeEntry, plan_recipe_run
 from cinoc.app.report_images import build_facsimiles, build_thumbnails
 from cinoc.app.variance import VarianceSummary, run_repeatedly
 from cinoc.evaluation.result import RunResult
-from cinoc.interfaces._run_summary import unit_summary
+from cinoc.interfaces._run_summary import print_progress, unit_summary
 from cinoc.reports import default_report_renderer
+
+if TYPE_CHECKING:  # pragma: no cover
+    _SousCommandes = argparse._SubParsersAction[argparse.ArgumentParser]  # noqa: SLF001
+
+
+def add_correct_parser(
+    subparsers: _SousCommandes,
+    add_scoring: Callable[[argparse.ArgumentParser, str], None],
+) -> None:
+    """``cinoc correct`` : sa surface, à côté de son assemblage (budget de
+    ``_cli_parser.py``). ``add_scoring`` : les options de notation communes."""
+    correct_cmd = subparsers.add_parser(
+        "correct",
+        help="Corrige un dossier d'ALTO existants (post-correction structurée).",
+    )
+    correct_cmd.add_argument(
+        "alto_dir",
+        help="Dossier d'images, chacune avec son ALTO : <nom>.xml (ou "
+        "<nom>.alto.xml) à côté de <nom>.png ; une transcription <nom>.gt.txt "
+        "posée à côté est la vérité terrain.",
+    )
+    correct_cmd.add_argument(
+        "-o", "--output", default="rapport.html", help="Fichier HTML de sortie."
+    )
+    correct_cmd.add_argument(
+        "--pipeline",
+        default="",
+        help="Lit l'ALTO qu'un run Cinoc a écrit pour ce pipeline "
+        "(<nom>.<pipeline>.alto.xml, sortie de --alto-dir et de cinoc hybrid) ; "
+        "il n'est jamais pris pour une vérité terrain.",
+    )
+    correct_cmd.add_argument(
+        "--producer",
+        default="rules",
+        # Dérivés de l'adapter : une troisième copie de la liste aurait laissé
+        # la CLI offrir deux producteurs sur quatre, en silence.
+        choices=PRODUCERS,
+        help="Producteur de corrections. 'rules' est déterministe et hors "
+        "ligne ; les autres interrogent un modèle et exigent --model "
+        "('mistral_vision' découpe en plus chaque ligne dans le scan).",
+    )
+    correct_cmd.add_argument(
+        "--model",
+        default="",
+        help="Modèle du producteur (requis hors 'rules' ; "
+        "`cinoc list models <fournisseur>` les liste).",
+    )
+    correct_cmd.add_argument(
+        "--host", default="http://localhost:11434", help="Serveur ollama."
+    )
+    correct_cmd.add_argument(
+        "--ocr-sidecar",
+        dest="ocr_sidecar",
+        default="",
+        help="JSON d'OCR réel {'ocr': {fichier: {line_id: texte}}} qui remplace "
+        "le texte des lignes : l'ALTO est alors une transcription, vérité de la "
+        "vue structure. INDISPENSABLE sur un corpus à vérité terrain : sans lui "
+        "la source lit la référence et il n'y a rien à corriger.",
+    )
+    correct_cmd.add_argument(
+        "--no-ground-truth",
+        dest="ground_truth",
+        action="store_false",
+        help="N'utilise aucune vérité terrain (ni <nom>.gt.txt, ni l'ALTO sous "
+        "--ocr-sidecar) : rien n'est noté, la commande et le rapport le disent.",
+    )
+    add_scoring(correct_cmd, "")
+    correct_cmd.add_argument(
+        "--repeat",
+        type=int,
+        default=1,
+        help="Exécute N fois et écrit une fourchette (≥5 recommandé).",
+    )
 
 
 def write_variance(output: Path, variance: VarianceSummary) -> None:
@@ -61,6 +140,7 @@ def run_correction(
     alto_dir: str,
     output: str,
     *,
+    pipeline: str = "",
     producer: str,
     model: str,
     host: str,
@@ -76,13 +156,19 @@ def run_correction(
     changé, ce qui a été **refusé**, et pourquoi. Code de sortie : celui de
     ``cinoc run`` (``0``, ou ``3`` si une unité a échoué, rapport écrit).
     """
-    corpus = corpus_from_alto(alto_dir, ground_truth=ground_truth)
+    corpus = corpus_from_alto(
+        alto_dir, pipeline=pipeline, ocr_sidecar=ocr_sidecar, ground_truth=ground_truth
+    )
+    # Dit avant le run : ce que les chiffres mesureront, ou qu'il n'y en aura
+    # pas (D-307) — jamais un tableau vide ou un zéro sans explication.
+    print(truth_summary(corpus))
     registry = ModuleRegistry()
     register_default_modules(registry)
     discover_plugins(registry, enabled=True)  # CLI local : code de confiance
     # La recette ``alto_corrige``, par la file de la page (D-298) : les options
     # ne font que nommer ses réglages.
     correcteur = {"producer": producer, "host": host, "model": model}
+    source = {"ocr_sidecar": ocr_sidecar, "pipeline": pipeline}
     spec = plan_recipe_run(
         corpus,
         (
@@ -90,7 +176,11 @@ def run_correction(
                 recipe="alto_corrige",
                 params={
                     "correction": {k: v for k, v in correcteur.items() if v},
-                    **({"source": {"ocr_sidecar": ocr_sidecar}} if ocr_sidecar else {}),
+                    **(
+                        {"source": {k: v for k, v in source.items() if v}}
+                        if any(source.values())
+                        else {}
+                    ),
                 },
             ),
         ),
@@ -109,6 +199,7 @@ def run_correction(
             registry=registry,
             code_version=resolve_code_version(),
             paths_root=root,
+            on_progress=print_progress,
         )
 
     results, variance = run_repeatedly(_once, repeat)

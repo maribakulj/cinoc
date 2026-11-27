@@ -57,7 +57,11 @@ cinoc serve --reports-dir corpus                         # http://127.0.0.1:8000
 ```
 
 `--reports-dir` serves the `RunResult` JSON of that folder and reads its images
-against it: write `--json` beside the run config, as above.
+against it: write `--json` beside the run config, as above. What you do in the
+page — corpora you upload, runs you launch, their history — is kept in a
+per‑user data folder (`~/.local/share/cinoc` on Linux, `~/Library/Application
+Support/cinoc` on macOS, `%LOCALAPPDATA%\cinoc` on Windows; `CINOC_DATA_DIR`
+to choose another) and survives a restart; `cinoc serve` prints which one it uses.
 
 ## A real result — partial
 
@@ -88,9 +92,9 @@ and every other view: [`campaigns/2026-11-26-reference/README.md`](campaigns/202
 
 | You have… | You run | |
 |---|---|---|
-| transcriptions from another tool (text or ALTO) | `precomputed` reads `page.<label>.txt` beside each image — no engine | [guide](docs/guide.md#scoring-ocr-that-cinoc-did-not-produce) |
+| transcriptions from another tool (text or ALTO) | `precomputed` reads `page.<label>.txt`, `alto_source` reads `page.xml`, beside each image — no engine | [guide](docs/guide.md#scoring-ocr-that-cinoc-did-not-produce) |
 | a corpus and several candidate engines | `cinoc run` with recipes or a full YAML spec | [guide](docs/guide.md#the-run-config) |
-| ALTO to post‑correct inside its layout | `cinoc correct alto/` (extra `[saknussemm]`) | [guide](docs/guide.md#getting-a-corpus) |
+| ALTO to post‑correct inside its layout | `cinoc correct alto/` (extra `[saknussemm]`; `--pipeline <p>` for the ALTO of a Cinoc run; `<page>.gt.txt` beside it is the ground truth) | [guide](docs/guide.md#getting-a-corpus) |
 
 Each of these is run end to end on the **installed wheel** by CI
 (`tests/installed/`).

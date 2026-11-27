@@ -48,6 +48,62 @@ publier, et son moment, appartiennent au mainteneur.
 
 ### Corrigé
 
+- **`cinoc run` n'est plus muet.** Un run VLM de sept minutes ne disait rien
+  jusqu'au rapport. Une ligne par unité terminée (`[3/16] pipeline · document —
+  fait`), sur la sortie d'erreur, aussi pour `cinoc correct` et `cinoc hybrid` ;
+  c'est le compte que la vitrine diffuse en SSE.
+
+- **`cinoc list engines` ne dit plus que `saknussemm` manque à PyPI.**
+  `pip install "cinoc[saknussemm]"` l'installe depuis PyPI (0.9.0) ; le
+  message, qui envoyait chercher un dépôt, donne cette commande.
+
+- **Noter un ALTO d'un autre outil, sans moteur.** Le README le promettait
+  par `precomputed`, qui ne lit que du texte. Le guide donne la spec
+  (`alto_source` → `layout_to_text`), exécutée telle quelle par la suite et sur
+  la roue installée. `cinoc list engines <brique>` dit ce que la brique
+  consomme et produit et ce qu'elle exige (`label` de `layout_to_text`, avec la
+  ligne `adapter_kwargs` à écrire) ; un rôle de recette (`projection`) nomme
+  ses briques, un nom mal tapé reçoit le plus proche. Une spec écrite à la
+  main qui lirait un ALTO contre la vérité extraite de lui-même est refusée,
+  comme la recette `alto_corrige` l'était déjà.
+
+- **`cinoc correct` ne note plus un ALTO contre lui-même.** Sur un ALTO
+  d'OCR, la commande déclarait cet ALTO vérité terrain de la vue `structure`
+  et affichait `F1 1,0 · CER 0,0` — la sortie comparée à sa propre entrée —,
+  sans un mot ; une transcription `<nom>.gt.txt` posée à côté était ignorée.
+  La règle est désormais celle du dépôt ZIP : `<nom>.gt.txt` (ou `<nom>.txt`)
+  est la vérité du texte, `<nom>.gt.xml` celle de la mise en page, et l'ALTO
+  corrigé n'est une vérité que sous `--ocr-sidecar`. La commande dit avant le
+  run ce que mesureront les chiffres ; une vue sans aucun chiffre le dit dans
+  le rapport (FR/EN) au lieu d'un tableau vide. **Changement de
+  comportement** : sans `--ocr-sidecar`, la vue `structure` n'est plus
+  ajoutée ; `--no-ground-truth` ignore désormais toute vérité, `.gt.txt`
+  compris.
+
+- **L'ALTO qu'écrit Cinoc se relit.** `cinoc run --alto-dir`, `cinoc hybrid`
+  et l'`alto.zip` du web nomment tous l'ALTO `<doc>.<pipeline>.alto.xml`
+  (l'export web portait un autre nom, et l'identifiant de document perdait ses
+  points) ; `cinoc correct --pipeline <p>` et le réglage `pipeline` de la
+  brique `alto_source` (recette `alto_corrige`, web compris) le lisent à côté
+  de l'image. Un dossier qui n'en porte que de tels est refusé en nommant les
+  pipelines trouvés ; `<nom>.alto.xml` est apparié comme `<nom>.xml`. Deux
+  pipelines qui écriraient le même fichier sont refusés au lieu de
+  s'écraser. **Changement de comportement** : noms des fichiers de
+  l'`alto.zip` web.
+
+- **`cinoc serve` garde ce qu'on fait dans la page.** Un corpus déposé, un run
+  lancé et son historique disparaissaient au redémarrage : le dossier de
+  données était un temporaire neuf à chaque lancement, et la liste des corpus
+  n'était qu'en mémoire. Le défaut est désormais un dossier **par
+  utilisateur** (`~/.local/share/cinoc`, `~/Library/Application Support/cinoc`,
+  `%LOCALAPPDATA%\cinoc`), `CINOC_DATA_DIR` prime toujours, et le démarrage
+  affiche le dossier retenu. **Changement de comportement** : sans
+  `CINOC_DATA_DIR`, le serveur écrit maintenant sous ce dossier ; le mode
+  public (`CINOC_PUBLIC_MODE=true`) reste éphémère. Les rapports déposés
+  (`--reports-dir`) sont, eux, recopiés à chaque lancement : un rapport relancé
+  est servi dans sa dernière version, un rapport retiré du dépôt n'est plus
+  listé.
+
 - **Sans l'extra `[images]`, l'absence de Pillow se dit une fois.** L'avertissement se répétait à chaque vignette (quatre lignes pour deux pages).
 
 - **Un rapport de la CLI servi par `cinoc serve` retrouve ses images.** Un

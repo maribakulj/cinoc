@@ -243,15 +243,13 @@ def test_correction_status_names_the_capability_not_the_provider() -> None:
     assert status.available is True
 
 
-def test_correction_status_says_the_package_is_not_on_pypi() -> None:
-    """Anti-silence : ``pip install cinoc[saknussemm]`` va chercher un dépôt git.
-
-    Ne pas le dire ferait chercher longtemps pourquoi un extra « manquant »
-    reste manquant après installation.
-    """
+def test_correction_status_says_how_to_install_it() -> None:
+    """``pip install "cinoc[saknussemm]"`` installe ``saknussemm`` 0.9.0 depuis
+    PyPI : le message disait « depuis le dépôt, le paquet n'est pas publié sur
+    PyPI », ce qui était faux et faisait chercher une autre voie (D-307)."""
     from cinoc.app.engines import correction_status
 
     status = correction_status(has_module=lambda n: False)
     assert status.available is False
-    assert "saknussemm" in status.detail
-    assert "pas publié" in status.detail or "dépôt" in status.detail
+    assert 'pip install "cinoc[saknussemm]"' in status.detail
+    assert "pas publié" not in status.detail and "dépôt" not in status.detail

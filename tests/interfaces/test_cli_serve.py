@@ -73,3 +73,26 @@ def test_serve_without_extra_reports_cleanly(
     code = main(["serve"])
     assert code == 1
     assert "cinoc[serve]" in capsys.readouterr().err
+
+
+def test_serve_says_where_its_data_lives(
+    fake_uvicorn: _FakeUvicorn, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Le testeur a perdu son corpus au redémarrage sans qu'aucun message ne
+    # dise où vivaient les données (D-307) : le démarrage le dit.
+    from cinoc.app.data_dir import user_data_dir
+
+    main(["serve"])
+    sortie = capsys.readouterr().out
+    assert str(user_data_dir()) in sortie
+    assert "CINOC_DATA_DIR" in sortie
+
+
+def test_serve_in_public_mode_says_its_data_is_temporary(
+    fake_uvicorn: _FakeUvicorn,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CINOC_PUBLIC_MODE", "true")
+    main(["serve"])
+    assert "temporaire" in capsys.readouterr().out

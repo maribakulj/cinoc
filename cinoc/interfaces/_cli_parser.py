@@ -18,11 +18,9 @@ from __future__ import annotations
 import argparse
 from typing import TYPE_CHECKING
 
-# Les producteurs de correction sont lus en couche `app`, pas recopiés ici :
-# une interface qui énumère est une interface qui dérive.
-from cinoc.app.alto_corpus import PRODUCERS
 from cinoc.app.evaluation_views import METRIC_PROFILES
 from cinoc.interfaces._corpus_command import add_standardize_parser
+from cinoc.interfaces._correction_command import add_correct_parser
 
 if TYPE_CHECKING:  # pragma: no cover
     # Type de l'objet rendu par ``add_subparsers`` : ``argparse`` n'en publie
@@ -505,58 +503,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Jeton d'authentification de l'endpoint de segmentation distant.",
     )
 
-    correct_cmd = subparsers.add_parser(
-        "correct",
-        help="Corrige un dossier d'ALTO existants (post-correction structurée).",
-    )
-    correct_cmd.add_argument(
-        "alto_dir", help="Dossier de paires <nom>.xml + <nom>.png/.jpg."
-    )
-    correct_cmd.add_argument(
-        "-o", "--output", default="rapport.html", help="Fichier HTML de sortie."
-    )
-    correct_cmd.add_argument(
-        "--producer",
-        default="rules",
-        # Dérivés de l'adapter : une troisième copie de la liste aurait laissé
-        # la CLI offrir deux producteurs sur quatre, en silence.
-        choices=PRODUCERS,
-        help="Producteur de corrections. 'rules' est déterministe et hors "
-        "ligne ; les autres interrogent un modèle et exigent --model "
-        "('mistral_vision' découpe en plus chaque ligne dans le scan).",
-    )
-    correct_cmd.add_argument(
-        "--model",
-        default="",
-        help="Modèle du producteur (requis hors 'rules' ; "
-        "`cinoc list models <fournisseur>` les liste).",
-    )
-    correct_cmd.add_argument(
-        "--host", default="http://localhost:11434", help="Serveur ollama."
-    )
-    correct_cmd.add_argument(
-        "--ocr-sidecar",
-        dest="ocr_sidecar",
-        default="",
-        help="JSON d'OCR réel {'ocr': {fichier: {line_id: texte}}} qui remplace "
-        "le texte des lignes. INDISPENSABLE sur un corpus à vérité terrain : "
-        "sans lui la source lit la référence, il n'y a rien à corriger, et le "
-        "CER vaut zéro par construction.",
-    )
-    correct_cmd.add_argument(
-        "--no-ground-truth",
-        dest="ground_truth",
-        action="store_false",
-        help="L'ALTO est de l'OCR, pas une transcription : aucune vue de "
-        "structure n'est ajoutée (il n'y aurait rien à quoi comparer).",
-    )
-    _add_scoring(correct_cmd, "")
-    correct_cmd.add_argument(
-        "--repeat",
-        type=int,
-        default=1,
-        help="Exécute N fois et écrit une fourchette (≥5 recommandé).",
-    )
+    add_correct_parser(subparsers, _add_scoring)
     _add_corpus(subparsers)
     _add_list(subparsers)
     serve_cmd = subparsers.add_parser(

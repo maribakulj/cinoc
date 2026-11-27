@@ -306,10 +306,10 @@ def correction_status(*, has_module: ModuleProbe = _module_present) -> EngineSta
     """Disponibilité de la **post-correction structurée** (extra ``[saknussemm]``).
 
     Catégorie distincte des moteurs, comme la NER : c'est une brique de
-    post-traitement (``LAYOUT → LAYOUT``), pas un moteur de transcription. La
-    bibliothèque n'étant pas publiée sur PyPI, elle s'installe depuis son dépôt —
-    le détail le dit, parce qu'un ``pip install cinoc[saknussemm]`` qui échoue
-    sans explication est le pire des silences.
+    post-traitement (``LAYOUT → LAYOUT``), pas un moteur de transcription. Le
+    détail dit comment l'installer — ``saknussemm`` est sur PyPI, épinglé par
+    l'extra : le message disait le contraire et envoyait chercher un dépôt
+    (D-307).
 
     Le **producteur** de corrections, lui, est choisi au run : ``rules``
     (déterministe, hors ligne) ou ``ollama`` (serveur local). Cette sonde ne
@@ -320,8 +320,8 @@ def correction_status(*, has_module: ModuleProbe = _module_present) -> EngineSta
         detail, ok = "prêt (saknussemm installé)", True
     else:
         detail, ok = (
-            "saknussemm non installé (extra [saknussemm] — depuis le dépôt, "
-            "le paquet n'est pas publié sur PyPI)",
+            "saknussemm non installé (extra [saknussemm], depuis PyPI : "
+            "pip install \"cinoc[saknussemm]\")",
             False,
         )
     return EngineStatus(
