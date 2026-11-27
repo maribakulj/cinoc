@@ -1,13 +1,47 @@
 # Synthèse de conception : cinq contrats à remplacer (contre-expertise `04a1c17b`)
 
-Ce document fait suite à `README.md`, `CONVENTIONS.md`, `BIBLIOTHEQUES.md` et `rapports/*.md` de ce dossier. Il ne corrige rien et n'écrit aucun code. Il ramène les 90 défauts confirmés (51 `valide`, 39 `discutable`) à cinq contrats fautifs. Pour chacun, il donne le contrat qui le remplace, les invariants qui jugeront la correction, l'ordre des corrections et la liste fermée de ce qui reste à arbitrer.
+Ce document fait suite à `README.md`, `CONVENTIONS.md`, `BIBLIOTHEQUES.md` et `rapports/*.md` de ce dossier. Il ne corrige rien et n'écrit aucun code. Il ramène les 90 défauts confirmés (51 `valide`, 39 `discutable`) à cinq contrats fautifs, et donne pour chacun :
+- le contrat qui le remplace ;
+- les invariants qui jugeront la correction ;
+- l'ordre des corrections ;
+- la liste fermée de ce qui reste à arbitrer.
 
 **Règles suivies** (consigne du mainteneur) :
-- chaque cause remplace un contrat **existant**, en place ; aucune couche, aucun paquet, aucun plan nouveau ;
-- bilan de lignes visé faible ou négatif ;
+- chaque cause remplace un contrat existant, en place ; aucune couche ni aucun plan nouveau ;
 - bibliothèque mature d'abord ;
 - tests avant correctifs ;
-- une tranche est finie quand ses **invariants** sont établis, pas quand un compte de tests passe au vert.
+- une tranche est finie quand ses **invariants** sont établis, pas quand un compte de tests passe au vert ;
+- la cohérence des contrats n'est jamais sacrifiée à une contrainte de taille ou de dépendance. Le bilan de lignes (§ 2.5) est indicatif et n'a décidé d'aucun choix.
+
+## Révision n° 1
+
+| Point du mainteneur | Section modifiée |
+|---|---|
+| 1. Statistiques suffisantes propres à chaque métrique, combinaison et finalisation | § 2.1 a (table par famille) |
+| 2. Micro et macro, chacun avec son inférence appariée ; les rangs sont des analyses distinctes | § 2.1 d ; invariants A3, A4, A5 |
+| 3. Quatre axes ; une contribution au micro avec un ratio individuel indéfini | § 2.1 b ; invariants A1, A2 |
+| 4. Supports conditionnel, apparié et global, et l'analyse qui utilise chacun | § 2.1 c ; invariants A1, A5, A6 (ex-S6 et S9) |
+| 5. Pas de monotonie universelle ; propriétés par métrique ; corpus de références vides | § 3 M1 à M8 (ex-S4 supprimé) |
+| 6. Clé de reprise sur les artefacts consommés ; répétitions indépendantes | § 2.2 ; invariants F3, F4 |
+| 7. Intégrité et non authenticité ; risques des liens physiques ; fichiers réellement exécutés | § 2.3 a, b, c ; invariants I1, I6, F7 |
+| 8. Objectif d'appariement lexicographique ; filiation démontrée ; bijection contre fusions et scissions | § 2.4 ; invariant M8 |
+| 9. Relecture, reproduction et réévaluation ; coûts historiques contre coûts du rejeu | § 2.3 d ; invariants I4, I5, A12 |
+| 10. Familles de Holm définies a priori, sans fusion sur résultats identiques | § 2.1 d ; invariant A9 (remplace l'ex-N4) |
+| Décisions rendues | ci-dessous, retirées du § 6 |
+| K1 et K2 conçus ensemble | § 2.1 (une seule section) ; tranches 1a et 1b (§ 5) |
+
+### Décisions rendues (intégrées)
+
+| Décision | Effet dans ce document |
+|---|---|
+| BagIt validé | `bagit` en dépendance de base et dans `LAYERS["app"]` (ex-H1) |
+| Hypothesis validé | extra `dev`, profil déterministe (§ 3) |
+| Plancher SciPy relevé | `scipy>=1.15`, pour `rng=` (ex-H7) |
+| Rupture explicite du schéma `RunResult` | schéma v6 restructuré ; un JSON antérieur est refusé et se re-note depuis son archive (ex-N2) |
+| Enregistrements par étape | `StepRecord` (§ 2.2) |
+| Persistance atomique immédiate | chaque `StepRecord` est écrit dès la fin de son étape (§ 2.2, F5 ; ex-N9) |
+| RO-Crate reporté à la publication scientifique | hors 1.0 (ex-H6 et H8) |
+| Refus du fan-out multipage à image unique en 1.0 | invariant F8 (ex-C16) |
 
 ---
 
@@ -17,217 +51,360 @@ Ce document fait suite à `README.md`, `CONVENTIONS.md`, `BIBLIOTHEQUES.md` et `
 
 | # | Contrat fautif (actuel) | Pourquoi il produit plusieurs symptômes | Arbitrages servis | Tests V / D |
 |---|---|---|---|---|
-| **K1** | **L'observation est un ratio, pas des comptes.** `Observation(value, weight)` (`evaluation/metric.py:22`), agrégée par Σv·w/Σw (`runner.py:307-327` → `inference.py:166` `micro_ratio`) ; IC par pipeline sur les couples (v, w) (`inference.py:182-271`) ; `_error_rate` 0/1 sur dénominateur nul (`metrics/text.py:114`). | Aucun poids ne reconstruit un F1. Un dénominateur nul perd son numérateur (page blanche). Un plancher par page n'est pas un plancher du corpus. Rien ne vérifie que le poids est le dénominateur (τ). Tests et IC ne voient que des ratios, donc aucun Δ micro apparié, aucune grappe. **14 métriques sur 29** sont fausses pour cette seule raison. | **2**, **1** (micro/macro, apparié, grappes) | V 9 · D 10 (C01, C02×3, C03, C04, C05×2, C06 `ic_apparie`, C09) |
-| **K2** | **La non-mesure n'a ni statut ni motif, et « attendu » dérive de l'échec d'exécution.** `MetricScore.value=None` (`evaluation/result.py:31-46`) ; `missed` incrémenté dans la seule branche `failed` (`runner.py:146-160`) ; `None` sans motif à cinq endroits (`_context_for` `runner.py:519-538`, `_project_side` `:555-575`, `region_cer` `metrics/layout.py:92`, fan-out `pipeline/fanout.py:230-235`, `EntityCategoryScore.support ≥ 1` `analysis.py:960`) ; support implicite et différent pour l'agrégat, l'IC et le test (`_aggregate`, `_intervals`, `omnibus_test` `inference.py:116-122`) ; `max_error` déduit de `higher_is_better` (`runner.py:409`). | `None` code six situations distinctes. Une unité réussie mais inexploitable sort des deux compteurs. Un pipeline non applicable vide les tests des autres. Un échec non aléatoire fait gagner. La valeur imputée à un échec dépend du signe de la métrique, pas de sa définition. | **3**, **8**, **1** (même support) | V 8 · D 6 (C06 `meme_documents`, C07, C08×2, C13×2) |
-| **K3** | **L'étape n'est pas l'unité d'enregistrement.** L'issue est portée par l'unité (`DocumentExecution`, `pipeline/types.py:73-142`, avec « `failed` ⇒ aucun artefact » `:96-99` et `billed` qui remplace toute la consommation `:111-112`). L'exécuteur laisse sortir l'exception avec `by_step` (`executor.py:119-151`) et l'orchestrateur reconstruit un échec nu (`orchestrator.py:333-347`). Le workspace est par pipeline, pas par étape (`orchestrator.py:233-243` → `adapters/_workspace.py:23-28`). L'usage est par unité (`DocumentUsage`, `result.py:82`). La reprise est par unité (`resume.py:130`). Les analyses lisent le pool final (`runner.py:131-138`). | Un même manque, la coordonnée « étape », efface ensemble les artefacts, le coût, l'évaluabilité et la reprise de l'amont réussi. Il fait écraser le fichier d'une étape par une autre (même label), juger `correction`/`decisions` sur la dernière étape, et facturer le pipeline entier à une vue de préfixe. | **4**, **8** (opérationnel), **7** (provenance par unité) | V 13 · D 5 (C12×3, C18×2) |
-| **K4** | **L'identité est déclarée, jamais calculée ni vérifiée ; le cache tient lieu d'archive.** `Artifact.content_hash` n'est relu nulle part (`resume.py:296-301`, `:316-324`, `representations.py:37`) ; l'empreinte d'étape hache une `version` saisie à la main (`pipeline/fingerprint.py:72`, engagement `:18`) ; `GroundTruthRef` n'a pas d'empreinte (`domain/documents.py:22-32`) ; le manifeste ne garde que `corpus_name`/`n_documents` (`domain/run.py:90-91`) ; l'empreinte d'image est calculée puis jetée (`resume.py:150-172`) ; `ResumeStore` porte « deux rôles pour un seul mécanisme » (`resume.py:205-219`) ; `_rebased` laisse passer les chemins absolus et suit les liens (`:187-200`) ; la relecture hors ligne télécharge (`orchestrator.py:246-268`). | Ce qui se déclare au lieu de se calculer ne se vérifie pas. Une sortie altérée, un index modifié, une GT remplacée ou une brique corrigée sans nouvelle version passent sans trace, et une reprise réécrit l'archive publiée. | **5**, **7**, **4** (intégrité des sorties) | V 9 · D 9 (C14×4, C15×3, C17×2) |
-| **K5** | **La correspondance est une égalité de clé, pas un alignement global.** `correspondance` « id d'abord, en bloc » (`metrics/layout.py:232-265`, `:256`) et `_ordres` (`:372-392`) ; glouton dans l'ordre du fichier (`_greedy_pairs` `:172-195`) ; pages aplaties (`_detection_boxes` `:145`, `_identified_boxes` `:202`, `_region_texts` `:49`) ; deux projections `LAYOUT → texte` (`evaluation/projectors.py:30-67` contre `adapters/layout/to_text.py:31-86`) ; fan-out à image unique (`fanout.py:67,101`) ; calibration par multi-ensemble de mots (`calibration.py:126`). | Un id partagé (`r1…rN` des segmenteurs de Cinoc, `region_N` synthétisés), un mot répété ou une position dans le fichier tiennent lieu de preuve d'homologie. Le résultat dépend de l'ordre de sérialisation et de conventions de numérotation, et il apparie entre pages. | **6** | V 12 · D 5 (C10×2, C11×2, C16) |
-| — | Hors contrat : **plan d'expérience** (aucun type « comparaison », `provenance_campagne.md`). | Décision de méthode, pas de code. | (C19) | D 4 (C19) |
+| **K1** | **L'observation est un ratio et un poids, pas une statistique suffisante.** `Observation(value, weight)` (`evaluation/metric.py:22`). L'agrégat est Σv·w/Σw (`runner.py:307-327` → `inference.py:166`). Les IC sont calculés par pipeline sur les couples (v, w) (`inference.py:182-271`). `_error_rate` vaut 0 ou 1 sur dénominateur nul (`metrics/text.py:114`). | Aucun poids ne reconstruit un F1. Un dénominateur nul perd son numérateur (page blanche). Un plancher par page n'est pas un plancher du corpus. Rien ne vérifie que le poids est le dénominateur (τ). Faute de statistiques, aucun Δ micro apparié ni aucune grappe n'est possible. **14 métriques sur 29** sont fausses pour cette seule raison. | **2**, **1** | V 9 · D 10 (C01, C02×3, C03, C04, C05×2, C06 `ic_apparie`, C09) |
+| **K2** | **La non-mesure n'a ni axe ni motif ; « attendu » et support dérivent de l'échec d'exécution.** `MetricScore.value=None` (`evaluation/result.py:31-46`). `missed` n'est incrémenté que dans la branche `failed` (`runner.py:146-160`). Cinq endroits rendent `None` sans motif : `runner.py:519-538` et `:555-575`, `metrics/layout.py:92`, `pipeline/fanout.py:230-235`, et `support ≥ 1` à `analysis.py:960`. Le support est implicite et diffère entre agrégat, IC et test (`inference.py:116-122`). `max_error` est déduit de `higher_is_better` (`runner.py:409`). | `None` code six situations. Une unité réussie mais inexploitable sort des deux compteurs. Un pipeline non applicable vide les tests des autres. Un échec non aléatoire fait gagner. La valeur imputée à un échec dépend du signe de la métrique, pas de sa définition. | **3**, **8**, **1** (support) | V 8 · D 6 (C06 `meme_documents`, C07, C08×2, C13×2) |
+| **K3** | **L'étape n'est pas l'unité d'enregistrement.** L'issue est portée par l'unité : `DocumentExecution` (`pipeline/types.py:73-142`) impose « échec ⇒ aucun artefact » (`:96-99`), et `billed` y remplace toute la consommation (`:111-112`). L'orchestrateur reconstruit un échec nu (`orchestrator.py:333-347`). Le workspace est par pipeline (`orchestrator.py:233-243` → `adapters/_workspace.py:23-28`). L'usage est par unité (`result.py:82`). La clé de reprise est par unité (`resume.py:130`). Les analyses lisent le pool final (`runner.py:131-138`). | Faute de coordonnée « étape », l'échec aval efface l'amont réussi (artefacts, coût, évaluabilité, reprise). Deux étapes de même label s'écrasent. `correction` et `decisions` jugent la dernière étape. Une vue de préfixe est facturée au coût du pipeline entier. | **4**, **8** (opérationnel), **7** (provenance par unité) | V 13 · D 5 (C12×3, C18×2) |
+| **K4** | **L'identité est déclarée, jamais calculée ni vérifiée ; le cache tient lieu d'archive.** `content_hash` n'est jamais relu (`resume.py:296-301`, `:316-324`, `representations.py:37`). L'empreinte d'étape hache une version saisie à la main (`pipeline/fingerprint.py:72`, `:18`). `GroundTruthRef` n'a pas d'empreinte (`domain/documents.py:22-32`). Le manifeste ne garde que `corpus_name`/`n_documents` (`domain/run.py:90-91`). L'empreinte d'image est jetée (`resume.py:150-172`). `ResumeStore` porte deux rôles (`resume.py:205-219`). `_rebased` suit les chemins absolus et les liens (`:187-200`). La relecture hors ligne télécharge (`orchestrator.py:246-268`). | Ce qui est déclaré ne se vérifie pas. Une sortie altérée, un index modifié, une GT remplacée ou une brique corrigée sans nouvelle version passent sans trace, et une reprise réécrit l'archive publiée. | **5**, **7**, **4** (intégrité) | V 9 · D 9 (C14×4, C15×3, C17×2) |
+| **K5** | **La correspondance est une égalité de clé, pas un alignement global.** « Id d'abord, en bloc » (`metrics/layout.py:232-265`, `:256` ; `_ordres` `:372-392`). Glouton dans l'ordre du fichier (`:172-195`). Pages aplaties (`:145`, `:202`, `:49`). Deux projections `LAYOUT → texte` (`evaluation/projectors.py:30-67` contre `adapters/layout/to_text.py:31-86`). Fan-out à image unique (`fanout.py:67,101`). Multi-ensemble de mots en calibration (`calibration.py:126`). | Un id partagé par hasard (`r1…rN`, `region_N`), un mot répété ou une position dans le fichier tiennent lieu de preuve d'homologie. Le résultat dépend de l'ordre de sérialisation et apparie entre pages. | **6** | V 12 · D 5 (C10×2, C11×2, C16) |
+| — | Plan d'expérience (aucun type « comparaison », `provenance_campagne.md`). | Décision de méthode, pas de code. | — | D 4 (C19) |
 
 Totaux : V 9 + 8 + 13 + 9 + 12 = **51** ; D 10 + 6 + 5 + 9 + 5 + 4 = **39**.
 
-### 1.2 Recoupements : les arbitrages ne sont pas des causes
+### 1.2 Recoupements
 
 | Arbitrage | K1 | K2 | K3 | K4 | K5 | Lecture |
 |---|---|---|---|---|---|---|
-| 1 Estimandes, tests appariés, grappes | ● | ◐ | | | | Le micro et le Δ apparié sont des fonctions des comptes (K1). « Même support » est une règle de statut (K2). |
-| 2 Statistiques suffisantes, finalisation | ● | | | | | |
-| 3 Non-mesure typée | ○ | ● | ○ | | | x/0 est une non-validité (K1 la fait apparaître). « Étape amont en échec » est une non-exécution (K3 la fournit). |
-| 4 Par étape, isolation, intégrité | | | ● | ◐ | | L'isolation est un dossier par étape (K3). L'intégrité est l'empreinte vérifiée (K4). |
-| 5 Archive scellée ≠ cache | | | ○ | ● | | L'archive scelle des enregistrements d'étape (K3). |
-| 6 Appariement par page, géométrie, méthodes globales | ○ | | | | ● | Les comptes de détection (tp, fp, fn, fusions, scissions) sont des comptes K1. |
-| 7 Empreintes automatiques, identité des données, distant inconnu | | | ◐ | ● | | La provenance par unité vient de K3, l'empreinte calculée de K4. |
-| 8 Conditionnel, couverture, support commun, opérationnel ; pas de `max_error` universel | ○ | ● | ◐ | | | Couverture et support : K2. Coût de préfixe : K3. Valeur « page vide » : celle que la métrique calcule sur ses comptes (K1). |
+| 1 Estimandes, tests appariés, grappes | ● | ◐ | | | | Les estimandes sont des fonctions des statistiques (K1). Leurs supports sont dérivés des axes (K2). |
+| 2 Statistiques suffisantes | ● | | | | | |
+| 3 Non-mesure typée | ○ | ● | ○ | | | La validité et la définition du scalaire viennent de K1. L'exécution (cause d'indisponibilité) vient de K3. |
+| 4 Par étape, isolation, intégrité | | | ● | ◐ | | |
+| 5 Archive ≠ cache | | | ○ | ● | | L'archive scelle des `StepRecord` (K3). |
+| 6 Appariement | ○ | | | | ● | Les comptes de détection sont des statistiques K1. |
+| 7 Empreintes, identité des données, distant inconnu | | | ◐ | ● | | |
+| 8 Conditionnel, couverture, supports, opérationnel | ○ | ● | ◐ | | | |
 
 ● = cause principale ; ◐ = contribue ; ○ = fournit un ingrédient.
 
-Ainsi, **3 et 8 n'appellent aucun contrat propre** : ce sont K1 + K2. **4, 5 et 7** se partagent l'enregistrement d'étape (K3) et son empreinte vérifiée (K4) : un seul objet, `StepRecord`, est produit, adressé, vérifié et archivé.
+Les arbitrages 3 et 8 n'ont pas de contrat propre : ils découlent de K1 et K2, conçus ensemble (§ 2.1). Les arbitrages 4, 5 et 7 se partagent un objet unique, `StepRecord`, dont K4 calcule et vérifie l'empreinte.
 
 Tests à cheval sur deux causes :
-- `a5_*` : K3 (même fichier pour deux étapes) puis K4 (empreinte jamais relue) ;
-- C01 : K1 (numérateur perdu) et K2 (statut « référence vide ») ;
-- C12 `la_reprise` : K3 (préfixe) et K4 (clé) ;
-- C18 : K3 (par unité) et K4 (servi ou inconnu) ;
-- NER label absent : K2 (catégorie sans GT = rappel indéfini) et K1 (comptes).
+- `a5_*` (K3 puis K4) ;
+- C01 (K1, K2) ;
+- C12 `la_reprise` (K3, K4) ;
+- C18 (K3, K4) ;
+- `ner_payload…label_absent` (K2, K1).
 
-### 1.3 Défauts hors des cinq contrats (pour mémoire)
+### 1.3 Hors des cinq contrats
 
 | Défaut | Rattachement |
 |---|---|
-| SIGINT : `ThreadPoolExecutor.__exit__` attend la file ; des unités sont payées mais non archivées | invariant §12 « annulation coopérative » violé ; traité en tranche 3 (archivage par étape à la fin de chaque étape), voir N9 |
-| saknussemm : délai codé en dur, unité `ok` alors que toutes ses lignes sont en repli | réglage opérationnel déclaré (K4) + issue `partial` (K2/K3) |
-| `dependencies_lock` = métadonnées d'installation (`pytesseract` y figure encore) | K4 (empreinte `RECORD` par distribution) |
-| Ligne de layout avec des `\n` (fan-out → saknussemm) | corrigé dans `aba0fe7`, gelé (arbitrage 9) |
+| SIGINT : la file n'est pas arrêtée, et des unités sont payées sans être archivées | persistance atomique immédiate (décidée) + arrêt de la file à l'annulation ; tranche 2 |
+| saknussemm : délai codé en dur ; unité `ok` alors que toutes ses lignes sont en repli | réglage opérationnel déclaré (K4) + issue `partial` (K2, K3) |
+| `dependencies_lock` = métadonnées d'installation | K4 (fichiers réellement exécutés, § 2.3 c) |
+| Lignes de layout avec des `\n` (fan-out → saknussemm) | corrigé dans `aba0fe7`, gelé (arbitrage 9) |
 
 ---
 
 ## 2. Contrats simplifiés
 
-Pseudo-signatures (pas du code). « Supprime » vise des symboles de la copie `04a1c17b`. Les lignes sont des **ordres de grandeur (±50 %)**, mesurés sur l'étendue des fonctions visées.
+Pseudo-signatures, pas du code.
 
-### K1 — Comptes additifs et finalisation par métrique
+### 2.1 K1 + K2 : observation, axes, supports, estimandes (conception commune)
+
+#### a. Statistique suffisante propre à chaque métrique (point 1)
+
+Chaque métrique déclare trois choses :
+- sa statistique `S` ;
+- sa **combinaison** (associative, commutative, avec un élément neutre) ;
+- sa **finalisation** `S → float | None`.
+
+La valeur d'un document et l'agrégat micro passent par la **même** finalisation : `micro = finalize(combine(S_d))`.
+
+Il n'y a ni algèbre générique ni registre de monoïdes. Une petite classe de statistique est créée par famille ci-dessous, chacune avec un consommateur, son `+` et ses finaliseurs.
+
+| Famille | Métriques | Statistique `S` | Combinaison | Finalisation | Scalaire indéfini quand |
+|---|---|---|---|---|---|
+| Taux d'édition | `cer`, `cer_diplo`, `wer`, `ins_rate`, `del_rate` | (S, D, I, n_réf), entiers (`rapidfuzz.editops`) | somme | (S+D+I)/n_réf ; I/n_réf ; D/n_réf | n_réf = 0 |
+| MER | `mer`, `cmer` | (S+D+I, H+S+D+I) | somme | ratio | les deux textes sont vides |
+| Exactitudes | `char_accuracy`, `word_accuracy`, `fca` | (erreurs, n_réf) | somme | max(0, 1 − e/n), plancher appliqué **après** combinaison (C02, résiduel § 6) | n = 0 |
+| Appariement P/R/F | `ner_f1`, `ner_f1_exact`, `region_detection`, `bow_precision`/`recall`/`f1` | (tp, fp, fn) | somme | F1 = 2tp/(2tp+fp+fn) ; P = tp/(tp+fp) ; R = tp/(tp+fn) | dénominateur respectif nul |
+| Proportions | `searchability`, `diacritic_err`, `mufi_err`, `hcpr`, `air`, `numseq_*`, `unanchored_trigrams`, `*_coverage`, préservation | (k, n) | somme | k/n | n = 0 |
+| Texte par région | `region_cer`, `line_identity_cer` | (éditions sur paires bijectives + texte non apparié de l'hypothèse, car. réf.) | somme | ratio | car. réf. = 0 (le numérateur contribue quand même) |
+| Ordre de lecture | `reading_order_tau` | (paires discordantes, paires ordonnées par la référence) sur les régions appariées | somme | d/(c+d) | aucune paire |
+| Calibration (analyse) | ECE, MCE | histogramme sur des classes **fixées par le protocole** (10 × 0,1) : (n_b, Σ justes_b, Σ conf_b), Σ conf réel | somme par classe (`math.fsum`) | ECE = Σ n_b/N·\|acc_b − conf_b\| ; MCE = max sur classes non vides | N = 0 |
+| Moyenne de réels | **estimande macro** de toute métrique ; durées, coûts | (Σ x, n), x réel | `math.fsum` en ordre canonique des documents | Σx/n | n = 0 |
+| Quantiles (analyses) | percentiles par ligne | données élémentaires : multi-ensemble de valeurs | concaténation | quantile, méthode déclarée (`numpy`, `method="linear"`) | vide |
+
+Le bootstrap travaille sur les statistiques empilées en tableau (`n_docs × k`) : on somme les lignes tirées, puis on finalise. Les quantiles sont la seule famille qui rééchantillonne des données élémentaires.
+
+#### b. Quatre axes par observation (point 3)
 
 ```
-Counts = Mapping[str, int]                       # statistiques suffisantes, clés fixées par la métrique
-DocumentMetric(spec, fn: DocContext -> Counts | None, finalize: Counts -> float | None)
-  valeur page  = finalize(counts_d)
-  micro corpus = finalize(Σ_d counts_d)          # même fonction : page et corpus
-  macro corpus = moyenne des finalize(counts_d) définies
-finaliseurs partagés : ratio(num, den) · f1(tp, fp, fn) · exactitude(err, n) = max(0, 1 − err/n)
-MetricScore(par doc) : + counts            MetricScore(agrégat) : value = micro, + macro, + n_macro
-InferencePayload     : + estimand ∈ {micro, macro}, + delta, + IC apparié du Δ ; le Wilcoxon/Friedman y est étiqueté « macro »
-Δ micro apparié      = scipy.stats.bootstrap(paired=True) / permutation_test(permutation_type="samples")
-                       sur les tableaux de comptes (documents triés par id) ; grappes = mêmes appels sur les comptes sommés par grappe
+Observation[S] (pipeline × document × vue × métrique)
+  applicability : "applicable" | "no_ground_truth" | "not_in_view"               # 1. la VT du type existe, la métrique est dans la vue
+  availability  : "available" | "gt_unreadable" | "output_missing" | "output_unreadable"
+                  | "step_failed" | "step_cancelled" | "step_not_reached"         # 2. les entrées sont réellement là ; l'exécution (K3) est une CAUSE d'indisponibilité
+  validity      : "valid" | motif propre à la métrique                            # 3. S mesure fidèlement ce document (ex. page sans dimensions pour la détection ; jetons sans confiance pour l'ECE)
+  stat          : S | None                                                        # présente ⇔ axes 1 à 3 au vert
+  scalar        : float | None ; scalar_reason : "zero_denominator" | "no_pairs" | … # 4. le ratio individuel finalize(S_d) est défini
+  execution     : ok | truncated | partial                                        # étiquette recopiée du StepRecord, sans effet sur les supports
+validateur : un axe n'est évalué que si les précédents sont au vert ; chaque axe non vert porte son motif
 ```
+
+Une page à référence vide est applicable, disponible, valide, avec `scalar=None` pour `zero_denominator`. Elle **contribue au micro** par ses insertions (point 3) et sort du macro.
+
+#### c. Trois supports (point 4)
+
+Pour une vue v, une métrique m et une famille F de pipelines déclarée :
+- attendus(P) = {d : applicable} ;
+- D^μ_P = {d : stat présente} ;
+- D^M_P = {d : scalaire défini}.
+
+| Support | Définition | Analyses qui l'utilisent |
+|---|---|---|
+| **Conditionnel**, par pipeline | D^μ_P, D^M_P | agrégats micro et macro d'un pipeline ; couverture \|D^μ_P\|/\|attendus\| et \|D^M_P\|/\|attendus\| avec ventilation par motif ; IC marginal, étiqueté « conditionnel » |
+| **Apparié**, par paire (A, B) | D^μ_AB = D^μ_A ∩ D^μ_B ; D^M_AB = D^M_A ∩ D^M_B | Δ micro et Δ macro, leurs IC et p ; Wilcoxon de la paire ; tout ordre entre A et B |
+| **Global**, sur la famille | D^μ_F = ∩_{P∈F} D^μ_P ; D^M_F idem | Friedman, Nemenyi, rangs moyens ; tri multi-pipelines du tableau, si retenu (§ 6) |
+| Sensibilité « page vide » | attendus ∩ {GT disponible} | agrégat où les sorties manquantes sont notées `finalize(S(réf, ""))`, sous ce nom |
+
+C'est ce qui lève la contradiction entre les anciens S6 et S9. Ajouter un pipeline ne change ni les supports conditionnels ni les supports appariés des autres. Il change le support global, que les analyses globales déclarent.
+
+#### d. Estimandes, inférence et famille de Holm (points 2 et 10)
+
+| Estimande ou analyse | Statistique appariée | Inférence | Bibliothèque |
+|---|---|---|---|
+| **Micro** R_P = finalize(Σ S) | Δ^μ = R_A − R_B sur D^μ_AB (ratio de sommes) | p : permutation appariée (échange A/B par document) ; IC : bootstrap apparié (documents tirés une fois pour A et B) | `scipy.stats.permutation_test(permutation_type="samples")`, `scipy.stats.bootstrap(paired=True)` |
+| **Macro** M_P = moyenne des scalaires sur D^M_P | Δ^M = moyenne sur D^M_AB de (r_A,d − r_B,d) | p : changement de signe des différences ; IC : bootstrap de la moyenne des différences | idem |
+| **Analyses de rangs par document**, nommées ainsi | Wilcoxon signé (paire, sur D^M_AB) ; Friedman + Nemenyi (famille, sur D^M_F) | telles qu'aujourd'hui | `scipy.stats.wilcoxon`, `friedmanchisquare` |
+| Grappes déclarées | mêmes statistiques | unité de rééchantillonnage et d'échange = la grappe | mêmes appels sur les statistiques sommées par grappe |
+
+Règles :
+- Les analyses de rangs ne sont jamais affichées comme test du micro ni du macro. Leur estimande est un décalage de localisation des différences (Wilcoxon) ou des rangs moyens (Friedman).
+- Avant tout tirage, les documents sont triés par id et les sommes de réels passent par `fsum`. Le résultat est ainsi invariant par permutation de la spec (A10).
+- **Famille de Holm** (point 10) : définie par la spec avant exécution, en (vue × métrique établie × estimande × paire déclarée). Elle ne dépend d'aucun résultat. Un test non calculable garde sa place (p = 1 dans la correction, publié « non calculé »). Des pipelines aux sorties identiques ne sont jamais fusionnés. Aujourd'hui, la famille est l'ensemble des tests **calculés** (`inference.py:346`), donc elle dépend des données.
+
+#### e. Échecs (arbitrage 8)
+
+`FailurePolicy = Literal["exclude", "empty_page"]`. `max_error` est retiré. Rien n'est imputé par défaut. `empty_page` est une sensibilité nommée, dont la valeur est celle que la métrique donne à une hypothèse vide. `UnitOutcome` gagne `partial` (sous-appels en échec : régions d'un fan-out, lignes en repli).
+
+Validation avant exécution : VT et image lisibles et hachées (K4), pont de projection présent pour chaque couple (vue × pipeline). Sinon, refus.
 
 | | |
 |---|---|
-| **Supprime ou fusionne** | `Observation` ; `micro_ratio`, `micro_ratio_ci`, `bootstrap_batch`, `_intervals` (`inference.py`, ~75 l.) ; `_aggregate` (21) ; `_error_rate` (5) ; F1 par document dans `ner.py`, `bow.py` et `layout.py` (~15) ; les 29 `return Observation(…)` deviennent des `return {…}` (réécrits, sans gain de lignes). **≈ −120 / +85, net ≈ −35** (dont `runner.py`, à 598/600 LOC, qui doit baisser). |
-| **Bibliothèques** | `scipy.stats` (déjà là) ; `rapidfuzz.editops` (déjà là) pour S/D/I. Oracles en `dev` : jiwer (CER/WER/MER), nervaluate (NER micro), scipy. Rejetés : méthode delta (fausse d'un facteur 4 sur Simpson), jiwer en production. |
-| **Couche** | `evaluation` (3) seulement. `MetricSpec` (domain) ne change pas : le calcul reste hors domain. |
-| **Ne fait pas** | Pas de bornes ni de « pire valeur » déclarées dans `MetricSpec` (aucun consommateur, puisque K2 n'impute plus rien par défaut). Pas de registre d'estimandes. Pas de rééchantillonnage maison. Aucune nouvelle métrique. |
+| **Supprime ou fusionne** | `Observation` ; `micro_ratio`, `micro_ratio_ci`, `bootstrap_batch`, `_intervals` ; `_aggregate`, `_error_rate` ; `missed`, `_expects` et la branche `failed` d'`evaluate_run` ; règle `worst` et `_score_failed` (réduit à `empty_page`) ; F1 par document de `ner.py`, `bow.py` et `layout.py` ; `support ≥ 1` d'`EntityCategoryScore` ; motif faux `insufficient_support` quand un pipeline est hors vue ; famille de Holm « tests calculés » |
+| **Bibliothèques** | `scipy.stats` (plancher 1.15) ; `rapidfuzz` (S/D/I). Oracles en `dev` : jiwer, nervaluate, scipy. Rejetée : la méthode delta (fausse d'un facteur 4 sur Simpson) |
+| **Couche** | `evaluation` (3) : statistiques, axes et supports. `partial` en `domain/usage.py` (1). Validation préalable en `app` (6). Le placement des axes suit le critère de CLAUDE.md : vocabulaire d'évaluation, consommé par les couches 3 et 7 seulement, donc pas `domain` |
+| **Ne fait pas** | Pas d'algèbre générique. Pas de bornes ni de « pire valeur » dans `MetricSpec`. Pas d'imputation par défaut. Pas de courbes risque-couverture. Pas de méthode delta. Aucune nouvelle métrique |
 
-### K2 — Statut typé, couverture, support commun
-
-```
-MeasureStatus = Literal["measured",       # valeur définie
-                        "not_applicable", # applicabilité : pas de GT du type, métrique hors vue — hors des attendus
-                        "unavailable",    # disponibilité : GT illisible, sortie absente / sans contenu / incompatible
-                        "undefined",      # validité : x/0 (référence vide), niveau absent de l'hypothèse
-                        "not_executed"]   # exécution : étape cible ou amont en échec, annulée
-MetricScore : + status, + reason (code)   # validateur : value is None ⇔ status ≠ "measured" ; reason ⇔ status ≠ "measured"
-attendus(pipeline, métrique)  = #{d : status_d ≠ not_applicable}        # indépendant de l'issue d'exécution
-couverture                    = n measured / n attendus
-support_commun(vue, métrique) = ∩ des documents measured des pipelines comparés (un seul calcul : tableau comparé, Δ, test)
-FailurePolicy = Literal["exclude", "empty_page"]   # max_error retiré ; empty_page = sensibilité nommée, valeur = finalize(fn(réf, hypothèse vide))
-UnitOutcome  += "partial"                          # sous-appels en échec (régions d'un fan-out, lignes en repli)
-validation avant exécution : GT et image lisibles et hachées, pont de projection présent pour chaque (vue × pipeline)
-```
-
-| | |
-|---|---|
-| **Supprime ou fusionne** | `missed` et la branche `failed` d'`evaluate_run` (~15) ; `_expects` fondu dans `attendus` ; règle `worst` et `_score_failed` réduits au cas `empty_page` (~43 → 12) ; motif faux `insufficient_support` quand un pipeline est hors vue ; `support ≥ 1` d'`EntityCategoryScore`. **≈ −60 / +75, net ≈ +15.** |
-| **Bibliothèques** | Aucune (rien de mature : ∞, 0, −1 ou `zero_division` selon l'outil). Méthode de fairlearn `MetricFrame` pour le conditionnel par strate : même finalisation sur des comptes groupés, ~0 ligne de plus. |
-| **Couche** | `MeasureStatus` en `evaluation/result.py` (3) : seuls l'évaluation et les rapports s'en servent (voir N6). `partial` en `domain/usage.py`, où vit déjà `UnitOutcome`. Validation préalable en `app` (6). |
-| **Ne fait pas** | Pas d'imputation par défaut. Pas quatre champs d'axe : une seule énumération dont chaque valeur nomme un axe. Pas de courbes risque-couverture. Pas de fairlearn. |
-
-### K3 — Enregistrement par étape
+### 2.2 K3 : enregistrement par étape (point 6)
 
 ```
 StepRecord(step_id, outcome ∈ {ok, truncated, partial, failed}, reason, message,
            artifacts: Mapping[ArtifactType, Artifact], usage: ResourceUsage,
-           served_models: tuple[str, ...] | None,   # None = non rendu par le fournisseur (« inconnu » pour un module distant)
-           fingerprint, prefix_key)
-DocumentExecution(steps: tuple[StepRecord, ...])   # issue, usage et pool déduits ; un échec = le dernier record, l'amont reste
-RunContext.workspace_uri = <ws>/<pipeline>/<step_id>/   # isolation physique sans changer la signature d'un adaptateur
-DocumentUsage : + steps: tuple[StepUsage(step_id, outcome, reason, usage, served_models, code_version)]
-prefix_key(k) = H(prefix_key(k−1), step_fingerprint(step_k), empreintes des unit_inputs de l'étape k) ;  prefix_key(0) = H(document_id, image_sha256)
-correction / decisions / economics : (vue, étape notée, étape d'entrée déclarée par inputs_from), jamais le pool
+           served_models: tuple[str, ...] | None,          # None + module distant ⇒ « inconnu », affiché tel
+           identity (§ 2.3 c), executed_files, step_key, produced_in: (run_id, repetition_id))
+DocumentExecution(steps: tuple[StepRecord, ...])            # issue, usage et pool déduits ; un échec = le dernier record, l'amont reste
+RunContext.workspace_uri = <ws>/<pipeline>/<step_id>/        # isolation physique ; aucune signature d'adaptateur ne change
+step_key(k) = H(identité de l'étape k,
+                [(type, content_hash) des artefacts EFFECTIVEMENT résolus en entrée de l'étape k, triés],
+                [(nom, sha256) des unit_inputs lus],
+                repetition_id)
+RunMode = Literal["fresh", "resume", "rescore"]             # réutilisation seulement en "resume" ou "rescore", toujours explicite
+```
+
+- **Artefacts consommés** (point 6). La clé d'une étape se calcule à partir des empreintes de ce qu'elle lit vraiment, et non de la clé amont. Un amont réexécuté qui rend les mêmes octets laisse l'aval réutilisable. Un amont non déterministe qui rend d'autres octets fait réexécuter l'aval. La reprise avance donc étape par étape : record k−1 vérifié, empreintes de ses sorties, puis clé k.
+- **Répétitions** (point 6). `repetition_id` (0 pour un run seul, 1 à N pour `--repeat`) entre dans chaque clé. Une répétition ne peut pas relire celle d'une autre, même dans le même dossier. Chaque observation du `RunResult` porte `produced_in`, et `reread` avec sa source. Une recopie de `repetition-1` vers `repetition-2` (procédure S31) ne crée donc pas de répétition : elle est lue comme une relecture ou n'est pas trouvée.
+- **Persistance atomique immédiate** (décidée). Chaque `StepRecord` est écrit dès la fin de son étape (fichier temporaire, `fsync`, `os.replace`), avant l'étape suivante. À l'annulation, la file est arrêtée.
+- **Analyses** : `correction`, `decisions` et `economics` reçoivent (vue, étape notée, étape d'entrée déclarée par `inputs_from`), jamais le pool.
+
+| | |
+|---|---|
+| **Supprime ou fusionne** | `billed`, `DocumentExecution.failed`, « échec ⇒ aucun artefact » ; reconstruction de l'échec dans l'orchestrateur ; `pools`, `_two_stage_pipelines`, `_text_of` sur le pool ; `unit_key` ; saut `if not entries: continue` d'`economics` ; `RunManifest.served_models` stocké (devient dérivé) ; `repetition_dir` comme seul garde-fou |
+| **Bibliothèques** | stdlib ; modèle de Provenance Run Crate (une `ControlAction` par étape) comme forme de référence, sans dépendance |
+| **Couche** | `StepRecord` en `pipeline` (4) ; clés et modes en `app` (6) ; consommateurs en `evaluation` (3) |
+| **Ne fait pas** | Pas de DAG ni d'ordonnanceur. Pas de reprise à l'intérieur d'une étape. Pas de record « sautée » (absence = `step_not_reached`). Pas de coût par région |
+
+### 2.3 K4 : identité calculée ; cache et archive séparés (points 7 et 9)
+
+#### a. Ce que BagIt garantit, et ce qu'il ne garantit pas (point 7)
+
+BagIt garantit la **vérification d'intégrité** : le contenu correspond aux manifestes du sac. Il ne garantit **ni l'immuabilité ni l'authenticité** : quiconque modifie le contenu peut réécrire les manifestes et le `tagmanifest`, et le sac redevient valide.
+
+Conséquences :
+1. Cinoc n'écrit jamais dans une archive scellée et la vérifie à chaque lecture. C'est une garantie sur Cinoc, pas contre un tiers.
+2. L'authenticité tient à un **ancrage externe** : l'empreinte du `tagmanifest-sha256.txt` (empreinte racine) est publiée hors de l'archive (README de campagne, notice du dépôt, commit). La relecture la compare à une empreinte attendue quand on la lui fournit.
+3. La signature détachée du `tagmanifest` est recommandée **hors 1.0** (§ 6).
+
+#### b. Mutualisation physique : risques et règles (point 7)
+
+| Mécanisme | Risque | Règle |
+|---|---|---|
+| Lien dur | même inode : une écriture **en place** (éditeur, `open("r+")`, outil de synchronisation) altère toutes les copies, archive comprise ; impossible entre systèmes de fichiers | seulement sur option explicite, sur le même système de fichiers ; blob en lecture seule (0444) ; jamais ouvert en écriture par Cinoc |
+| Copie-sur-écriture (reflink : btrfs, XFS, APFS) | aucun pour l'écriture en place, qui crée de nouveaux blocs ; dépend du système de fichiers | choix par défaut quand il est disponible |
+| Copie | coût en place | repli par défaut (autre système de fichiers, reflink absent) |
+| Tous | un blob altéré touche toutes les archives qui le partagent | chaque lecture recalcule l'empreinte (aucun cache fondé sur `mtime` pour une archive scellée) ; `bagit.validate` refuse chaque sac touché |
+
+#### c. Identité d'étape fondée sur les fichiers réellement exécutés (point 7)
+
+```
+StepIdentity(version déclarée,
+             settings effectifs ENVOYÉS (prompt, température, max_tokens…),
+             executed_files: {chemin relatif à son sys.path: sha256}
+                # __file__ / __spec__.origin (.py, .so) de chaque module hors stdlib chargé
+                # pour construire puis exécuter le module (différence de sys.modules)
+             binaries: {exécutable résolu à l'appel: sha256} + fichiers de données déclarés (traineddata),
+             weights: révision RÉSOLUE (hash de commit du Hub), jamais la chaîne demandée,
+             distributions: {nom: version} (étiquettes, jamais preuves),
+             interpreter: (implémentation, version))
+```
+
+- **`RECORD` est rejeté comme preuve.** C'est une liste d'installation, jamais revérifiée, et vide pour une installation éditable.
+- **Imports paresseux.** Le record garde l'ensemble exécuté *après* l'exécution. Une réutilisation exige que **tous** les fichiers enregistrés se re-hachent à l'identique. Un fichier importé paresseusement puis modifié force donc une réexécution.
+- **Coût.** Les empreintes sont mémoïsées le temps d'un run seulement.
+- **Modèle distant.** Le modèle servi est enregistré, ou marqué « inconnu » en toutes lettres. Les poids d'un modèle distant sont toujours « inconnus ».
+
+#### d. Protocole de mesure et trois opérations (point 9)
+
+```
+ProtocolIdentity = H(spec de vue, identité de chaque métrique (statistique, finalisation, executed_files
+                     du code d'évaluation et de formats qui l'a calculée), contenu du profil de normalisation,
+                     unicodedata.unidata_version, empreintes des VT)
+ObservationId    = H(content_hash de la sortie notée, content_hash de la VT, ProtocolIdentity)
+```
+
+| Opération | Entrées | Ce qui est exécuté | Résultat exigé | Coûts publiés |
+|---|---|---|---|---|
+| **Relecture des observations** | archive scellée | rien (lecture des statistiques et du `RunResult` archivés) | octets identiques, hors horodatages | coûts historiques, attribués à leur run de production |
+| **Reproduction sous protocole identique** | sorties archivées, même `ProtocolIdentity` (re-notation) ; ou rejeu des moteurs | évaluation ; moteurs seulement en rejeu | re-notation : `ObservationId` et valeurs identiques. Rejeu : les écarts de sortie sont publiés, pas fondus | rejeu : **coûts du rejeu**, séparés des coûts historiques |
+| **Réévaluation sous nouveau protocole** | sorties archivées, autre `ProtocolIdentity` (nouvelle VT, normalisation, métrique) | évaluation | nouvelles observations, avec filiation vers l'archive et le protocole d'origine ; jamais publiées sous l'identité d'origine | aucun coût moteur |
+
+#### e. Contrats
+
+```
+Artifact.content_hash : obligatoire dès qu'une uri existe ; calculé par l'exécuteur
+read_verified(artifact) -> bytes          # point de lecture unique ; écart => CorruptedArtifactError
+BlobStore : put -> sha256 (écriture atomique, lecture seule, reflink > copie ; lien dur sur option) ; get(sha) vérifié
+Cache   = BlobStore + index mutable {step_key: StepRecord}
+Archive = sac BagIt scellé : objects/<sha>, ground_truth/<sha>, spec.json, run_result.json, observations ;
+          lecture = bagit.Bag.validate() + refus de tout lien (lstat) + refus de fetch.txt + empreinte racine comparée à l'ancre si fournie
+GroundTruthRef.content_sha256, DocumentRef.image_sha256 ; RunManifest.corpus (CorpusSpec avec empreintes) ;
+DocumentUsage par étape : usage historique (produced_in) + usage de ce run (0 pour une relecture)
 ```
 
 | | |
 |---|---|
-| **Supprime ou fusionne** | `billed`, `DocumentExecution.failed`, invariant « échec ⇒ pas d'artefact » (~35) ; reconstruction de l'échec dans l'orchestrateur (~20) ; `pools` (8) et `_two_stage_pipelines`/`_text_of` sur le pool (~20) ; `unit_key` (45) remplacé par `prefix_key` ; saut `if not entries: continue` d'`economics` ; `RunManifest.served_models` stocké (devient dérivé des records). **≈ −135 / +115, net ≈ −20.** |
-| **Bibliothèques** | Stdlib. Modèle de données de Provenance Run Crate (une `ControlAction` par étape, `actionStatus`, `error`) comme **forme de référence**, sans dépendance. |
-| **Couche** | `StepRecord` en `pipeline` (4), à la place de `DocumentExecution`. Clés en `app` (6). Consommateurs en `evaluation` (3). |
-| **Ne fait pas** | Pas d'ordonnanceur ni de DAG. Pas de reprise à l'intérieur d'une étape (région). Pas de record « sautée » : l'absence suffit, lue `not_executed` par K2. Pas de coût par région. |
+| **Supprime ou fusionne** | `_rebased`, `_store_image`, `binaries.json` et ses deux accesseurs, rôle d'archive du `ResumeStore`, téléchargement hors ligne, clé lisant l'image du corpus, durées héritées présentées comme durées du run |
+| **Bibliothèques** | `bagit` (décidé) ; `hashlib`, `importlib.metadata` (étiquettes) ; méthode DVC/git (adressage par contenu) ; méthode joblib/Snakemake, étendue aux fichiers chargés |
+| **Couche** | champs d'empreinte en `domain` (1) ; `StepIdentity` en `pipeline` (4) ; `ProtocolIdentity` en `evaluation` (3) ; `BlobStore` et archive en `app` (6) |
+| **Ne fait pas** | Pas d'OCFL, pas de signature en 1.0, pas de `fetch.txt`, pas de RO-Crate (reporté), pas de `rfc8785` (seul Cinoc recalcule). Octets d'image facultatifs selon la licence (§ 6, H4) |
 
-### K4 — Identité calculée et vérifiée ; cache et archive séparés
+### 2.4 K5 : appariement de structure (point 8)
 
-```
-Artifact.content_hash : obligatoire dès qu'une uri existe ; calculé par l'exécuteur, jamais déclaré par le module
-read_verified(artifact) -> bytes        # point de lecture unique (évaluation, cache, archive) ; écart => CorruptedArtifactError
-BlobStore(racine) : put(fichier) -> sha256 (écriture atomique, lecture seule, lien dur si même FS) ; get(sha) -> chemin vérifié
-Cache   = BlobStore + index mutable {prefix_key: StepRecord}                    # réécrit, retenté
-Archive = bag BagIt scellé : data/objects/<sha>, data/ground_truth/<sha>, data/spec.json, data/run_result.json
-          relecture = bagit.Bag(p).validate() + refus de tout lien (lstat) + refus de fetch.txt ; jamais réécrite ;
-          identité d'unité lue dans les records archivés (empreinte d'image), sans le corpus ni le réseau
-GroundTruthRef.content_sha256, DocumentRef.image_sha256   # remplis au chargement (= la validation préalable de K2)
-RunManifest.corpus : CorpusSpec avec empreintes           # remplace corpus_name / n_documents
-ModuleIdentity : version, settings effectifs (prompt, température, max_tokens envoyés), binaries,
-                 library {distribution: version, sha256 du RECORD}, weights_revision, source_sha256
-```
+**Objectif**, par page et pour un seuil d'admissibilité θ (IoU ≥ θ ou > θ, § 6) :
+1. **Filiation démontrée.** La chaîne de `StepRecord` qui produit l'hypothèse a consommé un artefact dont le `content_hash` est celui de la VT de mise en page (K4), et chaque étape de cette chaîne est déclarée `preserves_region_ids` par son module (déclaration incluse dans son identité). Exemples : reconnaissance sur la segmentation de la VT, post-correction d'un ALTO de VT. Alors les ids, uniques par page, **sont** l'appariement. Les régions sans id commun passent à l'étape 2.
+2. **Sans filiation** (ou pour le reste), on cherche un appariement **bijectif** M qui maximise, dans l'ordre lexicographique :
+   1. le nombre de paires admissibles ;
+   2. puis Σ IoU sur M.
+
+   Calcul : `linear_sum_assignment` sur le poids (n+1)·[admissible] + IoU·[admissible], où la borne Σ IoU ≤ n garantit l'ordre lexicographique. Avant le calcul, les deux côtés sont triés dans un ordre géométrique canonique (page, y0, x0, y1, x1, puis texte), ce qui départage les ex æquo résiduels. **Aucun identifiant n'intervient sans filiation**, pas même pour départager. Oracle : énumération exhaustive sur les petites instances.
+3. **Fusions et scissions** : ce sont des relations **distinctes** de la bijection, calculées sur les matrices IoGT = \|r∩h\|/\|r\| et IoDT = \|r∩h\|/\|h\| (méthode PRImA et ocrd-segment-evaluate). Une fusion est une h qui couvre au moins deux r à IoGT ≥ θ_m ; une scission est une r couverte par au moins deux h à IoDT ≥ θ_m. Elles sont publiées comme comptes à part et ne modifient pas tp/fp/fn.
+
+Les mêmes paires bijectives servent `region_detection`, `region_cer`, `line_identity_*` et `reading_order_*`.
 
 | | |
 |---|---|
-| **Supprime ou fusionne** | `_rebased` (14) ; `_store_image` (~22, remplacé par le `BlobStore`) ; `binaries.json` et `record_binaries`/`recorded_binaries` (~35 : les binaires sont dans chaque record) ; rôle d'archive du `ResumeStore` et validation structurelle de `load` (~30) ; téléchargement hors ligne (~10). **≈ −110 / +170, net ≈ +60.** Archive, vérification et empreinte des sources sont des capacités nouvelles. **+60** si RO-Crate (H6). |
-| **Bibliothèques** | `bagit` (LoC, un fichier, 0 dépendance, domaine public) pour valider et écrire (H1). `hashlib`, `importlib.metadata` (`RECORD`). Méthode du cache DVC/git (adressage par contenu, lecture seule, liens durs). Méthode joblib/Snakemake pour l'empreinte des sources (~40 l.). |
-| **Couche** | Champs d'empreinte en `domain` (1 : ce sont des types purs, des références et non du contenu). Identité en `pipeline` (4). `BlobStore` et archive en `app` (6), ce qui bute sur la liste blanche de `app` (H1). |
-| **Ne fait pas** | Pas d'OCFL (versions), pas de signature. Pas de `fetch.txt` dans une archive scellée. Pas de `rfc8785` tant que seul Cinoc recalcule. Pas de W3C PROV. Octets d'image facultatifs (licence) : l'empreinte suffit à re-noter. RO-Crate seulement si H6. |
+| **Autres contrats** | `formats.layout_text(layout)` est la **seule** projection `LAYOUT → texte`. Elle respecte `reading_order` imbriqué et sert à `evaluation.projectors` comme à `adapters.layout.to_text`. Le fan-out refuse, de façon typée, un layout multipage accompagné d'une seule image (décidé). La calibration juge un jeton par alignement de séquences, si C11-B |
+| **Supprime ou fusionne** | `_greedy_pairs`, `_true_positives`, `correspondance` « id d'abord », `_ids_partages`, branche id de `_ordres`, `_identified_boxes` (fusionné avec `_detection_boxes`), `_region_texts` global, l'une des deux projections, `_judge` par multi-ensemble |
+| **Bibliothèques** | `scipy.optimize.linear_sum_assignment` (déjà importé par `metrics/flexible.py:50`) ; méthode PRImA pour les relations. Rejeté : `pycocotools` (glouton par score) |
+| **Couche** | appariement en `evaluation` (3) ; projection en `formats` (2), seule couche commune à 3 et 5 ; refus de fan-out en `pipeline` (4) ; `preserves_region_ids` dans le `Module` (contrat de couche 4, déclaratif) |
+| **Ne fait pas** | Pas d'IoU polygonale (H2). Pas de profils pondérés PRImA. Pas d'alignement par ligne en calibration |
 
-### K5 — Appariement global par page, projection unique
+### 2.5 Bilan de lignes (indicatif, secondaire)
 
-```
-apparier(réf, hyp, seuil) -> paires      # linear_sum_assignment sur l'IoU seuillée, page par page ;
-                                         # ex æquo départagés par id commun, puis par ordre géométrique canonique
-DetectionCounts(tp, fp, fn, fusions, scissions)   # comptes K1 ; fusions/scissions par IoGT/IoDT ≥ 0,5 (méthode PRImA / ocrd-segment-evaluate)
-region_cer, reading_order_*, line_identity_* : mêmes paires, par page ; τ = Σ discordantes / Σ paires (C03-A)
-formats.layout_text(layout) : seule projection LAYOUT → texte, qui respecte reading_order imbriqué ; séparateur unique ;
-                              utilisée par evaluation.projectors ET adapters.layout.to_text
-fan-out : refus typé d'un layout multipage accompagné d'une seule image (C16-C)
-calibration : jeton juste ⇔ bloc « equal » d'un alignement de séquences (rapidfuzz opcodes), si C11-B
-```
+Ordre de grandeur ±50 %, mesuré sur l'étendue des symboles retirés :
+- K1+K2 ≈ −20 ;
+- K3 ≈ 0 ;
+- K4 ≈ +120 (archive, empreinte des fichiers exécutés et du protocole sont des capacités nouvelles) ;
+- K5 ≈ −90.
 
-| | |
-|---|---|
-| **Supprime ou fusionne** | `_greedy_pairs`, `_true_positives` (26) ; `correspondance` « id d'abord » et `_ids_partages` (44) ; branche « id » de `_ordres` (~10) ; `_detection_boxes` et `_identified_boxes` fusionnés (−17) ; `_region_texts` global (7) ; deux projections (`projectors.py` 34 + `to_text.py` 52) remplacées par une seule ; `_judge` par multi-ensemble (12). **≈ −200 / +80, net ≈ −120** (+30 si fusions/scissions, N7). |
-| **Bibliothèques** | `scipy.optimize.linear_sum_assignment` (déjà importé par `metrics/flexible.py:50`). IoU des boîtes : les 6 lignes maison restent. Rejetés : `pycocotools` (glouton par score), `shapely` (H2). |
-| **Couche** | Appariement en `evaluation` (3). Projection en `formats` (2), seule couche que l'évaluation (3) et les adaptateurs (5) peuvent importer tous deux (précédent : `formats/_region_ids.py`). Refus de fan-out en `pipeline` (4). |
-| **Ne fait pas** | Pas d'IoU polygonale. Pas de profils pondérés PRImA par scénario. Pas d'espace de noms d'identifiants : l'id n'est jamais primaire en 1.0 (N8). Pas d'alignement par ligne pour la calibration (il demanderait une position dans `ConfidenceToken`). |
-
-### Bilan net estimé (code produit)
-
-| K1 | K2 | K3 | K4 | K5 | **Total** |
-|---|---|---|---|---|---|
-| −35 | +15 | −20 | +60 | −120 | **≈ −100** (≈ −10 avec RO-Crate et fusions/scissions) |
-
-Les tests de propriété ajoutés (~300 lignes de test) ne comptent pas. Les tests existants qui figent un défaut sont supprimés ou inversés dans le commit du correctif (§ 4.2).
+**Total ≈ 0.** Ce bilan n'a motivé aucun choix de contrat.
 
 ---
 
 ## 3. Invariants
 
+Chaque invariant porte sur **une métrique ou une analyse nommée**, aucun n'est universel.
+
 Vérification :
-- **P** = test de propriété. `hypothesis` est la bonne réutilisation : il réduit le contre-exemple au minimum. Il serait ajouté à l'extra `dev` seulement, avec un profil déterministe en `tests/conftest.py` (`derandomize=True`, `database=None`, `deadline=None`, `max_examples` borné pour `check-fast`). Les tests vivraient à côté de leur couche (`tests/evaluation/test_proprietes_*.py`…), sans arbre nouveau.
+- **P** = propriété avec `hypothesis` (extra `dev`), profil déterministe dans `tests/conftest.py` (`derandomize=True`, `database=None`, `deadline=None`, `max_examples` borné pour `check-fast`). Les tests vivent à côté de leur couche.
 - **O** = oracle externe.
 - **A** = test adversarial ciblé.
 
-« Manquant » = aucun test adversarial ne le couvre encore : il faut l'écrire **avant** la correction.
+« Manquant » = à écrire, rouge, avant la correction.
 
-### Scientifiques
+### Par métrique (M) (point 5 : propriétés propres à chaque métrique, aucune monotonie universelle)
 
-| # | Invariant | Vérification | Subsume |
+| # | Invariant | Vérif. | Subsume / manquant |
 |---|---|---|---|
-| S1 | Pour toute métrique enregistrée, l'agrégat micro vaut `finalize(Σ comptes)`, et la valeur page vaut `finalize(comptes page)` avec la même fonction. Un corpus d'un seul document a pour agrégat la valeur de ce document. | P sur les 29 métriques du registre ; O jiwer (CER/WER/MER), nervaluate (micro-F1 NER), calcul à la main (F1 régions, τ par paires, exactitudes) | `reference_vide[cer, wer, ins_rate]`, `ner_f1×2`, `ner_f1…sans_entite`, `region_detection`, `bow_f1`, C02×3, C03 ; verts `taux_additifs…jiwer`, `preservation…` |
-| S2 | Toute grandeur publiée (agrégat, IC, p) est **invariante par permutation de l'ordre des documents** dans la spec. | P | **Manquant, et violé aujourd'hui.** Vérifié hors test : sur 8 documents, inverser leur ordre fait passer l'IC de `micro_ratio_ci` de [0,0953 ; 0,7596] à [0,1032 ; 0,7403], parce que le tirage suit l'ordre de la spec. Correctif dans K1 : trier par id avant de rééchantillonner. |
-| S3 | Les métriques de structure sont invariantes par permutation des régions de référence et d'hypothèse, et par renommage des ids sans filiation démontrée. L'appariement se fait à l'intérieur de chaque page. | P (permutations et renommages aléatoires) ; O `linear_sum_assignment` | C10×2, `ordre_des_regions_de_reference`, `egalite_d_iou`, `ids_identiques_non_homologues`, `ids_partiellement_partages`, `alto_sans_id`, `multipage×3` |
-| S4 | **Monotonie face à l'invention.** Ajouter à l'hypothèse du texte, des entités, des régions ou des lignes sans vis-à-vis dans la référence ne rend jamais une métrique meilleure, ni au document ni au corpus. Un pipeline qui invente sur une page blanche est classé derrière un pipeline muet. | P (ajouts aléatoires, toutes métriques) | `reference_vide*`, `pipeline_qui_hallucine`, `ner…faux_positifs`, C04 (sous C04-A) ; vert `metriques_a_denominateur_hypothese` ; **manquant** : région fantôme sur une région de référence sans texte (`layout.py:116`) |
-| S5 | Le test et l'IC publiés portent **sur l'estimande affiché et sur le même support** : le micro va avec la permutation ou le bootstrap apparié des comptes, le macro avec Wilcoxon/Friedman. Le payload nomme l'estimande et le sens du Δ. Le support du test est celui du Δ. | O `scipy.stats.permutation_test` et `bootstrap` ; A Simpson | C05×2, C06×2, C01 `nentre_pas` |
-| S6 | Toute comparaison se fait sur le support commun. Chaque agrégat est publié conditionnel, avec sa couverture. Aucun classement ne met en regard des agrégats de supports différents. Rien n'est imputé par défaut. La sensibilité « page vide » vaut `finalize(fn(réf, hypothèse vide))` et porte ce nom. | A | C07, C08×2, `max_error…deplace_lagregat` |
-| S7 | Avec des grappes déclarées, l'IC rééchantillonne des grappes : les mêmes pages groupées de deux façons donnent deux IC ; groupées en singletons, l'IC par grappe égale l'IC par document ; sous le seuil, l'IC est « non estimable ». | P (singletons) ; A | C09 |
-| S8 | **n attendus** = nombre de documents dont la VT applicable existe, indépendamment de l'issue d'exécution et de la sortie ; n mesurés ≤ n attendus. Toute non-mesure a un statut de `MeasureStatus` ≠ `measured` et un motif, et jamais un `None` nu (validateur). | P (pannes aléatoires par unité et par étape) ; A | `artefact_sans_contenu`, `artefact…absent_du_disque`, `fanout_entierement_en_echec`, `sortie_incompatible`, `reference_vide_nest_pas_comptee` (T1), `ner_payload…label_absent`, C13×2 ; **manquants** : troncature d'une étape aval sous une vue amont complète, unité saknussemm en repli total |
-| S9 | Ajouter un pipeline au run ne change ni les agrégats, ni les IC, ni les p brutes des autres paires. Seule change la taille de la famille de Holm, qui est publiée. | P | `pipeline_non_applicable…` (cas particulier) ; **manquant** dans sa forme générale |
-| S10 | La valeur d'une vue, analyses comprises (correction, décisions, économie), ne dépend que de la sortie de son étape cible, de l'entrée déclarée de cette étape et de la VT. | A | `correction×3`, `decisions×2`, C12 `economie`, `a5…chaque_vue_notee` |
-| S11 | La sortie d'une étape ne dépend que de ses entrées (empreintes) et de son identité : sources, bibliothèque enveloppée, réglages effectifs envoyés, révision des poids, binaires. Changer l'une d'elles change l'empreinte ; changer la version du paquet ou un réglage opérationnel ne la change pas. | A (reformulés, § 4.1) | C17×2, `saknussemm…version_de_la_bibliotheque`, `poids_du_scoreur_qe` ; verts `digest_ollama`, `reprise_autres_binaires` |
-| S12 | Changer un octet d'une image ou d'une VT change l'empreinte du corpus publiée dans le `RunResult`. Re-noter contre une autre VT est signalé. | A ; P (octet aléatoire) | `identite_gt×4`, `identite_image` |
-| S13 | Relire une archive vérifiée redonne **exactement** les mêmes comptes et le même `RunResult`, hors horodatages. | P (aller-retour) | `a5_relecture_offline` ; vert `a7_temoin_relecture_intacte` |
-| S14 | Une archive altérée est refusée avant toute note : octet d'une sortie, d'un index, d'une image, d'une VT ou de la spec, lien symbolique, chemin absolu, `fetch.txt`. | O `bagit.Bag.validate` ; A | C14 (3 sur 4), `a7_uri_absolue`, `a7_lien_symbolique`, `a5_archive__empreinte` |
-| S15 | Provenance attribuée par unité et par étape : modèle servi, ou « inconnu » pour un module distant qui ne le rend pas ; `code_version` et dépendances de production. Aucune union n'est présentée comme l'attribut d'une unité. | A | C18×2 ; **manquant** : module distant qui ne rend pas le modèle servi |
-| S16 | Une seule projection `LAYOUT → texte`. Un candidat identique à la référence a un CER nul sous toute vue, ordre imbriqué compris. | P (layouts imbriqués aléatoires) | `deux_projections×3`, `ordre_de_lecture_imbrique` |
+| M1 | **Taux d'édition** (`cer`, `cer_diplo`, `wer`, `ins_rate`, `del_rate`, `mer`, `cmer`) : micro = finalize(Σ S), égal à jiwer sur la liste des documents, pages à référence vide comprises. Une page à référence vide ajoute \|h\| au numérateur, avec un scalaire `zero_denominator`. **Corpus entièrement vide** : CER/WER micro indéfinis (n_réf = 0) pour tout pipeline, muet compris ; aucun classement ; Σ insertions publiée comme statistique. `mer`/`cmer` sont définis dès qu'un texte n'est pas vide. | P ; O jiwer | `reference_vide[cer, wer, ins_rate]`, `pipeline_qui_hallucine`, C01 ; verts `taux_additifs…jiwer`, `cer_borne…`, `metriques_a_denominateur…` ; **manquant** : corpus entièrement vide |
+| M2 | **Exactitudes** (`char_accuracy`, `word_accuracy`, `fca`) : valeur corpus = max(0, 1 − Σe/Σn), jamais une moyenne de planchers par page (sous C02-A). | P | C02×3 |
+| M3 | **F1 à appariement** (`ner_f1`, `ner_f1_exact`, `region_detection`, `bow_*`) : corpus = F1(Σtp, Σfp, Σfn). Un document sans référence contribue ses fp. Une catégorie présente seulement en prédiction a P = 0 et R indéfini, sans lever d'erreur. Sous l'appariement de cardinalité maximale, ajouter une prédiction sans partenaire admissible augmente fp d'exactement 1 et ne change pas tp. Tout vide : F1 indéfini. | P ; O nervaluate (NER), calcul à la main | `ner_f1×2`, `ner_f1…sans_entite`, `ner_payload…label_absent`, `region_detection…`, `bow_f1…` ; vert `bow_precision_recall` |
+| M4 | **Texte par région** (`region_cer`, `line_identity_cer`) : éditions sur les paires bijectives, plus le texte non apparié de l'hypothèse au numérateur. Une région de référence sans texte, appariée à du texte, contribue au numérateur. | P | C04 (sous A) ; **manquant** : région de référence sans texte (`layout.py:116`) |
+| M5 | **τ** : finalize(discordantes, paires ordonnées par la référence) sur les régions appariées ; les régions non appariées vont à la couverture ; sans ex æquo, égal à (1 − τ)/2 de `scipy.stats.kendalltau`. | P ; O scipy | C03 |
+| M6 | **ECE/MCE** : combiner les histogrammes par document = calculer sur les jetons poolés ; classes fixées par le protocole ; ECE ∈ [0, 1] ; un jeton est jugé par alignement (si C11-B). | P ; O calcul à la main, `difflib` | vert `ece_sur_jetons_poolés` ; C11×2 |
+| M7 | **Projection `LAYOUT → texte`** : une seule fonction pour la VT et le candidat ; un layout identique donne un CER nul sous toute vue, ordre imbriqué compris. | P | `deux_projections×3`, `ordre_de_lecture_imbrique` |
+| M8 | **Appariement de structure** (§ 2.4) : optimum lexicographique égal à l'énumération exhaustive ; invariant par permutation des régions des deux côtés et par renommage des ids sans filiation ; page par page ; ids conservés sous filiation démontrée ; fusions et scissions sans effet sur tp/fp/fn. | P ; O énumération, `linear_sum_assignment` | C10×2, `ordre_des_regions_de_reference`, `egalite_d_iou`, `ids_identiques_non_homologues`, `ids_partiellement_partages`, `alto_sans_id`, `multipage×3` ; **manquants** : filiation conservée ; fusion comptée hors bijection |
 
-### Fonctionnels
+### Par analyse (A)
 
-| # | Invariant | Vérification | Subsume |
+| # | Invariant | Vérif. | Subsume / manquant |
 |---|---|---|---|
-| F1 | **Isolation physique.** Deux étapes d'une unité ne partagent jamais un fichier, et `sha256(fichier) = content_hash` à l'écriture comme à chaque lecture. | A ; garde dans l'exécuteur | `a5×5` (dont le socle Tesseract → redressement) |
-| F2 | **Conservation de l'amont réussi.** Un échec à l'étape k garde les artefacts, coûts, issues et l'évaluabilité des étapes avant k. La facture de l'étape fautive est comptée, et un pipeline tout en échec garde la sienne. | A | `echec_partiel×5` (V + C12) ; **inverse** le vert `le_type_interdit_bien_les_artefacts_dune_unite_failed` ; **manquant** : chemin annulation et délai |
-| F3 | **Reprise par préfixe.** Une reprise n'exécute que les étapes dont la clé de préfixe est absente ou en échec. | A ; P (nombre d'appels = étapes manquantes) | C12 `la_reprise` |
-| F4 | La relecture d'une archive ne télécharge rien et ne lit pas le corpus d'origine. Une unité archivée intacte n'est jamais déclarée `failed` pour une cause extérieure à l'archive. | A (réseau déjà refusé par `tests/conftest.py`, D-303) | C15×3 |
-| F5 | Une reprise n'écrit jamais dans une archive scellée. Deux archives qui mutualisent un blob par lien dur restent valides chacune. | A ; O `bagit` | C14 `archive_publiee` ; **manquant** : mutualisation (essayée dans `libs-try`, absente de la suite) |
-| F6 | **Refus avant de payer.** Une VT ou une image référencée illisible, une vue sans pont de projection pour un pipeline, un layout multipage à image unique en fan-out : tous sont refusés avant le premier appel de moteur. | A | C13 `gt…avant_de_payer`, `sortie_incompatible`, C16 |
-| F7 | **Parité** : chaque capacité nouvelle (sceller et vérifier une archive) est une fonction `app`, avec ses faces déclarées dans `test_web_cli_parity`. | garde existante (tables) | **manquant** : entrées de table à ajouter, rouges d'abord |
+| A1 | **Agrégat conditionnel d'un pipeline** : micro sur D^μ_P, macro sur D^M_P ; couverture et motifs publiés ; ajouter un autre pipeline ne le change pas. | P ; A | `reference_vide_nest_pas_comptee` (T1), `artefact_sans_contenu`, `artefact…absent_du_disque`, `fanout_entierement_en_echec`, `sortie_incompatible`, C13×2 |
+| A2 | **Quatre axes** : n attendus = applicables, quelle que soit l'issue d'exécution ; la statistique est présente ⇔ axes 1 à 3 au vert ; le scalaire peut être indéfini avec une statistique présente ; chaque exclusion a son axe et son motif. | P (pannes aléatoires par étape) ; A | **manquants** : troncature aval sous une vue amont complète ; saknussemm en repli total (`partial`) |
+| A3 | **Δ micro apparié** sur D^μ_AB : IC par bootstrap apparié et p par permutation appariée, égaux à scipy ; sur Simpson, p = 1. | O scipy ; A | C05×2 (reformulés), C06 `ic_apparie` |
+| A4 | **Δ macro apparié** sur D^M_AB : moyenne des différences, IC par bootstrap, p par changement de signe, égaux à scipy. | O scipy | **manquant** |
+| A5 | **Analyses de rangs** : Wilcoxon (paire, D^M_AB) et Friedman/Nemenyi (famille, D^M_F), publiés comme « analyse de rangs par document », jamais comme test du micro ou du macro ; ajouter un pipeline change Friedman (déclaré), pas le Wilcoxon d'une paire. | A | `pipeline_non_applicable…`, C01 `nentre_pas` |
+| A6 | **Classement** : deux pipelines ne s'ordonnent que sur leur support apparié ; aucune comparaison entre agrégats de supports différents. | A | C07, C06 `meme_documents` |
+| A7 | **Échecs** : pas d'imputation par défaut ; la sensibilité « page vide » vaut finalize(S(réf, "")) et porte ce nom ; aucune valeur n'est déduite de `higher_is_better`. | A | C08×2, `max_error…deplace_lagregat` |
+| A8 | **Grappes** : la même liste groupée de deux façons donne deux IC ; en singletons, l'IC égale l'IC par document ; sous le seuil, « non estimable ». | P ; A | C09 |
+| A9 | **Famille de Holm** : taille et membres ne dépendent que de la spec ; un test non calculable garde sa place (p = 1, « non calculé ») ; aucune fusion de pipelines aux résultats identiques. | P | **manquant ; violé** (`inference.py:346`) |
+| A10 | **Rééchantillonnage** (A3, A4, A8) : IC et p invariants par permutation de l'ordre des documents de la spec. | P | **manquant ; violé** : l'IC de `micro_ratio_ci` passe de [0,0953 ; 0,7596] à [0,1032 ; 0,7403] en inversant 8 documents |
+| A11 | **Analyses d'une vue** (`correction`, `decisions`, `economics`) : elles ne lisent que l'étape cible, son entrée déclarée et la VT. | A | `correction×3`, `decisions×2`, `a5…chaque_vue_notee`, C12 `economie` |
+| A12 | **Coûts** : coût d'un préfixe = Σ des étapes jusqu'à la cible ; la facture de l'étape fautive est comptée ; les coûts historiques (attribués à leur run) ne sont jamais additionnés aux coûts du rejeu. | A | `echec_partiel…cout_amont`, `…bilan_economique`, `…pipeline_tout_en_echec` ; **manquant** : coûts historiques contre rejeu |
 
-**23 invariants** (16 scientifiques, 7 fonctionnels).
+### Identité, provenance, archive (I)
+
+| # | Invariant | Vérif. | Subsume / manquant |
+|---|---|---|---|
+| I1 | **Identité d'étape** : modifier un fichier réellement exécuté (source, module importé paresseusement, binaire, fichier de données), un réglage envoyé ou la révision des poids change l'identité ; une réutilisation exige que les fichiers enregistrés se re-hachent à l'identique ; la version du paquet et les réglages opérationnels n'y entrent pas. | A | C17×2 (reformulés), `saknussemm…version`, `poids_du_scoreur_qe` ; verts `digest_ollama`, `reprise_autres_binaires` ; **manquant** : import paresseux modifié |
+| I2 | **Identité du corpus** : un octet changé d'une image ou d'une VT change l'empreinte publiée ; re-noter contre une autre VT est signalé. | A ; P | `identite_gt×4`, `identite_image` |
+| I3 | **Identité du protocole** : changer de profil de normalisation, de définition de métrique, de VT ou de version Unicode change `ProtocolIdentity` et chaque `ObservationId`. | A | **manquant** |
+| I4 | **Relecture des observations** : lire une archive vérifiée rend des octets identiques, hors horodatages. | P (aller-retour) | `a5_relecture_offline` ; vert `a7_temoin_relecture_intacte` |
+| I5 | **Reproduction et réévaluation** : sous le même protocole, une re-notation rend les mêmes `ObservationId` ; sous un autre, elle rend de nouvelles identités avec filiation, jamais publiées sous l'identité d'origine. | A | **manquant** |
+| I6 | **Intégrité** : une archive altérée (octet d'une sortie, d'un index, d'une image, d'une VT, de la spec ; lien ; chemin absolu ; `fetch.txt`) est refusée avant toute note ; une empreinte racine différente de l'ancre fournie est refusée. Aucune authenticité n'est revendiquée au-delà. | O `bagit` ; A | C14 (3 sur 4), `a7_uri_absolue`, `a7_lien_symbolique`, `a5_archive__empreinte` ; **manquant** : ancre |
+| I7 | **Provenance** par unité et par étape : modèle servi ou « inconnu » ; `code_version` et fichiers exécutés de production ; aucune union présentée comme attribut d'une unité. | A | C18×2 ; **manquant** : distant sans modèle servi |
+
+### Fonctionnels (F)
+
+| # | Invariant | Vérif. | Subsume / manquant |
+|---|---|---|---|
+| F1 | **Isolation physique** : deux étapes ne partagent jamais un fichier ; `sha256(fichier) = content_hash` à l'écriture et à chaque lecture. | A | `a5×5` |
+| F2 | **Conservation de l'amont** : un échec à l'étape k garde les artefacts, coûts, issues et l'évaluabilité des étapes avant k. | A | `echec_partiel…lamont_reussi` ; inverse le vert `le_type_interdit…` ; **manquant** : annulation et délai |
+| F3 | **Reprise sur artefacts consommés** : un amont réexécuté aux mêmes octets laisse l'aval relu ; à d'autres octets, il fait réexécuter l'aval. | A ; P | C12 `la_reprise` ; **manquant** : amont non déterministe |
+| F4 | **Répétitions** : une répétition ne relit jamais une observation d'une autre, même dans le même dossier ; la réutilisation n'existe qu'en mode explicite ; chaque observation dit `produced_in` et `reread`. | A | vert `repetitions__archives_disjointes` (partiel) ; **manquant** : même dossier |
+| F5 | **Persistance atomique** : un arrêt brutal après l'étape k laisse k records valides et aucun fichier partiel sous un nom final ; l'annulation arrête la file. | A | **manquant** |
+| F6 | **Relecture autonome** : ni téléchargement, ni lecture du corpus d'origine ; une unité intacte n'est jamais déclarée `failed` pour une cause extérieure. | A | C15×3 |
+| F7 | **Archive scellée et mutualisation** : une reprise n'écrit jamais dans une archive scellée ; un blob partagé altéré en place est détecté dans chaque archive qui le partage ; entre systèmes de fichiers, copie. | A ; O `bagit` | C14 `archive_publiee` ; **manquant** : altération d'un blob partagé |
+| F8 | **Refus avant de payer** : VT ou image illisible, vue sans pont de projection, layout multipage à image unique en fan-out. | A | C13 `gt…avant_de_payer`, `sortie_incompatible`, C16 |
+| F9 | **Parité** : chaque capacité nouvelle (sceller, vérifier, modes de run) a sa fonction `app` et ses faces déclarées dans `test_web_cli_parity`. | garde existante | **manquant** : entrées de table |
+
+**36 invariants** : 8 M, 12 A, 7 I, 9 F.
+
+Correspondance avec la première version :
+- **supprimé** : S4 (monotonie universelle), remplacé par des propriétés propres à M1, M3 et M4 ;
+- **éclatés** :
+  - S1 en M1 à M6 ;
+  - S5 en A3, A4 et A5 ;
+  - S6 et S9 en A1, A5 et A6 (trois supports), plus A7 ;
+  - S13 en I4, I5 et A12 ;
+- **changés de nature** :
+  - S2 devient A10 (rééchantillonnage seulement) ;
+  - S3 devient M8 (objectif lexicographique, filiation) ;
+  - S8 devient A1 et A2 (quatre axes) ;
+  - S11 devient I1 (fichiers exécutés) ;
+  - F3 porte sur les artefacts consommés ;
+- **inversé** : l'ex-N4 devient A9 (familles a priori) ;
+- **nouveaux** : A4, A9, A12, I3, I5, F4, F5, M6.
 
 ---
 
@@ -235,103 +412,77 @@ Vérification :
 
 ### 4.1 Reformulations (avant toute correction)
 
-Ce sont le test valide touché par la tension T1 et les 8 tests discutables dont l'attendu change sous l'arbitrage.
-
-| Test | Conv. | Attendu reformulé (une phrase) |
+| Test | Conv. | Attendu reformulé |
 |---|---|---|
-| `applicabilite…::reference_vide_nest_pas_comptee_notee` (**valide**) | T1 | Le micro de A vaut 12/120 = 0,100 (pages blanches au numérateur) ; 12 documents contribuent au micro et 6 au macro, et les 6 pages blanches portent `undefined/empty_reference`. |
-| `test_omnibus__meme_sens_que_le_cer_micro_affiche` | C05 | Le test publié pour l'estimande micro va dans le sens du Δ micro ou n'est pas significatif (ici p = 1). Le Wilcoxon, s'il est publié, est étiqueté « macro (effet par document) » et va dans le sens du macro. |
-| `test_omnibus__p_du_ratio_micro_par_permutation_appariee` | C05 | La p corrigée du test **micro** est ≥ α et égale à la permutation exacte de scipy (1,0) ; l'assertion ne lit plus le champ du Wilcoxon. |
-| `intervalles__meme_documents_que_le_test` | C06 | L'IC apparié du Δ porte exactement sur les cas complets du test (mêmes ids). Les IC marginaux peuvent garder leur support propre, étiquetés « conditionnels », avec leur couverture. |
-| `echec_non_aleatoire__classement_sur_documents_communs` | C07 | Sur le support commun, B (0,040) est devant A (0,050). Aucun classement ne met A devant B à partir d'agrégats de supports différents, et la couverture 7/8 de A est publiée. |
-| `max_error__un_echec_ne_note_jamais_mieux_quune_reponse` | C08 | Aucune règle n'impute une « erreur maximale ». Par défaut l'échec n'est pas noté (couverture 2/3). Sous la sensibilité « page vide », il vaut la valeur que la métrique donne à une hypothèse vide (CER 1,0), sous ce nom. |
-| `bootstrap__grappes_documentaires_declarables` | C09 | Test de comportement, et non plus de noms de champ : la même liste de pages groupée de deux façons donne deux IC ; groupée en singletons, l'IC égale l'IC par document. |
-| `version_manuelle__brique_modifiee_sans_relever_sa_version_reexecutee` | C17 | Deux modules de **sources** différentes, de même nom et de même version déclarée, donnent deux empreintes d'étape, donc le second est exécuté. La correction n'est plus simulée par un attribut d'instance. |
-| `identite_saknussemm__prompt_et_temperature_envoyes_au_llm_sont_traces` | C17 | L'empreinte change quand le prompt ou la température effectivement envoyés changent, et ne change pas pour un réglage opérationnel. On teste un comportement, pas des noms de clés. |
+| `applicabilite…::reference_vide_nest_pas_comptee_notee` (**valide**) | T1 | Micro de A = 12/120 = 0,100. Les 6 pages blanches sont applicables, disponibles et valides, avec scalaire `zero_denominator` : 12 documents au support micro, 6 au support macro. |
+| `test_omnibus__meme_sens_que_le_cer_micro_affiche` | C05 | Le test du Δ micro (permutation appariée) va dans le sens du Δ micro ou n'est pas significatif (ici p = 1). Le Wilcoxon, s'il est publié, est une analyse de rangs nommée comme telle, jamais affichée comme test du micro. |
+| `test_omnibus__p_du_ratio_micro_par_permutation_appariee` | C05 | La p corrigée du test du Δ micro est ≥ α et égale à `scipy.stats.permutation_test` exact (1,0). |
+| `intervalles__meme_documents_que_le_test` | C06 | L'IC du Δ porte sur le support apparié D^μ_AB (mêmes ids que le test). Les IC marginaux portent sur le support conditionnel et sont étiquetés ainsi. |
+| `echec_non_aleatoire__classement_sur_documents_communs` | C07 | Sur le support apparié (A, B), B (0,040) est devant A (0,050). Aucun ordre n'est donné entre agrégats de supports différents, et la couverture 7/8 de A est publiée. |
+| `max_error__un_echec_ne_note_jamais_mieux_quune_reponse` | C08 | Aucune « erreur maximale » n'est imputée. Par défaut, l'échec n'est pas noté (couverture 2/3). Sous `empty_page`, il vaut la valeur de la métrique pour une hypothèse vide (CER 1,0), sous ce nom. |
+| `bootstrap__grappes_documentaires_declarables` | C09 | La même liste groupée de deux façons donne deux IC ; en singletons, l'IC égale l'IC par document. |
+| `version_manuelle__brique_modifiee_sans_relever_sa_version_reexecutee` | C17 | Deux modules aux **fichiers exécutés** différents, de même nom et de même version déclarée, ont deux identités, donc le second est exécuté. Variante : un fichier importé paresseusement puis modifié refuse la réutilisation. |
+| `identite_saknussemm__prompt_et_temperature_envoyes_au_llm_sont_traces` | C17 | L'identité change quand le prompt ou la température **envoyés** changent, et ne change pas pour un réglage opérationnel. On teste le comportement, pas des noms de clés. |
+
+À recibler sans changer l'attendu :
+- `reference_vide_nentre_pas_dans_le_test_apparie` (C01) : p = 0,031 lue dans l'**analyse de rangs** (6 pages) ;
+- `pipeline_non_applicable…` : p = 0,0078 lue dans le Wilcoxon de la paire (A, B).
 
 ### 4.2 Tests existants qui figent un défaut
 
-Ils sont à inverser ou supprimer **dans le commit du correctif** (rupture nette, §5.1).
+À inverser ou supprimer dans le commit du correctif.
 
 | Test | Défaut figé | Tranche |
 |---|---|---|
-| `tests/evaluation/test_metrics_text.py::test_cer_weight_is_reference_length` | page blanche hors du micro | 1 |
-| `tests/evaluation/test_micro_interval.py::test_zero_weight_documents_weigh_nothing` | idem pour l'IC | 1 |
-| `tests/app/test_unit_outcome.py::test_max_error_is_zero_for_a_higher_is_better_metric`, `::test_max_error_scores_the_failure_like_an_empty_page` | `max_error` déduit du signe ; la seconde devient le test de la sensibilité `empty_page` | 2 |
-| `tests/adversarial/applicabilite_echecs/…::le_type_interdit_bien_les_artefacts_dune_unite_failed` (vert) | « échec ⇒ aucun artefact » | 3 |
-| `tests/evaluation/test_appariement_geometrique.py::test_identifiants_partages_inchanges` | id prioritaire « pour que rien ne bouge » | 5 |
-| `tests/evaluation/test_calibration.py::test_analysis_scores_tokens_against_reference_multiset` | multi-ensemble (D-068), si C11-B | 5 |
+| `tests/evaluation/test_metrics_text.py::test_cer_weight_is_reference_length` | page blanche hors du micro | 1a |
+| `tests/evaluation/test_micro_interval.py::test_zero_weight_documents_weigh_nothing` | idem pour l'IC | 1a |
+| `tests/evaluation/test_inference_scipy_parity.py` (`family_size == len(computed)`), `test_inference.py::test_not_computed_says_why` (`family_size == 0`) | famille de Holm dépendante des résultats | 1a |
+| `tests/app/test_unit_outcome.py::test_max_error_is_zero_for_a_higher_is_better_metric`, `::test_max_error_scores_the_failure_like_an_empty_page` | `max_error` déduit du signe ; la seconde devient le test de `empty_page` | 1b |
+| `tests/adversarial/applicabilite_echecs/…::le_type_interdit_bien_les_artefacts_dune_unite_failed` (vert) | « échec ⇒ aucun artefact » | 2 |
+| `tests/evaluation/test_appariement_geometrique.py::test_identifiants_partages_inchanges` | id prioritaire sans filiation | 4 |
+| `tests/evaluation/test_calibration.py::test_analysis_scores_tokens_against_reference_multiset` | multi-ensemble (si C11-B) | 4 |
 
-Restent valides : `test_code_version_change_keeps_the_cache` (la version du paquet reste hors de l'empreinte, S11) ; `test_omnibus_drops_incomplete_documents` ; `test_a_failing_region_does_not_abort_the_page`, à compléter par le statut `partial`.
+### 4.3 Tests manquants (à écrire rouges d'abord)
 
-### 4.3 Tests adversariaux manquants (à écrire rouges d'abord)
+M1 corpus entièrement vide · M4 région de référence sans texte · M8 filiation conservée, fusion hors bijection · A2 troncature aval et saknussemm en repli total · A4 · A9 · A10 · A12 coûts historiques contre rejeu · I1 import paresseux · I3 · I5 · I6 ancre · I7 distant sans modèle · F2 annulation · F3 amont non déterministe · F4 même dossier · F5 · F7 blob partagé altéré · F9 entrées de parité.
 
-S2 (ordre des documents) · S4 (région fantôme sur une référence sans texte) · S8 (troncature aval sous une vue amont ; saknussemm en repli total) · S9 (ajout d'un pipeline, forme générale) · S15 (distant sans modèle servi) · F2 (annulation et délai) · F5 (mutualisation par lien dur) · F7 (entrées de parité). Les tests de propriété P de S1, S3, S4, S8, S13, S16 et F3 sont à écrire en même temps.
+Ajouter les propriétés P de M1 à M8, A1, A2, A8, A9, A10, I2, I4 et F3.
 
 ---
 
 ## 5. Ordre des tranches
 
-Chaque tranche ne dépend que des précédentes. Le premier commit d'une tranche ne contient que des tests (reformulés, manquants, propriétés), et ils doivent être rouges pour la bonne raison. La tranche 5 ne dépend que des tranches 1 et 2 : elle peut être avancée.
+Le premier commit de chaque tranche ne contient que des tests (§ 4), rouges pour la bonne raison. K1 et K2 partagent une conception (§ 2.1) et deux implémentations successives. La tranche 4 ne dépend que de 1a et 1b.
 
-| Tranche | Invariants visés | Tests prérequis (rouges) | Contrats touchés | Suppressions | Critère de fin |
-|---|---|---|---|---|---|
-| **1 · Comptes** (K1) | S1, S2, S4 (texte, NER), S5, S7 | T1, C05×2, C09 reformulés ; P de S1/S2/S4 ; C01-C04 et C06 `ic_apparie` existants | `Observation` → `Counts` + `finalize` ; `MetricScore` (+ counts, macro) ; `InferencePayload` (+ estimande, Δ, IC apparié) | `Observation`, `micro_ratio(_ci)`, `_intervals`, `_error_rate` ; § 4.2 tranche 1 | S1 établi sur les 29 métriques contre les oracles ; S2/S5/S7 établis. **Prévisions vérifiées** en re-notant les deux `RunResult` commités depuis leur archive : CER/WER micro BNL et Dresden **inchangés** (aucune page blanche), `char_accuracy` Dresden E5 de 0,3125 à 0,000, Δ apparié E5−E0 BNL [−0,041 ; −0,010]. |
-| **2 · Statut et support** (K2) | S6, S8, S9, F6 | C07, C08, C06 `meme_documents` reformulés ; tests manquants S8/S9 | `MeasureStatus` + motif ; attendus ; support commun ; `FailurePolicy` (`empty_page`) ; `UnitOutcome.partial` ; validation avant exécution | `missed`, règle `worst`, `max_error` ; § 4.2 tranche 2 | S6/S8/S9/F6 établis. Dresden E5 publié 1,8614 « conditionnel 4/10 », comparé à E0 sur le seul support commun. Amendement CLAUDE.md §3 « niveau absent » (N1) dans le même commit. |
-| **3 · Étape** (K3) | S10, S15, F1 (isolation), F2, F3 | C12×3 (fixture `economie` réécrite avec un usage par étape), C18×2 ; `a5×5`, correction et décisions existants ; F2 annulation | `StepRecord`, `DocumentExecution`, workspace par étape, `DocumentUsage.steps`, `prefix_key`, entrées des analyses | `billed`, `failed()`, `pools`, `unit_key`, `_two_stage_pipelines`, `served_models` stocké ; § 4.2 tranche 3 | S10/S15/F1/F2/F3 établis. Socle `tesseract → deskew → tesseract` : chaque vue garde sa lecture (CER ≈ 0,015 avant redressement). |
-| **4 · Identité et archive** (K4) | S11, S12, S13, S14, F1 (empreinte), F4, F5, F7 | C14×4 reciblés sur le lecteur d'archive, C15×3, C17×2 reformulés ; S15 distant ; F5 ; F7 | `content_hash` calculé + `read_verified` ; `BlobStore` ; archive BagIt ; empreintes GT et image ; `ModuleIdentity` enrichie | `_rebased`, `_store_image`, `binaries.json`, rôle d'archive du `ResumeStore`, téléchargement hors ligne | S11-S14/F4/F5/F7 établis. Une archive de campagne scellée est validée par `bagit` et re-notée hors ligne, réseau et corpus retirés, à l'identique (S13). |
-| **5 · Correspondance** (K5) | S3, S16 (+ S1 pour la détection) | C10×2, C11×2 (si tranché), C16 ; P de S3/S16 ; 12 valides existants | `apparier` (hongrois, par page), `DetectionCounts`, `formats.layout_text`, refus de fan-out, alignement de calibration | `_greedy_pairs`, `correspondance` « id d'abord », `_ids_partages`, une des deux projections ; § 4.2 tranche 5 | S3/S16 établis par propriété et contre `linear_sum_assignment`. CER par région E1/E3/E4 re-notés. |
+| Tranche | Invariants | Tests prérequis | Contrats | Critère de fin |
+|---|---|---|---|---|
+| **1a · Statistiques et estimandes** (K1, conception § 2.1) | M1 à M6, A3, A4, A5, A8, A9, A10 | T1, C05×2, C09 reformulés ; A4, A9, A10, M1 (corpus vide) ; propriétés M1 à M6 | statistiques par famille, finalisation, micro/macro, Δ appariés, analyses de rangs nommées, famille a priori, ordre canonique | Invariants établis sur les 29 métriques et l'ECE, contre jiwer, nervaluate et scipy. **Prévisions vérifiées** en re-notant les deux `RunResult` commités : CER/WER micro BNL et Dresden inchangés (aucune page blanche) ; `char_accuracy` Dresden E5 de 0,3125 à 0 ; Δ micro apparié E5−E0 sur BNL, IC [−0,041 ; −0,010]. |
+| **1b · Axes et supports** (K2, même conception) | A1, A2, A6, A7, F8 | C06 `meme_documents`, C07, C08 reformulés ; A2 manquants | quatre axes, trois supports, `empty_page`, `partial`, validation préalable | Invariants établis. Dresden E5 publié 1,8614 « conditionnel 4/10 », ordonné face à E0 sur leur seul support apparié. Amendement CLAUDE.md §3 (N1) dans le même commit. |
+| **2 · Étape** (K3) | A11, A12 (préfixe), I7, F1 (isolation), F2, F3, F4, F5 | C12×3 (fixture `economie` avec usage par étape), C18×2 ; F2 à F5 manquants | `StepRecord`, workspace par étape, `step_key` sur artefacts consommés, `repetition_id`, `RunMode`, persistance atomique, entrées des analyses | Invariants établis. Socle `tesseract → deskew → tesseract` : chaque vue garde sa lecture. Un arrêt brutal ne perd aucune étape payée. |
+| **3 · Identité et archive** (K4) | I1 à I6, A12 (historique/rejeu), F1 (empreinte), F6, F7, F9 | C14×4 reciblés sur le lecteur d'archive, C15×3, C17×2 reformulés ; I1, I3, I5, I6, F7, F9 manquants | `read_verified`, `BlobStore`, sac BagIt, `StepIdentity` sur fichiers exécutés, `ProtocolIdentity`, empreintes de corpus | Invariants établis. Une archive de campagne est scellée, validée par `bagit`, relue (I4), re-notée sous le même protocole (I5), réseau et corpus retirés ; son empreinte racine est publiée hors de l'archive. |
+| **4 · Correspondance** (K5) | M7, M8 | C10×2, C11×2 (si tranché), C16 ; M8 manquants ; propriétés M7 et M8 | appariement lexicographique, filiation, relations de fusion et scission, projection unique, refus de fan-out | Invariants établis contre l'énumération exhaustive et `linear_sum_assignment`. CER par région E1/E3/E4 re-notés. |
 
 ---
 
-## 6. Ce qui reste à arbitrer (liste fermée)
+## 6. Ce qui reste ouvert (liste fermée)
 
-### 6.1 Conventions ouvertes (4)
-
-| | Question | Recommandation |
+| # | Question | Recommandation |
 |---|---|---|
-| C04 | Lignes fantômes dans `line_identity_cer` | A : insertions comptées, cohérent avec D-288 et S4 |
-| C11 | Jugement d'un jeton pour la calibration | B : alignement LCS, ou C avec un départage « maximiser les correspondances » déclaré |
-| C16 | Layout multipage avec une seule image en fan-out | C : refus typé en 1.0 (F6) ; A (une image par page) ensuite |
-| C19 | Plan d'expérience de la campagne | Témoin `seg → tesseract:reco → lecture → mistral:correction` obligatoire ; `max_tokens` : aligner (A) ou montrer sur S31 qu'il ne limite pas (C) |
-
-### 6.2 Conventions tranchées en partie (6)
-
-| | Choix résiduel | Recommandation |
-|---|---|---|
-| C01 | Page blanche dans le macro et le test par document | A : incluse au micro et à son test apparié, statut `undefined`, exclue du macro et du Wilcoxon |
-| C02 | Plancher des exactitudes | A : plancher au corpus ; macro publié à part |
-| C03 | Statistique nommée τ | A : Σ discordantes / Σ paires ; macro à part ; la mesure par bloc sous un autre nom |
-| C09 | Méthode des grappes et seuil | B : bootstrap par grappe ; « non estimable » sous un seuil **à chiffrer** (BNL : 5 grappes, dont un singleton) |
-| C17 | Empreinte des sources contre réglages déclarés | B + D (sources + réglages effectifs, version de bibliothèque, révision des poids), garde CI en filet pour le first-party (voir N3) |
-| C18 | Provenance par unité | A : attribution par unité ; l'union devient un résumé dérivé |
-
-### 6.3 Heurts avec `CLAUDE.md` (BIBLIOTHEQUES.md § 3)
-
-| | Heurt | Recommandation |
-|---|---|---|
-| H1 | `bagit` hors de la liste blanche `app` ; `rfc8785` hors de `pipeline` | Ajouter `bagit` en base et à `LAYERS["app"]` : un fichier, 0 dépendance, et c'est ce que la consigne demande de réutiliser. Pas de `rfc8785` tant que seul Cinoc recalcule les empreintes. |
-| H2 | IoU polygonale (`shapely`) contre liste blanche et déterminisme | Rester en boîtes (aucun consommateur ne demande de polygones), limite écrite. Jamais en extra avec repli : la métrique dépendrait du paquet installé. |
-| H3 | Tirages scipy dépendants de la version | Accepter « mêmes octets à versions égales » (c'est déjà le cas du rééchantillonneur numpy actuel, NEP 19) ; le manifeste trace scipy et numpy ; ordre canonique des documents (S2). |
-| H4 | « Aucun téléchargement » contre D-094 (images par référence IIIF) | Empreinte d'image obligatoire, octets facultatifs selon la licence. La re-notation n'a besoin que des empreintes, donc aucun trou ni `fetch.txt`. La réexécution reste hors du rôle de l'archive. |
-| H5 | Parité web/CLI pour les capacités d'archive | Une fonction `app` par capacité. Le scellement devient une option d'une commande existante (`cinoc run`), et la vérification est implicite à chaque relecture `--offline`. Aucun verbe nouveau ; route web `front-absent` déclarée. |
-| H6 | Provenance Run Crate complet contre « pas de consommateur » | BagIt maintenant. Le descripteur RO-Crate (Process Run Crate, plus une `ControlAction` par `StepRecord`) n'est écrit que si un dépôt (Zenodo, HF) est nommé comme consommateur à la publication. |
-| H7 | `rng=` absent avant scipy 1.15 | Relever le plancher à `scipy>=1.15` (disponible sur 3.11). |
-| H8 | `roc-validator` résout le contexte JSON-LD par le réseau | Sans objet si H6 est différé ; sinon contexte local dans le job `oracle`. |
-
-### 6.4 Questions nouvelles nées de cette synthèse
-
-| | Question | Recommandation |
-|---|---|---|
-| N1 | CLAUDE.md §3 « niveau absent → métrique non applicable (`None`) » contredit K2 | Amender : niveau absent de la **VT** → `not_applicable` ; niveau absent de l'**hypothèse** → `undefined`, ou texte vide noté, plus `partial`. |
-| N2 | `RunResult` v6 : `support` par document cède la place à `counts`, alors que les clés sont un « contrat dur » (§12) | Clés conservées, champs additifs. Un JSON antérieur portant `inference` est refusé et re-noté depuis son archive (précédent v4 → v5). |
-| N3 | Empreinte des sources : dans la clé de cache, ou seulement enregistrée + garde CI (tension T5) ? | Dans la clé, restreinte à la fermeture du module dans `cinoc.adapters` ou au `RECORD` d'un plugin installé ; fermeture complète enregistrée ; installation éditable signalée « empreinte non garantie ». Coût : une modification d'adaptateur fait réexécuter ses unités. |
-| N4 | Famille de Holm et pipelines identiques page à page (E1/E3/E4 : Friedman 0,029 contre 0,051) | Fusionner, sous déclaration, les pipelines aux sorties identiques (mêmes empreintes) avant de former la famille. |
-| N5 | Ordre canonique des documents pour le rééchantillonnage (S2) | Tri par id de document. |
-| N6 | `MeasureStatus` en `domain` (BIBLIOTHEQUES) ou en `evaluation` | `evaluation` : aucun consommateur hors des couches 3 et 7. |
-| N7 | Fusions et scissions (arbitrage 6 « examiner ») : comptes publiés en 1.0 ? | Oui, comme comptes de détection (~30 l.), sans profils pondérés. |
-| N8 | Quand un id prouve-t-il la filiation ? | Jamais en 1.0 : il ne sert qu'à départager. Un lien d'empreinte vers la VT ne sera ajouté que pour un consommateur réel (reconnaissance sur segmentation VT). |
-| N9 | SIGINT (invariant §12 violé, hors des neuf arbitrages) | Le traiter en tranche 3 : archiver chaque `StepRecord` dès la fin de son étape (reprend l'idée du correctif gelé, arbitrage 9), et arrêter la file à l'annulation. |
-| N10 | Archives S30/S31 au format `ResumeStore` | Script ponctuel de conversion **hors produit** (`campaigns/`, supprimé après usage) plutôt qu'un shim, ou réexécution des parties gratuites. |
-| N11 | Séparateur de blocs de la projection unique (K5) | `\n`, celui de la couche 5, qui a produit les sorties de campagne. |
-| N12 | `hypothesis` en extra `dev` | Oui, avec un profil déterministe (§ 3). |
+| 1 | **C02** : plancher des exactitudes (après combinaison, ou pas de plancher façon ISRI) | plancher au corpus (A) ; macro publié à part |
+| 2 | **C04** : lignes fantômes dans `line_identity_cer` | insertions comptées (A, M4) |
+| 3 | **C09** : déclaration des grappes (champ de `DocumentRef` ou métadonnée d'import) et seuil « non estimable » | champ déclaré par le corpus ; seuil à chiffrer (BNL : 5 grappes, dont un singleton) |
+| 4 | **C10** (résiduel) : seuil d'admissibilité strict ou inclusif, et seuil θ_m des fusions et scissions | IoU > 0,5 strict (unicité de l'appariement plan, Kirillov et al. 2019) ; θ_m = 0,5 |
+| 5 | **C11** : jugement d'un jeton en calibration | alignement LCS (B) |
+| 6 | **C17** (résiduel) : périmètre des fichiers exécutés (stdlib et interpréteur hachés, ou seulement leur version enregistrée) | version de l'interpréteur enregistrée, stdlib non hachée ; tout le reste haché |
+| 7 | **C19** : plan d'expérience | témoin `seg → tesseract:reco → lecture → mistral:correction` obligatoire ; `max_tokens` aligné ou montré non limitant ; la recopie `repetition-1 → 2…5` de S31 retirée ou déclarée relecture (F4) |
+| 8 | **H2** : IoU polygonale (`shapely`) | rester en boîtes tant qu'aucun consommateur n'exige de polygones ; jamais en extra avec repli (la métrique dépendrait du paquet installé) |
+| 9 | **H3** : IC scipy dépendants de la version | accepter « mêmes octets à versions égales », versions tracées |
+| 10 | **H4** : images IIIF dans l'archive | empreinte obligatoire, octets facultatifs selon la licence ; la re-notation n'a besoin que des empreintes |
+| 11 | **H5** : faces des capacités nouvelles (sceller, vérifier, modes) | options de `cinoc run` ; vérification implicite à chaque relecture ; web `front-absent` déclaré |
+| 12 | **N1** : formulation de l'amendement CLAUDE.md §3 (« niveau absent → `None` ») | niveau absent de la VT → `not_applicable` ; de l'hypothèse → statistique valide (texte vide noté) ou indisponible avec motif, plus `partial` |
+| 13 | **Famille de Holm par défaut**, quand la spec ne déclare pas de comparaisons (point 10) | toutes les paires de la spec × métriques établies × vues × {micro, macro} ; les analyses de rangs hors de la famille confirmatoire |
+| 14 | **C07** (résiduel) : tri par défaut du tableau | aucun tri implicite entre supports différents ; tri sur le support global de la famille, avec colonne de couverture |
+| 15 | **Authenticité** : signature du `tagmanifest` en 1.0, ou ancrage externe seul | ancrage de l'empreinte racine en 1.0 ; signature hors 1.0 |
+| 16 | **Mutualisation** par défaut | reflink, sinon copie ; lien dur sur option explicite seulement |
+| 17 | **Archives S30/S31** au format `ResumeStore` | script de conversion ponctuel hors produit (`campaigns/`, supprimé après usage), ou réexécution des parties gratuites |
+| 18 | **Séparateur de blocs** de la projection unique | `\n`, celui de la couche 5 qui a produit les sorties de campagne |
