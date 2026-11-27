@@ -1,6 +1,6 @@
 """Métriques de diagnostic texte : cherchabilité, trigrammes non ancrés (couche 3).
 
-Heuristiques **maison** (PLAN_PARITE §5.8b : spécification de départ relue,
+Heuristiques **maison** (règle D-068 : spécification de départ relue,
 valeurs de test dérivées à la main — jamais en exécutant la source).
 
 - ``searchability`` — la question des bibliothèques numériques : quelle part

@@ -2,7 +2,7 @@
 
 Transforme « combien d'erreurs » en « quelles erreurs » : chaque mot erroné
 est classé par des règles **déterministes et auditables** (aucun ML, aucun
-lexique). Heuristique maison (PLAN_PARITE §5.8b : spécification source relue
+lexique). Heuristique maison (règle D-068 : spécification source relue
 et **élaguée** — les classes à lexique ``hapax``/``oov_character`` et
 l'``abbreviation_error`` à table MUFI ne sont pas portées, cf. D-071).
 

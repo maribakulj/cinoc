@@ -345,7 +345,7 @@ de page de la DoD ci-dessus sont donc **dépassés sur ces points** :
 
 - **upload ZIP (glisser-déposer) + imports IIIF/Gallica/eScriptorium/HF** :
   déplacés de `/benchmark` vers **`/library`** (`static/js/corpus.js`) — **renverse
-  D-059** et « UI upload/sélection sur `/benchmark` » (`PLAN_SPACE_INTERACTIF` TU2.f.2).
+  D-059** et « UI upload/sélection sur `/benchmark` » (TU2.f.2 de l'ancienne spec UX du Space, retirée de l'arbre — D-309).
 - **`/library` n'est plus « 0 JS »** : elle porte `corpus.js` + une section
   « Mes corpus » (`CorpusStore.list_corpora`) ; le **Banc d'essai sélectionne**
   un corpus existant (`<select>`), il ne téléverse plus.

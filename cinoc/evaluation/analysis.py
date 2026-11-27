@@ -1,6 +1,6 @@
 """Canal « analyses » du ``RunResult`` — résultats **non scalaires** (couche 3).
 
-Contrat E2 (``PLAN_PARITE.md`` §1) : les scalaires ``MetricScore`` restent la
+Contrat E2 (D-066, D-067) : les scalaires ``MetricScore`` restent la
 seule monnaie de classement/historique ; ``analyses`` porte le **contexte
 structuré** (inférentiel, diagnostics…), calculé dans ``evaluation/`` et
 seulement **lu** par les rapports. Chaque famille ajoute son payload Pydantic

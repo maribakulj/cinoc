@@ -1,6 +1,6 @@
 """Économie : coûts, débit effectif, Pareto — valeurs dérivées **à la main**.
 
-Règle d'ancrage (PLAN_PARITE §5.8b) : l'économie est une heuristique maison —
+Règle d'ancrage (D-068) : l'économie est une heuristique maison —
 chaque valeur attendue ci-dessous est calculée sur papier depuis le modèle
 documenté (durée × taux + jetons × tarif ; débit corrigé), jamais générée en
 exécutant l'implémentation source.

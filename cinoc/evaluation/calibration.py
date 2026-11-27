@@ -15,7 +15,7 @@ dans l'ECE ni dans le MCE.
 des mots de la référence du document — proxy volontairement simple et
 auditable (pas d'alignement positionnel : un mot juste mais déplacé reste
 juste pour la recherche). Heuristique maison pour ce choix de proxy →
-valeurs de test dérivées à la main (PLAN_PARITE §5.8b). **Mot et référence
+valeurs de test dérivées à la main (règle D-068). **Mot et référence
 sont préparés comme au scoring** (``prepare_text`` de la vue) : sous le profil
 par défaut, un « é » décomposé du moteur et le « é » composé de la GT sont le
 même mot, comme pour le CER (D-285). Un jeton que la vue efface entièrement

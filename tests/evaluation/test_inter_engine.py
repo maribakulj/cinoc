@@ -1,6 +1,6 @@
 """Inter-moteurs : JSD (valeurs main), oracle multiset (valeurs main), R10, caps.
 
-Toutes les valeurs attendues sont **dérivées à la main** (PLAN_PARITE §5.8b) :
+Toutes les valeurs attendues sont **dérivées à la main** (règle D-068) :
 - JSD : formule ``½·KL(P‖M) + ½·KL(Q‖M)`` en base 2 posée sur des
   distributions courtes (``log2(1.5) = 0.5849625007211562``) ;
 - oracle : multisets min/max comptés à la main sur 2 moteurs courts.
