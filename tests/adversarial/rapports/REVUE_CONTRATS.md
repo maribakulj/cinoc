@@ -231,3 +231,76 @@ Deux autres sont à régler avant la tranche 3 :
 - **N5** : sources sur disque, pas modules chargés.
 
 N6 est à régler avant la tranche 4. Aucun contrat n'est à repenser.
+
+---
+
+## 7. Clôture de la révision n° 3
+
+Objet : la révision n° 3 de `CONTRATS.md`, avec sa table « Révision n° 3 » et les deux nouveaux scripts de l'auteur, `revision2_verifications/n1_n2_procedure_unique.py` et `n8_wilcoxon_methode_explicite.py`. Je les ai exécutés tous deux ; ils reproduisent les valeurs annoncées.
+
+Méthode :
+- les contre-exemples `r2_*` sont rejoués contre les règles révisées ;
+- la partie statistique est mesurée sur les scénarios que B9 nomme lui-même.
+
+Les sept scripts `r3_*.py` sont dans `/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/ce-review2/`. `run_all.sh` rejoue les 23 + 10 + 7 scripts ; les 40 se reproduisent.
+
+**Comptes N1 à N8** : **6 levés** (N2, N3, N4, N5, N7, N8), **2 partiels** (N1, N6), **0 non levé**.
+
+Parmi les six points partiels de la révision n° 2 :
+- **levés** : R5, P4, P10 et P11 ;
+- **encore partiels** : R4 (via N1) et R11 (via N6).
+
+**Contradictions nouvelles : 5** (C1 à C5).
+
+### 7.1 Point par point
+
+| Point | Verdict | Une ligne |
+|---|---|---|
+| N1 | **partiel** | SF tient à tout n. En revanche, BA (n ≥ 30) et PS (n < 30) ne tiennent pas la borne d'A3 sur deux des quatre scénarios que B9 retient lui-même (C1, C2). |
+| N2 | **levé** | Une seule procédure par Δ. SF par inversion : l'indicatrice de chaque partie J est monotone en δ (Σ_J e ≤ δ Σ_J n), donc p_haut croît, p_bas décroît et l'IC est d'un seul tenant. Je trouve 0 violation sur 300 jeux. Couverture de 0,942 sous effets hétérogènes de type Simpson à n = 10. Pour BA, p et IC viennent des mêmes réplicats (`r3_sf_inversion.py` (1), (3)). Une exception, sur le seuil « n ≤ 5 » : voir C3. |
+| N3 | **levé** | A4 est corrigé. La nouvelle analyse « invention hors référence » est à préciser (C5). |
+| N4 | **levé** | Rejeu de `r2_p10` sous la validation révisée (partie calculée de la définition, et modules résolus par leur nom) : les poids remplacés et le module résolu dans un autre venv sont tous deux détectés (`r3_n4_n5_rejeu.py`). |
+| N5 | **levé** | Les sources sur disque rendent la définition indépendante de ce qui est chargé. Remarque : `find_spec("pkg.sub")` importe `pkg`, donc exécute son `__init__`. « Résolu sans exécuter » n'est vrai que pour les modules de premier niveau ; il suffit de corriger la phrase (même script). |
+| N6 | **partiel** | L'échange d'ids est levé (`region_cer` 0). Mais la justification « une paire héritée appartient toujours à un optimum des critères 1 et 2 » est fausse quand des régions de la VT se recouvrent (C4). |
+| N7 | **levé** | L'ordre (y0, x0) ne dépend plus de la déclaration : même projection, même CER (`r3_n7_rejeu.py`). |
+| N8 | **levé** | `PermutationMethod` explicite, vérifié contre une énumération écrite à la main (n = 7 : 0,2656 ; n = 20 : 0,4366). La graine déclarée rend la p répétable. |
+
+### 7.2 Contradictions nouvelles
+
+| # | Phrase visée | Contre-exemple minimal | Script | Correction minimale |
+|---|---|---|---|---|
+| **C1** | § 2.1 d, PS : « rejet mesuré entre 0,000 et 0,060 pour n de 5 à 30 » ; A3 : « pour chaque procédure et chaque n du jeu de calibration, taux de rejet ≤ α + 3 erreurs MC » ; B9 : le jeu comprend « une page à fort levier, des dénominateurs très inégaux » | PS implémentée comme dans `n1_n2_procedure_unique.py` (c), sous H0 R_A = R_B, 1 000 simulations par case, borne 0,071 :<br>• scénario F1 de la revue : 0,000 à 0,073 ;<br>• **un document à 60 entités, les autres à 2** : **0,346 (n = 6), 0,519 (n = 10), 0,542 (n = 15), 0,418 (n = 20)** ;<br>• **dénominateurs lognormaux** : **0,141 (n = 8), 0,121 (n = 15), 0,119 (n = 25)** ;<br>• MER : 0,000 à 0,071.<br>La mesure de l'auteur ne porte que sur le premier scénario. | `r3_ps_niveau_scenarios.py` | Ne publier la p de PS que si un diagnostic de levier déclaré (part maximale d'une unité dans Σ dénominateur) est sous un seuil calibré sur tout le jeu B9 ; sinon « non estimable (levier) ». |
+| **C2** | B9 : « n_min = le plus petit n à partir duquel BA tient α + 3 erreurs MC sur **tous** les scénarios » ; § 2.1 d « n_min = 30 provisoirement » | BA, 600 simulations par case, borne 0,077 :<br>• lognormal : **0,107 (n = 30)**, 0,087 (n = 50), 0,062 (n = 100) ;<br>• levier : 0,065 (n = 30), **0,083 (n = 50), 0,087 (n = 100)**.<br>Sur le jeu de calibration de B9, n_min est d'au moins 100, ou n'existe pas tant que le levier ne diminue pas avec n. Comme PS échoue aussi (C1), **aucune** procédure du contrat ne couvre une famille à dénominateur d'hypothèse dont une unité a un fort levier. | `r3_ba_n_min_scenarios.py` | Même diagnostic de levier pour BA. Définir n_min sur les scénarios à levier borné, et publier « non estimable » au-delà du seuil de levier, quel que soit n. |
+| **C3** | § 2.1 d, SF : « si n ≤ 5, aucun rejet possible ; IC non borné » | Une page à référence vide (n_d = 0, au support micro) a r_d(δ) = e_d, constant en δ : quand δ → ±∞, p tend vers environ 2·2^(k−n). Exemple : n = 8 dont 3 pages vides donne p(0) = 0,016 (rejet), mais p(δ = 10) = 0,055 > α. L'IC est donc **non borné** alors que n = 8 > 5. | `r3_sf_inversion.py` (2) | Le seuil porte sur n_eff = #{unités à n_d > 0}. Publier « IC non borné » quand 2^(1+k−n) > α. |
+| **C4** | § 2.4 a : « Une paire héritée a IoU = 1. Elle appartient donc **toujours** à un optimum des critères 1 et 2 » ; M8 | Le critère 1 (nombre de paires) prime sur l'IoU. VT : r1 (page entière) et r2 (60 % du haut). La brique garde r1 à l'identique (même id, même géométrie) et remplace r2 par h2 (de 40 % à 100 %). L'énumération donne r1↔h2 et r2↔(copie de r1), avec la clé (2, 6/5). La paire héritée est hors de tout optimum, et `region_cer` vaut 0,84 contre 0,76 si elle est gardée. | `r3_n6_heritage_hors_optimum.py` (b) | Fixer les paires héritées avant l'optimisation, qui porte alors sur le reste ; ou retirer la phrase et écrire dans M8 que l'héritage ne survit pas au critère 1. |
+| **C5** | § 2.1 c, « invention hors référence » : « par pipeline … publiés à côté de chaque macro » ; A6 | (a) Calculée par pipeline, donc sur des supports différents : A échoue sur 3 pages blanches sur 4 et affiche (0 document, 0 caractère inventé) ; B les lit toutes et affiche (1, 2). Sur leur support apparié, les deux sont identiques. (b) « Unités inventées » n'est pas défini pour les proportions à dénominateur de référence (`numseq_*`, `searchability`, `diacritic_err`, `mufi_err`), dont le macro est pourtant publié : leur statistique ne compte aucune unité de l'hypothèse (`metrics/structured_data.py:168-175`). | `r3_invention_hors_reference.py` | Publier l'analyse sur le support apparié ou global, avec la couverture des pages vides, et déclarer l'unité inventée par famille (« non défini » pour ces proportions). |
+
+Remarque, sans contradiction : à n ≤ 5, PS ne peut pas rejeter non plus. Le cas extrême (l'identité et l'échange complet ont le même |T|) est atteint par 2 des 32 permutations, donc p ≥ 2/32 > α. Il faut l'écrire comme pour SF. Avec les 5 grappes de BNL, aucun Δ d'aucune famille ne peut donc être déclaré significatif.
+
+### 7.3 Ce qui tient dans la partie statistique
+
+- **SF** : niveau ≤ α à tout n sous sa H0 nommée (échangeabilité), et elle s'applique à la famille dont le dénominateur est fixé par la référence. L'IC par inversion est d'un seul tenant, par la monotonie démontrée au § 7.1 (N2), et couvre bien le Δ micro sous des effets hétérogènes (0,942 pour un nominal de 0,95). Il n'y a aucune contradiction entre p et IC.
+- **BA** : p et IC sont tirés des mêmes réplicats, donc cohérents par construction. P2 (réplicats écartés au-delà de ε) est inchangé et tient.
+- **N8 et P4** : la méthode des rangs est explicite et répétable.
+
+### 7.4 Avis : la tranche 1a peut-elle commencer ?
+
+**Oui pour le premier commit, celui des tests adversariaux rouges. Non pour le correctif d'inférence tant que B9 n'est pas reformulé.**
+
+Les contrats de la tranche 1a sont stables et sans contradiction ouverte :
+- les statistiques exactes par famille ;
+- P1 ;
+- D^M fixé par la référence ;
+- SF ;
+- les rangs explicites ;
+- Holm a priori ;
+- les grappes et l'ordre canonique.
+
+Les invariants correspondants (M1, M2, M3, M6, A4, A5, A8, A9, A10, A13) peuvent être écrits en tests rouges dès maintenant. Les scénarios de C1 et C2 doivent y entrer comme cas de calibration d'A3.
+
+B9, en revanche, ne peut pas être tranché tel qu'il est écrit : sa propre définition (« tous les scénarios du jeu ») réfute n_min = 30, et aucune procédure ne tient sous fort levier. Avant de coder l'inférence des familles à dénominateur d'hypothèse, B9 doit être reformulé :
+- un diagnostic de levier déclaré ;
+- « non estimable » au-delà de son seuil, à tout n ;
+- n_min calibré sur les scénarios à levier borné.
+
+Restent ensuite à écrire C3 (n_eff) et C5 (support et unités de l'analyse d'invention). Ce sont des clauses ; aucun contrat n'est à repenser. C4 relève de la tranche 4.
