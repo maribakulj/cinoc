@@ -58,7 +58,11 @@ from cinoc.interfaces._list_command import (
     run_list_recipes,
 )
 from cinoc.interfaces._recipe_spec import scoring_options, spec_loader
-from cinoc.interfaces._run_summary import print_progress, unit_summary
+from cinoc.interfaces._run_summary import (
+    console_safe,
+    print_progress,
+    unit_summary,
+)
 from cinoc.interfaces._serve_command import serve_command
 from cinoc.reports import default_report_renderer, render_comparison
 from cinoc.reports.composition_diff import paired_differences
@@ -454,11 +458,11 @@ def _compare_command(path_a: str, path_b: str, output: str, lang: str) -> int:
             f"{d.label()} : {d.value_a or '—'} -> {d.value_b or '—'}"
             for d in paire.differences
         )
-        print(
+        ligne = (
             f"Attention : « {paire.pipeline} » n'a pas la même composition "
-            f"dans A et B ({ecarts}) ; son delta mêle l'effet de ces réglages.",
-            file=sys.stderr,
+            f"dans A et B ({ecarts}) ; son delta mêle l'effet de ces réglages."
         )
+        print(console_safe(ligne, sys.stderr), file=sys.stderr)
     print(f"Comparaison écrite : {output}")
     return 0
 

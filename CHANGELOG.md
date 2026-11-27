@@ -48,6 +48,13 @@ publier, et son moment, appartiennent au mainteneur.
 
 ### Corrigé
 
+- **La fourchette de `--repeat` nomme sa vue.** `cer : 0.0051 – 0.0051`
+  s'affichait deux fois, une par vue, sans dire laquelle ; chaque ligne dit
+  `pipeline · vue · métrique`, et la console dit que la fourchette vit dans
+  `<rapport>.variance.json`, le rapport HTML portant le dernier run (le guide
+  aussi). Une console cp1252 lit `->` pour le `→` d'un nom de recette, ici
+  comme dans la progression et l'avertissement de `cinoc compare`.
+
 - **Le rapport de `cinoc run` et de `cinoc demo` existe en anglais.** Seul
   `cinoc compare` avait `--lang` ; `demo` et `run` le reçoivent (une option, la
   même pour les trois). La console reste en français ; le README le dit.
