@@ -111,3 +111,15 @@ def test_run_command_reports_errors_cleanly(
     )
     assert code == 1
     assert "Erreur" in capsys.readouterr().err
+
+
+def test_run_command_writes_its_report_in_english_on_request(tmp_path: Path) -> None:
+    """S34b, n° 13 : ``--lang en`` — le mécanisme de ``compare``, pas un autre."""
+    (tmp_path / "doc1.gt.txt").write_text("abcd", encoding="utf-8")
+    (tmp_path / "doc1.eng.txt").write_text("abxd", encoding="utf-8")
+    config = tmp_path / "run.yaml"
+    config.write_text(_YAML, encoding="utf-8")
+    output = tmp_path / "r.html"
+    assert main(["run", str(config), "--lang", "en", "-o", str(output)]) == 0
+    html = output.read_text(encoding="utf-8")
+    assert '<html lang="en">' in html and "Pipeline composition" in html

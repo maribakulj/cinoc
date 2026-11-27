@@ -31,6 +31,10 @@ cinoc demo --output report.html                                  # then open rep
 No engine, no key, no network after the install. That report is built from
 frozen outputs; your own pages are next.
 
+The command line speaks French — its help, messages and progress lines; the
+reports exist in French and English: `--lang en` on `cinoc demo`, `cinoc run`
+and `cinoc compare`, `?lang=en` in the web app.
+
 ## A first real OCR, on your pages
 
 Put your page images beside their transcriptions (`page_001.png` +

@@ -71,7 +71,7 @@ if TYPE_CHECKING:
 _DEMO_EPOCH = datetime(2026, 1, 1, tzinfo=UTC)
 
 
-def demo_to_html() -> str:
+def demo_to_html(lang: str = "fr") -> str:
     """Exécute la démo et renvoie le rapport HTML (déterministe).
 
     La démo est la **vitrine du déterminisme** (golden octet-stable entre deux
@@ -118,7 +118,8 @@ def demo_to_html() -> str:
             ),
         }
     )
-    return default_report_renderer().render(stable, title="Cinoc — démonstration")
+    title = "Cinoc — demo" if lang == "en" else "Cinoc — démonstration"
+    return default_report_renderer().render(stable, title=title, lang=lang)
 
 
 def _run_history(
@@ -165,9 +166,9 @@ def _series_label(key: SeriesKey) -> str:
     return f"corpus {key.corpus_name} | profil {profile} | {key.pipeline} | {key.view}"
 
 
-def _run_demo(output: str) -> int:
+def _run_demo(output: str, lang: str = "fr") -> int:
     path = Path(output)
-    path.write_text(demo_to_html(), encoding="utf-8")
+    path.write_text(demo_to_html(lang), encoding="utf-8")
     print(f"Rapport de démonstration écrit : {path}")
     return 0
 
@@ -252,6 +253,7 @@ def _run_config(
     analyses: str | None = None,
     offline: bool = False,
     load: Callable[[str | Path], RunSpec] = load_run_spec,
+    lang: str = "fr",
 ) -> int:
     if offline and not resume_dir:
         raise CinocError(
@@ -331,6 +333,7 @@ def _run_config(
             report_dir,
             render=default_report_renderer().render,
             title=title,
+            lang=lang,
             image_root=root,
         )
         written = str(report)
@@ -340,6 +343,7 @@ def _run_config(
             default_report_renderer().render(
                 result,
                 title=title,
+                lang=lang,
                 images=build_thumbnails(result, image_root=root),
                 facsimiles=build_facsimiles(result, image_root=root),
             ),
@@ -466,7 +470,7 @@ def main(argv: list[str] | None = None) -> int:
     # rapportées proprement sur stderr + code de sortie 1 — jamais une trace nue.
     try:
         if args.command == "demo":
-            return _run_demo(args.output)
+            return _run_demo(args.output, args.lang)
         if args.command == "run":
             return _run_config(
                 args.config,
@@ -483,6 +487,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.analyses,
                 args.offline,
                 spec_loader(args),
+                args.lang,
             )
         if args.command == "correct":
             return run_correction(

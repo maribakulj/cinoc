@@ -157,6 +157,7 @@ cinoc demo  --output report.html                 # demo report, no engine requir
 cinoc corpus import gallica ark:/12148/bpt6k5619759j  # fetch a corpus, write corpus.yaml
 cinoc run   config.yaml --check                  # validate + print the plan, run nothing
 cinoc run   config.yaml -o report.html           # run a benchmark described in YAML
+cinoc run   config.yaml --lang en -o report.html # the same report in English (demo too)
 cinoc run   config.yaml --report-dir bundle/     # folder report (HTML + separate images)
 cinoc run   config.yaml --json run.json          # also export the machine-readable RunResult
 cinoc run   config.yaml --alto-dir corpus/       # keep the ALTO: <doc>.<pipeline>.alto.xml

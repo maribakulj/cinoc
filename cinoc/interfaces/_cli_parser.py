@@ -99,6 +99,16 @@ def _add_list(subparsers: _SousCommandes) -> None:
     )
 
 
+def _add_report_lang(parser: argparse.ArgumentParser) -> None:
+    """La langue du rapport écrit — une option, la même pour ``demo``, ``run``
+    et ``compare`` ; la console, elle, parle français."""
+    parser.add_argument(
+        "--lang", default="fr", choices=("fr", "en"),
+        help="Langue du rapport (libellés et séparateur décimal) ; la console "
+        "reste en français.",
+    )
+
+
 def _add_scoring(parser: argparse.ArgumentParser, avec: str) -> None:
     """Les options de notation du web (une seule politique de vues, D-297)."""
     parser.add_argument(
@@ -271,6 +281,7 @@ def build_parser() -> argparse.ArgumentParser:
     demo.add_argument(
         "-o", "--output", default="rapport_demo.html", help="Fichier HTML de sortie."
     )
+    _add_report_lang(demo)
     run_cmd = subparsers.add_parser(
         "run",
         help="Exécute un run décrit dans un fichier YAML.",
@@ -321,6 +332,7 @@ def build_parser() -> argparse.ArgumentParser:
         "comme sa case dans la page. `cinoc list recipes` les liste.",
     )
     _add_scoring(run_cmd, "Avec --recipe : ")
+    _add_report_lang(run_cmd)
     run_cmd.add_argument(
         "--resume-dir",
         default=None,
@@ -434,10 +446,7 @@ def build_parser() -> argparse.ArgumentParser:
     compare_cmd.add_argument(
         "-o", "--output", default="comparaison.html", help="Fichier HTML de sortie."
     )
-    compare_cmd.add_argument(
-        "--lang", default="fr", choices=("fr", "en"),
-        help="Langue du rapport (libellés et séparateur décimal).",
-    )
+    _add_report_lang(compare_cmd)
     hybrid_cmd = subparsers.add_parser(
         "hybrid",
         help="Transcription hybride : segmente → OCR par bloc → ALTO/page "

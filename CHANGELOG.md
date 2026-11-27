@@ -48,6 +48,10 @@ publier, et son moment, appartiennent au mainteneur.
 
 ### Corrigé
 
+- **Le rapport de `cinoc run` et de `cinoc demo` existe en anglais.** Seul
+  `cinoc compare` avait `--lang` ; `demo` et `run` le reçoivent (une option, la
+  même pour les trois). La console reste en français ; le README le dit.
+
 - **Deux chaînes de même nom disent ce qui les distingue.** `ocr_simple ·
   tesseract` et `… #2` ne différaient que par `lang`, qui ne se lisait que dans
   « Composition des chaînes » ; le rapport l'écrit à côté du nom
