@@ -1,0 +1,155 @@
+# Revue adverse de `CONTRATS.md` (révision n° 1)
+
+Relecteur indépendant : je n'ai pas écrit le document et je ne le défends pas. Chaque contre-exemple vise une phrase précise du document. Il est minimal et exécutable, et il est comparé à une référence indépendante (`Fraction`, énumération exhaustive, scipy, jiwer, nervaluate, bagit) chaque fois qu'il s'agit d'un calcul.
+
+| | |
+|---|---|
+| **Objet** | `tests/adversarial/CONTRATS.md`, révision n° 1 : K1 à K5, 36 invariants |
+| **Code confronté** | copie figée `04a1c17b` (rien d'autre n'a été modifié que ce fichier) |
+| **Scripts** | `/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/ce-review2/` (23 scripts `k*.py`, chacun affirme son contre-exemple) |
+| **Rejouer** | `/tmp/claude-0/-home-user-cinoc/ba51ebd3-028f-5e81-8193-80881c86be9f/scratchpad/ce-review2/run_all.sh` (sortie 0 = les 23 contre-exemples sont reproduits ; une sortie par script, `out_*.txt`) |
+| **Environnement** | `ce-venv` (cinoc éditable, numpy 2.4.6, scipy 1.18.1, rapidfuzz 3.14.6, jiwer 4.0.0) ; `review-venv` (avec `bagit` et `nervaluate`) |
+
+Verdicts :
+- **faux** : la phrase est fausse ou contradictoire sur un cas ;
+- **à préciser** : la phrase admet deux lectures, ou laisse un cas sans règle, et une lecture plausible casse un invariant ;
+- **tient** : j'ai cherché sans trouver de contre-exemple.
+
+## Comptes
+
+| | faux | à préciser | tient | total |
+|---|---|---|---|---|
+| Invariants (§ 3) | **10** (M1, M3, M4, M5, M6, M8, A3, A4, A7, I1) | **10** (A2, A5, A6, A8, I3, I5, I6, F3, F5, F7) | **16** | 36 |
+| Clauses de contrat (§ 2 et § 6) | **11** (R1 à R11) | **20** (P1 à P20) | voir § 4 | — |
+
+---
+
+## 1. Points faux
+
+| # | Phrase visée | Contre-exemple (minimal) | Script | Correction minimale |
+|---|---|---|---|---|
+| **R1** | § 2.1 a : « combinaison (**associative**, commutative, avec un élément neutre) », par `math.fsum`, pour les familles à somme réelle (ECE/MCE Σ conf_b, Moyenne de réels). **M6** : « combiner les histogrammes par document = calculer sur les jetons poolés » | Confiances [0,1 ; 0,2] et [0,3] : `fsum` du lot complet = 0,6 ; `fsum` des sommes par document = 0,6000000000000001. (a+b)+c ≠ a+(b+c). Les deux ECE diffèrent au dernier bit. `fsum` n'est exact que sur la liste **complète** de ses termes. | `k1_fsum_non_associatif.py` | Statistiques réelles en entiers (confiance quantifiée, durées en ns, coûts en micro-unités) ou en partiels exacts (`Fraction`, partiels de Shewchuk). `fsum` seulement sur la liste plate des termes, à la finalisation. |
+| **R2** | Table « Texte par région » : S = (éditions sur paires bijectives **+ texte non apparié de l'hypothèse**, car. réf.). **M4** idem | VT : 2 régions de 10 car. P ne rend que la 1ʳᵉ, parfaitement : **0,000** sous la formule. Q rend les deux, avec 1 faute : 0,050. Perdre une région entière note mieux qu'une coquille. Le code actuel (`metrics/layout.py:103-108`) compte la région manquante en suppressions et donne 0,500 : la révision **régresse**. | `k1_region_cer_reference_non_appariee.py` | Ajouter au numérateur « + texte des régions de référence non appariées (suppressions) ». |
+| **R3** | Table « Ordre de lecture » : S = (discordantes, « **paires ordonnées par la référence** ») ; **M5** ; § 2.4 « respecte `reading_order` imbriqué » | PAGE `UnorderedGroup{m1, m2}`, hypothèse (m2, m1). Le parseur voit `ordered=False`, mais `ReadingOrderGroup.flatten()` (`formats/pagexml/types.py:44`) puis `LayoutPage.reading_order`, liste plate (`domain/layout.py:111`), donnent ('m1','m2'). Résultat : `kendall_distance` = **1,0**, au lieu de « aucune paire ordonnée ». La statistique annoncée n'est pas calculable sur le type existant. | `k1_tau_groupe_non_ordonne.py` | Porter l'ordre partiel (groupes ordonnés ou non) dans `LayoutPage`. Sinon, écrire « toutes les paires de l'ordre aplati » et retirer « imbriqué ». |
+| **R4** | § 2.1 d, ligne Micro : « p : permutation appariée (échange A/B par document) ». **A3** « égaux à scipy » | F1 NER, 2 entités de référence par document. A prédit toujours (tp 2, fp 4, fn 0), soit F1 = 0,5. B est parfait (2,0,0) avec probabilité 1/3 et muet (0,0,2) sinon, soit R_B = 0,5. Donc R_A = R_B en population. Taux de rejet à α = 0,05 : **0,17 (n = 10), 0,30 (n = 30), 0,31 (n = 100)**, sans décroître avec n. Témoin CER (même n_réf des deux côtés) : 0,044. L'échange teste l'échangeabilité de (S_A,d, S_B,d), pas R_A = R_B, dès que les dénominateurs diffèrent entre pipelines : F1/P/R, `bow_*`, MER/cMER (n_réf + I), `unanchored_trigrams` (n = trigrammes produits). | `k1_permutation_ratio_niveau.py`, `k1_permutation_cer_temoin.py` | Réserver la permutation aux familles dont le dénominateur est fixé par la référence. Pour les autres : IC par bootstrap apparié et p par inversion de l'IC, ou permutation studentisée. Nommer H0. |
+| **R5** | § 2.1 c : « D^M_P = {d : scalaire défini} », « D^M_AB = D^M_A ∩ D^M_B ». **A4**, **A6** | d1 : A = B = (5,0,0). d2 n'a aucune entité de référence : A invente 5 entités (F1 = 0, donc défini), B se tait ((0,0,0), indéfini). D^M_AB = {d1}, d'où **Δ macro = 0**. Pourtant B domine A sur chaque document (micro : 1,0 contre 0,667). Le support macro dépend du pipeline pour toute famille dont le dénominateur contient l'hypothèse. L'intersection retire justement le document où B a raison. Même chose pour MER sur référence vide. | `k2_support_macro_depend_du_pipeline.py` | Fixer D^M par la **référence** (n_réf > 0 ou tp+fn > 0), le même pour tous les pipelines. Un document sans référence ne va qu'au micro. |
+| **R6** | § 2.1 b : « execution : ok \| truncated \| partial — **sans effet sur les supports** ». § 2.1 e « Rien n'est imputé par défaut ». **A7** | Fan-out sur 2 pages de 2 régions. P perd 1 région sur p2 : `partial`, la région est absente du texte (`fanout.py:230-235`), CER micro **0,262**. Q perd les 2 régions sur p2 : `failed`, exclue, CER micro **0,000**, couverture 1/2. Une région en échec est imputée « vide » en silence. Plus d'échecs donnent un meilleur agrégat conditionnel. Même mécanisme pour `truncated`. | `k2_partial_impute_en_silence.py` | La part manquante d'un `partial` ou `truncated` porte un motif d'axe 3 qui exclut l'observation par défaut. Elle n'est notée que sous la sensibilité `empty_page`. |
+| **R7** | **M1** : « égal à jiwer … pages à référence vide comprises » **et** « corpus entièrement vide : CER/WER micro indéfinis » | jiwer 4.0.0 : `cer([""], ["xyz"]) = 3`, `wer = 1`, `cer([""], [""]) = 0`. L'oracle désigné rend un nombre là où l'invariant exige « indéfini ». | `k1_editops_egalites.py` | « Égal à jiwer quand Σ n_réf > 0 ». |
+| **R8** | **M3** : « Vérif. : O nervaluate (NER) » | `ner_f1` apparie par IoU d'empan ≥ 0,5 (`evaluation/ner.py:48`, `:190`, `:229`). La VT est [0,10) PER, la prédiction [0,30) PER (IoU 1/3). Cinoc rend (tp, fp, fn) = (0, 1, 1). nervaluate rend `ent_type` correct = 1 (F1 = 1), `partial` partiel (F1 = 0,5), `strict` et `exact` 0. Aucun schéma nervaluate ne calcule la grandeur de `ner_f1` ni celle de `ner_f1_exact`. | `k1_ner_oracle_nervaluate.py` | Prendre comme oracle une énumération sur l'IoU d'empan et retirer nervaluate de M3 (ou le garder seulement pour une métrique « bornes exactes », qui n'existe pas). |
+| **R9** | § 2.3 c : executed_files = modules chargés « pour construire puis exécuter le module (**différence de `sys.modules`**) ». § 2.3 c « une réutilisation exige que tous les fichiers enregistrés se re-hachent ». **I1** | L'étape A importe `shared_norm`. L'étape B l'utilise aussi, avec un import paresseux. Le record de B ne contient pas `shared_norm` (déjà chargé), et il est **vide** au 2ᵉ document (tout est déjà chargé). Après modification de `shared_norm`, la vérification des fichiers enregistrés de B passe : relecture périmée. L'ensemble enregistré dépend de l'historique du processus (ordre des étapes, des documents). | `k4_fichiers_executes_sys_modules.py` | Instantané de **tous** les modules hors stdlib chargés dans le processus à la fin de l'étape (sur-approximation sûre), mémoïsé par run, plus les bibliothèques partagées chargées. |
+| **R10** | § 2.3 c : binaries = « {exécutable résolu à l'appel : sha256} ». **I1** « modifier un … binaire … change l'identité » | Ici, `/usr/bin/tesseract` fait **39 320 octets** : une coquille. Le moteur est `libtesseract.so.5.0.3` (3,2 Mo), plus `liblept.so.5.0.4`, dans des paquets distincts. Une mise à jour du moteur laisse l'empreinte inchangée. Le code actuel trace au moins `tesseract --version` (5.3.4, la version de la bibliothèque) ; le contrat, qui tient les versions pour des « étiquettes », le remplace par une preuve plus faible. | `k4_binaire_bibliotheque_partagee.py` | Hacher aussi les bibliothèques partagées chargées par le binaire (`ldd`, `/proc/<pid>/maps`), ou garder la sortie complète de `--version` en étiquette. |
+| **R11** | § 2.4 étape 1 : « **Filiation démontrée** … chaque étape déclarée `preserves_region_ids` … Alors les ids **sont** l'appariement ». **M8** « ids conservés sous filiation démontrée » | (a) La filiation n'est pas démontrée mais **déclarée** par le module (code tiers in-process), le défaut même que K4 reproche à l'existant. Un module qui garde les ids et change le repère (redressement, recadrage) donne IoU = 0,0 sur les deux paires, avec tp = 2 et `region_detection` = 1,0. (b) Même honnête, sous filiation l'hypothèse hérite des régions de la VT : la détection vaut 1 par construction, pour un pipeline qui n'a rien segmenté. | `k5_filiation_declaree.py` | Sous filiation, les ids ne font que **départager** des paires admissibles (l'IoU reste exigé). `region_detection` est `not_applicable` quand les régions sont héritées de la VT. |
+
+---
+
+## 2. Points à préciser
+
+| # | Phrase visée | Contre-exemple | Script | Correction minimale |
+|---|---|---|---|---|
+| **P1** | Tables « Taux d'édition » et « MER » : S = (S, D, I) par `rapidfuzz.editops` | « ab » contre « ba » admet deux alignements optimaux, (S,D,I) = (2,0,0) et (0,1,1). Le CER vaut 1 dans les deux cas. En revanche `ins_rate` vaut 0 ou 0,5, et MER vaut 1 ou 0,667. Seul S+D+I est intrinsèque ; I et D dépendent du départage (rapidfuzz choisit (0,1,1)). | `k1_editops_egalites.py` | Écrire que le départage de rapidfuzz fait partie de la définition, sa version étant dans `ProtocolIdentity`, ou poser une règle canonique. |
+| **P2** | § 2.1 a « on somme les lignes tirées, puis on finalise » ; § 2.1 b (une page blanche est au support micro) ; A3 | 3 documents, dont 2 blancs. Un réplicat a Σ n_réf = 0 avec une probabilité de 0,30. scipy rend alors l'IC [−0,1 ; **inf**] en percentile et **NaN** en BCa (`DegenerateDataWarning`). Pour la fixture T1 reformulée (12 documents, dont 6 blancs), la probabilité d'au moins un réplicat dégénéré sur 9 999 est de 0,91. | `k1_bootstrap_denominateur_nul.py` | Règle déclarée : le réplicat est rejeté et compté, ou l'IC est déclaré « non estimable » au-delà d'un taux. Méthode (percentile ou BCa) nommée. |
+| **P3** | Table « Quantiles » : « les quantiles sont la seule famille qui rééchantillonne des **données élémentaires** » | 8 pages de 60 lignes, avec un effet de page. Couverture de l'IC à 95 % de la médiane des CER par ligne : **0,25** en tirant des lignes, **0,92** en tirant des documents. | `k1_quantiles_grappes.py` | La statistique d'un document est le multi-ensemble de ses lignes, et l'on tire des **documents**. |
+| **P4** | § 2.1 d « Analyses de rangs … telles qu'aujourd'hui » ; A5 ; A9 « jamais fusionnés » | (1) 3 différences nulles sur 8. Selon `zero_method` et `method`, p varie de 0,109 à 0,313. (2) Avec deux pipelines identiques gardés : Wilcoxon p = 1, Friedman **NaN**. (3) Friedman avec 2 pipelines : `ValueError`. (4) Des ex æquo exacts (|Δ| = 1/10) sont cassés par l'arrondi flottant : p = 0,588 sur les flottants, 0,655 sur les valeurs exactes. | `k1_rangs_ex_aequo.py` | Fixer `zero_method` et `method`. Calculer les rangs sur des scalaires exacts (`Fraction`). Publier « non calculé » si k < 3 ou si la variance est nulle. |
+| **P5** | **A8** « en singletons, l'IC égale l'IC par document » | Graine fixe. Les grappes `c1…c10` se trient c1, c10, c2…, les documents d01…d10 autrement : les IC valent [0,0301 ; 0,0691] et [0,0290 ; 0,0701]. L'égalité n'est vraie qu'à l'erreur de Monte-Carlo près. | `k1_grappes_singletons_ordre.py` | Ordonner les grappes par le plus petit id de document qu'elles contiennent. |
+| **P6** | § 2.1 d « Grappes déclarées … mêmes appels » ; § 2.2 « Répétitions » | Ni Wilcoxon ni Friedman ne tiennent compte des grappes. Le contrat ne dit pas comment les répétitions entrent dans l'inférence. Les traiter en documents indépendants reproduit le défaut de P3. | (même mécanisme que P3) | Une répétition n'est jamais une unité d'inférence : grappe = document (ou moyenne par document), y compris pour les rangs, ou « non publié sous grappes ». |
+| **P7** | § 2.1 b, axe 1 (`applicable \| no_ground_truth \| not_in_view`) ; § 6 n° 12 (N1) ; **M4** « une région de référence sans texte, appariée à du texte, contribue au numérateur » | Une VT vide parce que la page **n'a pas été transcrite** (fichier placeholder, VT de segmentation partielle) et une page **blanche** ont la même représentation. Toute lecture correcte compte alors en hallucinations (M1 et M4). N1 exige « niveau absent → `not_applicable` », mais l'énumération n'a pas de valeur pour ce cas. | (arithmétique de `k1_region_cer…`) | Ajouter `level_absent` / `not_transcribed`, déclaré par l'importeur, distinct d'une référence vide. |
+| **P8** | **A6** « deux pipelines ne s'ordonnent que sur leur support apparié » ; § 6 n° 14 | Chacun sur son propre support apparié : B bat A, C bat B, A bat C (un cycle). Le support global {d4} donne trois ex æquo. | `k2_ordres_apparies_intransitifs.py` | Écrire que les ordres appariés ne composent pas un classement ; seul le support global trie. |
+| **P9** | § 2.2 `step_key` ; I1 « les réglages opérationnels n'y entrent pas » ; § 1.3 saknussemm `partial` | Le contrat ne dit pas quels records sont réutilisables. Un record `partial` produit avec un délai de 5 s a la même clé qu'avec 60 s : `--resume` relit la sortie dégradée qu'on cherchait à corriger. | `k3_reprise_record_non_ok.py` | Seul un record `ok` est réutilisable ; ou les réglages opérationnels entrent dans la clé des records non `ok`. |
+| **P10** | § 2.2 `step_key(k) = H(identité de l'étape k, …, unit_inputs **lus**, …)` avec identité ⊃ `executed_files` (§ 2.3 c) | Les fichiers exécutés et les entrées « lues » ne sont connus **qu'après** l'exécution : la clé de recherche ne peut pas les contenir. Le texte suggère un mécanisme en deux phases (« une réutilisation exige … ») sans le poser. | `k4_fichiers_executes_sys_modules.py` (l'ensemble n'existe qu'après exécution) | Clé de recherche = partie déclarée + entrées résolues. Fichiers exécutés = prédicat de validité du record trouvé. |
+| **P11** | § 2.3 d `ProtocolIdentity` ⊃ « executed_files du code d'évaluation » ; **I5** | Le calcul d'un CER charge 103 extensions C dont le **nom** porte la plateforme (`…cpython-313-x86_64-linux-gnu.so`). Pour un tiers sur macOS, sous Windows ou avec un autre Python, l'identité diffère toujours : la « reproduction sous protocole identique » est inaccessible hors de la machine d'origine. | `k4_protocole_depend_de_la_plateforme.py` | Séparer l'identité de **définition** (sources `evaluation`/`formats` de Cinoc, profils, Unicode) de celle d'**environnement**, publiée à part. |
+| **P12** | § 2.3 d `ProtocolIdentity` ⊃ « empreintes des VT » ; ObservationId ⊃ VT du document ; **I3** | Corriger la VT de d2 change l'`ObservationId` de d1, qui est inchangé. Re-noter d1 seul ne reproduit jamais son identité. | `k4_observation_id_depend_du_corpus.py` | Retirer de `ProtocolIdentity` les VT du corpus (celle du document est déjà dans l'ObservationId). Identité de corpus séparée. |
+| **P13** | § 2.3 e « Archive … spec.json, run_result.json, observations ; lecture = `bagit.Bag.validate()` + refus de tout lien (lstat) » ; § 2.3 b « 0444 » ; **I6** | Si les fichiers sont à la racine, `bag.save()` liste bien les tags existants, et leur altération est **refusée**. En revanche, l'**ajout** de `observations.json` ou de `overrides/spec.json` non listés passe `validate(fast=False)`, et l'empreinte racine ne change pas. `lstat` ne voit pas un lien dur (`S_ISLNK=False`, `st_nlink=2`). Sous uid 0, une écriture en place sur un blob 0444 lié réussit et altère `data/`, ce qui sera détecté à la validation. | `k4_bagit_fichiers_hors_manifeste.py` | Tout sous `data/`, ou refus de tout fichier non listé dans un manifeste. « Lien » = symbolique, ou `st_nlink > 1` hors option. Ne pas présenter 0444 comme une protection. |
+| **P14** | § 2.2 « fichier temporaire, `fsync`, `os.replace` » ; **F5** « laisse k records valides » | Argument (non scriptable sans coupure d'alimentation) : sans `fsync` du répertoire après `os.replace`, le renommage peut être perdu. Rien n'impose que les blobs référencés soient durables avant le record. Un record peut alors pointer un blob partiel, que `read_verified` refuse. | — | Ordre : blobs `fsync` → record `fsync` → `os.replace` → `fsync` du répertoire. |
+| **P15** | § 2.3 c « weights : révision RÉSOLUE (hash de commit du Hub) » | Argument : le commit identifie le dépôt distant, pas les octets chargés depuis le cache local, qui est modifiable. C'est la critique que le document adresse à `RECORD`. | — | Hacher les fichiers de poids chargés (le cache HF nomme déjà ses blobs LFS par sha256). |
+| **P16** | § 2.4 étape 2 « tri … puis **texte** … départage les ex æquo résiduels » ; « les mêmes paires bijectives servent `region_cer` » | Boîte dupliquée (VLM qui répète une région), VT « Zurich », hypothèses « Aaaaaa » et « Zurich » sur la même boîte. L'ordre alphabétique retient « Aaaaaa » et donne `region_cer` = **2,0**. L'autre choix, de même objectif, donne 1,0. Il suffit de renommer le texte fautif « Zzzzzz » pour que l'appariement bascule. | `k5_objectif_lexicographique.py` (1) | 3ᵉ critère lexicographique : Σ distance d'édition des textes appariés, puis l'ordre canonique. |
+| **P17** | § 2.4 « IoU ≥ θ ou > θ » ; § 6 n° 4 « > 0,5 strict » | Les boîtes sont des pixels entiers rendus **relatifs** (`metrics/layout.py:160`). Pour une IoU exacte de 1/2 : page de 3 px → 0,49999999999999994 ; page de 7 px → 0,5000000000000001. Le choix strict ou inclusif est tranché par l'arrondi. | `k5_seuil_iou_flottant.py` | Admissibilité en entiers : 2·\|∩\| > \|∪\| sur les pixels. |
+| **P18** | § 6 n° 4 « strict (unicité de l'appariement plan, Kirillov et al. 2019) » ; § 2.4 étape 3 (fusions) | L'unicité exige des segments **disjoints des deux côtés**. Avec des régions de VT qui se recouvrent : IoU(r1,h1) = 0,95, IoU(r1,h2) = 0,60, IoU(r2,h1) = 0,63. L'optimum (accord de l'oracle exhaustif) apparie r1↔h2 et r2↔h1, et h1 est publié comme **fusion** (IoGT 0,95 et 1,0). | `k5_objectif_lexicographique.py` (2) | Retirer la justification. Calculer les relations entre régions de VT disjointes, ou exclure les recouvrements de la VT. |
+| **P19** | § 2.4 « les mêmes paires bijectives servent … `line_identity_*` » ; « aucun identifiant n'intervient sans filiation » | Les paires bijectives sont des paires de **régions** ; `line_identity_cer` et `line_identity_coverage` apparient des **lignes** par id (`metrics/layout.py:304-370`). Sans filiation, aucun id n'est permis, et ces deux métriques n'ont plus de définition. | — | `line_identity_*` applicables seulement sous filiation, `not_applicable` sinon. |
+| **P20** | § 6 n° 4 (régions : > 0,5 strict) contre `ner_f1` (IoU ≥ 0,5 inclusif, `evaluation/ner.py:48,190`) | Deux conventions de seuil coexistent pour la même notion d'admissibilité. | — | Une seule convention, écrite dans les deux fiches. |
+
+---
+
+## 3. Tableau par invariant
+
+| Inv. | Verdict | Renvoi | Remarque |
+|---|---|---|---|
+| M1 | **faux** | R7, P1, P7 | La propriété « page vide ajoute \|h\| » tient ; l'égalité à jiwer ne tient pas sur le corpus tout vide. |
+| M2 | tient | | Le plancher après combinaison est cohérent avec la finalisation unique. |
+| M3 | **faux** | R8 | La propriété « +1 fp sans partenaire admissible » tient sous la cardinalité maximale ; c'est l'oracle qui ne mesure pas la même grandeur. |
+| M4 | **faux** | R2, P7 | |
+| M5 | **faux** | R3 | Hors groupes non ordonnés, l'égalité à `(1 − τ)/2` de scipy tient sans ex æquo. |
+| M6 | **faux** | R1 | En arithmétique exacte, l'histogramme (n_b, Σ justes, Σ conf) suffit (§ 4). |
+| M7 | tient | | |
+| M8 | **faux** | R11, P16, P17, P18 | L'invariance par permutation et par renommage sans filiation tient (§ 4). |
+| A1 | tient | (R6) | Par construction. L'agrégat conditionnel hérite toutefois de l'imputation de R6. |
+| A2 | à préciser | P7 | |
+| A3 | **faux** | R4, P2 | Tient pour la famille « taux d'édition » (témoin). |
+| A4 | **faux** | R5 | |
+| A5 | à préciser | P4, P6 | |
+| A6 | à préciser | P8, R5 | |
+| A7 | **faux** | R6 | |
+| A8 | à préciser | P5, P6 | |
+| A9 | tient | | § 4 |
+| A10 | tient | | Le tri par id rend le tirage indépendant de l'ordre de la spec (§ 4). |
+| A11 | tient | | |
+| A12 | tient | | |
+| I1 | **faux** | R9, R10 | |
+| I2 | tient | | Pour IIIF, l'empreinte des octets servis peut varier d'une requête à l'autre (réencodage) : à surveiller avec H4. |
+| I3 | à préciser | P12, P11 | |
+| I4 | tient | | |
+| I5 | à préciser | P11 | |
+| I6 | à préciser | P13 | |
+| I7 | tient | | |
+| F1 | tient | | |
+| F2 | tient | | |
+| F3 | à préciser | P9, P10 | La sémantique « octets consommés » est juste. |
+| F4 | tient | | La recopie `repetition-1 → 2` n'est pas trouvée, puisque `repetition_id` est dans la clé. |
+| F5 | à préciser | P14 | |
+| F6 | tient | | |
+| F7 | à préciser | P13 | La détection tient (témoin `data/` refusé) ; la « protection » 0444, non. |
+| F8 | tient | | |
+| F9 | tient | | |
+
+---
+
+## 4. Ce qui tient
+
+| Affirmation | Pourquoi elle résiste |
+|---|---|
+| **Famille « taux d'édition »** : S+D+I additif, micro = finalize(ΣS), Δ micro par échange de signe | Le même document donne le même n_réf aux deux pipelines, donc Δ = Σ(E_A − E_B)/Σn est linéaire. Niveau mesuré : 0,044 pour un nominal de 0,05, avec des lois différentes (`k1_permutation_cer_temoin.py`). Le cas Simpson (p = 1) se vérifie à la main. |
+| **ECE/MCE par histogramme** à classes fixées | ECE = (1/N) Σ_b \|Σ justes_b − Σ conf_b\| et MCE = max sur les classes non vides : l'histogramme est exactement suffisant. Seule la représentation flottante pèche (R1). Les classes fixées par le protocole sont cohérentes avec `calibration.py:83` (`min(int(c·10), 9)`). |
+| **Poids (n+1)·[adm] + IoU·[adm]** pour l'ordre lexicographique | k+1 paires admissibles pèsent au moins (k+1)(n+1), plus que tout k-appariement (au plus k(n+1)+k ≤ k(n+1)+n). L'oracle exhaustif confirme le résultat de `linear_sum_assignment` (`k5_objectif_lexicographique.py` (2)). |
+| **M8** : invariance par permutation des régions et par renommage des ids sans filiation | Le tri canonique précède le calcul et les ids n'y entrent pas : le résultat est une fonction de l'ensemble. |
+| **A9** : famille de Holm a priori, test non calculable gardé à p = 1 | Holm contrôle le FWER sous toute dépendance. Une entrée à p = 1 ne peut qu'augmenter m, donc rendre la correction plus conservatrice, jamais l'invalider. Ajouter un pipeline change la famille par défaut (§ 6 n° 13) et donc les p corrigées des paires existantes ; c'est cohérent avec « défini par la spec ». |
+| **A10** : tri par id avant tout tirage | Avec une graine fixée, le tirage ne dépend que de l'ordre des lignes, désormais canonique. |
+| **Supports** (§ 2.1 c) | D^M ⊆ D^μ ⊆ attendus. Apparié ⊆ conditionnel. Ajouter un pipeline ne change ni les supports conditionnels ni les supports appariés des autres. La contradiction ex-S6/S9 est bien levée. Le défaut de R5 tient à la **définition** de D^M, pas à la structure en trois supports. |
+| **§ 2.3 a** : intégrité contre authenticité | Juste. Un fichier de tag listé altéré et un `data/` altéré sont refusés par `bagit` (témoins de `k4_bagit…`). Un faussaire peut réécrire les manifestes, et l'ancre externe est la bonne réponse. |
+| **K3** : clé par octets consommés, `repetition_id` dans la clé, conservation de l'amont, persistance par étape | Aucun contre-exemple hors P9, P10 et P14. Les invariants F1, F2, F4, F6, A11 et A12 tiennent. |
+| **M2, M7, F8, F9, I2, I4, I7** | Pas de contre-exemple. |
+| **Arithmétique du document** | V 9+8+13+9+12 = 51 ; D 10+6+5+9+5+4 = 39 ; 8+12+7+9 = 36. |
+| **Références au code** | Vérifiées exactes sur `04a1c17b` : `evaluation/metric.py:22` ; `metrics/text.py:113-116` (`_error_rate`) ; `runner.py:409` (`worst`) ; `inference.py:346` (famille = tests calculés) ; `app/resume.py:130` (`unit_key`) ; `pipeline/fingerprint.py:72` ; `domain/documents.py:22-32` (pas d'empreinte) ; `domain/run.py:90-91` ; `calibration.py:126` (multi-ensemble) ; `metrics/flexible.py:50` (`linear_sum_assignment`) ; `pipeline/fanout.py:230-235` (région ignorée) ; `analysis.py:960` (`support ≥ 1`) ; `pipeline/types.py:96-112`. Les seuls écarts avec l'existant sont R2 (la formule régresse sur le code), R3 (ordre plat), R10 (preuve plus faible que l'étiquette actuelle) et P20. |
+
+---
+
+## 5. Avis
+
+**Les contradictions se résolvent en corrigeant `CONTRATS.md`. Aucun des cinq contrats n'est à repenser dans son principe** :
+- statistique suffisante et finalisation unique (K1) ;
+- axes et trois supports (K2) ;
+- record par étape et clé sur les octets consommés (K3) ;
+- identité calculée, avec une archive distincte du cache (K4) ;
+- appariement global (K5).
+
+Une tranche peut s'ouvrir sur chacun.
+
+La plupart des corrections tiennent en une phrase : R2, R3, R5, R6, R7, R8, R11 et P1 à P20. Deux points demandent toutefois de **re-spécifier un mécanisme**, et pas seulement une formulation. Ils sont à corriger avant les tranches 1a et 3 :
+
+1. **R4 (inférence du Δ micro)**. La permutation appariée n'est un test de « R_A = R_B » que pour les familles à dénominateur fixé par la référence. Pour F1/P/R, `bow`, MER/cMER et `unanchored_trigrams`, elle rejette 31 % du temps à α = 0,05, sans amélioration quand n croît. Le tableau du § 2.1 d doit donc choisir l'inférence **par famille**, comme le § 2.1 a le fait déjà pour la statistique.
+2. **R9, R10, P10 et P11 (identité par fichiers exécutés)**. Le principe est bon ; le calcul annoncé (différence de `sys.modules`, exécutable seul) ne peut pas établir I1. Il faut :
+   - un instantané du processus, bibliothèques partagées comprises ;
+   - une clé en deux temps (recherche sur le déclaré, validation sur les fichiers) ;
+   - pour I5, une séparation entre l'identité de la définition et celle de l'environnement.
+
+   Sans cela, I5 n'est pas atteignable par un tiers.
+
+Le point de méthode le plus transversal est R5 : un support macro qui dépend du dénominateur de l'hypothèse rend le Δ macro aveugle aux hallucinations. Le corriger, en fixant D^M par la référence, renforce K2 sans le changer.
