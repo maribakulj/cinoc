@@ -32,13 +32,19 @@ recoupée par dinglehopper**, l'estimation du coût Mistral. Restent :
 | `dresden-sans-cle.yaml` | ses 4 pipelines sans clé — **exécutée en S30** |
 | `bnl-sans-cle.run_result.json` | `RunResult` v5 du run S30 (566 Ko, aucun chemin local) |
 | `dresden-sans-cle.run_result.json` | idem (169 Ko) |
+| `bnl-local.yaml` | campagne **locale** (S31L, D-311) : partie sans clé + E2 et E1 VLM sur `qwen2.5:3b` / `qwen2.5vl:3b`, 37 pages — **lancée** |
+| `bnl-local-saknussemm.yaml` | idem + E3/E4 `saknussemm` producteur `ollama`, sur 5 pages fixées par le rang — **lancée** |
+| `dresden-local.yaml` | partie sans clé + E2 locale, 10 pages — **lancée** |
 
 Chaque pipeline d'une spec sans clé est, au caractère près, un pipeline de la
 spec complète, avec les mêmes réglages de briques — la clé d'unité en dérive,
 donc la spec complète **relit** ces unités au lieu de les rejouer (vérifié :
 `cinoc run bnl.yaml --offline` sur l'archive S30 trouve les 185 unités sans clé
 et ne réclame que les 259 unités Mistral ; Dresden : 40 trouvées, 60
-réclamées). Verrouillé par `tests/app/test_campaign_specs.py`.
+réclamées). Verrouillé par `tests/app/test_campaign_specs.py`. **Depuis D-311**
+(`FANOUT_VERSION = "2"`), les unités à fan-out de cette archive (E1, E3, E4
+Tesseract) ne sont plus trouvées et se ré-exécutent — sans clé, ≈ 10 min ;
+E0 et E5 restent relues.
 
 Les specs ne tournent qu'**à côté de leur corpus importé** (chemins relatifs) :
 
@@ -199,6 +205,91 @@ langue essayé : `deu`, `Fraktur`, `deu+Fraktur`, `frk`) et le VLM local
 **hallucine** (CER > 1, une sortie bouclée jusqu'au plafond de 2 048 jetons) ou
 dépasse 600 s par page : Dresden mesure ce qu'un moteur généraliste ne sait pas
 faire, et c'est ce qu'E0/E5 Mistral y diront.
+
+## Campagne locale (S31L, D-311) — lancée, résultats attendus
+
+Sans clé Mistral, les expériences que S31 lui réservait tournent sur des
+modèles **locaux** (Ollama, CPU, 4 cœurs, sans GPU), gratuitement. Ce n'est pas
+S31 : Mistral reste l'option du mainteneur. Rien n'est publié ; les chiffres
+viendront avec les `RunResult`, à la session qui suivra la fin des runs.
+
+**Correspondance** — chaque pipeline local a la forme exacte d'un pipeline
+Mistral de `bnl.yaml` / `dresden.yaml`, seule la brique du modèle change
+(`test_campaign_specs`) :
+
+| Mistral (S31) | local (S31L) | BNL | Dresden |
+|---|---|---|---|
+| E0 · `mistral-ocr` | **aucun équivalent** — Tesseract reste E0 | — | — |
+| E2 · `tesseract → mistral` | `tesseract → qwen2.5:3b` (BNL : prompt curé `correction_press_19c_european` ; Dresden : générique) | 37 pages | 10 pages |
+| E2 · `mistral-ocr → mistral` | aucun (pas d'E0 local) | — | — |
+| E1 · `segmentation → mistral` (VLM par région) | `segmentation → qwen2.5vl:3b` | 37 pages | **retirée** |
+| E3 · `saknussemm (mistral)` | producteur `ollama`, `qwen2.5:3b` | 5 pages | **retirée** |
+| E4 · `saknussemm (mistral, QE dalembert)` | idem + QE `dalembert`, `qe_skip 0.5` | 5 pages | non déclarée |
+| E5 · `mistral` (VLM) | `qwen2.5vl:3b` (partie sans clé de S30) | 37 pages | 10 pages (6 échecs de S30 retentés) |
+
+**Pourquoi `qwen2.5:3b` seul comme producteur de `saknussemm`.** Le producteur
+`ollama` est **texte seul** : `LLMEditProducer` → `OllamaStructuredClient`,
+aucun octet d'image envoyé. La seule voie image de `saknussemm`
+(`VisionEditProducer`) n'est câblée dans Cinoc que pour Mistral
+(`mistral_vision`), et elle découpe chaque ligne dans le scan d'après sa
+géométrie — que les lignes d'une région lue par Tesseract n'ont pas.
+`qwen2.5vl:3b` n'y verrait que le texte, comme `qwen2.5:3b`, en plus lent.
+
+**Dresden.** E2 est gardée (≈ 1 h) : elle dit si un LLM rebâtit du Kurrent à
+partir d'un OCR à CER 0,76, le miroir d'E2 Mistral. E1 VLM est retirée : 23 min
+pour une page de 11 régions, sortie tronquée au plafond de 1 024 jetons (≈ 4 h
+pour les 132 régions), quand le même VLM sur la page entière hallucine (E5,
+CER 1,86). E3 aussi : corriger ligne à ligne un texte à CER 0,76 n'a pas de
+sens, pour ≈ 5-6 h de calcul.
+
+**Sous-ensemble de la correction structurée** — fixé d'avance par une règle,
+pas choisi après coup : rangs 0, 8, 16, 24, 32 de l'ordre des identifiants
+(`0000`, `0009`, `0017`, `0025`, `0033` ; 3 304 caractères sur 22 138). Sur
+CPU, une page de 28 lignes demande plus de 300 s par appel : le corpus entier
+ne tiendrait pas en 10 h (≈ 2 s de calcul par caractère).
+
+**Deux défauts corrigés en route** (D-311) : le fan-out donnait à une région
+lue par Tesseract ou un VLM **une** ligne contenant les sauts de ligne du bloc —
+`saknussemm` repliait alors chaque ligne (33 unités E3 « règles » sur 37 de
+S30 entièrement en repli : le « ne changent rien » de plus haut) ; et le délai
+d'un appel `ollama` de `saknussemm` était figé à 300 s (réglage `timeout`,
+commit **gelé** jusqu'à l'arbitrage du mainteneur). Un troisième, de méthode,
+reste ouvert : une unité entièrement en repli est archivée `ok`, et un délai
+hors empreinte la fige — 90 unités retirées à la main de l'archive locale, et
+le contrôle refait en fin de campagne.
+
+**Protocole.** Mêmes vues, pipelines sans clé identiques à ceux de S30
+(l'archive de S30 est relue, unités à fan-out exceptées) ; `temperature: 0`,
+`seed: 0` écrits pour chaque brique `ollama` ; `saknussemm` part à
+température 0 puis, sur une réponse refusée, 0,3 et 0,5 **sans graine** (son
+client n'en envoie pas) : sa reproductibilité se mesure, elle ne se suppose
+pas. `--workers 1`, un seul run lourd à la fois, une **répétition** ; preuve
+de déterminisme par un rejeu dans une archive neuve — BNL `0003`, `0006`,
+`0031` (E2, E1 VLM, E5), `0017` (E3, E4), Dresden `K80_177`-`179` (E2, E5) :
+hashes d'artefacts attendus identiques, sinon la dispersion de CER est
+rapportée. Lancé en tranches (`cinoc run` n'écrit son archive qu'en fin de
+run : une tranche tuée ne perd qu'elle) ; `RunResult` finaux relus
+`--offline`, puis chaque score noté en ligne comparé au final, seconde
+re-notation hors ligne, oracle dinglehopper comme en S30.
+
+**Mesures sur deux pages** (non citables ; `--workers 1`) :
+
+| | BNL `0000` + `0001` (1 125 car.) | Dresden `K80_177` + `K80_178` |
+|---|---|---|
+| E2 · → `qwen2.5:3b` | 50 s | ≈ 11 min |
+| E1 · → `qwen2.5vl:3b` par région | 522 s au calme, 983 s sous charge | ≈ 23 min pour `K80_177` seule |
+| E3 · `saknussemm` `qwen2.5:3b` | `0000` : 28/28 lignes en repli par délai (300 s) ; `0001` : 504 s | — |
+| E4 · idem + QE `dalembert` | `0000` : 9 lignes en repli par délai ; `0001` : 177 s | — |
+| E5 · `qwen2.5vl:3b` (retentée, `--workers 1`) | — | ≈ 4,5 min, finie sous 600 s |
+
+« Sous charge » : un run de S31 (≈ 150 % CPU) tournait à côté de
+`llama-server` (≈ 190-260 %), de 12:28 à la fin de la mesure ; les résultats
+n'en dépendent pas, l'ETA si.
+
+**ETA** (au calme ; × 1,5 à 1,9 sous la même charge) : unités sans clé à
+fan-out ≈ 10 min, E2 BNL ≈ 16 min, E3 + E4 `qwen` ≈ 1,5-3 h, E5 Dresden
+≤ 1 h, E2 Dresden ≈ 1 h, E1 VLM BNL ≈ 2,75 h, rejeu de déterminisme
+≈ 1,2 h — **≈ 8 h**, jusqu'à ≈ 13 h si la charge persiste.
 
 ## Attend — S31 (exécution Mistral)
 
