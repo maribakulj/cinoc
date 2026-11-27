@@ -48,6 +48,16 @@ publier, et son moment, appartiennent au mainteneur.
 
 ### Corrigé
 
+- **`docs/PLUGINS.md` suffit pour écrire un module.** L'exemple s'arrêtait sur
+  `StepOutput(artifacts={ArtifactType.RAW_TEXT: ...})`. La page, désormais en
+  anglais comme le README et le guide et sans renvoi au contrat interne, donne
+  un module complet (fichier de sortie dans le workspace, `Artifact` construit,
+  échéance et échec typés), le script qui l'emploie **sans paquet** (un
+  registre, `register_builder`, `cinoc.app.run`) et sa spec ; la suite extrait
+  les trois blocs et les exécute. Elle dit franchement que `cinoc run` ne voit
+  qu'une distribution installée — `pip install -e .` d'un dossier local
+  suffit. `DeadlineExceeded` rejoint `cinoc.adapters.extension`.
+
 - **La recherche HTR-United dit ce qu'elle fait.** L'exemple du guide
   (`"presse"`) ne trouvait rien ; il devient `"medieval"`, cherché par un test
   dans le catalogue embarqué. La commande et le guide disent que la recherche
