@@ -324,6 +324,9 @@ suivantes ne les répètent pas.
   `saknussemm` refusait toute correction (trois tentatives payées, puis repli).
   Une ligne par ligne de texte désormais ; seules les étapes à fan-out d'une
   archive se ré-exécutent (`FANOUT_VERSION`).
+- Le délai d'un appel du producteur `ollama` de `saknussemm` se règle
+  (`timeout`, hors empreinte) : les 300 s figées du client faisaient replier
+  chaque ligne d'une page longue sur CPU.
 - Les mots des PAGE-XML sont lus ; un import IIIF rapporte la vraie image (il
   écrivait parfois l'`info.json` du service).
 - Une sortie pré-calculée corrigée sous la même image n'est plus resservie par

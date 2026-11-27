@@ -76,6 +76,8 @@ PRODUCERS = ("rules", *sorted(MODEL_PRODUCERS))
 #: ce dépôt lui donne raison — AUC ligne 0,500 (le hasard) contre 0,766.
 QE_SCORERS = ("heuristic", "dalembert")
 _DEFAULT_HOST = "http://localhost:11434"
+#: Délai d'un appel au serveur ollama, celui du client tant que rien n'est saisi.
+_DEFAULT_OLLAMA_TIMEOUT = 300.0
 
 
 def _require_saknussemm() -> Any:
@@ -102,6 +104,10 @@ class SaknussemmCorrector:
         Param("qe", "str", "Scoreur QE", "QE scorer", "", choices=("", *QE_SCORERS)),
         Param("qe_skip", "float", "Seuil QE : garder", "QE threshold: keep"),
         Param("qe_escalate", "float", "Seuil QE : escalader", "QE threshold: escalate"),
+        # Exploitation (hors empreinte) : il borne l'attente, ne change aucune
+        # sortie. Sur CPU, une page de 28 lignes dépassait les 300 s figés.
+        Param("timeout", "float", "Délai d'un appel ollama (s)",
+              "Ollama call time limit (s)", affects_output=False),
     )
 
     def __init__(
@@ -115,6 +121,7 @@ class SaknussemmCorrector:
         qe: str = "",
         qe_skip: float | None = None,
         qe_escalate: float | None = None,
+        timeout: float | None = None,
     ) -> None:
         if producer not in PRODUCERS:
             raise AdapterStepError(
@@ -140,8 +147,23 @@ class SaknussemmCorrector:
                 "SaknussemmCorrector : des seuils de routage sans `qe` ne "
                 "s'appliquent à rien — nomme un scoreur."
             )
+        if timeout is not None and producer != "ollama":
+            # Il ne borne que le client ollama : ailleurs il serait ignoré.
+            raise AdapterStepError(
+                "SaknussemmCorrector : `timeout` ne s'applique qu'au producteur "
+                f"'ollama' (reçu pour {producer!r})."
+            )
+        if timeout is not None and (
+            isinstance(timeout, bool)
+            or not isinstance(timeout, (int, float))
+            or timeout <= 0
+        ):
+            raise AdapterStepError(
+                f"SaknussemmCorrector : `timeout` doit être > 0 (reçu {timeout!r})."
+            )
         self._label = label
         self._producer = producer
+        self._timeout = _DEFAULT_OLLAMA_TIMEOUT if timeout is None else float(timeout)
         self._model = model
         self._host = validate_endpoint(host, "SaknussemmCorrector", "host")
         self._xml_scale = xml_scale
@@ -270,7 +292,9 @@ class SaknussemmCorrector:
             OllamaStructuredClient,
         )
 
-        ollama = OllamaStructuredClient(host=self._host, control=control)
+        ollama = OllamaStructuredClient(
+            host=self._host, timeout=self._timeout, control=control
+        )
         return LLMEditProducer(ollama, api_key="", model=self._model), ollama
 
     def _build_vision_producer(self, control: RunControl) -> tuple[Any, Any]:

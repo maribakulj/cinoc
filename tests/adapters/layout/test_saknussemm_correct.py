@@ -446,3 +446,44 @@ def test_a_single_line_page_has_no_neighbours(tmp_path: Path) -> None:
              for x in p.lines][0]
     assert ligne.prev_line_id is None
     assert ligne.next_line_id is None
+
+
+# --------------------------------------------------------------------------- #
+# Délai d'un appel au serveur ollama (S31L, D-311)
+# --------------------------------------------------------------------------- #
+
+
+def test_the_ollama_call_timeout_is_a_setting_of_the_brick() -> None:
+    """Sur CPU, une page de 28 lignes dépassait les 300 s **figés** du client :
+    trois tentatives, puis repli de chaque ligne — et l'unité, archivée ``ok``,
+    était relue telle quelle. Le délai se règle dans la spec ; il est
+    d'exploitation (hors empreinte), comme tout délai."""
+    from cinoc.app.modules.params import operational_names
+    from cinoc.pipeline.params import declared_params
+
+    module = SaknussemmCorrector(
+        label="x", producer="ollama", model="qwen2.5:3b", timeout=1800
+    )
+    _producteur, client = module._build_producer(RunControl())
+    assert client._timeout == 1800
+    assert "timeout" in operational_names(declared_params(module))
+
+
+def test_the_ollama_call_timeout_keeps_its_default() -> None:
+    module = SaknussemmCorrector(label="x", producer="ollama", model="qwen2.5:3b")
+    _producteur, client = module._build_producer(RunControl())
+    assert client._timeout == 300.0
+
+
+@pytest.mark.parametrize("producteur", ["rules", "mistral"])
+def test_a_timeout_for_another_producer_is_refused(producteur: str) -> None:
+    """Le délai ne borne que le client ollama : ailleurs il serait ignoré."""
+    with pytest.raises(AdapterStepError, match="timeout"):
+        SaknussemmCorrector(
+            label="x", producer=producteur, model="m", timeout=600
+        )
+
+
+def test_a_non_positive_timeout_is_refused() -> None:
+    with pytest.raises(AdapterStepError, match="timeout"):
+        SaknussemmCorrector(label="x", producer="ollama", model="m", timeout=0)
