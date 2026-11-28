@@ -21,6 +21,13 @@ from typing import Any
 
 from cinoc.domain.errors import AdapterStepError
 from cinoc.domain.layout import CanonicalLayout, Line, Region
+from cinoc.domain.usage import LineOutcomes
+
+#: Les deux codes de ``FALLBACK_REASON_CODES`` qui disent un **incident
+#: d'exécution** : aucune proposition exploitable n'a pu être obtenue (délais,
+#: réponses illisibles, erreur de lot absorbée). Tout autre code d'un repli est
+#: une **décision** des garde-fous, de la revue ou d'un relecteur.
+INCIDENT_CODES = frozenset({"all_attempts_exhausted", "chunk_error_absorbed"})
 
 
 def _flatten_regions(regions: tuple[Region, ...]) -> list[Region]:
@@ -239,6 +246,67 @@ def decisions_json(result: object, document_id: str) -> bytes:
     ).encode("utf-8")
 
 
+def classify_lines(result: object) -> LineOutcomes:
+    """Les issues des lignes d'un rapport de la bibliothèque, en quatre classes.
+
+    La classe se lit au **statut** (``DecisionStage.status``) et au **code de
+    raison** (``DecisionReason.code``, ensemble fermé
+    ``saknussemm.core.decide.FALLBACK_REASON_CODES``), jamais au texte : la
+    source sort identique d'une abstention, d'un refus technique et d'un repli.
+
+    - ``corrected`` avec un texte modifié : corrigée ; avec ``final_text ==
+      source_text`` : abstention volontaire (le producteur propose la source,
+      ou aucune règle ne s'applique) ;
+    - ``review_required`` : correction gardée que le correcteur déclare ne pas
+      pouvoir établir — classe **disjointe** de ``corrected`` ;
+    - ``fallback`` hors ``INCIDENT_CODES`` : refus technique, par code ;
+    - ``fallback`` dans ``INCIDENT_CODES`` : repli, par code — seul à rendre
+      l'étape partielle.
+
+    Un statut ou un code hors vocabulaire est un défaut de la bibliothèque : il
+    lève, il n'est pas rangé au hasard.
+    """
+    from saknussemm.core.decide import (  # type: ignore[import-not-found]  # noqa: PLC0415
+        FALLBACK_REASON_CODES,
+    )
+
+    corrected = review_required = abstained = 0
+    refused: dict[str, int] = {}
+    fallback: dict[str, int] = {}
+    for outcome in result.report.lines:  # type: ignore[attr-defined]
+        decision = outcome.decision
+        status = decision.status
+        if status == "corrected":
+            if decision.final_text == outcome.source_text:
+                abstained += 1
+            else:
+                corrected += 1
+        elif status == "review_required":
+            review_required += 1
+        elif status == "fallback":
+            code: str = decision.reason.code if decision.reason is not None else ""
+            if code not in FALLBACK_REASON_CODES:
+                raise AdapterStepError(
+                    f"saknussemm : ligne {outcome.page_id}/{outcome.line_id} en "
+                    f"repli avec un code hors de FALLBACK_REASON_CODES ({code!r}) "
+                    "— bibliothèque incompatible."
+                )
+            bucket = fallback if code in INCIDENT_CODES else refused
+            bucket[code] = bucket.get(code, 0) + 1
+        else:
+            raise AdapterStepError(
+                f"saknussemm : ligne {outcome.page_id}/{outcome.line_id} au "
+                f"statut inconnu {status!r} — bibliothèque incompatible."
+            )
+    return LineOutcomes(
+        corrected=corrected,
+        review_required=review_required,
+        abstained=abstained,
+        refused=dict(sorted(refused.items())),
+        fallback=dict(sorted(fallback.items())),
+    )
+
+
 def apply_decisions(
     layout: CanonicalLayout,
     decided: dict[tuple[str, str], str],
@@ -287,7 +355,9 @@ def apply_decisions(
 
 
 __all__ = [
+    "INCIDENT_CODES",
     "apply_decisions",
+    "classify_lines",
     "decisions_json",
     "layout_to_manifest",
     "manifest_page_ids",

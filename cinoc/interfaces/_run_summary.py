@@ -28,15 +28,18 @@ def unit_summary(results: Sequence[RunResult]) -> int:
     """Affiche le bilan des unités et rend le code de sortie : ``0`` si chaque
     unité a une sortie, ``EXIT_UNITS_FAILED`` si au moins une a échoué.
 
-    Une unité **tronquée** a une sortie, notée : elle est comptée, pas en
-    échec. Le bilan d'un succès va sur la sortie standard, celui d'un échec sur
-    la sortie d'erreur, avec les motifs libellés comme au rapport.
+    Une unité **tronquée** ou **partielle** a une sortie, signalée : elle est
+    comptée, pas en échec. Le bilan d'un succès va sur la sortie standard, celui
+    d'un échec sur la sortie d'erreur, avec les motifs libellés comme au rapport.
     """
     units = [unit for result in results for unit in result.usage]
     failed = [unit for unit in units if unit.outcome == "failed"]
     truncated = sum(unit.outcome == "truncated" for unit in units)
+    partial = sum(unit.outcome == "partial" for unit in units)
     runs = f" sur {len(results)} runs" if len(results) > 1 else ""
-    coupees = f", {truncated} tronquée(s)" if truncated else ""
+    coupees = (f", {truncated} tronquée(s)" if truncated else "") + (
+        f", {partial} partielle(s)" if partial else ""
+    )
     if not failed:
         print(f"Bilan : {len(units)} unité(s){runs}, aucune en échec{coupees}.")
         return 0
@@ -54,6 +57,7 @@ def unit_summary(results: Sequence[RunResult]) -> int:
 _ISSUES = {
     "ok": "fait",
     "truncated": "tronquée",
+    "partial": "partielle",
     "failed": "échec",
     "resumed": "relue de l'archive",
 }

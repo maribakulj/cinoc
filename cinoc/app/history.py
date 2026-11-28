@@ -81,9 +81,10 @@ def record_run(store: HistoryStore, run_result: RunResult) -> int:
 class SeriesInsight:
     """Tendance + rupture d'une série (corpus, profil, pipeline, vue) d'historique.
 
-    ``rupture_run_id`` = le **premier run du nouveau régime**, renseigné
-    seulement quand la rupture est significative (p ≤ α) — sinon il n'y a
-    rien à pointer, quelle que soit l'ampleur du delta.
+    ``rupture_run_id`` = le **premier run du nouveau régime**, renseigné dès que
+    le test de Pettitt est calculable, **quelle que soit sa p** : filtrer sur la
+    significativité serait un verdict implicite. La rupture est publiée avec sa
+    p, étiquetée exploratoire (``CONTRATS.md`` § 2.1 f, révision n° 7).
     """
 
     trend: TrendResult | None
@@ -115,11 +116,7 @@ def series_insight(records: Sequence[HistoryRecord]) -> SeriesInsight:
     rows.sort(key=lambda row: (row[0], row[1]))
     trend = linear_trend([(stamp, value) for stamp, _, value in rows])
     rupture = pettitt([value for _, _, value in rows])
-    rupture_run_id = (
-        rows[rupture.boundary][1]
-        if rupture is not None and rupture.significant
-        else None
-    )
+    rupture_run_id = rows[rupture.boundary][1] if rupture is not None else None
     return SeriesInsight(trend=trend, rupture=rupture, rupture_run_id=rupture_run_id)
 
 

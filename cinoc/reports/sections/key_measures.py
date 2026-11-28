@@ -41,7 +41,7 @@ from cinoc.reports.html import escape, localized, view_label
 from cinoc.reports.metric_categories import higher_is_better, is_established
 from cinoc.reports.section import Html, SectionContext
 from cinoc.reports.sections._inference_text import (
-    is_significant,
+    exploratory_label,
     omnibus_label,
     p_text,
     posthoc_text,
@@ -325,8 +325,8 @@ class KeyMeasuresSection:
         Toujours une phrase : le test et ses p (brute, corrigée), le post-hoc
         s'il a eu lieu — ou le motif pour lequel rien n'a été calculé.
         ``label`` (plusieurs vues) : la vue que le test juge, nommée à côté du
-        verdict — une différence peut être significative dans une vue et
-        absente d'une autre (S34b).
+        résultat — un test peut donner une p basse dans une vue et haute dans
+        une autre (S34b).
         """
         if label is None:
             head = localized(
@@ -353,13 +353,7 @@ class KeyMeasuresSection:
                 f"test not computed: {escape(reason_text(payload, lang))}.",
             )
             return f'<p class="muted">{head}{txt}</p>\n'
-        significant = is_significant(payload)
-        alpha = localize_decimal(f"{payload.alpha:g}", lang)
-        verdict = localized(
-            lang,
-            "significative" if significant else "non significative",
-            "a significant" if significant else "no significant",
-        )
+        status = exploratory_label(lang)
         k = len(payload.mean_ranks)
         between = localized(
             lang,
@@ -371,11 +365,11 @@ class KeyMeasuresSection:
         txt = localized(
             lang,
             f"{escape(omnibus_label(payload, lang))} : p = {raw}, corrigée de "
-            f"Holm sur {m} test(s) : {holm} → différence {verdict} {between} "
-            f"au seuil α = {alpha} ({payload.n_documents} cas complets).",
+            f"Holm sur {m} test(s) : {holm} → résultat ({status}) {between} "
+            f"({payload.n_documents} cas complets).",
             f"{escape(omnibus_label(payload, lang))}: p = {raw}, Holm-corrected "
-            f"over {m} test(s): {holm} → {verdict} difference {between} "
-            f"at α = {alpha} ({payload.n_documents} complete cases).",
+            f"over {m} test(s): {holm} → result ({status}) {between} "
+            f"({payload.n_documents} complete cases).",
         )
         posthoc = posthoc_text(payload, lang) if payload.test == "friedman" else ""
         tail = f" {posthoc}" if posthoc else ""

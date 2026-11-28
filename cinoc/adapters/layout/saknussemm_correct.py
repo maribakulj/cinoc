@@ -32,6 +32,7 @@ reviendrait à réintroduire en aval ce que les gardes ont écarté.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -376,6 +377,7 @@ class SaknussemmCorrector:
 
         from cinoc.adapters.layout._saknussemm_bridge import (  # noqa: PLC0415
             apply_decisions,
+            classify_lines,
             decisions_json,
             layout_to_manifest,
             manifest_page_ids,
@@ -441,11 +443,28 @@ class SaknussemmCorrector:
         output = self._emit(
             corrected, decisions_json(result, context.document_id), context
         )
+        # L'étape **déclare** sa complétude : seul un repli (incident
+        # d'exécution) la rend partielle ; corrigée, abstention et refus
+        # technique sont des décisions du correcteur (§ 2.1 f).
+        outcomes = classify_lines(result)
+        fell_back = sum(outcomes.fallback.values())
+        output = replace(
+            output,
+            line_outcomes=outcomes,
+            partial=(
+                f"{fell_back} ligne(s) en repli ("
+                + ", ".join(f"{code} : {n}" for code, n in outcomes.fallback.items())
+                + ")"
+                if fell_back
+                else None
+            ),
+        )
         if client is None:
             return output
         # Chaque corps reçu dit quel modèle l'a servi (Mistral, Ollama : ``model``).
         servis = {m for r in client.responses if (m := served_model(r)) is not None}
-        return StepOutput(
+        return replace(
+            output,
             artifacts={
                 **output.artifacts,
                 ArtifactType.NATIVE_JSON: self._native(client.responses, context),

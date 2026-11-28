@@ -7,13 +7,14 @@ moteur et n'importe pas ``pipeline``. **Trois passes** par vue : (1) par-documen
 (micro exact, K1), **support** exposé ; (3) **inter-moteurs** — chaque
 ``CrossEngineMetric`` compare les pipelines et écrit dans
 ``RunResult.cross_engine``. La notation par document (statistique, scalaire,
-axes, normalisation de la vue) vit dans ``evaluation.scoring``.
+axes, normalisation de la vue) vit dans ``evaluation.scoring`` ; les agrégats
+(deux qualités, couverture, macro) et les supports apparié et global, dans
+``evaluation.aggregation``.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
-from typing import Any
+from collections.abc import Mapping
 
 from cinoc.domain.artifacts import (
     Artifact,
@@ -24,7 +25,14 @@ from cinoc.domain.artifacts import (
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.evaluation import EvaluationSpec, EvaluationView
 from cinoc.domain.run import RunManifest
+from cinoc.domain.usage import LineOutcomes
 from cinoc.evaluation._view_collectors import COLLECTEURS, ViewCollectors
+from cinoc.evaluation.aggregation import (
+    comparison_payload,
+    complete_statistic,
+    invention_payload,
+    publish,
+)
 from cinoc.evaluation.calibration import calibration_analysis
 from cinoc.evaluation.conformity import conformity_analysis
 from cinoc.evaluation.context import CrossEngineContext
@@ -43,15 +51,23 @@ from cinoc.evaluation.result import (
     RunDocumentResult,
     RunResult,
 )
-from cinoc.evaluation.scoring import metric_of, score_document, score_failed
-from cinoc.evaluation.statistics import Counts, Scalar, combine
+from cinoc.evaluation.scoring import (
+    ReferenceProbe,
+    metric_of,
+    score_unit,
+    view_outcome,
+)
+from cinoc.evaluation.statistics import Counts, reference_defines
 
 #: { pipeline_name: { document_id: { step_id: { ArtifactType: Artifact } } } } —
 #: les sorties de **chaque** étape (``by_step``), dans l'ordre d'exécution.
 PipelineOutputs = Mapping[str, Mapping[str, StepArtifacts]]
 
-#: { métrique : { pipeline : [score par doc, aligné, ``None`` inclus] } }
+#: { métrique : { pipeline : [score par doc, aligné] } }
 _Series = dict[str, dict[str, list[MetricScore]]]
+
+#: { métrique : { pipeline : [statistique opérationnelle par doc, alignée] } }
+_Operational = dict[str, dict[str, list[Counts | None]]]
 
 #: Les ``kind`` d'analyse que ce runner sait produire. Une spec qui en nomme un
 #: autre est refusée **au chargement** plutôt que de rendre un résultat
@@ -111,13 +127,13 @@ def evaluate_run(
     #: le run entier, réduit aux métriques établies (D-289).
     tests: list[InferenceEntry] = []
     actives = _analyses_actives(evaluation)
-    failed = frozenset(
-        (u.pipeline, u.document_id) for u in usage if u.outcome == "failed"
-    )
-    truncated = frozenset(
-        (u.pipeline, u.document_id) for u in usage if u.outcome == "truncated"
-    )
     empty_page = evaluation.failure_policy == "empty_page"
+    #: L'état d'exécution **déclaré** de chaque unité (issue, motif, issues de
+    #: lignes) : lu tel quel, jamais reconstruit d'après les textes (§ 2.1 f).
+    units = {(u.pipeline, u.document_id): u for u in usage}
+    document_ids = [document.id for document in corpus.documents]
+    #: Grappe de chaque document (un document sans grappe est la sienne, B3).
+    clusters = [document.cluster or document.id for document in corpus.documents]
     # Les analyses qui lisent la sortie **finale** d'un pipeline (calibration,
     # correction, décisions) en lisent le pool : une lecture de ``by_step``.
     pools = {
@@ -130,74 +146,88 @@ def evaluate_run(
 
     for view in evaluation.views:
         series: _Series = {name: {} for name in view.metric_names}
+        operational: _Operational = {name: {} for name in view.metric_names}
         collectors = ViewCollectors(view, actives)
+        # La référence de chaque document, lue **une fois** pour tous les pipelines.
+        probes = {
+            document.id: ReferenceProbe(view, document, registry)
+            for document in corpus.documents
+        }
         for pipeline_name in pipeline_order:
             for name in view.metric_names:
                 series[name][pipeline_name] = []
-            #: Unités en échec qui **auraient** été notées, par métrique : la
-            #: différence entre « n attendus » et « n notés ».
-            missed = dict.fromkeys(view.metric_names, 0)
+                operational[name][pipeline_name] = []
+            by_document = pipeline_outputs.get(pipeline_name, {})
             for document in corpus.documents:
-                if (pipeline_name, document.id) in failed:
-                    scores = score_failed(view, document, registry, empty_page)
-                    for score in scores:
-                        if score.stat is None and score.applicability == "applicable":
-                            missed[score.metric] += 1
-                    # Rien n'a été produit : aucune analyse ne s'en nourrit,
-                    # même notée comme une page vide (pas de texte fabriqué).
-                    text_context = entity_context = None
-                else:
-                    candidate = _candidate_for(
-                        view,
-                        pipeline_name,
-                        pipeline_outputs.get(pipeline_name, {}).get(document.id, {}),
-                    )
-                    scores, text_context, entity_context = score_document(
-                        view,
-                        document,
-                        candidate,
-                        registry,
-                        (pipeline_name, document.id) in truncated,
-                    )
+                by_step = by_document.get(document.id, {})
+                found = _scored_step(view, pipeline_name, by_step)
+                candidate = None if found is None else found[1][found[2]]
+                unit = units.get((pipeline_name, document.id))
+                step_id = None if found is None else found[0]
+                scored = score_unit(
+                    view,
+                    probes[document.id],
+                    candidate,
+                    candidate is not None or not by_step,
+                    view_outcome(unit, list(by_step), step_id),
+                    None if unit is None else unit.reason,
+                    registry,
+                    empty_page,
+                )
                 collectors.observe(
                     pipeline_name,
                     document.id,
-                    scores,
-                    text_context,
-                    entity_context,
+                    scored.scores,
+                    scored.text_context,
+                    scored.entity_context,
                 )
-                for score in scores:
-                    series[score.metric][pipeline_name].append(score)
+                for name, score, stat in zip(
+                    view.metric_names, scored.scores, scored.operational, strict=True
+                ):
+                    series[name][pipeline_name].append(score)
+                    operational[name][pipeline_name].append(stat)
                 documents.append(
                     RunDocumentResult(
                         document_id=document.id,
                         pipeline=pipeline_name,
                         view=view.name,
-                        scores=scores,
+                        scores=scored.scores,
                         stratum=document.metadata.get("stratum"),
                         image_ref=document.image_uri,
                     )
                 )
             pipelines.append(
-                PipelineResult(
-                    pipeline=pipeline_name,
-                    view=view.name,
-                    aggregate=tuple(
-                        _aggregate(
-                            metric_of(registry, name),
-                            series[name][pipeline_name],
-                            missed[name],
-                        )
-                        for name in view.metric_names
-                    ),
+                _pipeline_result(
+                    pipeline_name,
+                    view.name,
+                    [metric_of(registry, name) for name in view.metric_names],
+                    series,
+                    operational,
+                    clusters,
+                    corpus,
+                    empty_page,
+                    _line_outcomes(pipeline_name, units),
                 )
             )
         cross_engine.extend(_cross_engine_scores(view, series, registry))
         tests.extend(_inference_entries(view, series, registry))
         analyses.extend(
+            _support_analyses(
+                view.name,
+                [metric_of(registry, name) for name in view.metric_names],
+                pipeline_order,
+                series,
+                operational,
+                document_ids,
+                clusters,
+                corpus.cluster_weighting,
+                probes,
+            )
+        )
+        analyses.extend(
             collectors.build(
                 view.name,
-                [document.id for document in corpus.documents],
+                document_ids,
                 series.get("cer", {}),
             )
         )
@@ -308,41 +338,161 @@ def _inference_entries(
     return entries
 
 
-def _aggregate(
-    metric: DocumentMetric, scores: list[MetricScore], missed: int
-) -> MetricScore:
-    """Agrégat **micro** : la finalisation de la **somme** des statistiques.
+def _pipeline_result(
+    pipeline: str,
+    view: str,
+    metrics: list[DocumentMetric],
+    series: _Series,
+    operational: _Operational,
+    clusters: list[str],
+    corpus: CorpusSpec,
+    empty_page: bool,
+    line_outcomes: LineOutcomes | None,
+) -> PipelineResult:
+    """Les agrégats d'un pipeline : les deux qualités, et la principale.
 
-    Le micro est la métrique calculée sur les comptes cumulés du corpus — pour
-    un taux d'erreur, Σ erreurs / Σ longueurs de référence, comparable à
-    ``jiwer`` sur le corpus entier ; pour un F1, F1(Σtp, Σfp, Σfn) ; pour une
-    exactitude, max(0, 1 − Σe/Σn), plancher au corpus (B1). Une page à
-    référence vide entre au micro par sa statistique (ses insertions) même si
-    son scalaire est indéfini. ``support`` = documents dont la statistique
-    entre au micro ; ``expected`` = ``support`` + les unités en échec qui
-    auraient pu l'être (``missed``) — « n notés / n attendus » (arbitrage A3).
+    **Conditionnelle** : la finalisation de la **somme** des statistiques des
+    observations complètes (le micro, K1 : Σ erreurs / Σ longueurs de référence
+    pour un taux d'erreur, F1(Σtp, Σfp, Σfn) pour un F1, max(0, 1 − Σe/Σn) pour
+    une exactitude — plancher au corpus, B1) ; une page à référence vide y entre
+    par sa statistique. **Opérationnelle** : ce que l'utilisateur reçoit — les
+    partielles et tronquées telles que produites, les échecs comme une sortie
+    vide. Les deux portent la **même** couverture (« n notés / n attendus » et
+    ses motifs). ``failure_policy`` choisit la principale (``aggregate``) :
+    ``exclude`` → conditionnelle, ``empty_page`` → opérationnelle (§ 2.1 e, f).
     """
-    stats = [score.stat for score in scores if score.stat is not None]
-    combined = combine(stats)
-    if combined is None:
-        return MetricScore(metric=metric.name, support=0, expected=missed)
-    return _score(metric.name, metric.finalize, combined).model_copy(
-        update={"support": len(stats), "expected": len(stats) + missed}
+    conditional: list[MetricScore] = []
+    operational_scores: list[MetricScore] = []
+    for metric in metrics:
+        scores = series[metric.name][pipeline]
+        conditional.append(
+            publish(
+                metric,
+                [
+                    (index, stat)
+                    for index, score in enumerate(scores)
+                    if (stat := complete_statistic(score)) is not None
+                ],
+                scores,
+                clusters,
+                corpus.cluster_weighting,
+            )
+        )
+        operational_scores.append(
+            publish(
+                metric,
+                [
+                    (index, stat)
+                    for index, stat in enumerate(operational[metric.name][pipeline])
+                    if stat is not None
+                ],
+                scores,
+                clusters,
+                corpus.cluster_weighting,
+            )
+        )
+    return PipelineResult(
+        pipeline=pipeline,
+        view=view,
+        aggregate=tuple(operational_scores if empty_page else conditional),
+        conditional_aggregate=tuple(conditional),
+        operational_aggregate=tuple(operational_scores),
+        target_population=corpus.target_population,
+        cluster_weighting=corpus.cluster_weighting,
+        line_outcomes=line_outcomes,
     )
 
 
-def _score(
-    name: str, finalize: Callable[[Any], Scalar], stat: Counts
-) -> MetricScore:
-    """Le ``MetricScore`` d'une statistique sous la finalisation de sa métrique."""
-    scalar = finalize(stat)
-    return MetricScore(
-        metric=name,
-        value=scalar.value,
-        stat=stat,
-        scalar_reason=scalar.reason,
-        untruncated_error_rate=scalar.untruncated_error_rate,
-    )
+def _line_outcomes(
+    pipeline: str, units: Mapping[tuple[str, str], DocumentUsage]
+) -> LineOutcomes | None:
+    """Somme des issues de lignes des unités d'un pipeline (``None`` : aucune
+    étape de correction structurée n'en a déclaré)."""
+    total: LineOutcomes | None = None
+    for (name, _), unit in sorted(units.items()):
+        if name == pipeline and unit.line_outcomes is not None:
+            total = unit.line_outcomes.merged_with(total)
+    return total
+
+
+def _support_analyses(
+    view: str,
+    metrics: list[DocumentMetric],
+    pipeline_order: list[str],
+    series: _Series,
+    operational: _Operational,
+    document_ids: list[str],
+    clusters: list[str],
+    weighting: str,
+    probes: Mapping[str, ReferenceProbe],
+) -> list[Analysis]:
+    """Supports apparié et global, et invention hors référence, par métrique.
+
+    Les pipelines que la vue **voit** seuls y entrent (un ``not_in_view`` n'est
+    comparable à personne et ne change le support de personne) ; seules les
+    observations complètes y comptent (§ 2.1 c, A4, A6).
+    """
+    out: list[Analysis] = []
+    for metric in metrics:
+        viewed = [
+            pipeline
+            for pipeline in pipeline_order
+            if any(
+                score.applicability != "not_in_view"
+                for score in series[metric.name][pipeline]
+            )
+        ]
+        if len(viewed) < 2:
+            continue
+        stats = {
+            pipeline: [complete_statistic(s) for s in series[metric.name][pipeline]]
+            for pipeline in viewed
+        }
+        comparison = comparison_payload(
+            metric, viewed, stats, document_ids, clusters, weighting
+        )
+        if comparison is not None:
+            out.append(Analysis(scope="corpus", view=view, payload=comparison))
+        applicable = {
+            pipeline: [
+                s.applicability == "applicable" for s in series[metric.name][pipeline]
+            ]
+            for pipeline in viewed
+        }
+        without = [
+            _without_reference(
+                metric,
+                probes[document_id],
+                [operational[metric.name][p][index] for p in viewed],
+                any(applicable[p][index] for p in viewed),
+            )
+            for index, document_id in enumerate(document_ids)
+        ]
+        invention = invention_payload(
+            metric, viewed, stats, document_ids, without, applicable
+        )
+        if invention is not None:
+            out.append(Analysis(scope="corpus", view=view, payload=invention))
+    return out
+
+
+def _without_reference(
+    metric: DocumentMetric,
+    probe: ReferenceProbe,
+    stats: list[Counts | None],
+    applicable: bool,
+) -> bool:
+    """La **référence** du document ne définit pas le scalaire de la métrique.
+
+    Lu sur la statistique d'un pipeline qui en a une (elle porte n_réf, ou
+    tp + fn), sinon sur la référence face à une sortie vide : jamais sur le
+    scalaire d'un pipeline (R5)."""
+    if not applicable:
+        return False
+    found = next((stat for stat in stats if stat is not None), None)
+    if found is None:
+        found = probe.empty_statistic(metric)
+    return found is not None and not reference_defines(found)
 
 
 def _cross_engine_scores(

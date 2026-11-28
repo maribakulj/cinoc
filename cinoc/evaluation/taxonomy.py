@@ -33,7 +33,7 @@ from __future__ import annotations
 
 from collections import Counter
 
-from cinoc.evaluation._alignment import Pair, alignment
+from cinoc.evaluation._alignment import Pair, alignment, matches_canonical
 from cinoc.evaluation.analysis import (
     Analysis,
     PipelineTaxonomy,
@@ -158,10 +158,17 @@ class TaxonomyCollector:
 
     def __init__(self) -> None:
         self._counts: dict[str, Counter[str]] = {}
+        #: Les ``lacuna`` et ``insertion`` suivent l'alignement RapidFuzz sur les
+        #: mots : concordent-ils, sur tous les documents, avec les D et I
+        #: canoniques du WER ?
+        self._concordant = True
 
     def observe(self, pipeline: str, reference: str, hypothesis: str) -> None:
         bucket = self._counts.setdefault(pipeline, Counter())
         bucket.update(classify_texts(reference, hypothesis))
+        self._concordant = self._concordant and matches_canonical(
+            reference.split(), hypothesis.split()
+        )
 
     def build(self, view: str) -> Analysis | None:
         rows = tuple(
@@ -179,7 +186,11 @@ class TaxonomyCollector:
         )
         if not rows:
             return None
-        payload = TaxonomyPayload(classes=CLASSES, pipelines=rows)
+        payload = TaxonomyPayload(
+            classes=CLASSES,
+            pipelines=rows,
+            matches_canonical_counts=self._concordant,
+        )
         return Analysis(scope="corpus", view=view, payload=payload)
 
 

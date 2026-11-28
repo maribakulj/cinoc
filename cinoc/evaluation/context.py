@@ -20,6 +20,11 @@ class DocContext:
     document_id: str
     reference: object
     hypothesis: object
+    #: La sortie est **déclarée incomplète** par l'étape (ou perdue : échec noté
+    #: comme une sortie vide) : un niveau texte absent de l'hypothèse y est une
+    #: part **manquante**, notée en suppressions, et non un « niveau absent »
+    #: qui rendrait la métrique non applicable (``CLAUDE.md`` §3).
+    partial: bool = False
 
 
 @dataclass(frozen=True)

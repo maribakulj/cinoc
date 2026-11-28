@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from statistics import fmean
 
+from cinoc.evaluation._alignment import matches_canonical
 from cinoc.evaluation.analysis import (
     _MAX_TEXT_CHARS,
     Analysis,
@@ -30,6 +31,9 @@ class DocumentTextsCollector:
         self._reference: dict[str, str] = {}
         self._hyps: dict[str, dict[str, str]] = {}
         self._cers: dict[str, list[float]] = {}
+        #: Le diff surligné suit l'alignement RapidFuzz : concorde-t-il, sur
+        #: tous les documents, avec les comptes canoniques du CER ?
+        self._concordant = True
 
     def observe(
         self,
@@ -39,6 +43,9 @@ class DocumentTextsCollector:
         hypothesis: str,
         cer: float | None,
     ) -> None:
+        self._concordant = self._concordant and matches_canonical(
+            reference, hypothesis
+        )
         self._reference.setdefault(document_id, reference[:_MAX_CHARS])
         self._hyps.setdefault(document_id, {})[pipeline] = hypothesis[:_MAX_CHARS]
         if cer is not None:
@@ -64,7 +71,11 @@ class DocumentTextsCollector:
             for doc in ranked
         )
         return Analysis(
-            scope="corpus", view=view, payload=DocumentTextsPayload(documents=documents)
+            scope="corpus",
+            view=view,
+            payload=DocumentTextsPayload(
+                documents=documents, matches_canonical_counts=self._concordant
+            ),
         )
 
 

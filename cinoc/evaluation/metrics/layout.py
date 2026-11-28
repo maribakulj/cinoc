@@ -95,7 +95,11 @@ def _layout_pair(ctx: DocContext) -> tuple[CanonicalLayout, CanonicalLayout]:
 )
 def region_cer(ctx: DocContext) -> ErrorCounts | None:
     reference, hypothesis = _layout_pair(ctx)
-    if not _has_text_level(hypothesis) or not _has_text_level(reference):
+    # Un hypothèse **déclarée incomplète** n'a pas « pas de niveau texte » : elle
+    # a perdu ses régions, qui comptent en suppressions.
+    if not (ctx.partial or _has_text_level(hypothesis)) or not _has_text_level(
+        reference
+    ):
         return None
     ref_texts = _region_texts(reference)
     hyp_texts = _region_texts(hypothesis)
@@ -333,9 +337,9 @@ def line_identity_cer(ctx: DocContext) -> ErrorCounts | None:
     """
     reference, hypothesis = _layout_pair(ctx)
     ref_lines = _lines_by_id(reference)
-    if not ref_lines or not _lines_by_id(hypothesis):
-        return None
     hyp_lines = _lines_by_id(hypothesis)
+    if not ref_lines or not (hyp_lines or ctx.partial):
+        return None
     total_edits = 0
     total_chars = 0
     for line_id, ref_text in ref_lines.items():
@@ -396,6 +400,7 @@ def _ordres(ctx: DocContext) -> tuple[list[str], list[str]]:
 
 @document_metric(
     name="reading_order_tau",
+    macro=False,
     finalize=st.proportion,
     input_types=(ArtifactType.LAYOUT, ArtifactType.LAYOUT),
     category=MetricCategory.ADAPTED,

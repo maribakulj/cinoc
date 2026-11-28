@@ -317,3 +317,5 @@ Cinoc **doit** continuer d'offrir (sous une forme propre) :
 
 *Verdicts marqués « PROVISOIRE — à confirmer au build ». Partie 1 durable (source
 figée) ; Partie 2 périssable (à confirmer à la tranche).*
+
+> **Refonte des contrats, tranche 1b (D-313)** : `StepOutput.partial` (motif d'une sortie déclarée incomplète, sur le modèle de `truncation`) et `line_outcomes` ; `DocumentExecution.step_issues` (étape → `partial`/`truncated`) et `line_outcomes`, `outcome` = `partial` | `truncated` | `ok` | `failed` (`partial` l'emporte). Le fan-out **déclare** sa part manquante (région en échec, bloc sans géométrie à découper) : une page dont toutes les régions échouent n'est plus `ok`. Preuves : `tests/adversarial/applicabilite_echecs/test_ce_applicabilite.py`, `tests/app/test_partial_unit.py`. `step_issues` est la seule trace d'étape que 1b ajoute : la tranche 2 le déplace dans le `StepRecord`.

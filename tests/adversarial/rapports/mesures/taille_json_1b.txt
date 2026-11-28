@@ -1,0 +1,24 @@
+Taille du RunResult, tranche 1b — S30 BNL (185 unités, 5 pipelines, 37 pages), re-notation hors ligne
+du même archive : v5 (main 04a1c17), v6 de la tranche 1a (abee7b5), v6 de la tranche 1b (ce commit).
+
+                    brut (octets)   gzip -9   zstd -19   rapport HTML
+v5                        566 266    28 098     16 557   11 200 550
+v6 / tranche 1a         1 352 368    41 723     20 074   12 025 985
+v6 / tranche 1b         1 970 975    50 527     22 751   12 456 357
+1b / v5                     ×3,48     ×1,80      ×1,37        ×1,11
+1b / 1a                     ×1,46     ×1,21      ×1,13        ×1,04
+
+Où vont les 618 ko de 1b sur 1a (JSON compact, octets) :
+  analyses     6 933 -> 135 917   dont la seule analyse `comparison` : 128 789
+  pipelines   17 833 ->  65 501   (deux qualités, couverture, macro : trois jeux d'agrégats)
+  documents  730 449 -> 876 969   (stat_partielle, applicabilité/couverture par document)
+  usage       60 172 ->  67 202   (step_issues, line_outcomes)
+
+Dresden S30 (40 unités) : JSON 549 966 octets, HTML 1 587 738 (1a : 1 423 746).
+Re-notation hors ligne : BNL 7,3 s, Dresden 9,9 s (relecture de l'archive comprise).
+
+L'analyse `comparison` est la part nouvelle qui pèse (supports apparié et global :
+les identifiants de documents de chaque paire sont listés en clair). Compactage
+possible sans changer le contrat — numéros de document au lieu d'identifiants, ou
+supports communs écrits une fois — non fait : la taille compressée croît de ×1,21
+sur la tranche 1a, et le contrat (§ 2.1 a, révision n° 7) garde le JSON complet.

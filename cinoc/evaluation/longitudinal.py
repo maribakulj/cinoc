@@ -23,6 +23,11 @@ multi-runs), deux questions :
   seulement si p ≤ α** — le max-diff de la source « détectait » toujours
   quelque chose (aucune statistique de test) ; réparation R11.
 
+**Exploratoire (rév. 7, ``CONTRATS.md`` § 2.1 d).** Les booléens ``significant``
+de ces deux résultats sont des **calculs internes** : l'historique publie la p
+comme un nombre, étiquetée *exploratoire*, et affiche la rupture dès qu'elle est
+calculable, quelle que soit sa p — jamais un verdict « significatif ».
+
 Entrées **déjà parsées** (``datetime``/``float``) : le parsing tolérant
 multi-formats à skip silencieux de la source n'est pas porté — la conversion
 vit chez l'appelant (couche app), explicite et journalisée.

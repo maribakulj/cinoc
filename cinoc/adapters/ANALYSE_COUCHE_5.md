@@ -308,3 +308,5 @@ cinoc/adapters/
 ---
 
 *Tous les verdicts de la Partie 1 sont marqués **PROVISOIRE — à confirmer au build** : le contact du code corrige souvent l'analyse.*
+
+> **Refonte des contrats, tranche 1b (D-313)** : `SaknussemmCorrector` **déclare** la complétude de son étape depuis le rapport de la bibliothèque (`_saknussemm_bridge.classify_lines`) : classe lue au `DecisionStage.status` et au `reason.code` (ensemble fermé `FALLBACK_REASON_CODES`), jamais au texte — corrigée (`corrected` à texte modifié), à revoir (`review_required`, disjointe), abstention (`corrected` à texte source), refus technique (repli hors `all_attempts_exhausted`/`chunk_error_absorbed`), repli (ces deux codes : étape `partial`). Un statut ou un code hors vocabulaire lève `AdapterStepError`. Preuves : `tests/adversarial/applicabilite_echecs/test_ce_saknussemm_issues.py` (bibliothèque réelle, client de complétion scripté).

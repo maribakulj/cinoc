@@ -52,10 +52,8 @@
             · R² {{ "%.2f"|format(tr.r_squared) }}</span>
           {% if tr.p_value is none %}
           <span class="mono">{{ t.history_trend_untested }}</span>
-          {% elif tr.significant %}
-          <span class="mono">p={{ "%.3f"|format(tr.p_value) }} · {{ t.history_trend_significant }}</span>
           {% else %}
-          <span class="mono">p={{ "%.3f"|format(tr.p_value) }} · {{ t.history_trend_not_significant }}</span>
+          <span class="mono">p={{ "%.3f"|format(tr.p_value) }} · {{ t.history_exploratory }}</span>
           {% endif %}
           {% endif %}
         </div>
@@ -63,7 +61,7 @@
         <div class="trend-meta">
           <span class="mono">{{ t.history_rupture }} {{ tr.rupture.run_id }}
             · Δ {{ "%+.4f"|format(tr.rupture.delta) }}
-            (p={{ "%.3f"|format(tr.rupture.p_value) }})</span>
+            (p={{ "%.3f"|format(tr.rupture.p_value) }}) · {{ t.history_exploratory }}</span>
         </div>
         {% endif %}
       </div>

@@ -10,7 +10,9 @@ Run 2 : **plus de réseau ni de SDK**. Chaque texte est reconstruit depuis le se
 sidecar ``NATIVE_JSON`` du run 1, par la fonction de conversion de l'adaptateur
 qui l'a produit — ``_completion_from_*`` et les extracteurs, pas une copie —,
 puis noté par ``precomputed``. Les métriques sont égales au run 1, page coupée
-comprise (une unité ``truncated`` est notée sur sa sortie réelle).
+comprise : sous la politique ``empty_page`` (R6, ``CONTRATS.md`` § 2.1 e), une
+unité ``truncated`` est notée sur sa sortie réelle — par défaut, elle n'est pas
+notée et sa statistique est gardée à part.
 
 Le sidecar traverse aussi le reste du run : ``by_step``, le puits d'artefacts
 (lisible avant le nettoyage du workspace), le cache de reprise (persisté puis
@@ -160,8 +162,15 @@ class _Run1:
         install_fake_sdks(monkeypatch, queues)
         install_fake_http(monkeypatch, queues)
         self.archive = tmp_path / "archive"
-        self.spec = plan_recipe_run(
-            _corpus(tmp_path / "corpus"), _ENTRIES, run_id="s8"
+        planned = plan_recipe_run(_corpus(tmp_path / "corpus"), _ENTRIES, run_id="s8")
+        # R6 : une page coupée n'est notée que sous ``empty_page`` ; le rejeu
+        # (``precomputed``, jamais coupé) la note, lui, sur son texte entier.
+        self.spec = planned.model_copy(
+            update={
+                "evaluation": planned.evaluation.model_copy(
+                    update={"failure_policy": "empty_page"}
+                )
+            }
         )
         self.sidecars_in_sink: dict[tuple[str, str, str], bytes] = {}
         self.result = run(
@@ -255,17 +264,20 @@ def _replay_offline(run1: _Run1, folder: Path) -> RunSpec:
     )
 
 
-#: L'axe « validité » décrit l'**exécution** de l'unité, pas la mesure : le
-#: rejeu est une autre exécution (``precomputed``, jamais coupée), où une unité
-#: tronquée du run 1 est ``ok``. Valeurs, statistiques et autres axes, eux,
-#: doivent être identiques.
-_EXECUTION_AXES = {"validity"}
+#: L'axe « validité » (et la statistique gardée à part d'une sortie coupée, avec
+#: la couverture qui la compte) décrit l'**exécution** de l'unité, pas la
+#: mesure : le rejeu est une autre exécution (``precomputed``, jamais coupée),
+#: où une unité tronquée du run 1 est ``ok``. Valeurs, statistiques et autres
+#: axes, eux, doivent être identiques.
+_EXECUTION_AXES = {"validity", "stat_partielle"}
 
 
 def _scores(result: RunResult) -> dict[str, Any]:
     return {
         "aggregates": {
-            (p.pipeline, p.view): [s.model_dump() for s in p.aggregate]
+            (p.pipeline, p.view): [
+                s.model_dump(exclude={"coverage"}) for s in p.aggregate
+            ]
             for p in result.pipelines
         },
         "documents": {

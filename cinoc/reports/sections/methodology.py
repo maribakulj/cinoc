@@ -164,24 +164,33 @@ class MethodologySection:
                 "Un document qu’un moteur n’a pas produit (unité en échec) est "
                 "noté comme une <b>page vide</b> — les comptes de sa référence "
                 "face à une sortie sans texte : un CER de 1, une exactitude "
-                f"de 0, un taux d’insertion de 0 ({code})."
+                "de 0, un taux d’insertion de 0 ; une sortie partielle ou "
+                f"tronquée est notée telle que produite ({code})."
             )
             failed_en = (
                 "A document an engine did not produce (failed unit) is scored "
                 "as an <b>empty page</b> — the counts of its reference against "
                 "an output with no text: a CER of 1, an accuracy of 0, an "
-                f"insertion rate of 0 ({code})."
+                "insertion rate of 0; a partial or truncated output is scored "
+                f"as produced ({code})."
             )
         else:
             failed_fr = (
                 "Un document qu’un moteur n’a pas produit (unité en échec) est "
-                "<b>exclu</b> de ses agrégats, sans score factice ; l’agrégat "
-                f"porte alors « n notés / n attendus » ({code})."
+                "<b>exclu</b> de ses agrégats, sans score factice ; une sortie "
+                "<b>partielle</b> ou <b>tronquée</b> n’y est pas notée non plus "
+                "(sa statistique est gardée à part) ; l’agrégat porte alors "
+                "« n notés / n attendus » et sa couverture par motif, la "
+                "qualité opérationnelle du résultat notant les sorties telles "
+                f"que produites ({code})."
             )
             failed_en = (
                 "A document an engine did not produce (failed unit) is "
-                "<b>left out</b> of its aggregates, with no fake score; the "
-                f"aggregate then shows “n scored / n expected” ({code})."
+                "<b>left out</b> of its aggregates, with no fake score; a "
+                "<b>partial</b> or <b>truncated</b> output is not scored either "
+                "(its statistic is kept apart); the aggregate then shows “n "
+                "scored / n expected” and its coverage by reason, the result’s "
+                f"operational quality scoring outputs as produced ({code})."
             )
         conventions = localized(
             lang,

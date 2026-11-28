@@ -21,7 +21,11 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Mapping, Sequence
 
-from cinoc.evaluation._alignment import aligned_to_reference, char_substitutions
+from cinoc.evaluation._alignment import (
+    aligned_to_reference,
+    char_substitutions,
+    matches_canonical,
+)
 from cinoc.evaluation.analysis import (
     Analysis,
     CharConfusion,
@@ -87,6 +91,9 @@ class DiagnosticsCollector:
     def __init__(self, *, lines: bool = True) -> None:
         #: ``False`` : la vue écrase les sauts de ligne, pas de « pire ligne ».
         self._with_lines = lines
+        #: Les confusions suivent l'alignement RapidFuzz : concordent-elles, sur
+        #: tous les documents, avec les comptes canoniques du CER ?
+        self._concordant = True
         self._confusions: dict[str, Counter[tuple[str, str]]] = {}
         self._lines: list[tuple[float, str, str, int, str, str]] = []
 
@@ -95,6 +102,9 @@ class DiagnosticsCollector:
     ) -> None:
         bucket = self._confusions.setdefault(pipeline, Counter())
         bucket.update(char_confusions(reference, hypothesis))
+        self._concordant = self._concordant and matches_canonical(
+            reference, hypothesis
+        )
         if not self._with_lines:
             return
         for index, cer, ref_line, hyp_line in line_cers(reference, hypothesis):
@@ -142,6 +152,7 @@ class DiagnosticsCollector:
             return None
         payload = DiagnosticsPayload(
             metric=metric,
+            matches_canonical_counts=self._concordant,
             confusions=confusions,
             worst_lines=worst,
             hardest_documents=hardest,

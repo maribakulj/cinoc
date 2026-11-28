@@ -33,7 +33,15 @@ FILE_BUDGETS: dict[str, int] = {
     # par famille (axe 2). Budget re-basé aux payloads **par document**
     # (``document_lines`` + ``document_taxonomy``, vue document recentrée :
     # 1102 LOC) + ~15 %.
-    "evaluation/analysis.py": 1265,
+    # Rév. n° 7 / tranche 1b : statut ``exploratory`` de l'inférence, chemin
+    # d'alignement et concordance des confusions / taxonomie / diff (1295 LOC ;
+    # les deux payloads de supports vivent à part, ``evaluation/comparison.py``).
+    "evaluation/analysis.py": 1300,
+    # Orchestrateur de run (couche 6) : la boucle de reprise, d'exécution
+    # parallèle et d'assemblage déterministe forme un seul flux. Tranche 1b :
+    # refus des vérités terrain absentes avant le premier appel, issues de
+    # lignes et états d'étape portés par l'unité (605 LOC).
+    "app/orchestrator.py": 700,
     # Helpers SVG **serveur** déterministes (un par type de graphe : dispersion,
     # Venn, barres, calibration, heatmap, radar, bulles, box plot, camembert,
     # haltère, colonnes groupées, bump). Cohésion d'un même contrat de rendu

@@ -16,9 +16,20 @@ from pydantic import BaseModel, ConfigDict, Field
 #: Issue d'une unité (pipeline × document), **produite par l'exécution** : la
 #: couche 4 la tient en main (l'exception d'une étape, la raison d'arrêt d'un
 #: LLM) et la couche 3 la transporte dans ``RunResult`` (``DocumentUsage``).
-#: ``truncated`` = sortie obtenue mais coupée (raison d'arrêt d'un LLM) : notée,
-#: et signalée. ``failed`` = aucune sortie : l'unité n'a rien à noter.
-UnitOutcome = Literal["ok", "truncated", "failed"]
+#: ``truncated`` = sortie obtenue mais coupée (raison d'arrêt d'un LLM) : non
+#: notée par défaut, signalée, sa statistique gardée à part (§ 2.1 f).
+#: ``partial`` = sortie obtenue mais **déclarée incomplète** par l'étape (régions
+#: non reconnues d'un fan-out, lignes de correction restées en repli) : le
+#: module ou l'exécuteur le **déclare**, l'évaluation le lit et ne le reconstruit
+#: jamais. ``failed`` = aucune sortie : l'unité n'a rien à noter.
+UnitOutcome = Literal["ok", "truncated", "partial", "failed"]
+
+#: L'état **déclaré** d'une étape dont la sortie est incomplète — ce que
+#: ``StepOutput`` déclare (``partial``, ``truncation``) et que l'unité porte, par
+#: étape, pour que chaque vue lise l'état de **son** étape (``A2`` : une
+#: correction aval coupée ne rend pas incomplète la lecture amont). La tranche 2
+#: le déplace dans le ``StepRecord`` de l'étape, sans changer sa sémantique.
+StepIssue = Literal["partial", "truncated"]
 
 #: Motif **codé** d'un échec — ce qu'on peut agréger ou filtrer sans lire un
 #: message libre. ``engine`` : le moteur (adapter) a levé ; ``infrastructure`` :
@@ -35,6 +46,45 @@ def _add(a: int | None, b: int | None) -> int | None:
     if a is None and b is None:
         return None
     return (a or 0) + (b or 0)
+
+
+class LineOutcomes(BaseModel):
+    """Les issues des lignes d'une étape de **correction structurée** (§ 2.1 f).
+
+    Quatre classes, **disjointes**. Les trois premières sont des décisions du
+    correcteur — l'unité reste complète : ``corrected`` (texte modifié, hors
+    ``review_required``), ``review_required`` (correction gardée, que le
+    correcteur déclare ne pas pouvoir établir), ``abstained`` (texte source
+    proposé inchangé), ``refused`` (garde-fou ou revue : la source est gardée,
+    avec son code, hors replis). La quatrième est un incident d'exécution :
+    ``fallback`` (aucune proposition exploitable : ``all_attempts_exhausted``,
+    ``chunk_error_absorbed``) rend l'étape **partielle**. Le total des
+    corrections est ``corrected + review_required``.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    corrected: int = Field(default=0, ge=0)
+    review_required: int = Field(default=0, ge=0)
+    abstained: int = Field(default=0, ge=0)
+    refused: dict[str, int] = Field(default_factory=dict)
+    fallback: dict[str, int] = Field(default_factory=dict)
+
+    def merged_with(self, other: LineOutcomes | None) -> LineOutcomes:
+        """Somme compte par compte (par code pour ``refused`` et ``fallback``)."""
+        if other is None:
+            return self
+        return LineOutcomes(
+            corrected=self.corrected + other.corrected,
+            review_required=self.review_required + other.review_required,
+            abstained=self.abstained + other.abstained,
+            refused=_sum_by_code(self.refused, other.refused),
+            fallback=_sum_by_code(self.fallback, other.fallback),
+        )
+
+
+def _sum_by_code(a: dict[str, int], b: dict[str, int]) -> dict[str, int]:
+    return {code: a.get(code, 0) + b.get(code, 0) for code in sorted({*a, *b})}
 
 
 class ResourceUsage(BaseModel):
@@ -91,4 +141,10 @@ class ResourceUsage(BaseModel):
         )
 
 
-__all__ = ["FailureReason", "ResourceUsage", "UnitOutcome"]
+__all__ = [
+    "FailureReason",
+    "LineOutcomes",
+    "ResourceUsage",
+    "StepIssue",
+    "UnitOutcome",
+]

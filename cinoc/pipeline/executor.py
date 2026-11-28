@@ -29,7 +29,7 @@ from cinoc.domain.deadline import Deadline
 from cinoc.domain.errors import AdapterStepError, CinocError, DeadlineExceeded
 from cinoc.domain.pipeline import INITIAL_STEP_ID, PipelineSpec, PipelineStep
 from cinoc.domain.provenance import ProvenanceRecord
-from cinoc.domain.usage import FailureReason, ResourceUsage
+from cinoc.domain.usage import FailureReason, LineOutcomes, ResourceUsage, StepIssue
 from cinoc.pipeline.fanout import RegionCropper, execute_region_fanout
 from cinoc.pipeline.fingerprint import ModuleIdentity, step_fingerprint
 from cinoc.pipeline.protocols import Module
@@ -115,6 +115,12 @@ class PipelineExecutor:
         # Une coupure par étape qui en déclare une : l'unité garde ses sorties
         # (elles seront notées) et son issue dit laquelle est coupée.
         truncations: list[str] = []
+        # Les étapes qui déclarent leur sortie incomplète (``StepOutput.partial``)
+        # et les issues de lignes qu'elles comptent : déclarées par l'étape,
+        # portées ici, jamais reconstruites en aval.
+        partials: list[str] = []
+        step_issues: dict[str, StepIssue] = {}
+        line_outcomes: LineOutcomes | None = None
 
         for step in spec.steps:
             ctrl.raise_if_cancelled()
@@ -151,11 +157,21 @@ class PipelineExecutor:
             by_step[step.id] = stamped
             if output.truncation is not None:
                 truncations.append(f"étape {step.id!r} : {output.truncation}")
+                step_issues[step.id] = "truncated"
+            if output.partial is not None:
+                partials.append(f"étape {step.id!r} : {output.partial}")
+                step_issues[step.id] = "partial"
+            if output.line_outcomes is not None:
+                line_outcomes = output.line_outcomes.merged_with(line_outcomes)
         return DocumentExecution(
             by_step=by_step,
             step_usage=step_usage,
-            outcome="truncated" if truncations else "ok",
-            message="; ".join(truncations) or None,
+            outcome=(
+                "partial" if partials else "truncated" if truncations else "ok"
+            ),
+            message="; ".join([*partials, *truncations]) or None,
+            line_outcomes=line_outcomes,
+            step_issues=step_issues,
         )
 
     def _run_merge(

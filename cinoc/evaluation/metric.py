@@ -71,6 +71,11 @@ class DocumentMetric:
     #: Prend la statistique de **sa** famille (``EditCounts`` pour ``cer``…).
     finalize: Callable[[Any], Scalar]
     terms: Callable[[Any], tuple[int, int]] | None = None
+    #: Le **macro** est publié (``CONTRATS.md`` § 2.1 c) : le scalaire est défini
+    #: pour toute hypothèse sur D^M. ``False`` pour les métriques dont le
+    #: dénominateur est l'hypothèse (précision, ``unanchored_trigrams``, ``air``,
+    #: τ) : leur macro serait fixé par la sortie du pipeline.
+    macro: bool = True
 
     @property
     def name(self) -> str:
@@ -103,6 +108,7 @@ def document_metric(
     unit: MetricUnit,
     finalize: Callable[[Any], Scalar],
     terms: Callable[[Any], tuple[int, int]] | None = None,
+    macro: bool = True,
     description: str = "",
     higher_is_better: bool = False,
     tags: frozenset[str] = frozenset(),
@@ -129,6 +135,7 @@ def document_metric(
             statistic=fn,
             finalize=finalize,
             terms=terms,
+            macro=macro,
         )
 
     return decorate

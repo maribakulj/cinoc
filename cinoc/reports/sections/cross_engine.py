@@ -2,16 +2,18 @@
 
 Pour chaque ``vue:métrique`` de ``RunResult.cross_engine`` : le **test**
 apparié (Wilcoxon signé-rangs à 2 pipelines, Friedman au-delà), sa p brute,
-sa p **corrigée de Holm** sur les tests du run, et un **verdict** factuel sur
-la p corrigée — ou le **motif** pour lequel le test n'a pas été calculé. Le
-verdict est une **fonction auditable** du payload ``inference`` — une
-étiquette, pas de la prose (narratif supprimé, ``CLAUDE.md`` §6). Une ligne
+sa p **corrigée de Holm** sur les tests du run, et son **statut** —
+``exploratoire`` : aucun verdict, les p sont des nombres — ou le **motif**
+pour lequel le test n'a pas été calculé. Le statut est une **fonction
+auditable** du payload ``inference`` — une étiquette, pas de la prose
+(narratif supprimé, ``CLAUDE.md`` §6). Une ligne
 sans payload (résultat antérieur au schéma 5) garde sa p brute et le dit
 « non corrigé ».
 
 Sous le tableau, la section **lit** (sans recalculer) les payloads
 ``inference`` : rangs moyens, post-hoc de Nemenyi s'il a eu lieu (paires
-significatives, barres CD qui se chevauchent), IC bootstrap en mode détaillé
+séparées par la distance critique, barres CD qui se chevauchent), IC bootstrap
+en mode détaillé
 — celui de l'agrégat **micro** du tableau, à côté de ce même agrégat.
 Puis les payloads ``inter_engine`` : complémentarité oracle (borne
 **supérieure** bag-of-words, documentée comme telle — anti-surinterprétation)
@@ -34,7 +36,7 @@ from cinoc.reports.engine_badges import engine_cell, engine_order
 from cinoc.reports.html import escape, localized, view_label, view_prefix
 from cinoc.reports.section import Html, SectionContext
 from cinoc.reports.sections._inference_text import (
-    is_significant,
+    exploratory_label,
     omnibus_label,
     p_text,
     posthoc_text,
@@ -65,7 +67,7 @@ def _payloads(result: RunResult) -> dict[tuple[str, str], InferencePayload]:
 def _row(
     score: MetricScore, payload: InferencePayload | None, lang: str
 ) -> tuple[str, str, str, str]:
-    """(test, p brute, p Holm, verdict + classe CSS) d'une ligne du tableau."""
+    """(test, p brute, p Holm, statut) d'une ligne du tableau."""
     if payload is None:
         verdict = (
             localized(lang, "non corrigé", "uncorrected")
@@ -80,14 +82,7 @@ def _row(
             f"({escape(reason_text(payload, lang))})</span>"
         )
         return label, "—", "—", '<td class="verdict">—</td>'
-    if is_significant(payload):
-        verdict = '<td class="verdict sig">' + localized(
-            lang, "significatif", "significant"
-        ) + "</td>"
-    else:
-        verdict = '<td class="verdict">' + localized(
-            lang, "non sig.", "not sig."
-        ) + "</td>"
+    verdict = f'<td class="verdict">{exploratory_label(lang)}</td>'
     return (
         escape(omnibus_label(payload, lang)),
         _format_p(payload.p_value, lang),
@@ -401,9 +396,13 @@ class CrossEngineSection:
                 localized(
                     lang,
                     f"p corrigée par Holm sur les {family} test(s) calculé(s) du "
-                    f"run ; significatif si p corrigée &lt; α = {alpha}.",
+                    f"run ; résultats <strong>exploratoires</strong> : tant que "
+                    f"l'inférence conditionnelle n'est pas livrée, aucune p "
+                    f"n'est confirmatoire (α = {alpha} ne sert qu'au post-hoc).",
                     f"p corrected by Holm over the run's {family} computed "
-                    f"test(s); significant if corrected p &lt; α = {alpha}.",
+                    f"test(s); <strong>exploratory</strong> results: until "
+                    f"conditional inference ships, no p is confirmatory "
+                    f"(α = {alpha} only serves the post-hoc).",
                 )
                 if family
                 else localized(
@@ -430,7 +429,7 @@ class CrossEngineSection:
             th_test = localized(lang, "Test", "Test")
             th_raw = localized(lang, "p brute", "raw p")
             th_holm = localized(lang, "p (Holm)", "p (Holm)")
-            th_verdict = localized(lang, "verdict", "verdict")
+            th_verdict = localized(lang, "résultat", "result")
             significance = (
                 prose
                 + '<table class="data">\n'

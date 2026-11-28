@@ -235,6 +235,27 @@ def char_counts(reference: str, hypothesis: str) -> tuple[int, int, int]:
     return substitutions, deletions, insertions
 
 
+def matches_canonical(
+    reference: Sequence[Hashable], hypothesis: Sequence[Hashable]
+) -> bool:
+    """La ventilation (S, D, I) de l'alignement :func:`opcodes` égale-t-elle les
+    comptes canoniques ? Vrai sans ex æquo d'alignement ; faux sinon (« ab » →
+    « ba » : (0, 1, 1) contre (2, 0, 0)). C'est ce que les analyses qui nomment
+    les éditions publient (``matches_canonical_counts``) : elles ne prétendent
+    pas décomposer les comptes d'une métrique quand leur ventilation diverge."""
+    substitutions = deletions = insertions = 0
+    for op in opcodes(reference, hypothesis):
+        if op.tag == "replace":
+            substitutions += op.src_end - op.src_start
+        elif op.tag == "delete":
+            deletions += op.src_end - op.src_start
+        elif op.tag == "insert":
+            insertions += op.dest_end - op.dest_start
+    return (substitutions, deletions, insertions) == canonical_counts(
+        reference, hypothesis
+    )
+
+
 @lru_cache(maxsize=32)
 def _canonical(
     reference: tuple[int, ...] | str, hypothesis: tuple[int, ...] | str
@@ -304,5 +325,6 @@ __all__ = [
     "char_counts",
     "char_mer",
     "char_substitutions",
+    "matches_canonical",
     "opcodes",
 ]

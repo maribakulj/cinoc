@@ -66,7 +66,13 @@ from pydantic import ValidationError
 from cinoc.domain.artifacts import Artifact, ArtifactType, compute_content_hash
 from cinoc.domain.documents import DocumentRef
 from cinoc.domain.pipeline import PipelineSpec
-from cinoc.domain.usage import FailureReason, ResourceUsage, UnitOutcome
+from cinoc.domain.usage import (
+    FailureReason,
+    LineOutcomes,
+    ResourceUsage,
+    StepIssue,
+    UnitOutcome,
+)
 from cinoc.pipeline.fingerprint import ModuleIdentity, canonical_json, step_fingerprint
 from cinoc.pipeline.protocols import Module
 from cinoc.pipeline.types import DocumentExecution
@@ -79,13 +85,17 @@ logger = logging.getLogger(__name__)
 #: d'étape. Le format entre dans la clé : un index d'un format antérieur n'est
 #: plus jamais trouvé — invalidé, pas converti. Une unité ``truncated`` est
 #: gardée (la rejouer la couperait à l'identique et la ferait repayer) et relue
-#: ``truncated``.
+#: ``truncated``. Une unité ``partial`` est archivée comme un échec : une reprise
+#: normale la **retente** (sa part manquante vient d'un incident d'exécution),
+#: la relecture hors ligne la restitue telle qu'archivée, ses issues de lignes
+#: comprises.
 CACHE_FORMAT = 3
 
 #: Issues relues (``failed`` ne l'est que hors ligne, voir :meth:`ResumeStore.load`)
 #: et motifs d'échec — tirés des ``Literal`` de ``domain``, pas recopiés.
 _OUTCOMES = frozenset(get_args(UnitOutcome))
 _REASONS = frozenset(get_args(FailureReason))
+_STEP_ISSUES = frozenset(get_args(StepIssue))
 #: Binaires des unités de l'archive, ``{adapter_name: {binaire: version}}``.
 _BINARIES = "binaries.json"
 #: Sous-dossier des images, rangées par contenu (une par page, tous pipelines).
@@ -227,7 +237,7 @@ class ResumeStore:
         l'était, on n'en déduirait pas ``by_step`` : l'unité est ré-exécutée,
         puis réécrite au format courant). Une unité **en échec** n'est rendue
         que si ``failures`` (relecture hors ligne) : une reprise normale la
-        retente.
+        retente. Il en va de même d'une unité **partielle**.
         """
         index = self._base / key / "index.json"
         try:
@@ -277,6 +287,8 @@ class ResumeStore:
                     return None
                 kept[artifact_type] = artifact
             by_step[step_id] = kept
+        if outcome == "partial" and not failures:
+            return None
         if outcome == "failed":
             if not (failures and isinstance(reason, str) and message is not None):
                 return None
@@ -297,8 +309,27 @@ class ResumeStore:
             for artifact in outputs.values():
                 if artifact.uri is not None and not Path(artifact.uri).is_file():
                     return None  # entrée incomplète → ré-exécution
+        try:
+            line_outcomes = (
+                LineOutcomes.model_validate(data["line_outcomes"])
+                if data.get("line_outcomes") is not None
+                else None
+            )
+        except ValidationError:
+            return None
+        raw_issues = data.get("step_issues", {})
+        if not isinstance(raw_issues, dict) or not all(
+            value in _STEP_ISSUES for value in raw_issues.values()
+        ):
+            return None
+        step_issues = cast(dict[str, StepIssue], dict(raw_issues))
         return DocumentExecution(
-            by_step=by_step, step_usage=step_usage, outcome=outcome, message=message
+            by_step=by_step,
+            step_usage=step_usage,
+            outcome=outcome,
+            message=message,
+            line_outcomes=line_outcomes,
+            step_issues=step_issues,
         )
 
     def save(self, key: str, execution: DocumentExecution) -> None:
@@ -350,6 +381,13 @@ class ResumeStore:
                     if execution.billed is not None
                     else None
                 ),
+                # Issues des lignes d'une correction structurée (§ 2.1 f).
+                "line_outcomes": (
+                    execution.line_outcomes.model_dump(mode="json")
+                    if execution.line_outcomes is not None
+                    else None
+                ),
+                "step_issues": dict(execution.step_issues),
             }
             (unit_dir / "index.json").write_text(
                 json.dumps(payload, ensure_ascii=False, sort_keys=True),

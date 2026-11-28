@@ -52,6 +52,7 @@ from cinoc.evaluation.metrics.archaic import make_air_metric, make_hcpr_metric
 from cinoc.evaluation.registry import MetricRegistry, register_default_metrics
 from cinoc.evaluation.result import DocumentUsage, RunResult
 from cinoc.evaluation.runner import evaluate_run
+from cinoc.evaluation.scoring import missing_ground_truths
 from cinoc.pipeline.executor import (
     UNIT_FAILURES,
     PipelineExecutor,
@@ -93,8 +94,8 @@ class UnitProgress:
     total: int
     pipeline: str
     document_id: str
-    #: ``ok`` / ``truncated`` / ``failed`` (issue de l'unité), ou ``resumed`` :
-    #: relue de l'archive, pas exécutée.
+    #: ``ok`` / ``truncated`` / ``partial`` / ``failed`` (issue de l'unité), ou
+    #: ``resumed`` : relue de l'archive, pas exécutée.
     outcome: str
 
 
@@ -224,6 +225,16 @@ def run(
     metric_registry = MetricRegistry()
     register_default_metrics(metric_registry)
     _bind_archaic_metrics(metric_registry, spec)
+    # F8 : une vérité terrain référencée mais absente du disque est refusée
+    # **avant** le premier appel de moteur — jamais payée pour rien.
+    missing = missing_ground_truths(spec.corpus, spec.evaluation, metric_registry)
+    if missing:
+        shown = ", ".join(f"{document} → {uri}" for document, uri in missing[:5])
+        more = f" (+{len(missing) - 5})" if len(missing) > 5 else ""
+        raise OrchestrationError(
+            f"{len(missing)} vérité(s) terrain référencée(s) mais absente(s) du "
+            f"disque : {shown}{more}. Rien n'a été exécuté."
+        )
 
     documents = spec.corpus.documents
     total_units = len(spec.pipelines) * len(documents)
@@ -398,6 +409,8 @@ def run(
                         outcome=execution.outcome,
                         reason=execution.reason,
                         message=execution.message,
+                        line_outcomes=execution.line_outcomes,
+                        step_issues=dict(execution.step_issues),
                         resumed=(pipeline.name, document.id) in resumed,
                     )
                 )

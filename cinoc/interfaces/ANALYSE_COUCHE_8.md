@@ -359,3 +359,5 @@ de page de la DoD ci-dessus sont donc **dépassés sur ces points** :
 Détail complet : `MIGRATION_PLAN.md` **D-065**. Limites assumées : interaction
 navigateur non testée en CI ; `/data` non gué sur `SPACE_ID` ; déploiement non
 encore aligné — au backlog.
+
+> **Refonte des contrats, tranche 1b (D-313)** : `/history` n'écrit plus « significative (p ≤ 0,05) » ni « non significative » : la p de la pente est publiée comme un nombre, étiquetée *exploratoire* ; la rupture de Pettitt s'affiche dès que le test est calculable, avec sa p et la même étiquette (`history_exploratory`, FR/EN), sans filtre sur la significativité. Le bilan `cinoc` compte les unités partielles. Preuves : `tests/interfaces/web/test_history_trends.py`.

@@ -155,6 +155,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": 0.025980392156862743,
+          "macro_support": 5,
+          "coverage": {},
           "applicability": null,
           "availability": null,
           "validity": null,
@@ -173,6 +177,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": 0.025980392156862743,
+          "macro_support": 5,
+          "coverage": {},
           "applicability": null,
           "availability": null,
           "validity": null,
@@ -191,6 +199,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": 0.14047619047619048,
+          "macro_support": 5,
+          "coverage": {},
           "applicability": null,
           "availability": null,
           "validity": null,
@@ -209,6 +221,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": 0.14047619047619048,
+          "macro_support": 5,
+          "coverage": {},
           "applicability": null,
           "availability": null,
           "validity": null,
@@ -225,13 +241,240 @@
           },
           "scalar_reason": "zero_denominator",
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": {},
           "applicability": null,
           "availability": null,
           "validity": null,
           "support": 5,
           "expected": 5
         }
-      ]
+      ],
+      "conditional_aggregate": [
+        {
+          "metric": "cer",
+          "value": 0.028985507246376812,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 4,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 138
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": 0.025980392156862743,
+          "macro_support": 5,
+          "coverage": {},
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.028985507246376812,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 4,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 138
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": 0.025980392156862743,
+          "macro_support": 5,
+          "coverage": {},
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
+        },
+        {
+          "metric": "wer",
+          "value": 0.16666666666666666,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 4,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 24
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": 0.14047619047619048,
+          "macro_support": 5,
+          "coverage": {},
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
+        },
+        {
+          "metric": "mer",
+          "value": 0.16666666666666666,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 4,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 24
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": 0.14047619047619048,
+          "macro_support": 5,
+          "coverage": {},
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
+        },
+        {
+          "metric": "air",
+          "value": null,
+          "stat": {
+            "family": "proportion",
+            "count": 0,
+            "total": 0
+          },
+          "scalar_reason": "zero_denominator",
+          "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": {},
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
+        }
+      ],
+      "operational_aggregate": [
+        {
+          "metric": "cer",
+          "value": 0.028985507246376812,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 4,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 138
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": 0.025980392156862743,
+          "macro_support": 5,
+          "coverage": {},
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.028985507246376812,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 4,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 138
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": 0.025980392156862743,
+          "macro_support": 5,
+          "coverage": {},
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
+        },
+        {
+          "metric": "wer",
+          "value": 0.16666666666666666,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 4,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 24
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": 0.14047619047619048,
+          "macro_support": 5,
+          "coverage": {},
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
+        },
+        {
+          "metric": "mer",
+          "value": 0.16666666666666666,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 4,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 24
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": 0.14047619047619048,
+          "macro_support": 5,
+          "coverage": {},
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
+        },
+        {
+          "metric": "air",
+          "value": null,
+          "stat": {
+            "family": "proportion",
+            "count": 0,
+            "total": 0
+          },
+          "scalar_reason": "zero_denominator",
+          "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": {},
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
+        }
+      ],
+      "target_population": null,
+      "cluster_weighting": "document",
+      "line_outcomes": null
     },
     {
       "pipeline": "pero",
@@ -249,6 +492,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": 0.017391304347826087,
+          "macro_support": 5,
+          "coverage": {},
           "applicability": null,
           "availability": null,
           "validity": null,
@@ -267,6 +514,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": 0.0,
+          "macro_support": 5,
+          "coverage": {},
           "applicability": null,
           "availability": null,
           "validity": null,
@@ -285,6 +536,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": 0.06666666666666667,
+          "macro_support": 5,
+          "coverage": {},
           "applicability": null,
           "availability": null,
           "validity": null,
@@ -303,6 +558,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": 0.06666666666666667,
+          "macro_support": 5,
+          "coverage": {},
           "applicability": null,
           "availability": null,
           "validity": null,
@@ -319,13 +578,240 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": {},
           "applicability": null,
           "availability": null,
           "validity": null,
           "support": 5,
           "expected": 5
         }
-      ]
+      ],
+      "conditional_aggregate": [
+        {
+          "metric": "cer",
+          "value": 0.014492753623188406,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 2,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 138
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": 0.017391304347826087,
+          "macro_support": 5,
+          "coverage": {},
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.0,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 138
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": 0.0,
+          "macro_support": 5,
+          "coverage": {},
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
+        },
+        {
+          "metric": "wer",
+          "value": 0.041666666666666664,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 1,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 24
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": 0.06666666666666667,
+          "macro_support": 5,
+          "coverage": {},
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
+        },
+        {
+          "metric": "mer",
+          "value": 0.041666666666666664,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 1,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 24
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": 0.06666666666666667,
+          "macro_support": 5,
+          "coverage": {},
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
+        },
+        {
+          "metric": "air",
+          "value": 1.0,
+          "stat": {
+            "family": "proportion",
+            "count": 2,
+            "total": 2
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": {},
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
+        }
+      ],
+      "operational_aggregate": [
+        {
+          "metric": "cer",
+          "value": 0.014492753623188406,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 2,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 138
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": 0.017391304347826087,
+          "macro_support": 5,
+          "coverage": {},
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.0,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 138
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": 0.0,
+          "macro_support": 5,
+          "coverage": {},
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
+        },
+        {
+          "metric": "wer",
+          "value": 0.041666666666666664,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 1,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 24
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": 0.06666666666666667,
+          "macro_support": 5,
+          "coverage": {},
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
+        },
+        {
+          "metric": "mer",
+          "value": 0.041666666666666664,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 1,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 24
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": 0.06666666666666667,
+          "macro_support": 5,
+          "coverage": {},
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
+        },
+        {
+          "metric": "air",
+          "value": 1.0,
+          "stat": {
+            "family": "proportion",
+            "count": 2,
+            "total": 2
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": {},
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
+        }
+      ],
+      "target_population": null,
+      "cluster_weighting": "document",
+      "line_outcomes": null
     },
     {
       "pipeline": "tesseract",
@@ -343,6 +829,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": 0.01764705882352941,
+          "macro_support": 5,
+          "coverage": {},
           "applicability": null,
           "availability": null,
           "validity": null,
@@ -361,6 +851,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": 0.09047619047619046,
+          "macro_support": 5,
+          "coverage": {},
           "applicability": null,
           "availability": null,
           "validity": null,
@@ -379,13 +873,156 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": 0.09047619047619046,
+          "macro_support": 5,
+          "coverage": {},
           "applicability": null,
           "availability": null,
           "validity": null,
           "support": 5,
           "expected": 5
         }
-      ]
+      ],
+      "conditional_aggregate": [
+        {
+          "metric": "cer",
+          "value": 0.021739130434782608,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 3,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 138
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": 0.01764705882352941,
+          "macro_support": 5,
+          "coverage": {},
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
+        },
+        {
+          "metric": "wer",
+          "value": 0.125,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 3,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 24
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": 0.09047619047619046,
+          "macro_support": 5,
+          "coverage": {},
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
+        },
+        {
+          "metric": "mer",
+          "value": 0.125,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 3,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 24
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": 0.09047619047619046,
+          "macro_support": 5,
+          "coverage": {},
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
+        }
+      ],
+      "operational_aggregate": [
+        {
+          "metric": "cer",
+          "value": 0.021739130434782608,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 3,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 138
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": 0.01764705882352941,
+          "macro_support": 5,
+          "coverage": {},
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
+        },
+        {
+          "metric": "wer",
+          "value": 0.125,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 3,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 24
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": 0.09047619047619046,
+          "macro_support": 5,
+          "coverage": {},
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
+        },
+        {
+          "metric": "mer",
+          "value": 0.125,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 3,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 24
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": 0.09047619047619046,
+          "macro_support": 5,
+          "coverage": {},
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
+        }
+      ],
+      "target_population": null,
+      "cluster_weighting": "document",
+      "line_outcomes": null
     },
     {
       "pipeline": "pero",
@@ -403,6 +1040,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": 0.0,
+          "macro_support": 5,
+          "coverage": {},
           "applicability": null,
           "availability": null,
           "validity": null,
@@ -421,6 +1062,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": 0.0,
+          "macro_support": 5,
+          "coverage": {},
           "applicability": null,
           "availability": null,
           "validity": null,
@@ -439,13 +1084,156 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": 0.0,
+          "macro_support": 5,
+          "coverage": {},
           "applicability": null,
           "availability": null,
           "validity": null,
           "support": 5,
           "expected": 5
         }
-      ]
+      ],
+      "conditional_aggregate": [
+        {
+          "metric": "cer",
+          "value": 0.0,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 138
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": 0.0,
+          "macro_support": 5,
+          "coverage": {},
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
+        },
+        {
+          "metric": "wer",
+          "value": 0.0,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 24
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": 0.0,
+          "macro_support": 5,
+          "coverage": {},
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
+        },
+        {
+          "metric": "mer",
+          "value": 0.0,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 24
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": 0.0,
+          "macro_support": 5,
+          "coverage": {},
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
+        }
+      ],
+      "operational_aggregate": [
+        {
+          "metric": "cer",
+          "value": 0.0,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 138
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": 0.0,
+          "macro_support": 5,
+          "coverage": {},
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
+        },
+        {
+          "metric": "wer",
+          "value": 0.0,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 24
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": 0.0,
+          "macro_support": 5,
+          "coverage": {},
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
+        },
+        {
+          "metric": "mer",
+          "value": 0.0,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 24
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": 0.0,
+          "macro_support": 5,
+          "coverage": {},
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
+        }
+      ],
+      "target_population": null,
+      "cluster_weighting": "document",
+      "line_outcomes": null
     }
   ],
   "documents": [
@@ -466,6 +1254,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -484,6 +1276,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -502,6 +1298,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -520,6 +1320,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -536,6 +1340,10 @@
           },
           "scalar_reason": "zero_denominator",
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -563,6 +1371,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -581,6 +1393,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -599,6 +1415,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -617,6 +1437,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -633,6 +1457,10 @@
           },
           "scalar_reason": "zero_denominator",
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -660,6 +1488,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -678,6 +1510,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -696,6 +1532,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -714,6 +1554,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -730,6 +1574,10 @@
           },
           "scalar_reason": "zero_denominator",
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -757,6 +1605,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -775,6 +1627,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -793,6 +1649,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -811,6 +1671,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -827,6 +1691,10 @@
           },
           "scalar_reason": "zero_denominator",
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -854,6 +1722,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -872,6 +1744,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -890,6 +1766,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -908,6 +1788,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -924,6 +1808,10 @@
           },
           "scalar_reason": "zero_denominator",
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -951,6 +1839,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -969,6 +1861,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -987,6 +1883,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1005,6 +1905,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1021,6 +1925,10 @@
           },
           "scalar_reason": "zero_denominator",
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1048,6 +1956,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1066,6 +1978,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1084,6 +2000,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1102,6 +2022,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1118,6 +2042,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1145,6 +2073,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1163,6 +2095,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1181,6 +2117,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1199,6 +2139,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1215,6 +2159,10 @@
           },
           "scalar_reason": "zero_denominator",
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1242,6 +2190,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1260,6 +2212,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1278,6 +2234,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1296,6 +2256,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1312,6 +2276,10 @@
           },
           "scalar_reason": "zero_denominator",
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1339,6 +2307,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1357,6 +2329,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1375,6 +2351,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1393,6 +2373,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1409,6 +2393,10 @@
           },
           "scalar_reason": "zero_denominator",
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1436,6 +2424,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1454,6 +2446,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1472,6 +2468,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1499,6 +2499,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1517,6 +2521,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1535,6 +2543,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1562,6 +2574,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1580,6 +2596,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1598,6 +2618,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1625,6 +2649,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1643,6 +2671,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1661,6 +2693,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1688,6 +2724,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1706,6 +2746,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1724,6 +2768,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1751,6 +2799,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1769,6 +2821,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1787,6 +2843,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1814,6 +2874,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1832,6 +2896,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1850,6 +2918,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1877,6 +2949,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1895,6 +2971,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1913,6 +2993,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1940,6 +3024,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1958,6 +3046,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -1976,6 +3068,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -2003,6 +3099,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -2021,6 +3121,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -2039,6 +3143,10 @@
           },
           "scalar_reason": null,
           "untruncated_error_rate": null,
+          "stat_partielle": null,
+          "macro": null,
+          "macro_support": null,
+          "coverage": null,
           "applicability": "applicable",
           "availability": "available",
           "validity": "valid",
@@ -2057,6 +3165,10 @@
       "stat": null,
       "scalar_reason": null,
       "untruncated_error_rate": null,
+      "stat_partielle": null,
+      "macro": null,
+      "macro_support": null,
+      "coverage": null,
       "applicability": null,
       "availability": null,
       "validity": null,
@@ -2069,6 +3181,10 @@
       "stat": null,
       "scalar_reason": null,
       "untruncated_error_rate": null,
+      "stat_partielle": null,
+      "macro": null,
+      "macro_support": null,
+      "coverage": null,
       "applicability": null,
       "availability": null,
       "validity": null,
@@ -2081,6 +3197,10 @@
       "stat": null,
       "scalar_reason": null,
       "untruncated_error_rate": null,
+      "stat_partielle": null,
+      "macro": null,
+      "macro_support": null,
+      "coverage": null,
       "applicability": null,
       "availability": null,
       "validity": null,
@@ -2093,6 +3213,10 @@
       "stat": null,
       "scalar_reason": null,
       "untruncated_error_rate": null,
+      "stat_partielle": null,
+      "macro": null,
+      "macro_support": null,
+      "coverage": null,
       "applicability": null,
       "availability": null,
       "validity": null,
@@ -2105,6 +3229,10 @@
       "stat": null,
       "scalar_reason": null,
       "untruncated_error_rate": null,
+      "stat_partielle": null,
+      "macro": null,
+      "macro_support": null,
+      "coverage": null,
       "applicability": null,
       "availability": null,
       "validity": null,
@@ -2117,6 +3245,10 @@
       "stat": null,
       "scalar_reason": null,
       "untruncated_error_rate": null,
+      "stat_partielle": null,
+      "macro": null,
+      "macro_support": null,
+      "coverage": null,
       "applicability": null,
       "availability": null,
       "validity": null,
@@ -2140,6 +3272,8 @@
       "outcome": "ok",
       "reason": null,
       "message": null,
+      "line_outcomes": null,
+      "step_issues": {},
       "resumed": false
     },
     {
@@ -2157,6 +3291,8 @@
       "outcome": "ok",
       "reason": null,
       "message": null,
+      "line_outcomes": null,
+      "step_issues": {},
       "resumed": false
     },
     {
@@ -2174,6 +3310,8 @@
       "outcome": "ok",
       "reason": null,
       "message": null,
+      "line_outcomes": null,
+      "step_issues": {},
       "resumed": false
     },
     {
@@ -2191,6 +3329,8 @@
       "outcome": "ok",
       "reason": null,
       "message": null,
+      "line_outcomes": null,
+      "step_issues": {},
       "resumed": false
     },
     {
@@ -2208,6 +3348,8 @@
       "outcome": "ok",
       "reason": null,
       "message": null,
+      "line_outcomes": null,
+      "step_issues": {},
       "resumed": false
     },
     {
@@ -2225,6 +3367,8 @@
       "outcome": "ok",
       "reason": null,
       "message": null,
+      "line_outcomes": null,
+      "step_issues": {},
       "resumed": false
     },
     {
@@ -2242,6 +3386,8 @@
       "outcome": "ok",
       "reason": null,
       "message": null,
+      "line_outcomes": null,
+      "step_issues": {},
       "resumed": false
     },
     {
@@ -2259,6 +3405,8 @@
       "outcome": "ok",
       "reason": null,
       "message": null,
+      "line_outcomes": null,
+      "step_issues": {},
       "resumed": false
     },
     {
@@ -2276,6 +3424,8 @@
       "outcome": "ok",
       "reason": null,
       "message": null,
+      "line_outcomes": null,
+      "step_issues": {},
       "resumed": false
     },
     {
@@ -2293,6 +3443,8 @@
       "outcome": "ok",
       "reason": null,
       "message": null,
+      "line_outcomes": null,
+      "step_issues": {},
       "resumed": false
     }
   ],
@@ -2303,7 +3455,206 @@
       "pipeline": null,
       "document_id": null,
       "payload": {
+        "kind": "comparison",
+        "metric": "cer",
+        "pairs": [
+          {
+            "a": "tesseract",
+            "b": "pero",
+            "micro_documents": [
+              "folio_001",
+              "folio_002",
+              "folio_003",
+              "imprime_001",
+              "imprime_002"
+            ],
+            "macro_documents": [
+              "folio_001",
+              "folio_002",
+              "folio_003",
+              "imprime_001",
+              "imprime_002"
+            ],
+            "micro": {
+              "tesseract": 0.021739130434782608,
+              "pero": 0.0
+            },
+            "macro": {
+              "tesseract": 0.01764705882352941,
+              "pero": 0.0
+            }
+          }
+        ],
+        "global_support": {
+          "micro_documents": [
+            "folio_001",
+            "folio_002",
+            "folio_003",
+            "imprime_001",
+            "imprime_002"
+          ],
+          "macro_documents": [
+            "folio_001",
+            "folio_002",
+            "folio_003",
+            "imprime_001",
+            "imprime_002"
+          ],
+          "micro": {
+            "tesseract": 0.021739130434782608,
+            "pero": 0.0
+          },
+          "macro": {
+            "tesseract": 0.01764705882352941,
+            "pero": 0.0
+          },
+          "ranking": [
+            "pero",
+            "tesseract"
+          ]
+        }
+      }
+    },
+    {
+      "scope": "corpus",
+      "view": "francais_medieval",
+      "pipeline": null,
+      "document_id": null,
+      "payload": {
+        "kind": "comparison",
+        "metric": "mer",
+        "pairs": [
+          {
+            "a": "tesseract",
+            "b": "pero",
+            "micro_documents": [
+              "folio_001",
+              "folio_002",
+              "folio_003",
+              "imprime_001",
+              "imprime_002"
+            ],
+            "macro_documents": [
+              "folio_001",
+              "folio_002",
+              "folio_003",
+              "imprime_001",
+              "imprime_002"
+            ],
+            "micro": {
+              "tesseract": 0.125,
+              "pero": 0.0
+            },
+            "macro": {
+              "tesseract": 0.09047619047619046,
+              "pero": 0.0
+            }
+          }
+        ],
+        "global_support": {
+          "micro_documents": [
+            "folio_001",
+            "folio_002",
+            "folio_003",
+            "imprime_001",
+            "imprime_002"
+          ],
+          "macro_documents": [
+            "folio_001",
+            "folio_002",
+            "folio_003",
+            "imprime_001",
+            "imprime_002"
+          ],
+          "micro": {
+            "tesseract": 0.125,
+            "pero": 0.0
+          },
+          "macro": {
+            "tesseract": 0.09047619047619046,
+            "pero": 0.0
+          },
+          "ranking": [
+            "pero",
+            "tesseract"
+          ]
+        }
+      }
+    },
+    {
+      "scope": "corpus",
+      "view": "francais_medieval",
+      "pipeline": null,
+      "document_id": null,
+      "payload": {
+        "kind": "comparison",
+        "metric": "wer",
+        "pairs": [
+          {
+            "a": "tesseract",
+            "b": "pero",
+            "micro_documents": [
+              "folio_001",
+              "folio_002",
+              "folio_003",
+              "imprime_001",
+              "imprime_002"
+            ],
+            "macro_documents": [
+              "folio_001",
+              "folio_002",
+              "folio_003",
+              "imprime_001",
+              "imprime_002"
+            ],
+            "micro": {
+              "tesseract": 0.125,
+              "pero": 0.0
+            },
+            "macro": {
+              "tesseract": 0.09047619047619046,
+              "pero": 0.0
+            }
+          }
+        ],
+        "global_support": {
+          "micro_documents": [
+            "folio_001",
+            "folio_002",
+            "folio_003",
+            "imprime_001",
+            "imprime_002"
+          ],
+          "macro_documents": [
+            "folio_001",
+            "folio_002",
+            "folio_003",
+            "imprime_001",
+            "imprime_002"
+          ],
+          "micro": {
+            "tesseract": 0.125,
+            "pero": 0.0
+          },
+          "macro": {
+            "tesseract": 0.09047619047619046,
+            "pero": 0.0
+          },
+          "ranking": [
+            "pero",
+            "tesseract"
+          ]
+        }
+      }
+    },
+    {
+      "scope": "corpus",
+      "view": "francais_medieval",
+      "pipeline": null,
+      "document_id": null,
+      "payload": {
         "kind": "inference",
+        "status": "exploratory",
         "metric": "cer",
         "alpha": 0.05,
         "n_documents": 5,
@@ -2328,6 +3679,7 @@
       "document_id": null,
       "payload": {
         "kind": "inference",
+        "status": "exploratory",
         "metric": "mer",
         "alpha": 0.05,
         "n_documents": 5,
@@ -2352,6 +3704,7 @@
       "document_id": null,
       "payload": {
         "kind": "inference",
+        "status": "exploratory",
         "metric": "wer",
         "alpha": 0.05,
         "n_documents": 5,
@@ -2375,7 +3728,325 @@
       "pipeline": null,
       "document_id": null,
       "payload": {
+        "kind": "comparison",
+        "metric": "air",
+        "pairs": [
+          {
+            "a": "tesseract",
+            "b": "pero",
+            "micro_documents": [
+              "folio_001",
+              "folio_002",
+              "folio_003",
+              "imprime_001",
+              "imprime_002"
+            ],
+            "macro_documents": [],
+            "micro": {
+              "tesseract": null,
+              "pero": 1.0
+            },
+            "macro": {
+              "tesseract": null,
+              "pero": null
+            }
+          }
+        ],
+        "global_support": {
+          "micro_documents": [
+            "folio_001",
+            "folio_002",
+            "folio_003",
+            "imprime_001",
+            "imprime_002"
+          ],
+          "macro_documents": [],
+          "micro": {
+            "tesseract": null,
+            "pero": 1.0
+          },
+          "macro": {
+            "tesseract": null,
+            "pero": null
+          },
+          "ranking": [
+            "pero"
+          ]
+        }
+      }
+    },
+    {
+      "scope": "corpus",
+      "view": "texte",
+      "pipeline": null,
+      "document_id": null,
+      "payload": {
+        "kind": "comparison",
+        "metric": "cer",
+        "pairs": [
+          {
+            "a": "tesseract",
+            "b": "pero",
+            "micro_documents": [
+              "folio_001",
+              "folio_002",
+              "folio_003",
+              "imprime_001",
+              "imprime_002"
+            ],
+            "macro_documents": [
+              "folio_001",
+              "folio_002",
+              "folio_003",
+              "imprime_001",
+              "imprime_002"
+            ],
+            "micro": {
+              "tesseract": 0.028985507246376812,
+              "pero": 0.014492753623188406
+            },
+            "macro": {
+              "tesseract": 0.025980392156862743,
+              "pero": 0.017391304347826087
+            }
+          }
+        ],
+        "global_support": {
+          "micro_documents": [
+            "folio_001",
+            "folio_002",
+            "folio_003",
+            "imprime_001",
+            "imprime_002"
+          ],
+          "macro_documents": [
+            "folio_001",
+            "folio_002",
+            "folio_003",
+            "imprime_001",
+            "imprime_002"
+          ],
+          "micro": {
+            "tesseract": 0.028985507246376812,
+            "pero": 0.014492753623188406
+          },
+          "macro": {
+            "tesseract": 0.025980392156862743,
+            "pero": 0.017391304347826087
+          },
+          "ranking": [
+            "pero",
+            "tesseract"
+          ]
+        }
+      }
+    },
+    {
+      "scope": "corpus",
+      "view": "texte",
+      "pipeline": null,
+      "document_id": null,
+      "payload": {
+        "kind": "comparison",
+        "metric": "cer_diplo",
+        "pairs": [
+          {
+            "a": "tesseract",
+            "b": "pero",
+            "micro_documents": [
+              "folio_001",
+              "folio_002",
+              "folio_003",
+              "imprime_001",
+              "imprime_002"
+            ],
+            "macro_documents": [
+              "folio_001",
+              "folio_002",
+              "folio_003",
+              "imprime_001",
+              "imprime_002"
+            ],
+            "micro": {
+              "tesseract": 0.028985507246376812,
+              "pero": 0.0
+            },
+            "macro": {
+              "tesseract": 0.025980392156862743,
+              "pero": 0.0
+            }
+          }
+        ],
+        "global_support": {
+          "micro_documents": [
+            "folio_001",
+            "folio_002",
+            "folio_003",
+            "imprime_001",
+            "imprime_002"
+          ],
+          "macro_documents": [
+            "folio_001",
+            "folio_002",
+            "folio_003",
+            "imprime_001",
+            "imprime_002"
+          ],
+          "micro": {
+            "tesseract": 0.028985507246376812,
+            "pero": 0.0
+          },
+          "macro": {
+            "tesseract": 0.025980392156862743,
+            "pero": 0.0
+          },
+          "ranking": [
+            "pero",
+            "tesseract"
+          ]
+        }
+      }
+    },
+    {
+      "scope": "corpus",
+      "view": "texte",
+      "pipeline": null,
+      "document_id": null,
+      "payload": {
+        "kind": "comparison",
+        "metric": "mer",
+        "pairs": [
+          {
+            "a": "tesseract",
+            "b": "pero",
+            "micro_documents": [
+              "folio_001",
+              "folio_002",
+              "folio_003",
+              "imprime_001",
+              "imprime_002"
+            ],
+            "macro_documents": [
+              "folio_001",
+              "folio_002",
+              "folio_003",
+              "imprime_001",
+              "imprime_002"
+            ],
+            "micro": {
+              "tesseract": 0.16666666666666666,
+              "pero": 0.041666666666666664
+            },
+            "macro": {
+              "tesseract": 0.14047619047619048,
+              "pero": 0.06666666666666667
+            }
+          }
+        ],
+        "global_support": {
+          "micro_documents": [
+            "folio_001",
+            "folio_002",
+            "folio_003",
+            "imprime_001",
+            "imprime_002"
+          ],
+          "macro_documents": [
+            "folio_001",
+            "folio_002",
+            "folio_003",
+            "imprime_001",
+            "imprime_002"
+          ],
+          "micro": {
+            "tesseract": 0.16666666666666666,
+            "pero": 0.041666666666666664
+          },
+          "macro": {
+            "tesseract": 0.14047619047619048,
+            "pero": 0.06666666666666667
+          },
+          "ranking": [
+            "pero",
+            "tesseract"
+          ]
+        }
+      }
+    },
+    {
+      "scope": "corpus",
+      "view": "texte",
+      "pipeline": null,
+      "document_id": null,
+      "payload": {
+        "kind": "comparison",
+        "metric": "wer",
+        "pairs": [
+          {
+            "a": "tesseract",
+            "b": "pero",
+            "micro_documents": [
+              "folio_001",
+              "folio_002",
+              "folio_003",
+              "imprime_001",
+              "imprime_002"
+            ],
+            "macro_documents": [
+              "folio_001",
+              "folio_002",
+              "folio_003",
+              "imprime_001",
+              "imprime_002"
+            ],
+            "micro": {
+              "tesseract": 0.16666666666666666,
+              "pero": 0.041666666666666664
+            },
+            "macro": {
+              "tesseract": 0.14047619047619048,
+              "pero": 0.06666666666666667
+            }
+          }
+        ],
+        "global_support": {
+          "micro_documents": [
+            "folio_001",
+            "folio_002",
+            "folio_003",
+            "imprime_001",
+            "imprime_002"
+          ],
+          "macro_documents": [
+            "folio_001",
+            "folio_002",
+            "folio_003",
+            "imprime_001",
+            "imprime_002"
+          ],
+          "micro": {
+            "tesseract": 0.16666666666666666,
+            "pero": 0.041666666666666664
+          },
+          "macro": {
+            "tesseract": 0.14047619047619048,
+            "pero": 0.06666666666666667
+          },
+          "ranking": [
+            "pero",
+            "tesseract"
+          ]
+        }
+      }
+    },
+    {
+      "scope": "corpus",
+      "view": "texte",
+      "pipeline": null,
+      "document_id": null,
+      "payload": {
         "kind": "inference",
+        "status": "exploratory",
         "metric": "cer",
         "alpha": 0.05,
         "n_documents": 5,
@@ -2400,6 +4071,7 @@
       "document_id": null,
       "payload": {
         "kind": "inference",
+        "status": "exploratory",
         "metric": "mer",
         "alpha": 0.05,
         "n_documents": 5,
@@ -2424,6 +4096,7 @@
       "document_id": null,
       "payload": {
         "kind": "inference",
+        "status": "exploratory",
         "metric": "wer",
         "alpha": 0.05,
         "n_documents": 5,

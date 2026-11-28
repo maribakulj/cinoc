@@ -86,6 +86,38 @@ suivantes ne les répètent pas.
   exactitude de 0, un taux d'insertion de 0), sous ce nom.
 - L'intervalle du micro d'un MER ou d'un cMER, dont le dénominateur dépend de
   la sortie, n'est plus publié : « inférence non estimable ».
+- **Non-mesure et supports** (refonte des contrats, tranche 1b, D-313) :
+  - une sortie **tronquée** n'est plus notée par défaut (elle l'était) : elle
+    porte l'axe `truncated_output`, sa statistique est gardée à part
+    (`stat_partielle`) et la couverture la compte ; une sortie **partielle**
+    (régions perdues d'un fan-out, lignes de correction restées en repli) fait de
+    même, l'unité devenant `partial` — jamais `ok` ;
+  - chaque agrégat est publié en deux qualités, **conditionnelle** (observations
+    complètes) et **opérationnelle** (partielles notées telles que produites,
+    échecs comme une page vide), avec leur couverture ; `failure_policy` choisit
+    la principale (`aggregate`) ; `empty_page` note désormais aussi les
+    sorties partielles et tronquées telles que produites ;
+  - le **macro** (moyenne sur D^M, par document ou par grappe), les supports
+    apparié et global (`comparison`) et l'« invention hors référence » sont
+    publiés ; `support` d'un agrégat est |D^μ|, les attendus sont les
+    observations applicables (un artefact absent du disque ou une vérité
+    terrain illisible compte, avec son motif, au lieu d'abattre le run) ;
+  - une vérité terrain référencée mais **absente du disque** est refusée
+    avant le premier appel de moteur ;
+  - `not_transcribed` (vérité terrain vide non saisie) ≠ page blanche ;
+    `DocumentRef.cluster`, `CorpusSpec.target_population` et
+    `cluster_weighting` (B3) ;
+  - les quatre issues d'une ligne de correction structurée (corrigée, à
+    revoir, abstention, refus par code, repli par code) sont comptées par unité
+    et par pipeline ; seul le repli rend l'étape partielle ;
+  - tout résultat de test de l'ancienne inférence est **exploratoire**
+    (`InferencePayload.status`) : ni « significatif » ni « non significatif »
+    n'est écrit comme verdict, dans les sections inter-moteurs et mesures clés
+    comme dans l'historique ; la rupture de Pettitt s'affiche dès que le test est
+    calculable, avec sa p ;
+  - les confusions, la taxonomie et le diff surligné portent leur
+    `alignment_path` (`rapidfuzz`) et `matches_canonical_counts` ; les comptes
+    d'édition sont canoniques (`EditCounts.alignment_path`).
 
 **Format**
 
@@ -95,7 +127,12 @@ suivantes ne les répètent pas.
   (les dénominateurs sont dans `stat`). Un JSON d'une version antérieure est
   **refusé** avec un message — ni relu, ni converti — et se re-note depuis son
   archive (`cinoc run --resume-dir … --offline`). Le CSV gagne les colonnes
-  `statistic`, `scalar_reason` et `untruncated_error_rate`.
+  `statistic`, `scalar_reason` et `untruncated_error_rate`. La tranche 1b
+  ajoute au `RunResult` v6 (qui n'a jamais été publiée) des champs
+  facultatifs : `stat_partielle`, `macro`, `macro_support`, `coverage`, les
+  agrégats `conditional_aggregate` et `operational_aggregate`, `line_outcomes`,
+  `step_issues`, `target_population`, `cluster_weighting`, les analyses
+  `comparison` et `invention_outside_reference`, `status` de l'inférence.
 
 **Ce qui est désormais refusé au lieu d'être ignoré**
 

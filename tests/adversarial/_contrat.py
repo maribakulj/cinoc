@@ -36,7 +36,9 @@ Composantes de ``stat`` (§ 2.1 a) :
 Agrégat d'un pipeline — un ``MetricScore`` de ``PipelineResult.aggregate``
 (§ 2.1 a, c) :
     ``value`` = micro, finalisation de la combinaison ; ``stat`` = combinaison
-    ``macro`` ; ``micro_support`` = |D^μ_P| ; ``macro_support`` = |D^M_P| ;
+    ``macro`` ; ``support`` = |D^μ_P| (renommé ici depuis ``micro_support`` : le champ
+    existait déjà, c'est lui que lisent rapport, CSV et garde du README) ;
+    ``macro_support`` = |D^M_P| ;
     ``expected`` = |attendus| ; ``coverage`` = {motif : nombre d'attendus non
     mesurés} ; ``untruncated_error_rate`` (exactitudes, B1)
     ``PipelineResult.target_population``, ``PipelineResult.cluster_weighting`` (B3)
@@ -165,7 +167,7 @@ def macro(agregat: object) -> Any:
 
 
 def support_micro(agregat: object) -> Any:
-    return exige(agregat, "micro_support", "§ 2.1 c, D^μ_P")
+    return exige(agregat, "support", "§ 2.1 c, D^μ_P")
 
 
 def support_macro(agregat: object) -> Any:

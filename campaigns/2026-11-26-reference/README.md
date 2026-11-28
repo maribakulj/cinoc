@@ -32,6 +32,7 @@ recoupée par dinglehopper**, l'estimation du coût Mistral. Restent :
 | `dresden-sans-cle.yaml` | ses 4 pipelines sans clé — **exécutée en S30** |
 | `bnl-sans-cle.run_result.json` | `RunResult` v5 du run S30 (566 Ko, aucun chemin local) |
 | `dresden-sans-cle.run_result.json` | idem (169 Ko) |
+| `v6/` | les **réévaluations v6** des deux `RunResult` ci-dessus (code `abee7b5`, tranche 1a), à part, avec leur provenance ([`v6/PROVENANCE.md`](v6/PROVENANCE.md)) ; les v5 restent intacts |
 
 Chaque pipeline d'une spec sans clé est, au caractère près, un pipeline de la
 spec complète, avec les mêmes réglages de briques — la clé d'unité en dérive,

@@ -145,23 +145,21 @@ def _cer_trends(
                 "r_squared": (
                     insight.trend.r_squared if insight.trend is not None else None
                 ),
-                # La pente porte son test (``linregress``) : p absente à 2
-                # runs, et « significative » seulement si p ≤ α.
+                # La pente porte son test (``linregress``) : p absente à 2 runs,
+                # sinon publiée comme un nombre, étiquetée exploratoire.
                 "p_value": (
                     insight.trend.p_value if insight.trend is not None else None
                 ),
-                "significant": (
-                    insight.trend is not None and insight.trend.significant
-                ),
-                # Rupture affichée seulement si significative (p ≤ α) — le
-                # test de Pettitt remplace le max-diff qui « trouvait » toujours.
+                # Rupture affichée dès que le test de Pettitt est calculable,
+                # avec sa p, quelle que soit sa valeur : filtrer sur la p serait
+                # un verdict implicite (révision n° 7).
                 "rupture": (
                     {
                         "run_id": insight.rupture_run_id,
                         "delta": insight.rupture.delta,
                         "p_value": insight.rupture.p_value,
                     }
-                    if insight.rupture is not None and insight.rupture.significant
+                    if insight.rupture is not None
                     else None
                 ),
             }

@@ -8,6 +8,7 @@ est chargé à la demande par les adapters de format.
 from __future__ import annotations
 
 import re
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -30,6 +31,11 @@ class GroundTruthRef(BaseModel):
 
     type: ArtifactType
     uri: str = Field(min_length=1, max_length=2048)
+    #: ``not_transcribed`` : la vérité terrain est vide **parce que personne ne
+    #: l'a saisie** (déclaré par l'importeur, P7) — le document sort des
+    #: attendus. ``transcribed`` (défaut) : un fichier vide y est une page
+    #: **blanche**, applicable, dont les insertions entrent au micro.
+    status: Literal["transcribed", "not_transcribed"] = "transcribed"
 
 
 class DocumentRef(BaseModel):
@@ -45,6 +51,10 @@ class DocumentRef(BaseModel):
         textuels.
     ground_truths:
         Vérités terrain disponibles, une par niveau (type unique).
+    cluster:
+        Grappe déclarée par le corpus (un manuscrit, un volume : B3) — l'unité
+        de pondération du macro quand ``CorpusSpec.cluster_weighting`` vaut
+        ``cluster``. ``None`` : le document est sa propre grappe.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -52,6 +62,7 @@ class DocumentRef(BaseModel):
     id: str = Field(min_length=1, max_length=256)
     image_uri: str | None = Field(default=None, max_length=2048)
     ground_truths: tuple[GroundTruthRef, ...] = Field(default_factory=tuple)
+    cluster: str | None = Field(default=None, min_length=1, max_length=256)
     #: Métadonnées libres par document (analogue documentaire de
     #: ``CorpusSpec.metadata``). Clé conventionnelle ``"stratum"`` = strate du
     #: document (genre/période/écriture), si la source la fournit. Optionnel :

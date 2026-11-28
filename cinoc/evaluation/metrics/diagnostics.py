@@ -89,6 +89,7 @@ def _ngrams(text: str) -> list[str]:
 
 @document_metric(
     name="unanchored_trigrams",
+    macro=False,
     finalize=st.proportion,
     input_types=(ArtifactType.RAW_TEXT, ArtifactType.RAW_TEXT),
     category=MetricCategory.EXPLORATORY,

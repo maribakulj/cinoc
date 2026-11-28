@@ -57,6 +57,7 @@ _STRINGS: dict[str, dict[str, str]] = {
         "bench_state_cancelled": "Arrêté",
         "bench_outcome_ok": "fait",
         "bench_outcome_truncated": "tronquée",
+        "bench_outcome_partial": "partielle",
         "bench_outcome_failed": "échec",
         "bench_outcome_resumed": "relue de l'archive",
         "bench_cancelled_result": "Run arrêté à ta demande. Aucun rapport : un "
@@ -198,13 +199,12 @@ _STRINGS: dict[str, dict[str, str]] = {
         "history_stat_runs": "mesures",
         "history_trends_title": "Tendances",
         "history_trends_desc": "Évolution du CER par moteur au fil des runs "
-        "(échelle locale). Pente par jour (moindres carrés) et son test : une "
-        "pente n'est une tendance que si elle est significative (p ≤ 0,05) ; "
-        "rupture signalée seulement si le test de Pettitt est significatif "
-        "(p ≤ 0,05).",
+        "(échelle locale). Pente par jour (moindres carrés) et rupture (test de "
+        "Pettitt), chacune avec sa p : ces tests sont exploratoires — la p est "
+        "un nombre, jamais un verdict, et la rupture est affichée dès que le "
+        "test est calculable.",
         "history_slope": "pente/j",
-        "history_trend_significant": "significative (p ≤ 0,05)",
-        "history_trend_not_significant": "non significative",
+        "history_exploratory": "exploratoire",
         "history_trend_untested": "aucun test à 2 runs",
         "history_rupture": "rupture dès",
         "history_regressions_title": "Régressions",
@@ -321,6 +321,7 @@ _STRINGS: dict[str, dict[str, str]] = {
         "bench_state_cancelled": "Stopped",
         "bench_outcome_ok": "done",
         "bench_outcome_truncated": "truncated",
+        "bench_outcome_partial": "partial",
         "bench_outcome_failed": "failed",
         "bench_outcome_resumed": "read from the archive",
         "bench_cancelled_result": "Run stopped at your request. No report: an "
@@ -457,12 +458,12 @@ _STRINGS: dict[str, dict[str, str]] = {
         "history_stat_runs": "records",
         "history_trends_title": "Trends",
         "history_trends_desc": "CER evolution per engine across runs "
-        "(local scale). Slope per day (least squares) and its test: a slope "
-        "is a trend only when it is significant (p ≤ 0.05); a change point is "
-        "flagged only when the Pettitt test is significant (p ≤ 0.05).",
+        "(local scale). Slope per day (least squares) and change point "
+        "(Pettitt test), each with its p: these tests are exploratory — the p "
+        "is a number, never a verdict, and the change point is shown as soon "
+        "as the test can be computed.",
         "history_slope": "slope/day",
-        "history_trend_significant": "significant (p ≤ 0.05)",
-        "history_trend_not_significant": "not significant",
+        "history_exploratory": "exploratory",
         "history_trend_untested": "no test with 2 runs",
         "history_rupture": "change point at",
         "history_regressions_title": "Regressions",

@@ -44,6 +44,7 @@ def make_air_metric(chars: frozenset[str]) -> DocumentMetric:
 
     @document_metric(
         name="air",
+        macro=False,
         finalize=st.proportion,
         input_types=(ArtifactType.RAW_TEXT, ArtifactType.RAW_TEXT),
         category=MetricCategory.EXPLORATORY,

@@ -87,6 +87,16 @@ class EditCounts(_Counts):
         """S + D + I : la distance d'édition."""
         return self.substitutions + self.deletions + self.insertions
 
+    @property
+    def alignment_path(self) -> Literal["canonical"]:
+        """La convention d'alignement de ces comptes : ``canonical`` (P1, max S).
+
+        Une **propriété**, pas un champ : cette classe n'a pas d'autre
+        convention (``family: "edit_counts"`` la nomme dans le JSON), et un
+        champ de plus est un octet de plus par statistique. Les analyses qui
+        nomment les éditions, elles, portent la leur (``rapidfuzz``).
+        """
+        return "canonical"
 
 
 class ErrorCounts(_Counts):
@@ -144,6 +154,32 @@ def combine(stats: Sequence[Counts]) -> Counts | None:
     return family(
         **{name: sum(getattr(stat, name) for stat in stats) for name in names}
     )
+
+
+def reference_defines(stat: Counts) -> bool:
+    """La **référence** définit le scalaire de ``stat`` : n_réf > 0, ou
+    tp + fn > 0 (R5). Ce critère — pas la valeur d'un pipeline — fait D^M :
+    le même support pour tous les pipelines."""
+    if isinstance(stat, EditCounts | ErrorCounts):
+        return stat.reference_length > 0
+    if isinstance(stat, MatchCounts):
+        return stat.tp + stat.fn > 0
+    return stat.total > 0
+
+
+def invented_units(stat: Counts) -> tuple[str, int] | None:
+    """``(unité, nombre)`` **inventé** par l'hypothèse (``CONTRATS.md`` § 2.1 c,
+    N3) : les insertions d'un taux d'édition ou d'une exactitude (sur une page
+    sans référence, S = D = 0 : les erreurs sont les insertions), les faux
+    positifs d'un appariement. ``None`` pour une proportion : sa statistique
+    ne compte aucune unité de l'hypothèse (« non définie »)."""
+    if isinstance(stat, EditCounts):
+        return "insertions", stat.insertions
+    if isinstance(stat, ErrorCounts):
+        return "insertions", stat.errors
+    if isinstance(stat, MatchCounts):
+        return "false_positives", stat.fp
+    return None
 
 
 class Scalar(NamedTuple):
@@ -264,8 +300,10 @@ __all__ = [
     "error_ratio",
     "f1",
     "insertion_rate",
+    "invented_units",
     "match_error_rate",
     "precision",
     "proportion",
     "recall",
+    "reference_defines",
 ]

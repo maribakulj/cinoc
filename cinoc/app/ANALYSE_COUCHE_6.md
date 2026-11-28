@@ -312,3 +312,5 @@ cinoc/app/
 ---
 
 *(Tous les verdicts ci-dessus sont **PROVISOIRES — à confirmer au build** ; le contact du code amont non encore mergé prévaut.)*
+
+> **Refonte des contrats, tranche 1b (D-313)** : l'orchestrateur refuse une vérité terrain référencée mais absente du disque **avant** le premier appel de moteur (`evaluation.scoring.missing_ground_truths`, F8) ; il porte `line_outcomes` et `step_issues` dans `DocumentUsage`. `resume.py` : une unité `partial` est archivée comme un échec — une reprise normale la retente, la relecture hors ligne la restitue avec ses issues de lignes et ses états d'étape. Preuves : `tests/app/test_partial_unit.py`, `tests/adversarial/applicabilite_echecs/test_ce_applicabilite.py`.

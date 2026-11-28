@@ -20,7 +20,13 @@ from cinoc.domain.artifacts import (
 )
 from cinoc.domain.deadline import Deadline
 from cinoc.domain.errors import CinocError
-from cinoc.domain.usage import FailureReason, ResourceUsage, UnitOutcome
+from cinoc.domain.usage import (
+    FailureReason,
+    LineOutcomes,
+    ResourceUsage,
+    StepIssue,
+    UnitOutcome,
+)
 
 
 class RunContext(BaseModel):
@@ -65,6 +71,8 @@ class StepOutput:
     usage: ResourceUsage | None = None
     truncation: str | None = None
     served_models: tuple[str, ...] = ()
+    partial: str | None = None
+    line_outcomes: LineOutcomes | None = None
 
 
 @dataclass(frozen=True)
@@ -85,6 +93,15 @@ class DocumentExecution:
     lisible (sans secret — l'appelant qui connaît les secrets la caviarde).
     ``billed`` : ce qu'une unité **en échec** a fait facturer avant d'échouer
     (``AdapterStepError.billed``) — sa seule consommation, sans durée.
+
+    ``partial`` : au moins une étape a **déclaré** sa sortie incomplète
+    (``StepOutput.partial``) ; l'issue de l'unité le dit (``partial`` l'emporte
+    sur ``truncated`` : la part manquante est la cause, la coupure un détail).
+    ``step_issues`` : l'état déclaré **par étape** (``partial`` ou ``truncated``) —
+    ce que chaque vue lit pour savoir si **son** étape est entière.
+    ``line_outcomes`` : somme des issues de lignes déclarées par les étapes de
+    correction structurée (§ 2.1 f) — portées par unité, et déplacées dans le
+    ``StepRecord`` par la tranche 2 sans changer de sémantique.
     """
 
     by_step: StepArtifacts = field(default_factory=dict)
@@ -93,6 +110,8 @@ class DocumentExecution:
     reason: FailureReason | None = None
     message: str | None = None
     billed: ResourceUsage | None = None
+    line_outcomes: LineOutcomes | None = None
+    step_issues: Mapping[str, StepIssue] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if (self.outcome == "failed") != (self.reason is not None):

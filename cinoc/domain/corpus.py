@@ -8,7 +8,9 @@ des patterns de nommage GT vivent ailleurs.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from typing import Literal, Self
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from cinoc.domain.documents import DocumentRef
 
@@ -29,6 +31,13 @@ class CorpusSpec(BaseModel):
     metadata:
         Dictionnaire libre de contexte (``language``, ``period``,
         ``source``…). Pas de validation stricte sur les clés.
+    target_population:
+        Ce que l'échantillon de documents (ou de grappes) représente (B3) —
+        publié avec chaque agrégat. ``None`` : non déclaré.
+    cluster_weighting:
+        Pondération du macro : ``document`` (moyenne par document, défaut) ou
+        ``cluster`` (moyenne des moyennes par grappe ; un document sans grappe
+        est sa propre grappe). Le micro, ratio de sommes, n'en dépend pas.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -36,6 +45,21 @@ class CorpusSpec(BaseModel):
     name: str = Field(min_length=1, max_length=128)
     documents: tuple[DocumentRef, ...] = Field(default_factory=tuple)
     metadata: dict[str, str] = Field(default_factory=dict)
+    target_population: str | None = Field(default=None, min_length=1, max_length=512)
+    cluster_weighting: Literal["document", "cluster"] = "document"
+
+    @model_validator(mode="after")
+    def _weighting_needs_clusters(self) -> Self:
+        if self.cluster_weighting == "cluster" and not any(
+            doc.cluster is not None for doc in self.documents
+        ):
+            from cinoc.domain.errors import CorpusSpecError
+
+            raise CorpusSpecError(
+                "pondération par grappe déclarée, mais aucun document ne porte "
+                "de grappe (``DocumentRef.cluster``)."
+            )
+        return self
 
     @field_validator("documents")
     @classmethod

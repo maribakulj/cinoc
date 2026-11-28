@@ -47,6 +47,7 @@ def _counts(ctx: DocContext) -> MatchCounts:
 
 @document_metric(
     name="bow_precision",
+    macro=False,
     finalize=st.precision,
     input_types=(ArtifactType.RAW_TEXT, ArtifactType.RAW_TEXT),
     category=MetricCategory.ADAPTED,

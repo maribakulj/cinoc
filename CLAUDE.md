@@ -199,10 +199,14 @@ un `CanonicalLayout` à régions sans lignes.
   L10) ; l'ordre de lecture y vit aussi (`LayoutPage.reading_order` : le type
   `READING_ORDER`, jamais produit, est retiré en D-303).
 - Couche 4 : fan-out — reconnaissance une fois par région, collecte des N
-  résultats, gestion des échecs partiels, réassemblage par ordre de lecture.
+  résultats, gestion des échecs partiels (une région perdue **déclare** l'étape
+  `partial`), réassemblage par ordre de lecture.
 - Couche 3 : métriques par bloc (CER par région + agrégat page). Segmentation et
-  structure mesurées sur le même `CanonicalLayout` ; niveau absent → métrique non
-  applicable (`None`).
+  structure mesurées sur le même `CanonicalLayout` ; niveau absent → observation
+  `not_in_view` (axe 1, aucune statistique, hors des attendus). Une sortie
+  **déclarée partielle** n'a pas un niveau absent mais une part manquante : axe 3
+  `partial_output`, non notée par défaut, statistique conservée à part (B6,
+  `tests/adversarial/CONTRATS.md` § 2.1 b, f).
 - Routage par type de bloc : moteur différent selon le label de région.
 
 ---

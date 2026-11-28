@@ -400,6 +400,7 @@ def test_inference_analyses_through_evaluate_run(tmp_path: Path) -> None:
     assert isinstance(flat_diagnostics, DiagnosticsPayload)
     assert flat_diagnostics.worst_lines == ()
     assert set(by_kind) == {
+        "comparison",
         "inference",
         "diagnostics",
         "taxonomy",

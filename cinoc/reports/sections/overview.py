@@ -63,31 +63,65 @@ REASON_LABELS: dict[str, tuple[str, str]] = {
 
 
 def failures_note(result: RunResult, lang: str) -> str:
-    """**Pourquoi** une unité manque ou cloche : échecs, puis coupures.
+    """**Pourquoi** une unité manque ou cloche : échecs, puis sorties incomplètes.
 
     Lu dans ``RunResult.usage`` (issue produite par l'exécution), jamais déduit
     d'un score absent : un ``None`` peut aussi vouloir dire « pas de vérité
     terrain » ou « métrique inapplicable », qui ne sont pas des échecs.
     """
-    return _failed_note(result, lang) + _truncated_note(result, lang)
+    return (
+        _failed_note(result, lang)
+        + _incomplete_note(result, lang, "partial")
+        + _incomplete_note(result, lang, "truncated")
+    )
 
 
-def _truncated_note(result: RunResult, lang: str) -> str:
-    """Unités **tronquées** : notées, mais signalées — leur score mesure aussi
-    la coupure. ``failure_policy`` ne s'y applique pas : elles ont une sortie."""
-    cut = [u for u in result.usage if u.outcome == "truncated"]
+#: ``issue → (titre FR, titre EN, cause FR, cause EN)`` d'une sortie incomplète.
+_INCOMPLETE = {
+    "partial": (
+        "Unités partielles",
+        "Partial units",
+        "étape déclarée incomplète (régions perdues, lignes restées en repli)",
+        "stage declared incomplete (lost regions, lines fallen back)",
+    ),
+    "truncated": (
+        "Unités tronquées",
+        "Truncated units",
+        "sortie coupée par un plafond de jetons",
+        "output cut by a token limit",
+    ),
+}
+
+
+def _incomplete_note(result: RunResult, lang: str, outcome: str) -> str:
+    """Unités à sortie **incomplète** (partielle ou tronquée) : elles ont une
+    sortie, signalée. Par défaut elles ne sont **pas notées** (leur statistique
+    est gardée à part, la couverture les compte) ; sous ``empty_page`` elles le
+    sont sur leur sortie réelle, la part manquante comprise (§ 2.1 e, f)."""
+    cut = [u for u in result.usage if u.outcome == outcome]
     if not cut:
         return ""
     order = engine_order(p.pipeline for p in result.pipelines)
-    title = localized(lang, "Unités tronquées", "Truncated units")
-    rule = localized(
-        lang,
-        "<strong>notées sur leur sortie réelle</strong>, coupée par un plafond "
-        "de jetons : leur score compte dans la moyenne et mesure aussi la "
-        "coupure",
-        "<strong>scored on their actual output</strong>, cut by a token limit: "
-        "their score counts in the mean and also measures the cut",
-    )
+    fr_title, en_title, fr_cause, en_cause = _INCOMPLETE[outcome]
+    title = localized(lang, fr_title, en_title)
+    if result.manifest.failure_policy == "empty_page":
+        rule = localized(
+            lang,
+            f"<strong>notées sur leur sortie réelle</strong> ({fr_cause}) : leur "
+            "score compte dans l'agrégat et mesure aussi la part manquante",
+            f"<strong>scored on their actual output</strong> ({en_cause}): their "
+            "score counts in the aggregate and also measures the missing part",
+        )
+    else:
+        rule = localized(
+            lang,
+            f"<strong>non notées par défaut</strong> ({fr_cause}) : elles "
+            "sortent de l'agrégat conditionnel, que la couverture compte ; la "
+            "qualité opérationnelle du résultat les note sur leur sortie réelle",
+            f"<strong>not scored by default</strong> ({en_cause}): they leave "
+            "the conditional aggregate, which the coverage counts; the result's "
+            "operational quality scores their actual output",
+        )
     items = []
     for unit in cut:
         badge = engine_cell(unit.pipeline, order.get(unit.pipeline, 0))

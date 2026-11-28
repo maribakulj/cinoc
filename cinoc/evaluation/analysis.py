@@ -20,6 +20,8 @@ from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from cinoc.evaluation.comparison import ComparisonPayload, InventionPayload
+
 
 class PipelineRank(BaseModel):
     """Rang moyen d'un pipeline sur les cas complets (petit = meilleur)."""
@@ -82,11 +84,19 @@ class InferencePayload(BaseModel):
     lui-même la comparaison de la paire. ``intervals`` (bootstrap du ratio
     micro affiché) n'est rempli qu'en mode détaillé — son coût, lui, n'est
     pas négligeable.
+
+    ``status`` : **exploratoire**, toujours — y compris quand le test n'est pas
+    calculé. Jusqu'à la tranche I (inférence conditionnelle), aucun résultat de
+    l'ancienne inférence n'est confirmatoire : les p restent publiées comme
+    **nombres**, jamais comme un verdict (``CONTRATS.md`` § 2.1 d, révision
+    n° 7). Les booléens ``PairwiseDifference.significant`` sont ceux du
+    post-hoc de Nemenyi, une lecture **de la distance critique**, non un verdict.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     kind: Literal["inference"] = "inference"
+    status: Literal["exploratory"] = "exploratory"
     metric: str = Field(min_length=1, max_length=128)
     alpha: float = Field(gt=0, lt=1)
     #: Cas complets (documents où tous les pipelines ont une valeur).
@@ -274,12 +284,25 @@ class HardDocument(BaseModel):
     n_pipelines: int = Field(ge=1)
 
 
+#: Le chemin d'alignement des analyses qui **nomment** des éditions (confusions,
+#: taxonomie, diff surligné) : celui de ``rapidfuzz`` (``Levenshtein.editops``).
+#: Les comptes des métriques, eux, sont canoniques (``EditCounts.alignment_path``).
+#: Les deux ne se décomposent pas l'un l'autre sur les ex æquo d'alignement
+#: (« ab » → « ba » : canonique (2, 0, 0), RapidFuzz (0, 1, 1)) : ``matches_
+#: canonical_counts`` dit si, sur **tous** les documents observés, la ventilation
+#: S/D/I de l'analyse égale celle des comptes canoniques. Faux : l'analyse ne
+#: prétend pas décomposer les S, D et I de la métrique voisine (révision n° 7).
+AlignmentPath = Literal["rapidfuzz"]
+
+
 class DiagnosticsPayload(BaseModel):
     """Diagnostic d'erreurs d'une vue : confusions, pires lignes, difficulté."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     kind: Literal["diagnostics"] = "diagnostics"
+    alignment_path: AlignmentPath = "rapidfuzz"
+    matches_canonical_counts: bool = True
     metric: str = Field(min_length=1, max_length=128)
     confusions: tuple[PipelineConfusions, ...] = ()
     worst_lines: tuple[WorstLine, ...] = ()
@@ -364,6 +387,8 @@ class TaxonomyPayload(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     kind: Literal["taxonomy"] = "taxonomy"
+    alignment_path: AlignmentPath = "rapidfuzz"
+    matches_canonical_counts: bool = True
     #: Ordre canonique de rendu (vocabulaire fermé, cf. ``evaluation.taxonomy``).
     classes: tuple[str, ...] = ()
     pipelines: tuple[PipelineTaxonomy, ...] = ()
@@ -447,6 +472,9 @@ class DocumentTextsPayload(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     kind: Literal["document_texts"] = "document_texts"
+    #: Le diff surligné suit l'alignement RapidFuzz ; rendu à côté du diff.
+    alignment_path: AlignmentPath = "rapidfuzz"
+    matches_canonical_counts: bool = True
     documents: tuple[DocumentTexts, ...] = ()
 
 
@@ -1181,7 +1209,9 @@ AnalysisPayload = Annotated[
     | LinesPayload
     | NerPayload
     | WordErrorPayload
-    | DecisionsPayload,
+    | DecisionsPayload
+    | ComparisonPayload
+    | InventionPayload,
     Field(discriminator="kind"),
 ]
 
@@ -1205,6 +1235,7 @@ __all__ = [
     "CalibrationPayload",
     "CatastrophicRate",
     "CategoryBreakdown",
+    "AlignmentPath",
     "CharConfusion",
     "ComplementarityDocument",
     "ConformityPayload",

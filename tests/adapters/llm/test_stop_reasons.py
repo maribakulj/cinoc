@@ -250,7 +250,9 @@ def test_max_tokens_reached_marks_the_unit_truncated(
     cut: str,
     _refused: str | None,
 ) -> None:
-    """La cassette « plafond atteint » donne une unité ``truncated``, notée."""
+    """La cassette « plafond atteint » donne une unité ``truncated`` : non notée
+    par défaut (R6, ``CONTRATS.md`` § 2.1 e), avec sa couverture ; notée sur sa
+    sortie réelle par la qualité opérationnelle."""
     _mock_provider(monkeypatch, provider, cut)
     result = _zero_shot_run(tmp_path, provider)
 
@@ -258,10 +260,18 @@ def test_max_tokens_reached_marks_the_unit_truncated(
     assert unit.outcome == "truncated"
     assert unit.reason is None
     assert "max_tokens=8192" in (unit.message or "")
-    # Notée sur sa sortie réelle : la coupure compte dans le CER, 1/1 noté.
-    (cer,) = (s for s in result.pipelines[0].aggregate if s.metric == "cer")
-    assert cer.value == pytest.approx(14 / 143)  # « deux maisons. » manque
-    assert (cer.support, cer.expected) == (1, 1)  # rien ne manque à la moyenne
+    # R6 : la fin manquante n'est pas imputée en silence — 0 noté sur 1 attendu,
+    # la couverture dit pourquoi ; la qualité opérationnelle, elle, note la
+    # sortie réelle (la coupure compte dans le CER).
+    (pipeline,) = result.pipelines
+    (cer,) = (s for s in pipeline.aggregate if s.metric == "cer")
+    assert cer.value is None
+    assert (cer.support, cer.expected) == (0, 1)
+    assert cer.coverage == {"truncated_output": 1}
+    (operational,) = (
+        s for s in pipeline.operational_aggregate if s.metric == "cer"
+    )
+    assert operational.value == pytest.approx(14 / 143)  # « deux maisons. » manque
 
 
 @pytest.mark.parametrize(
@@ -292,8 +302,9 @@ def test_the_report_and_the_csv_show_the_truncation(
 
     fr = renderer.render(result, lang="fr")
     en = renderer.render(result, lang="en")
-    assert "Unités tronquées" in fr and "notées sur leur sortie réelle" in fr
-    assert "Truncated units" in en and "scored on their actual output" in en
+    # R6 : par défaut, une unité tronquée n'est pas notée — le rapport le dit.
+    assert "Unités tronquées" in fr and "non notées par défaut" in fr
+    assert "Truncated units" in en and "not scored by default" in en
     assert ",truncated" in run_result_csv(result)
     assert json.loads(result.model_dump_json())["usage"][0]["outcome"] == "truncated"
 

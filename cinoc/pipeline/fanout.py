@@ -76,6 +76,7 @@ def run_region_fanout(
     truncations: list[str] | None = None,
     natives: list[dict[str, object]] | None = None,
     served: set[str] | None = None,
+    lost: list[str] | None = None,
 ) -> tuple[CanonicalLayout, ResourceUsage]:
     """Remplit ``layout`` (régions seules) par reconnaissance région par région.
 
@@ -91,17 +92,21 @@ def run_region_fanout(
     région dont le reconnaisseur a publié une réponse native (``NATIVE_JSON``),
     dans l'ordre de lecture. ``served``, si fourni, reçoit les modèles servis
     déclarés par chaque reconnaissance (``StepOutput.served_models``).
+    ``lost``, si fourni, reçoit une ligne par région **perdue** (reconnaissance
+    en échec, ou bloc sans géométrie à découper) : c'est ce que l'étape déclare
+    ensuite comme sa part manquante (``StepOutput.partial``).
     """
     step_params = dict(params) if params is not None else {}
     coupures = truncations if truncations is not None else []
     reponses = natives if natives is not None else []
     servis = served if served is not None else set()
+    perdues = lost if lost is not None else []
     usage = ResourceUsage()
     pages: list[LayoutPage] = []
     for page in layout.pages:
         filled_page, page_usage = _fill_page(
             page, page_image, recognizer, context, control, step_params, cropper,
-            coupures, reponses, servis,
+            coupures, reponses, servis, perdues,
         )
         pages.append(filled_page)
         usage = usage.merged_with(page_usage)
@@ -120,13 +125,14 @@ def _fill_page(
     truncations: list[str],
     natives: list[dict[str, object]],
     served: set[str],
+    lost: list[str],
 ) -> tuple[LayoutPage, ResourceUsage]:
     usage = ResourceUsage()
     filled: list[Region] = []
     for region in page.regions:
         filled_region, region_usage = _fill_region(
             region, page, page_image, recognizer, context, control, params, cropper,
-            truncations, natives, served,
+            truncations, natives, served, lost,
         )
         filled.append(filled_region)
         usage = usage.merged_with(region_usage)
@@ -190,6 +196,7 @@ def _fill_region(
     truncations: list[str] | None = None,
     natives: list[dict[str, object]] | None = None,
     served: set[str] | None = None,
+    lost: list[str] | None = None,
 ) -> tuple[Region, ResourceUsage | None]:
     """Remplit une région de ses lignes — **en descendant** dans ses enfants.
 
@@ -210,7 +217,7 @@ def _fill_region(
         for enfant in region.regions:
             rempli, usage_enfant = _fill_region(
                 enfant, page, page_image, recognizer, context, control, params,
-                cropper, truncations, natives, served,
+                cropper, truncations, natives, served, lost,
             )
             enfants.append(rempli)
             usage = usage.merged_with(usage_enfant)
@@ -218,6 +225,8 @@ def _fill_region(
 
     region_image = _region_image(region, page, page_image, context, cropper)
     if region_image is None:
+        if lost is not None:
+            lost.append(f"région {region.id!r} : sans géométrie, non découpable")
         return region, None
     try:
         par_region = dict(params)
@@ -231,6 +240,8 @@ def _fill_region(
         logger.warning(
             "[fanout] région %r non reconnue (ignorée) : %s", region.id, exc
         )
+        if lost is not None:
+            lost.append(f"région {region.id!r} : {exc}")
         # Ignorée, mais ce qu'elle a fait facturer reste compté (P5f 7).
         return region, exc.billed
     if output.truncation is not None and truncations is not None:
@@ -376,6 +387,7 @@ def execute_region_fanout(
     coupures: list[str] = []
     reponses: list[dict[str, object]] = []
     servis: set[str] = set()
+    perdues: list[str] = []
     filled, usage = run_region_fanout(
         layout=layout,
         page_image=page_image,
@@ -387,6 +399,7 @@ def execute_region_fanout(
         truncations=coupures,
         natives=reponses,
         served=servis,
+        lost=perdues,
     )
     payload = filled.model_dump_json().encode("utf-8")
     out_dir = (
@@ -422,7 +435,23 @@ def execute_region_fanout(
         usage=usage,
         truncation="; ".join(coupures) or None,
         served_models=tuple(sorted(servis)),
+        # La part manquante est **déclarée** : une page dont des régions ont été
+        # perdues n'est pas une page complète (§ 2.1 f).
+        partial=_lost_summary(perdues),
     )
+
+
+#: Régions nommées au plus dans le motif d'une étape partielle.
+_LOST_SHOWN = 3
+
+
+def _lost_summary(lost: list[str]) -> str | None:
+    """« 2 région(s) perdue(s) : … » — ``None`` si aucune ne l'est."""
+    if not lost:
+        return None
+    shown = " ; ".join(lost[:_LOST_SHOWN])
+    more = f" (+{len(lost) - _LOST_SHOWN})" if len(lost) > _LOST_SHOWN else ""
+    return f"{len(lost)} région(s) perdue(s) — {shown}{more}"
 
 
 __all__ = [
