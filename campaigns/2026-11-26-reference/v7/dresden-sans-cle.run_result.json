@@ -321,25 +321,20 @@
       }
     ],
     "failure_policy": "exclude",
-    "code_version": "0.1.1.dev271+g04a1c17b1",
-    "started_at": "2026-11-28T18:21:22.008506Z",
-    "completed_at": "2026-11-28T18:21:25.403416Z",
+    "code_version": "0.1.1.dev297+g730fabf36",
+    "started_at": "2026-11-28T19:43:51.576583Z",
+    "completed_at": "2026-11-28T19:43:54.850682Z",
     "dependencies_lock": {
-      "cinoc": "0.1.1.dev271+g04a1c17b1",
-      "fastapi": "0.165.0",
+      "cinoc": "0.1.1.dev297+g730fabf36",
       "httpcore": "1.0.9",
       "httpx": "0.29.0",
-      "jinja2": "3.1.6",
       "lxml": "6.2.0",
       "numpy": "2.4.6",
-      "pillow": "13.0.0",
       "pydantic": "2.14.4",
-      "python-multipart": "0.0.34",
       "pyyaml": "6.0.4",
       "rapidfuzz": "3.14.6",
       "saknussemm": "0.9.0",
-      "scipy": "1.18.1",
-      "uvicorn": "0.54.0"
+      "scipy": "1.18.1"
     },
     "system_binaries_lock": {
       "ollama:qwen2.5vl:3b": "fb90415cde1ef08aa669ae74b082d49b158729b6db1ab183c941417d507e71a1",

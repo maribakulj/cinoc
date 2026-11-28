@@ -9,7 +9,7 @@ sa filiation et ne remplace jamais l'identité d'origine (`CONTRATS.md` § 2.3 d
 
 | fichier | version | code | archive relue | unités |
 |---|---|---|---|---|
-| `bnl-sans-cle.run_result.json` | `RunResult` v7 | branche `claude/refonte-contrats`, correctifs de la revue de 1a + 1b (base `ec5c996`) | archive S30 `archive-bnl` | 185/185 |
+| `bnl-sans-cle.run_result.json` | `RunResult` v7 | commit `730fabf` (branche `claude/refonte-contrats`, code final de la seconde revue de 1a + 1b) | archive S30 `archive-bnl` | 185/185 |
 | `dresden-sans-cle.run_result.json` | `RunResult` v7 | idem | archive S30 `archive-dresden` | 40/40 (6 « arrêtée (délai) », 1 tronquée) |
 
 ## Comment
@@ -19,11 +19,37 @@ depuis le dossier du corpus importé (les specs ne tournent qu'à côté de leur
 corpus, `../README.md`) : aucun moteur appelé, aucun appel réseau (mandataire
 forcé sur `127.0.0.1:9`, `HF_HUB_OFFLINE=1`). Les archives ont été vérifiées
 **intactes après relecture** (somme SHA-256 de tous leurs fichiers, avant et
-après). Les fichiers ne contiennent **aucun chemin local** (aucune occurrence de
+après : arbre `archive-bnl` `9bf28e7d…`, `archive-dresden` `863419df…`, avant et
+après ; les tarballs `s30-archive-{bnl,dresden}.tar.zst` ont pour SHA-256
+`7ea845e8…` et `6881fe3c…`, inchangés). Les tarballs livrent `images/` **vide** :
+les images, adressées par leur SHA-256, sont rétablies depuis les corpus
+(`archives-branch/images/{bnl,dresden}`) avant la relecture, comme pour la
+première production de ces fichiers. Les fichiers ne contiennent **aucun chemin local** (aucune occurrence de
 `/tmp`, `/home`, `/root` ni d'un nom de dossier de travail ; le dossier d'archive
-y est relatif). Le champ `manifest.code_version` reprend la version installée de
-l'environnement de relecture, non le commit : le code est celui de la branche
-`claude/refonte-contrats` à la livraison des correctifs de la revue.
+y est relatif). Le champ `manifest.code_version` vaut `0.1.1.dev297+g730fabf36` :
+le commit `730fabf`, arbre propre, qui produit ces fichiers.
+
+**Environnement.** Un venv jetable (Python 3.13, `pip install -e ".[saknussemm]"`)
+**sans** les paquets d'oracle (`jiwer`, `dinglehopper`, `roman`, `multimethod` et
+leurs dépendances) : `dependencies_lock` ne porte que `cinoc`, `httpcore`, `httpx`,
+`lxml`, `numpy`, `pydantic`, `pyyaml`, `rapidfuzz`, `saknussemm` et `scipy`. Il ne
+porte plus `fastapi`, `jinja2`, `pillow`, `python-multipart` ni `uvicorn`, que la
+première production avait (venv de développement, extra web installé) : la
+relecture ne les utilise pas.
+
+## Régénération du 28/11 (code final de la seconde revue)
+
+Les deux fichiers ont été régénérés par `730fabf`. Par rapport au v7 précédent
+(`0.1.1.dev271+g04a1c17b1`), **aucune valeur ne bouge** : agrégats, observations,
+supports, macros, issues d'unité, analyses et `step_issues` sont identiques à
+l'octet près. Seul le manifeste change : `code_version`, `dependencies_lock`
+(`cinoc`, et les cinq paquets web ci-dessus), `started_at` et `completed_at`.
+C'est attendu : les correctifs de la seconde revue (`stat_partielle` d'une sortie
+illisible, clé de grappe singleton, `not_declared`, `n_pairs` et `n_substitutions`
+obligatoires, textes et légendes du rapport) agissent sur des cas que ces deux
+campagnes n'exercent pas — aucune sortie illisible, aucune grappe déclarée, mode
+rapide sans les analyses `diagnostics` ni `decisions`. Le rapport, lui, change
+(titres, légendes, texte des tests) : il se re-rend depuis ces JSON.
 
 ## Ce que le v7 change par rapport au v6 de la tranche 1a
 
