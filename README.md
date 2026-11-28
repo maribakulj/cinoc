@@ -19,3 +19,7 @@ Conservation demandée par le mainteneur (arbitrage 9 de la contre-expertise au 
 **Limites connues** (contre-expertise, affirmation 7) : l'archive `ResumeStore` ne vérifie pas les empreintes à la relecture, ne contient ni la spec ni les vérités terrain (leurs SHA-256 sont listés dans `campaigns/2026-11-26-reference/README.md` de la branche `claude/gele-s31-mistral`), et la clé d'unité dépend des octets de l'image du corpus. Des unités d'avant le correctif fan-out (D-311) y subsistent sans être atteintes par aucune clé.
 
 **Licences** : `37-GT-BNL` (BnL) — CC0. Dresden — vérité terrain CC BY-NC-SA 4.0, images Public Domain Mark : toute réutilisation de l'archive Dresden est bornée par CC BY-NC-SA 4.0 (attribution, pas d'usage commercial, partage dans les mêmes conditions). Aucun secret : les archives ont été parcourues (motifs de clés, en-têtes d'autorisation, chemins locaux) avant versement.
+
+## Avant/après de la tranche 1a (refonte des contrats)
+
+`avant-apres-1a/` : tableau avant/après (v5 contre v6) de toutes les métriques des 15 `RunResult` de S30, S31 et S31L, re-notés hors ligne par le code de `claude/refonte-contrats` (`abee7b5`) ; `renotation-v6.tar.zst` contient les `RunResult` v6, la variante avec `char_accuracy`/`word_accuracy` et les scripts. Rien de publié ni de citable.
