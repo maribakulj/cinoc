@@ -1,0 +1,6 @@
+Taille des RunResult, v5 (main 04a1c17) contre v6 (tranche 1a, abee7b5) — 15 RunResult de S30, S31, S31L
+(re-notation hors ligne ; voir claude/campagnes-archives-2026-11, avant-apres-1a/)
+
+v5 : brut 13,59 Mo | gzip -9 0,64 Mo | zstd -19 0,39 Mo
+v6 : brut 30,17 Mo | gzip -9 0,95 Mo | zstd -19 0,49 Mo
+v6/v5 : brut x2,22 | gzip x1,49 | zstd x1,25
