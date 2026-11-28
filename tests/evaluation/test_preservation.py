@@ -22,7 +22,7 @@ def _ctx(reference: str, hypothesis: str) -> DocContext:
 
 
 def test_counts_none_when_no_target() -> None:
-    assert preservation_counts("hello", "helo", lambda c: c == "z") is None
+    assert preservation_counts("hello", "helo", lambda c: c == "z") == (0, 0)
 
 
 def test_counts_total_and_wrong() -> None:
@@ -45,7 +45,7 @@ def test_mufi_parity_matches_engine() -> None:
     obs = mufi_error.fn(_ctx(ref, hyp))
     assert obs is not None
     assert obs.value == n_wrong / n_total
-    assert obs.weight == n_total
+    assert obs.stat.total == n_total
 
 
 def test_diacritic_parity_matches_engine() -> None:
@@ -56,4 +56,4 @@ def test_diacritic_parity_matches_engine() -> None:
     obs = diacritic_error.fn(_ctx(ref, hyp))
     assert obs is not None
     assert obs.value == n_wrong / n_total
-    assert obs.weight == n_total
+    assert obs.stat.total == n_total

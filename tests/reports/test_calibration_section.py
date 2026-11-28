@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from fractions import Fraction
 
 from cinoc.domain.run import RunManifest
 from cinoc.evaluation.analysis import (
@@ -31,7 +32,8 @@ def _result() -> RunResult:
                 bins=(
                     CalibrationBin(
                         lower=0.9, upper=1.0, mean_confidence=0.9,
-                        accuracy=1.0, count=1,
+                        accuracy=1.0, count=1, correct=1,
+                        confidence_sum=Fraction(9, 10),
                     ),
                 ),
             ),

@@ -108,12 +108,8 @@ def test_verdicts_match_scipy_on_5000_seeded_draws() -> None:
             analysis.payload
             for analysis in inference_analyses(
                 [
-                    (
-                        "v",
-                        f"m{i}",
-                        data,
-                        {name: [1] * len(s) for name, s in data.items()},
-                    )
+                    # Sans termes : les verdicts seuls sont comparés, pas d'IC.
+                    ("v", f"m{i}", data, None)
                     for i, data in enumerate(family)
                 ],
                 alpha=alpha,

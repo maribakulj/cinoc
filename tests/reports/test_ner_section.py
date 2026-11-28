@@ -86,3 +86,36 @@ def test_renders_english_labels() -> None:
 def test_no_payload_returns_none() -> None:
     section = NerSection()
     assert section.render(RunResult(manifest=_manifest()), SectionContext()) is None
+
+
+def test_a_predicted_only_category_reads_undefined_recall() -> None:
+    """M3 (tranche 1a) : une catégorie seulement prédite (support 0) a P = 0
+    et un rappel indéfini — rendu « indéfini », jamais un faux 0 % ni une
+    erreur."""
+    base = _result()
+    payload = base.analyses[0].payload
+    assert isinstance(payload, NerPayload)
+    row = payload.pipelines[0].model_copy(
+        update={
+            "per_category": (
+                EntityCategoryScore(
+                    label="LOC", precision=0.0, recall=None, f1=0.0, support=0
+                ),
+            )
+        }
+    )
+    result = base.model_copy(
+        update={
+            "analyses": (
+                Analysis(
+                    scope="corpus",
+                    view="entities",
+                    payload=payload.model_copy(update={"pipelines": (row,)}),
+                ),
+            )
+        }
+    )
+    html = NerSection().render(result, SectionContext())
+    assert html is not None and "indéfini" in html
+    english = NerSection().render(result, SectionContext(lang="en"))
+    assert english is not None and "undefined" in english

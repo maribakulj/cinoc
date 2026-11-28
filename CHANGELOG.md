@@ -26,6 +26,8 @@ suivantes ne les répètent pas.
   `tesseract` lui-même, seul le binaire est requis.
 - Les SDK des moteurs distants sont épinglés par majeure : `openai>=3,<4`,
   `anthropic>=2,<3`, `mistralai>=3,<4`.
+- `pydantic>=2.10` (les sommes exactes de la calibration sont des
+  `fractions.Fraction`, D-313).
 - `OPENAI_BASE_URL` n'est plus lue (un avertissement le dit si elle est posée) :
   un serveur compatible OpenAI se règle par instance, dans la spec.
 
@@ -53,12 +55,47 @@ suivantes ne les répètent pas.
   dans une table *Diagnostic*.
 - Le test affiché est corrigé de Holm sur les tests du run, et le post-hoc ne
   dit que ce qu'il sait.
+- **Statistiques suffisantes** (refonte des contrats, tranche 1a, D-313) :
+  chaque observation porte les comptes de sa famille — (S, D, I, n_réf),
+  (erreurs, n_réf), (tp, fp, fn) ou (k, n) — et l'agrégat d'un moteur est la
+  métrique calculée sur leur **somme**, non plus une moyenne pondérée des
+  valeurs par document. Valeurs qui changent, et pourquoi :
+  - une page à **référence vide** entre au CER, au WER, à `ins_rate`,
+    `del_rate`, `cer_diplo`, `region_cer` et `line_identity_cer` du corpus par
+    ses insertions (elle en était exclue) ; son propre scalaire est
+    **indéfini** (il valait 1 ou 0) ; un corpus entièrement vide a un CER
+    indéfini, le total des insertions publié ;
+  - les comptes S, D, I sont **canoniques** (parmi les alignements de coût
+    minimal, celui qui maximise S) : `ins_rate`, `del_rate`, MER et cMER
+    changent sur les alignements ex æquo (« a b »/« b a » : MER 1,0, jiwer
+    0,667), CER et WER jamais ;
+  - F1 NER, `region_detection` et `bow_f1` au corpus sont le F1 des comptes
+    cumulés ; un document sans entité de référence apporte ses faux positifs ;
+    une catégorie seulement prédite a un rappel indéfini, sans erreur ;
+  - `char_accuracy`, `word_accuracy` et `fca` au corpus : max(0, 1 − Σe/Σn),
+    le plancher appliqué au corpus et non page par page ; le taux d'erreur
+    non tronqué et ses comptes sont publiés à côté ;
+  - `reading_order_tau` au corpus : Σ discordantes / Σ paires ; une
+    proportion à dénominateur nul (`mufi_err` sans glyphe MUFI…) est
+    indéfinie, plus « non applicable » ;
+  - ECE et MCE en arithmétique exacte (au dernier chiffre près), identiques
+    quel que soit l'ordre des jetons et des documents.
+- `failure_policy: max_error` est **retiré** : « la pire valeur de l'échelle »
+  n'est la statistique d'aucune sortie. `failure_policy: empty_page` le
+  remplace : l'unité en échec est notée comme une page vide (un CER de 1, une
+  exactitude de 0, un taux d'insertion de 0), sous ce nom.
+- L'intervalle du micro d'un MER ou d'un cMER, dont le dénominateur dépend de
+  la sortie, n'est plus publié : « inférence non estimable ».
 
 **Format**
 
-- `RunResult` passe en version 5. Un JSON v4 sans payload `inference` se
-  recharge ; un v4 qui en porte un est refusé, plutôt que relu comme corrigé —
-  il se re-note depuis son archive (`cinoc run --offline`).
+- `RunResult` passe en version **6** (D-313) : `MetricScore` gagne `stat`
+  (la statistique suffisante), `scalar_reason`, `untruncated_error_rate` et
+  les axes de l'observation ; par document, `support` n'est plus un poids
+  (les dénominateurs sont dans `stat`). Un JSON d'une version antérieure est
+  **refusé** avec un message — ni relu, ni converti — et se re-note depuis son
+  archive (`cinoc run --resume-dir … --offline`). Le CSV gagne les colonnes
+  `statistic`, `scalar_reason` et `untruncated_error_rate`.
 
 **Ce qui est désormais refusé au lieu d'être ignoré**
 

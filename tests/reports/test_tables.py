@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from cinoc.evaluation.result import MetricScore
+from cinoc.evaluation.statistics import EditCounts, ErrorCounts
 from cinoc.reports.sections._tables import (
     bar_cell,
     group_header_row,
@@ -86,3 +87,40 @@ def test_nonempty_metric_indices_masks_hidden_metrics() -> None:
     keep = nonempty_metric_indices(rows)
     kept_metrics = {rows[0][i].metric for i in keep}
     assert kept_metrics == {"cer", "wer"}  # mer retiré, cer/wer gardés
+
+
+def test_an_undefined_scalar_is_not_a_dash() -> None:
+    """K1 : une page à référence vide a des comptes (ses insertions entrent au
+    corpus) et un scalaire indéfini — lu « indéfini », pas « — » (non mesuré)."""
+    blank = MetricScore(
+        metric="cer",
+        stat=EditCounts(
+            substitutions=0, deletions=0, insertions=3, reference_length=0
+        ),
+        scalar_reason="zero_denominator",
+    )
+    assert ">indéfini</span>" in bar_cell(blank, 1.0, lang="fr")
+    assert ">undefined</span>" in bar_cell(blank, 1.0, lang="en")
+    assert "—" in bar_cell(MetricScore(metric="cer"), 1.0, lang="fr")
+
+
+def test_a_floored_accuracy_shows_its_untruncated_rate_and_counts() -> None:
+    """B1 : au plancher, 0 ne distingue plus un taux de 1,2 d'un taux de 4,4 —
+    le taux non tronqué et les comptes sont écrits à côté ; sous le plancher,
+    la valeur vaut 1 − e/n et rien n'est ajouté."""
+    floored = MetricScore(
+        metric="char_accuracy",
+        value=0.0,
+        stat=ErrorCounts(errors=44, reference_length=10),
+        untruncated_error_rate=4.4,
+    )
+    fr = bar_cell(floored, 1.0, lang="fr")
+    assert "(erreurs 4,4000 · 44/10)" in fr
+    assert "(errors 4.4000 · 44/10)" in bar_cell(floored, 1.0, lang="en")
+    plain = MetricScore(
+        metric="char_accuracy",
+        value=0.5,
+        stat=ErrorCounts(errors=6, reference_length=12),
+        untruncated_error_rate=0.5,
+    )
+    assert "untruncated" not in bar_cell(plain, 1.0, lang="fr")

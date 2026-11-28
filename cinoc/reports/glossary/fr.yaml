@@ -13,8 +13,8 @@
 #   oracle      : la référence nommée, et ce contre quoi le calcul est vérifié
 #
 # Catégorie et unité ne sont PAS ici : elles sont déclarées au registre
-# (MetricSpec), et la fiche les y lit. La définition nomme l'unité que le
-# poids du calcul compte (verrouillé par test).
+# (MetricSpec), et la fiche les y lit. La définition nomme l'unité que la
+# statistique du calcul compte (verrouillé par test).
 
 cer:
   title: "CER — taux d'erreur caractère"
@@ -453,8 +453,10 @@ char_accuracy:
     mieux ».
   limits: >-
     Redondante avec le CER, qu'elle recopie à la borne près : une sortie
-    qui rallonge assez pour dépasser un CER de 1 vaut 0, sans dire de
-    combien.
+    qui rallonge assez pour dépasser un CER de 1 vaut 0 — le rapport
+    écrit alors à côté le taux d'erreur non tronqué et ses comptes. Au
+    corpus, la borne s'applique aux comptes cumulés, jamais à une moyenne
+    de bornes par page.
   oracle: >-
     Référence : l'exactitude caractère de l'ISRI, (n − erreurs) / n.
     Variante : bornée à 0 par Cinoc. Vérifié contre : le CER, lui-même
@@ -512,8 +514,9 @@ bow_recall:
 bow_f1:
   title: "Sac de mots — F1"
   definition: >-
-    Moyenne harmonique de la précision et du rappel sur sac de mots ;
-    poids = nombre de mots de la référence.
+    Moyenne harmonique de la précision et du rappel sur sac de mots,
+    2·tp / (2·tp + fp + fn) en mots ; au corpus, le F1 des comptes de
+    mots cumulés, et non une moyenne de F1 par document.
   measures: >-
     L'équilibre entre mots justes produits et mots attendus retrouvés,
     indépendamment de l'ordre.
@@ -560,8 +563,8 @@ reading_order_tau:
   definition: >-
     Distance de Kendall normalisée entre les ordres de lecture : part
     des paires de blocs (régions) présents des deux côtés que la sortie
-    range dans l'ordre inverse de la référence ; poids = nombre de
-    régions communes.
+    range dans l'ordre inverse de la référence ; au corpus, paires de
+    régions discordantes cumulées sur paires cumulées.
   measures: >-
     L'ordonnancement seul, que le CER confond avec la lecture.
   limits: >-

@@ -94,13 +94,14 @@ def test_l_alignement_tient_sur_une_page_entiere() -> None:
 
 
 def test_les_quatre_categories_somment_a_la_reference() -> None:
-    """Invariant d'un alignement : ``hits + subs + dels`` couvre la référence,
-    et ``hits + subs + ins`` couvre l'hypothèse. Un décompte qui dérive se voit
-    ici avant de fausser MER."""
-    from cinoc.evaluation.metrics.text import _align
+    """Invariant des comptes canoniques : ``S + D ≤ n_réf`` et ``n_réf + I −
+    D = |hyp|`` (les correspondances H = n_réf − S − D couvrent les deux
+    côtés). Un décompte qui dérive se voit ici avant de fausser MER."""
+    from cinoc.evaluation.statistics import canonical_edit_counts
 
     reference = "le chat noir dort".split()
     hypothese = "le chien noir court vite".split()
-    a = _align(reference, hypothese)
-    assert a.hits + a.substitutions + a.deletions == len(reference)
-    assert a.hits + a.substitutions + a.insertions == len(hypothese)
+    a = canonical_edit_counts(reference, hypothese)
+    hits = a.reference_length - a.substitutions - a.deletions
+    assert hits + a.substitutions + a.deletions == len(reference)
+    assert hits + a.substitutions + a.insertions == len(hypothese)

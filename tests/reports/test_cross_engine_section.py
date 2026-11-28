@@ -294,3 +294,19 @@ def test_divergence_without_max_pair_says_identical_profiles() -> None:
     assert html is not None
     assert "identiques" in html  # pas de « paire la plus divergente » inventée
     assert "0,0000" in html
+
+
+def test_a_hypothesis_denominator_micro_says_not_estimable() -> None:
+    """B9c (tranche 1a) : MER, cMER — le dénominateur du micro dépend de la
+    sortie ; aucune procédure validée, le bloc le dit (FR/EN), sans IC."""
+    payload = _friedman(metric="mer", intervals=(), micro_estimable=False)
+    for lang, text in (
+        ("fr", "<b>inférence non estimable</b>"),
+        ("en", "<b>inference not estimable</b>"),
+    ):
+        html = CrossEngineSection().render(
+            _result("text:mer:significance_p", 0.0017, payload),
+            SectionContext(lang=lang),
+        )
+        assert html is not None and text in html
+        assert "IC 95" not in html and "95% CI" not in html

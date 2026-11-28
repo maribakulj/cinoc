@@ -10,9 +10,12 @@
   IoU de boîtes (boîte dérivée du polygone pour PAGE) ; l'IoU polygonal exact est
   un épaississement (aucun consommateur ne l'exige encore).
 
-Convention métier (CLAUDE.md §3) : **niveau absent → métrique non applicable
-(``None``)**. ``region_cer`` : pas de niveau texte → ``None``. ``region_detection`` :
-aucune région géo-localisable côté référence → ``None``.
+Chaque métrique rend sa **statistique** (``evaluation.statistics``) : au corpus,
+la même finalisation des comptes cumulés (K1). Convention métier (CLAUDE.md
+§3) : **niveau absent → métrique non applicable (``None``)**. ``region_cer`` :
+pas de niveau texte → ``None``. ``region_detection`` : des régions de référence
+sans géométrie exploitable → ``None`` ; une référence **sans région** compte
+les régions de l'hypothèse en faux positifs (M3).
 """
 
 from __future__ import annotations
@@ -22,11 +25,13 @@ from collections.abc import Iterator
 from cinoc.domain.artifacts import ArtifactType
 from cinoc.domain.evaluation import MetricCategory, MetricUnit
 from cinoc.domain.layout import CanonicalLayout, Region
+from cinoc.evaluation import statistics as st
 from cinoc.evaluation.context import DocContext
 from cinoc.evaluation.errors import EvaluationError
-from cinoc.evaluation.metric import DocumentMetric, Observation, document_metric
+from cinoc.evaluation.metric import DocumentMetric, document_metric
 from cinoc.evaluation.metrics.text import _edit_distance
-from cinoc.evaluation.reading_order import kendall_distance, order_coverage
+from cinoc.evaluation.reading_order import kendall_counts, order_counts
+from cinoc.evaluation.statistics import ErrorCounts, MatchCounts, Proportion
 
 _MISSING = ""
 
@@ -77,6 +82,7 @@ def _layout_pair(ctx: DocContext) -> tuple[CanonicalLayout, CanonicalLayout]:
 
 @document_metric(
     name="region_cer",
+    finalize=st.error_ratio,
     input_types=(ArtifactType.LAYOUT, ArtifactType.LAYOUT),
     category=MetricCategory.ADAPTED,
     unit=MetricUnit.CHARACTER,
@@ -87,7 +93,7 @@ def _layout_pair(ctx: DocContext) -> tuple[CanonicalLayout, CanonicalLayout]:
     higher_is_better=False,
     tags=frozenset({"structure", "edit_distance", "layout"}),
 )
-def region_cer(ctx: DocContext) -> Observation | None:
+def region_cer(ctx: DocContext) -> ErrorCounts | None:
     reference, hypothesis = _layout_pair(ctx)
     if not _has_text_level(hypothesis) or not _has_text_level(reference):
         return None
@@ -113,9 +119,7 @@ def region_cer(ctx: DocContext) -> Observation | None:
     total_edits += sum(
         len(text) for region_id, text in hyp_texts.items() if region_id not in apparies
     )
-    if total_chars == 0:
-        return None
-    return Observation(value=total_edits / total_chars, weight=total_chars)
+    return ErrorCounts(errors=total_edits, reference_length=total_chars)
 
 
 def _leaf_regions(regions: tuple[Region, ...]) -> Iterator[Region]:
@@ -267,6 +271,7 @@ def correspondance(
 
 @document_metric(
     name="region_detection",
+    finalize=st.f1,
     input_types=(ArtifactType.LAYOUT, ArtifactType.LAYOUT),
     category=MetricCategory.ADAPTED,
     unit=MetricUnit.REGION,
@@ -274,17 +279,14 @@ def correspondance(
     higher_is_better=True,
     tags=frozenset({"structure", "layout", "geometry", "detection"}),
 )
-def region_detection(ctx: DocContext) -> Observation | None:
+def region_detection(ctx: DocContext) -> MatchCounts | None:
     reference, hypothesis = _layout_pair(ctx)
     ref_boxes = _detection_boxes(reference)
-    if not ref_boxes:
-        return None  # rien de géo-localisable côté référence → non applicable
+    if not ref_boxes and any(page.regions for page in reference.pages):
+        return None  # des régions, aucune géo-localisable → non applicable
     hyp_boxes = _detection_boxes(hypothesis)
     tp = _true_positives(ref_boxes, hyp_boxes, _IOU_THRESHOLD)
-    precision = tp / len(hyp_boxes) if hyp_boxes else 0.0
-    recall = tp / len(ref_boxes)
-    f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
-    return Observation(value=f1, weight=len(ref_boxes))
+    return MatchCounts(tp=tp, fp=len(hyp_boxes) - tp, fn=len(ref_boxes) - tp)
 
 
 #: Socle de métriques de structure, collecté explicitement par le registre.
@@ -302,6 +304,7 @@ def _lines_by_id(layout: CanonicalLayout) -> dict[str, str]:
 
 @document_metric(
     name="line_identity_cer",
+    finalize=st.error_ratio,
     input_types=(ArtifactType.LAYOUT, ArtifactType.LAYOUT),
     category=MetricCategory.ADAPTED,
     unit=MetricUnit.CHARACTER,
@@ -309,7 +312,7 @@ def _lines_by_id(layout: CanonicalLayout) -> dict[str, str]:
     higher_is_better=False,
     tags=frozenset({"structure", "edit_distance", "layout", "identity"}),
 )
-def line_identity_cer(ctx: DocContext) -> Observation | None:
+def line_identity_cer(ctx: DocContext) -> ErrorCounts | None:
     """CER par ligne, lignes appariées par leur **identifiant**.
 
     Le banc apparie sinon les lignes par un alignement de Levenshtein sur des
@@ -338,13 +341,12 @@ def line_identity_cer(ctx: DocContext) -> Observation | None:
     for line_id, ref_text in ref_lines.items():
         total_edits += _edit_distance(ref_text, hyp_lines.get(line_id, _MISSING))
         total_chars += len(ref_text)
-    if total_chars == 0:
-        return None
-    return Observation(value=total_edits / total_chars, weight=total_chars)
+    return ErrorCounts(errors=total_edits, reference_length=total_chars)
 
 
 @document_metric(
     name="line_identity_coverage",
+    finalize=st.proportion,
     input_types=(ArtifactType.LAYOUT, ArtifactType.LAYOUT),
     category=MetricCategory.EXPLORATORY,
     unit=MetricUnit.LINE,
@@ -352,7 +354,7 @@ def line_identity_cer(ctx: DocContext) -> Observation | None:
     higher_is_better=True,
     tags=frozenset({"structure", "layout", "identity", "coverage"}),
 )
-def line_identity_coverage(ctx: DocContext) -> Observation | None:
+def line_identity_coverage(ctx: DocContext) -> Proportion | None:
     """Part des lignes de référence que l'hypothèse porte **sous le même id**.
 
     Une étape qui perd des lignes, en fusionne, ou leur réattribue un
@@ -366,7 +368,7 @@ def line_identity_coverage(ctx: DocContext) -> Observation | None:
         return None
     hyp_ids = set(_lines_by_id(hypothesis))
     retrouvees = sum(1 for line_id in ref_lines if line_id in hyp_ids)
-    return Observation(value=retrouvees / len(ref_lines), weight=len(ref_lines))
+    return Proportion(count=retrouvees, total=len(ref_lines))
 
 
 def _ordres(ctx: DocContext) -> tuple[list[str], list[str]]:
@@ -394,6 +396,7 @@ def _ordres(ctx: DocContext) -> tuple[list[str], list[str]]:
 
 @document_metric(
     name="reading_order_tau",
+    finalize=st.proportion,
     input_types=(ArtifactType.LAYOUT, ArtifactType.LAYOUT),
     category=MetricCategory.ADAPTED,
     unit=MetricUnit.REGION,
@@ -404,7 +407,7 @@ def _ordres(ctx: DocContext) -> tuple[list[str], list[str]]:
     higher_is_better=False,
     tags=frozenset({"structure", "layout", "reading_order"}),
 )
-def reading_order_tau(ctx: DocContext) -> Observation | None:
+def reading_order_tau(ctx: DocContext) -> Proportion:
     """Attribue à l'**ordonnancement** ce que le CER attribuerait à la lecture.
 
     Un texte projeté dans le mauvais ordre a un CER catastrophique, mais ce CER
@@ -412,15 +415,12 @@ def reading_order_tau(ctx: DocContext) -> Observation | None:
     sur les blocs présents des deux côtés, la détection ayant sa propre métrique.
     """
     reference, hypothese = _ordres(ctx)
-    valeur = kendall_distance(reference, hypothese)
-    if valeur is None:
-        return None
-    communs = len(set(reference) & set(hypothese))
-    return Observation(value=valeur, weight=communs)
+    return kendall_counts(reference, hypothese)
 
 
 @document_metric(
     name="reading_order_coverage",
+    finalize=st.proportion,
     input_types=(ArtifactType.LAYOUT, ArtifactType.LAYOUT),
     category=MetricCategory.EXPLORATORY,
     unit=MetricUnit.REGION,
@@ -428,17 +428,14 @@ def reading_order_tau(ctx: DocContext) -> Observation | None:
     higher_is_better=True,
     tags=frozenset({"structure", "layout", "reading_order"}),
 )
-def reading_order_coverage(ctx: DocContext) -> Observation | None:
+def reading_order_coverage(ctx: DocContext) -> Proportion:
     """Le compagnon obligatoire du désaccord.
 
     Un ordre parfait sur deux blocs trouvés sur trente n'est pas un bon
     résultat, et la distance seule le dirait excellent.
     """
     reference, hypothese = _ordres(ctx)
-    valeur = order_coverage(reference, hypothese)
-    if valeur is None:
-        return None
-    return Observation(value=valeur, weight=len(set(reference)))
+    return order_counts(reference, hypothese)
 
 
 

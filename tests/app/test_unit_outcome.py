@@ -97,7 +97,7 @@ def test_failed_unit_is_recorded_with_its_reason(tmp_path: Path) -> None:
     assert "folio_002.pero.txt" in (failed[0].message or "")
     # Chaque unité a sa ligne, en échec comprise : 2 pipelines × 5 documents.
     assert len(result.usage) == 10
-    assert result.schema_version == 5
+    assert result.schema_version == 6
 
 
 def test_exclude_policy_shows_scored_over_expected(tmp_path: Path) -> None:

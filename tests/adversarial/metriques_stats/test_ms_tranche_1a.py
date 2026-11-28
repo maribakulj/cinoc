@@ -311,6 +311,11 @@ def test_propriete_m2__exactitude_au_corpus_et_comptes(
 
 
 # --- M3 : appariement P/R/F, agrégation ------------------------------------
+#
+# Tests d'**agrégation** NER (tranche 1a) : chaque instance a un appariement
+# sans ambiguïté (empans disjoints ou IoU loin du seuil) — l'oracle par
+# énumération et l'appariement actuel y coïncident. L'**appariement** lui-même
+# (optimum lexicographique, M8) relève de la tranche 4 et n'est pas jugé ici.
 
 
 def test_k1_ner_oracle__f1_micro_par_enumeration(tmp_path: Path) -> None:

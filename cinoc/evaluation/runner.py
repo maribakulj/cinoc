@@ -2,18 +2,18 @@
 
 Reçoit des **artefacts déjà produits** (couche 4, via l'app) : il n'exécute aucun
 moteur et n'importe pas ``pipeline``. **Trois passes** par vue : (1) par-document
-(``None`` = non applicable), (2) agrégat par pipeline (``None`` exclu, **support**
-exposé), (3) **inter-moteurs** — chaque ``CrossEngineMetric`` compare les
-pipelines et écrit dans ``RunResult.cross_engine``.
-
-Normalisation de la vue (``normalization_profile``/``char_exclude``) appliquée
-symétriquement GT/hyp ; représentation chargée+normalisée **une fois par
-signature** ``(ref, hyp)``.
+— la **statistique suffisante** de chaque métrique, son scalaire et ses axes ;
+(2) agrégat par pipeline — la finalisation de la **somme** des statistiques
+(micro exact, K1), **support** exposé ; (3) **inter-moteurs** — chaque
+``CrossEngineMetric`` compare les pipelines et écrit dans
+``RunResult.cross_engine``. La notation par document (statistique, scalaire,
+axes, normalisation de la vue) vit dans ``evaluation.scoring``.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
+from typing import Any
 
 from cinoc.domain.artifacts import (
     Artifact,
@@ -22,27 +22,19 @@ from cinoc.domain.artifacts import (
     latest_by_type,
 )
 from cinoc.domain.corpus import CorpusSpec
-from cinoc.domain.documents import DocumentRef, GroundTruthRef
 from cinoc.domain.evaluation import EvaluationSpec, EvaluationView
-from cinoc.domain.layout import CanonicalLayout
 from cinoc.domain.run import RunManifest
 from cinoc.evaluation._view_collectors import COLLECTEURS, ViewCollectors
 from cinoc.evaluation.calibration import calibration_analysis
 from cinoc.evaluation.conformity import conformity_analysis
-from cinoc.evaluation.context import CrossEngineContext, DocContext
+from cinoc.evaluation.context import CrossEngineContext
 from cinoc.evaluation.correction import correction_analysis
 from cinoc.evaluation.decisions import decisions_analysis
 from cinoc.evaluation.economics import economics_analysis
 from cinoc.evaluation.errors import EvaluationError
-from cinoc.evaluation.inference import (
-    InferenceEntry,
-    inference_analyses,
-    micro_ratio,
-)
-from cinoc.evaluation.ner import EntitySet
-from cinoc.evaluation.projectors import get_projector
+from cinoc.evaluation.inference import InferenceEntry, inference_analyses
+from cinoc.evaluation.metric import DocumentMetric
 from cinoc.evaluation.registry import MetricRegistry
-from cinoc.evaluation.representations import load_representation, prepare_text
 from cinoc.evaluation.result import (
     Analysis,
     DocumentUsage,
@@ -51,22 +43,15 @@ from cinoc.evaluation.result import (
     RunDocumentResult,
     RunResult,
 )
+from cinoc.evaluation.scoring import metric_of, score_document, score_failed
+from cinoc.evaluation.statistics import Counts, Scalar, combine
 
 #: { pipeline_name: { document_id: { step_id: { ArtifactType: Artifact } } } } —
 #: les sorties de **chaque** étape (``by_step``), dans l'ordre d'exécution.
 PipelineOutputs = Mapping[str, Mapping[str, StepArtifacts]]
 
-#: Signature d'entrée d'une métrique : ``(type_référence, type_hypothèse)``.
-_Signature = tuple[ArtifactType, ArtifactType]
-
 #: { métrique : { pipeline : [score par doc, aligné, ``None`` inclus] } }
 _Series = dict[str, dict[str, list[MetricScore]]]
-
-#: Types **inter-changeables au niveau représentation** : tous chargés en ``str``.
-#: Un candidat ``CORRECTED_TEXT`` est donc noté par une métrique ``RAW_TEXT`` sans
-#: projection (les post-corrections LLM passent telles quelles).
-_TEXT_LIKE = frozenset({ArtifactType.RAW_TEXT, ArtifactType.CORRECTED_TEXT})
-
 
 #: Les ``kind`` d'analyse que ce runner sait produire. Une spec qui en nomme un
 #: autre est refusée **au chargement** plutôt que de rendre un résultat
@@ -129,7 +114,10 @@ def evaluate_run(
     failed = frozenset(
         (u.pipeline, u.document_id) for u in usage if u.outcome == "failed"
     )
-    max_error = evaluation.failure_policy == "max_error"
+    truncated = frozenset(
+        (u.pipeline, u.document_id) for u in usage if u.outcome == "truncated"
+    )
+    empty_page = evaluation.failure_policy == "empty_page"
     # Les analyses qui lisent la sortie **finale** d'un pipeline (calibration,
     # correction, décisions) en lisent le pool : une lecture de ``by_step``.
     pools = {
@@ -151,14 +139,12 @@ def evaluate_run(
             missed = dict.fromkeys(view.metric_names, 0)
             for document in corpus.documents:
                 if (pipeline_name, document.id) in failed:
-                    scores = _score_failed(view, document, registry, max_error)
+                    scores = score_failed(view, document, registry, empty_page)
                     for score in scores:
-                        if score.value is None and _expects(
-                            view, document, registry, score.metric
-                        ):
+                        if score.stat is None and score.applicability == "applicable":
                             missed[score.metric] += 1
                     # Rien n'a été produit : aucune analyse ne s'en nourrit,
-                    # même notée à l'erreur maximale (pas de texte fabriqué).
+                    # même notée comme une page vide (pas de texte fabriqué).
                     text_context = entity_context = None
                 else:
                     candidate = _candidate_for(
@@ -166,8 +152,12 @@ def evaluate_run(
                         pipeline_name,
                         pipeline_outputs.get(pipeline_name, {}).get(document.id, {}),
                     )
-                    scores, text_context, entity_context = _score_document(
-                        view, document, candidate, registry
+                    scores, text_context, entity_context = score_document(
+                        view,
+                        document,
+                        candidate,
+                        registry,
+                        (pipeline_name, document.id) in truncated,
                     )
                 collectors.observe(
                     pipeline_name,
@@ -193,7 +183,11 @@ def evaluate_run(
                     pipeline=pipeline_name,
                     view=view.name,
                     aggregate=tuple(
-                        _aggregate(name, series[name][pipeline_name], missed[name])
+                        _aggregate(
+                            metric_of(registry, name),
+                            series[name][pipeline_name],
+                            missed[name],
+                        )
                         for name in view.metric_names
                     ),
                 )
@@ -277,140 +271,78 @@ def evaluate_run(
 def _inference_entries(
     view: EvaluationView, series: _Series, registry: MetricRegistry
 ) -> list[InferenceEntry]:
-    """(vue, métrique, séries alignées, poids) de chaque métrique **établie**
+    """(vue, métrique, séries alignées, termes) de chaque métrique **établie**
     de la vue — les seules qu'un test départage (D-289) : une adaptée ou une
     exploratoire reste au diagnostic et ne grossit pas la famille de Holm.
 
     Les **mêmes séries** que la passe inter-moteurs : même index = même
     document, ``None`` = non applicable — un seul calcul des scores, deux
-    lectures (scalaire ``significance_p`` + payload ``inference``). Les poids
-    (``support`` par document) sont ceux de l'agrégat : l'IC rééchantillonne
-    le ratio que le tableau affiche.
+    lectures (scalaire ``significance_p`` + payload ``inference``). Les termes
+    (numérateur, dénominateur) sont ceux de la statistique de chaque document
+    qui entre au micro affiché ; ``None`` pour une métrique dont le
+    dénominateur dépend de l'hypothèse : l'inférence de son micro est « non
+    estimable » (B9c).
     """
-    return [
-        (
-            view.name,
-            metric_name,
-            {
-                pipeline: [score.value for score in scores]
-                for pipeline, scores in series[metric_name].items()
-            },
-            {
-                pipeline: [score.support or 0 for score in scores]
-                for pipeline, scores in series[metric_name].items()
-            },
+    entries: list[InferenceEntry] = []
+    for metric_name in registry.established(view.metric_names):
+        terms = metric_of(registry, metric_name).terms
+        entries.append(
+            (
+                view.name,
+                metric_name,
+                {
+                    pipeline: [score.value for score in scores]
+                    for pipeline, scores in series[metric_name].items()
+                },
+                None
+                if terms is None
+                else {
+                    pipeline: [
+                        None if score.stat is None else terms(score.stat)
+                        for score in scores
+                    ]
+                    for pipeline, scores in series[metric_name].items()
+                },
+            )
         )
-        for metric_name in registry.established(view.metric_names)
-    ]
+    return entries
 
 
-def _aggregate(name: str, scores: list[MetricScore], missed: int) -> MetricScore:
-    """Agrégat **micro** : Σ(valeur·poids)/Σpoids — la métrique au niveau corpus.
+def _aggregate(
+    metric: DocumentMetric, scores: list[MetricScore], missed: int
+) -> MetricScore:
+    """Agrégat **micro** : la finalisation de la **somme** des statistiques.
 
-    Micro (et non la moyenne *macro* des taux par-document) est la métrique
-    conventionnelle au niveau corpus, comparable à ``jiwer`` sur le corpus
-    entier : un long document pèse à proportion de sa taille. La moyenne macro
-    reste reconstructible depuis le détail par-document (``RunResult.documents``).
-    Les documents à poids nul (référence vide) sont exclus du micro ; ``value``
-    vaut ``None`` si aucun poids (toutes réfs vides). ``support`` = nombre de
-    documents notés ; ``expected`` = ``support`` + les unités en échec qui
+    Le micro est la métrique calculée sur les comptes cumulés du corpus — pour
+    un taux d'erreur, Σ erreurs / Σ longueurs de référence, comparable à
+    ``jiwer`` sur le corpus entier ; pour un F1, F1(Σtp, Σfp, Σfn) ; pour une
+    exactitude, max(0, 1 − Σe/Σn), plancher au corpus (B1). Une page à
+    référence vide entre au micro par sa statistique (ses insertions) même si
+    son scalaire est indéfini. ``support`` = documents dont la statistique
+    entre au micro ; ``expected`` = ``support`` + les unités en échec qui
     auraient pu l'être (``missed``) — « n notés / n attendus » (arbitrage A3).
     """
-    pairs = [
-        (score.value, score.support or 0)
-        for score in scores
-        if score.value is not None
-    ]
-    micro = micro_ratio([v for v, _ in pairs], [w for _, w in pairs])
-    return MetricScore(
-        metric=name, value=micro, support=len(pairs), expected=len(pairs) + missed
+    stats = [score.stat for score in scores if score.stat is not None]
+    combined = combine(stats)
+    if combined is None:
+        return MetricScore(metric=metric.name, support=0, expected=missed)
+    return _score(metric.name, metric.finalize, combined).model_copy(
+        update={"support": len(stats), "expected": len(stats) + missed}
     )
 
 
-def _empty_hypothesis(hypothesis_type: ArtifactType) -> object | None:
-    """Hypothèse **vide** du type : ce qu'aurait rendu un moteur sans sortie.
-
-    Sert uniquement à demander à la métrique le **poids** de la référence ; la
-    valeur notée, elle, est la borne de l'échelle (cf. ``_score_failed``).
-    """
-    if hypothesis_type in _TEXT_LIKE:
-        return ""
-    if hypothesis_type is ArtifactType.LAYOUT:
-        return CanonicalLayout()
-    if hypothesis_type is ArtifactType.ENTITIES:
-        return EntitySet(text="", entities=())
-    return None
-
-
-def _reference_for(
-    view: EvaluationView, document: DocumentRef, reference_type: ArtifactType
-) -> object | None:
-    """Référence chargée, projetée et préparée comme au scoring, ou ``None``."""
-    resolved = _resolve_ground_truth(document, view, reference_type)
-    if resolved is None:
-        return None
-    ground_truth, gt_native_type = resolved
-    reference = _project_side(ground_truth.uri, gt_native_type, reference_type, view)
-    return None if reference is None else _prepare(reference, view)
-
-
-def _expects(
-    view: EvaluationView, document: DocumentRef, registry: MetricRegistry, name: str
-) -> bool:
-    """Une unité de ce document est-elle **attendue** pour cette métrique ?
-
-    Oui si sa vérité terrain l'alimente : c'est ce qui sépare un échec (l'unité
-    aurait été notée) d'un cas que la métrique ne couvre de toute façon pas.
-    """
-    metric = registry.document_metric(name)
-    if metric is None:
-        raise EvaluationError(f"métrique inconnue : {name!r}.")
-    return _resolve_ground_truth(document, view, metric.input_types[0]) is not None
-
-
-def _score_failed(
-    view: EvaluationView,
-    document: DocumentRef,
-    registry: MetricRegistry,
-    max_error: bool,
-) -> tuple[MetricScore, ...]:
-    """Scores d'une unité **en échec**, selon la politique d'échec.
-
-    ``exclude`` : tout ``None`` — l'unité sort de la moyenne, et « n attendus »
-    le dit. ``max_error`` : la pire valeur de l'échelle — 1 pour un taux
-    d'erreur, 0 pour un score —, avec le **poids** que la métrique donne à la
-    référence face à une sortie vide (la longueur de la référence pour le CER :
-    exactement le CER d'une page rendue vide). Une métrique qui ne sait pas
-    peser une sortie vide reste ``None`` : on ne fabrique pas de poids.
-    """
-    scores: list[MetricScore] = []
-    for name in view.metric_names:
-        metric = registry.document_metric(name)
-        if metric is None:
-            raise EvaluationError(f"métrique inconnue : {name!r}.")
-        if not max_error:
-            scores.append(MetricScore(metric=name))
-            continue
-        reference_type, hypothesis_type = metric.input_types
-        reference = _reference_for(view, document, reference_type)
-        empty = _empty_hypothesis(hypothesis_type)
-        observation = (
-            metric.fn(
-                DocContext(
-                    document_id=document.id, reference=reference, hypothesis=empty
-                )
-            )
-            if reference is not None and empty is not None
-            else None
-        )
-        if observation is None:
-            scores.append(MetricScore(metric=name))
-            continue
-        worst = 0.0 if metric.spec.higher_is_better else 1.0
-        scores.append(
-            MetricScore(metric=name, value=worst, support=observation.weight)
-        )
-    return tuple(scores)
+def _score(
+    name: str, finalize: Callable[[Any], Scalar], stat: Counts
+) -> MetricScore:
+    """Le ``MetricScore`` d'une statistique sous la finalisation de sa métrique."""
+    scalar = finalize(stat)
+    return MetricScore(
+        metric=name,
+        value=scalar.value,
+        stat=stat,
+        scalar_reason=scalar.reason,
+        untruncated_error_rate=scalar.untruncated_error_rate,
+    )
 
 
 def _cross_engine_scores(
@@ -483,98 +415,6 @@ def _scored_step(
     return None
 
 
-def _score_document(
-    view: EvaluationView,
-    document: DocumentRef,
-    candidate: Artifact | None,
-    registry: MetricRegistry,
-) -> tuple[tuple[MetricScore, ...], DocContext | None, DocContext | None]:
-    # Représentation chargée + normalisée une seule fois par signature, partagée
-    # par toutes les métriques qui la consomment (CER/WER/MER). Les contextes
-    # **texte** et **entités** sont aussi renvoyés : les collecteurs (confusions,
-    # pires lignes, NER) les consomment sans recharger ni renormaliser.
-    contexts: dict[_Signature, DocContext | None] = {}
-    scores: list[MetricScore] = []
-    for name in view.metric_names:
-        metric = registry.document_metric(name)
-        if metric is None:
-            raise EvaluationError(f"métrique inconnue : {name!r}.")
-        signature = metric.input_types
-        if signature not in contexts:
-            contexts[signature] = _context_for(view, document, candidate, signature)
-        context = contexts[signature]
-        observation = metric.fn(context) if context is not None else None
-        scores.append(
-            MetricScore(
-                metric=name,
-                value=observation.value if observation is not None else None,
-                support=observation.weight if observation is not None else None,
-            )
-        )
-    text_context = contexts.get((ArtifactType.RAW_TEXT, ArtifactType.RAW_TEXT))
-    entity_context = contexts.get((ArtifactType.ENTITIES, ArtifactType.ENTITIES))
-    return tuple(scores), text_context, entity_context
-
-
-def _context_for(
-    view: EvaluationView,
-    document: DocumentRef,
-    candidate: Artifact | None,
-    signature: _Signature,
-) -> DocContext | None:
-    reference_type, hypothesis_type = signature
-    if candidate is None or candidate.uri is None:
-        return None
-    if _resolve_ground_truth(document, view, reference_type) is None:
-        return None
-    reference = _reference_for(view, document, reference_type)
-    hypothesis = _project_side(candidate.uri, candidate.type, hypothesis_type, view)
-    if reference is None or hypothesis is None:
-        return None
-    return DocContext(
-        document_id=document.id,
-        reference=reference,
-        hypothesis=_prepare(hypothesis, view),
-    )
-
-
-def _resolve_ground_truth(
-    document: DocumentRef, view: EvaluationView, reference_type: ArtifactType
-) -> tuple[GroundTruthRef, ArtifactType] | None:
-    """GT dont le type natif **alimente** ``reference_type`` (direct ou projeté)."""
-    direct = document.gt_for(reference_type)
-    if direct is not None:
-        return direct, reference_type
-    for gt in document.ground_truths:
-        spec = view.projection_for(gt.type)
-        if spec is not None and spec.target_type == reference_type:
-            return gt, gt.type
-    return None
-
-
-def _project_side(
-    uri: str,
-    native_type: ArtifactType,
-    target_type: ArtifactType,
-    view: EvaluationView,
-) -> object | None:
-    """Charge ``uri`` dans son type natif, projette vers ``target_type`` si besoin.
-
-    Identité si types égaux ou tous deux *text-like* (même représentation ``str``).
-    Sinon une ``ProjectionSpec`` de la vue doit pont(er) ``native → target`` ; à
-    défaut, ``None`` (jonction non applicable, pas de comparaison factice).
-    """
-    representation = load_representation(uri, native_type)
-    if native_type == target_type or (
-        native_type in _TEXT_LIKE and target_type in _TEXT_LIKE
-    ):
-        return representation
-    spec = view.projection_for(native_type)
-    if spec is None or spec.target_type != target_type:
-        return None
-    return get_projector(spec.projector_name)(representation, spec.params)
-
-
 def _scored_steps(
     view: EvaluationView, pipeline_outputs: PipelineOutputs
 ) -> dict[str, dict[str, tuple[str, Mapping[ArtifactType, Artifact]]]]:
@@ -586,13 +426,6 @@ def _scored_steps(
             if scored is not None:
                 out.setdefault(pipeline, {})[document_id] = scored[:2]
     return out
-
-
-def _prepare(representation: object, view: EvaluationView) -> object:
-    """Applique la normalisation de la vue (profil + ``char_exclude``) au texte."""
-    if not isinstance(representation, str):
-        return representation
-    return prepare_text(representation, view)
 
 
 __all__ = ["PipelineOutputs", "evaluate_run"]

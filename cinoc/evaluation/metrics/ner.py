@@ -3,9 +3,10 @@
 Jonction ``(ENTITIES, ENTITIES)`` que le registre type-driven accepte sans
 modification. Le calcul (appariement IoU + **reprojection R14** des spans
 hypothèse en coordonnées GT) vit dans ``evaluation.ner`` ; ici on n'expose que
-le F1 global comme ``Observation`` (poids = nombre d'entités GT → micro-agrégat
-au niveau corpus). ``None`` si la GT du document ne porte aucune entité (non
-applicable — jamais un faux zéro).
+les comptes ``(tp, fp, fn)`` du document (``MatchCounts``) : au corpus, le F1
+est ``F1(Σtp, Σfp, Σfn)`` (M3). Un document dont la GT ne porte aucune entité
+contribue ses faux positifs ; son F1 vaut 0 s'il en invente, il est indéfini
+(dénominateur nul) s'il n'invente rien.
 
 ``ner_f1_exact`` (D-288) : même appariement, mais un apparié ne compte juste
 que si sa forme écrite est celle de la GT ; sinon il est à la fois manqué et
@@ -17,10 +18,12 @@ from __future__ import annotations
 
 from cinoc.domain.artifacts import ArtifactType
 from cinoc.domain.evaluation import MetricCategory, MetricUnit
+from cinoc.evaluation import statistics as st
 from cinoc.evaluation.context import DocContext
 from cinoc.evaluation.errors import EvaluationError
-from cinoc.evaluation.metric import DocumentMetric, Observation, document_metric
-from cinoc.evaluation.ner import EntitySet, compute_ner, prf
+from cinoc.evaluation.metric import DocumentMetric, document_metric
+from cinoc.evaluation.ner import EntitySet, compute_ner
+from cinoc.evaluation.statistics import MatchCounts
 
 
 def _entity_pair(ctx: DocContext) -> tuple[EntitySet, EntitySet]:
@@ -35,6 +38,7 @@ def _entity_pair(ctx: DocContext) -> tuple[EntitySet, EntitySet]:
 
 @document_metric(
     name="ner_f1",
+    finalize=st.f1,
     input_types=(ArtifactType.ENTITIES, ArtifactType.ENTITIES),
     category=MetricCategory.ADAPTED,
     unit=MetricUnit.ENTITY,
@@ -45,17 +49,15 @@ def _entity_pair(ctx: DocContext) -> tuple[EntitySet, EntitySet]:
     higher_is_better=True,
     tags=frozenset({"ner", "downstream", "entities"}),
 )
-def ner_f1(ctx: DocContext) -> Observation | None:
+def ner_f1(ctx: DocContext) -> MatchCounts:
     reference, hypothesis = _entity_pair(ctx)
-    if not reference.entities:
-        return None  # GT sans entité → non applicable
     counts = compute_ner(reference, hypothesis)
-    _precision, _recall, f1 = prf(counts.tp, counts.fp, counts.fn)
-    return Observation(value=f1, weight=len(reference.entities))
+    return MatchCounts(tp=counts.tp, fp=counts.fp, fn=counts.fn)
 
 
 @document_metric(
     name="ner_f1_exact",
+    finalize=st.f1,
     input_types=(ArtifactType.ENTITIES, ArtifactType.ENTITIES),
     category=MetricCategory.ADAPTED,
     unit=MetricUnit.ENTITY,
@@ -66,16 +68,11 @@ def ner_f1(ctx: DocContext) -> Observation | None:
     higher_is_better=True,
     tags=frozenset({"ner", "downstream", "entities"}),
 )
-def ner_f1_exact(ctx: DocContext) -> Observation | None:
+def ner_f1_exact(ctx: DocContext) -> MatchCounts:
     reference, hypothesis = _entity_pair(ctx)
-    if not reference.entities:
-        return None
     counts = compute_ner(reference, hypothesis)
     wrong = counts.tp - counts.tp_exact
-    _precision, _recall, f1 = prf(
-        counts.tp_exact, counts.fp + wrong, counts.fn + wrong
-    )
-    return Observation(value=f1, weight=len(reference.entities))
+    return MatchCounts(tp=counts.tp_exact, fp=counts.fp + wrong, fn=counts.fn + wrong)
 
 
 #: Socle NER, collecté explicitement par le registre.

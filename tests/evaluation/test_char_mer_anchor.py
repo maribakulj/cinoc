@@ -6,8 +6,10 @@ et ``correction._cmer``). La Phase 3.1 les a fusionnés dans une seule primitive
 ``char_mer`` sur des cas dérivés à la main, et (2) que ``conformity.cmer`` **délègue**
 bien à cette primitive — toute ré-introduction d'un calcul jumeau divergent casse.
 
-Convention (SPEC_HIPE §4.1) : ``value = (S+D+I) / (len(ref) + I)`` ; dénominateur
-``H+S+D+I`` = ``weight`` ; deux textes vides → ``0.0``.
+Convention (SPEC_HIPE §4.1) : ``value = (S+D+I) / (len(ref) + I)`` sur les
+comptes **canoniques** (P1) ; dénominateur ``H+S+D+I`` = ``n_réf + I`` de la
+statistique ; deux textes vides → ``0.0`` pour la primitive (analyse de
+correction), scalaire indéfini pour la métrique (K1, dénominateur nul).
 """
 
 from __future__ import annotations
@@ -44,11 +46,20 @@ def test_char_mer_pinned(
 def test_conformity_cmer_delegates_to_char_mer(
     ref: str, hyp: str, value: float, denom: int, edits: int
 ) -> None:
-    """La métrique de socle ``cmer`` produit exactement ``char_mer`` (valeur+poids)."""
+    """La métrique de socle ``cmer`` produit exactement ``char_mer`` (valeur +
+    dénominateur), sauf deux textes vides : indéfini pour la métrique."""
     observation = cmer.fn(DocContext(document_id="d", reference=ref, hypothesis=hyp))
-    primitive_value, _edits, primitive_denom = char_mer(ref, hyp)
+    assert observation is not None
+    primitive_value, primitive_edits, primitive_denom = char_mer(ref, hyp)
+    stat = observation.stat
+    assert (stat.edits, stat.reference_length + stat.insertions) == (
+        primitive_edits,
+        primitive_denom,
+    )
+    if primitive_denom == 0:
+        assert observation.value is None
+        return
     assert observation.value == pytest.approx(primitive_value)
-    assert observation.weight == primitive_denom
     # et ces valeurs sont bien les valeurs canoniques figées
     assert observation.value == pytest.approx(value)
-    assert observation.weight == denom
+    assert stat.reference_length + stat.insertions == denom

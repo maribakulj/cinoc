@@ -16,10 +16,12 @@ import unicodedata
 
 from cinoc.domain.artifacts import ArtifactType
 from cinoc.domain.evaluation import MetricCategory, MetricUnit
+from cinoc.evaluation import statistics as st
 from cinoc.evaluation.context import DocContext
 from cinoc.evaluation.errors import EvaluationError
-from cinoc.evaluation.metric import DocumentMetric, Observation, document_metric
+from cinoc.evaluation.metric import DocumentMetric, document_metric
 from cinoc.evaluation.preservation import preservation_counts
+from cinoc.evaluation.statistics import Proportion
 
 
 def _is_diacritic(char: str) -> bool:
@@ -34,6 +36,7 @@ def _is_diacritic(char: str) -> bool:
 
 @document_metric(
     name="diacritic_err",
+    finalize=st.proportion,
     input_types=(ArtifactType.RAW_TEXT, ArtifactType.RAW_TEXT),
     category=MetricCategory.EXPLORATORY,
     unit=MetricUnit.CHARACTER,
@@ -41,19 +44,16 @@ def _is_diacritic(char: str) -> bool:
     higher_is_better=False,
     tags=frozenset({"text", "philology", "alignment"}),
 )
-def diacritic_error(ctx: DocContext) -> Observation | None:
+def diacritic_error(ctx: DocContext) -> Proportion:
     """Parmi les caractères à diacritique de la **référence**, fraction mal
-    reconnue (substituée ou supprimée dans l'alignement). ``None`` si la référence
-    n'en contient aucun (non applicable) — le runner exclut ce cas de l'agrégat."""
+    reconnue (substituée ou supprimée dans l'alignement). Indéfini si la
+    référence n'en contient aucun (``zero_denominator``)."""
     if not isinstance(ctx.reference, str) or not isinstance(ctx.hypothesis, str):
         raise EvaluationError(
             "diacritic_err : reference et hypothesis doivent être du texte."
         )
     counts = preservation_counts(ctx.reference, ctx.hypothesis, _is_diacritic)
-    if counts is None:
-        return None
-    n_total, n_wrong = counts
-    return Observation(value=n_wrong / n_total, weight=n_total)
+    return Proportion(count=counts.wrong, total=counts.total)
 
 
 #: Métriques philologiques par alignement caractère (dépendent de ``rapidfuzz``).

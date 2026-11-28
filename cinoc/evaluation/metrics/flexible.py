@@ -37,9 +37,11 @@ from __future__ import annotations
 
 from cinoc.domain.artifacts import ArtifactType
 from cinoc.domain.evaluation import MetricCategory, MetricUnit
+from cinoc.evaluation import statistics as st
 from cinoc.evaluation.context import DocContext
 from cinoc.evaluation.errors import EvaluationError
-from cinoc.evaluation.metric import DocumentMetric, Observation, document_metric
+from cinoc.evaluation.metric import DocumentMetric, document_metric
+from cinoc.evaluation.statistics import ErrorCounts
 
 
 def _flexible_errors(gt_lines: list[str], ocr_lines: list[str]) -> int:
@@ -73,6 +75,7 @@ def _flexible_errors(gt_lines: list[str], ocr_lines: list[str]) -> int:
 
 @document_metric(
     name="fca",
+    finalize=st.accuracy,
     input_types=(ArtifactType.RAW_TEXT, ArtifactType.RAW_TEXT),
     category=MetricCategory.ADAPTED,
     unit=MetricUnit.CHARACTER,
@@ -84,17 +87,17 @@ def _flexible_errors(gt_lines: list[str], ocr_lines: list[str]) -> int:
     higher_is_better=True,
     tags=frozenset({"text", "accuracy", "reading_order"}),
 )
-def flexible_character_accuracy(ctx: DocContext) -> Observation:
+def flexible_character_accuracy(ctx: DocContext) -> ErrorCounts:
     if not isinstance(ctx.reference, str) or not isinstance(ctx.hypothesis, str):
         raise EvaluationError("fca : reference et hypothesis doivent être du texte.")
     gt_lines = [ln for ln in ctx.reference.splitlines() if ln.strip()]
     ocr_lines = [ln for ln in ctx.hypothesis.splitlines() if ln.strip()]
-    total = sum(len(ln) for ln in gt_lines)
-    if total == 0:
-        # Réf. vide : exact ssi l'hypothèse l'est aussi ; poids 0 → exclue du micro.
-        return Observation(value=1.0 if not ocr_lines else 0.0, weight=0)
-    errors = _flexible_errors(gt_lines, ocr_lines)
-    return Observation(value=max(0.0, 1.0 - errors / total), weight=total)
+    # Réf. vide : le scalaire est indéfini, mais les lignes inventées restent
+    # des erreurs (insertions) qui entrent au corpus (B1).
+    return ErrorCounts(
+        errors=_flexible_errors(gt_lines, ocr_lines),
+        reference_length=sum(len(ln) for ln in gt_lines),
+    )
 
 
 #: Socle « ordre de lecture libre », collecté explicitement par le registre.

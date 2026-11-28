@@ -98,7 +98,8 @@ def test_lines_without_an_id_are_ignored() -> None:
         )
     )
     assert line_identity_cer.fn(_ctx(reference, reference)).value == 0.0
-    assert line_identity_cer.fn(_ctx(reference, reference)).weight == 2  # "ok"
+    stat = line_identity_cer.fn(_ctx(reference, reference)).stat
+    assert stat.reference_length == 2  # "ok"
 
 
 def test_a_layout_without_lines_is_not_applicable() -> None:

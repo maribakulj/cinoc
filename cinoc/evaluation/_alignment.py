@@ -31,13 +31,21 @@ Deux départages en découlent, chacun pour ses consommateurs :
 Les confusions de caractères lisent l'alignement caractère du CER
 (:func:`char_substitutions`) : au caractère, rien n'est réapparié.
 
-La forme du char-MER (comptes S/D/I, dénominateur ``H+S+D+I`` borné) est figée
-par ``tests/evaluation/test_char_mer_anchor``.
+**Comptes canoniques (K1, P1).** Les *métriques* ne lisent pas les comptes de
+ce chemin : elles lisent :func:`canonical_counts`, les (S, D, I) de
+l'alignement de coût minimal qui maximise S — des comptes, sans chemin. Sur
+des ex æquo (« ab »/« ba » : (2, 0, 0) canonique, (0, 1, 1) ici), les analyses
+qui nomment les éditions peuvent donc répartir S, D et I autrement que la
+statistique de la métrique voisine ; jamais leur somme, la distance.
+
+La forme du char-MER (comptes S/D/I canoniques, dénominateur ``H+S+D+I``
+borné) est figée par ``tests/evaluation/test_char_mer_anchor``.
 """
 
 from __future__ import annotations
 
 from collections.abc import Hashable, Iterator, Sequence
+from functools import lru_cache
 
 from rapidfuzz.distance import Levenshtein, Opcode
 
@@ -227,14 +235,62 @@ def char_counts(reference: str, hypothesis: str) -> tuple[int, int, int]:
     return substitutions, deletions, insertions
 
 
+@lru_cache(maxsize=32)
+def _canonical(
+    reference: tuple[int, ...] | str, hypothesis: tuple[int, ...] | str
+) -> tuple[int, int, int]:
+    d = int(Levenshtein.distance(reference, hypothesis))
+    delta = len(hypothesis) - len(reference)
+    # S = d − 2·min(D, I) − |Δ| : max S ⇔ min(D, I) minimal. Si l'alignement
+    # de rapidfuzz a déjà min(D, I) = 0, il est canonique — la passe pondérée
+    # (quadratique) n'est faite que s'il peut exister mieux.
+    first_d = sum(
+        1 for op in Levenshtein.editops(reference, hypothesis) if op.tag == "delete"
+    )
+    if min(first_d, first_d + delta) > 0:
+        k = len(reference) + len(hypothesis) + 1
+        weighted = int(
+            Levenshtein.distance(reference, hypothesis, weights=(k, k, k - 1))
+        )
+        substitutions = k * d - weighted
+    else:
+        substitutions = d - abs(delta)
+    deletions = (d - substitutions - delta) // 2
+    return substitutions, deletions, deletions + delta
+
+
+def canonical_counts(
+    reference: Sequence[Hashable], hypothesis: Sequence[Hashable]
+) -> tuple[int, int, int]:
+    """(S, D, I) **canoniques** (P1, ``CONTRATS.md`` § 2.1 a) : parmi les
+    alignements de coût minimal, celui qui maximise S.
+
+    S + D + I = d et I − D = |h| − |r| ; maximiser S fixe donc les trois
+    comptes. Avec K = |r| + |h| + 1, la distance pondérée W (insertion K,
+    suppression K, substitution K − 1) vaut K·d − S_max : S = K·d − W. Vaut
+    pour les caractères (chaînes) et les mots (listes, codées en entiers par
+    ordre d'apparition). Ce sont des **comptes**, pas un chemin : les analyses
+    qui nomment les éditions (confusions, taxonomie, diff) suivent
+    l'alignement de :func:`opcodes`, dont D et I peuvent différer sur les ex
+    æquo — jamais S + D + I.
+    """
+    if isinstance(reference, str) and isinstance(hypothesis, str):
+        return _canonical(reference, hypothesis)
+    ref, hyp = _codes(reference, hypothesis)
+    return _canonical(tuple(ref), tuple(hyp))
+
+
 def char_mer(reference: str, hypothesis: str) -> tuple[float, int, int]:
     """``(cmer, edits, dénominateur)`` — Match Error Rate caractère (SPEC_HIPE §4.1).
 
-    ``cmer = (S+D+I) / (H+S+D+I)``, borné ``[0, 1]`` ; dénominateur
-    ``H+S+D+I = len(reference) + insertions`` (l'alignement complet de la
-    référence donne ``H+S+D = len(reference)``). Deux textes vides → ``(0.0, 0, 0)``.
+    ``cmer = (S+D+I) / (H+S+D+I)``, borné ``[0, 1]``, sur les comptes
+    **canoniques** (:func:`canonical_counts`, ceux de la métrique ``cmer``) ;
+    dénominateur ``H+S+D+I = len(reference) + insertions`` (l'alignement
+    complet de la référence donne ``H+S+D = len(reference)``). Deux textes
+    vides → ``(0.0, 0, 0)`` (l'analyse de correction ; la métrique, elle, dit
+    « indéfini »).
     """
-    substitutions, deletions, insertions = char_counts(reference, hypothesis)
+    substitutions, deletions, insertions = canonical_counts(reference, hypothesis)
     total = len(reference) + insertions
     edits = substitutions + deletions + insertions
     return (edits / total if total else 0.0), edits, total
@@ -242,6 +298,7 @@ def char_mer(reference: str, hypothesis: str) -> tuple[float, int, int]:
 
 __all__ = [
     "Pair",
+    "canonical_counts",
     "aligned_to_reference",
     "alignment",
     "char_counts",

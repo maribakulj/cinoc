@@ -23,6 +23,7 @@ from cinoc.evaluation.economics import (
     pareto_front,
 )
 from cinoc.evaluation.result import DocumentUsage, MetricScore
+from cinoc.evaluation.statistics import EditCounts
 
 FIXED = datetime(2026, 6, 1, tzinfo=UTC)
 
@@ -115,15 +116,20 @@ def _usage() -> tuple[DocumentUsage, ...]:
 def _series() -> dict[str, list[MetricScore]]:
     # ocr_seul : CER 0.10 sur 1000 chars + 0.20 sur 500 → 200 erreurs.
     # ocr_llm  : CER 0.05 sur 1000 + 0.10 sur 500 → 100 erreurs.
+    # Les erreurs se lisent dans la statistique du CER (K1), plus dans un poids.
+    def score(errors: int, length: int) -> MetricScore:
+        return MetricScore(
+            metric="cer",
+            value=errors / length,
+            stat=EditCounts(
+                substitutions=errors, deletions=0, insertions=0,
+                reference_length=length,
+            ),
+        )
+
     return {
-        "ocr_seul": [
-            MetricScore(metric="cer", value=0.10, support=1000),
-            MetricScore(metric="cer", value=0.20, support=500),
-        ],
-        "ocr_llm": [
-            MetricScore(metric="cer", value=0.05, support=1000),
-            MetricScore(metric="cer", value=0.10, support=500),
-        ],
+        "ocr_seul": [score(100, 1000), score(100, 500)],
+        "ocr_llm": [score(50, 1000), score(50, 500)],
     }
 
 

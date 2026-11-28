@@ -11,14 +11,15 @@ import pytest
 from cinoc.evaluation.archaic import (
     ARCHAIC_LISTS,
     DEFAULT_ARCHAIC_LIST,
-    air_observation,
+    air_statistic,
     archaic_list_hash,
-    hcpr_observation,
+    hcpr_statistic,
     resolve_archaic_list,
 )
 from cinoc.evaluation.context import DocContext
 from cinoc.evaluation.errors import EvaluationError
 from cinoc.evaluation.metrics.archaic import make_air_metric, make_hcpr_metric
+from cinoc.evaluation.statistics import Proportion
 
 _CHARS = resolve_archaic_list(DEFAULT_ARCHAIC_LIST).chars
 _LONG_S = "ſ"
@@ -35,48 +36,49 @@ def _ctx(reference: str, hypothesis: str) -> DocContext:
 
 def test_air_inserted_long_s() -> None:
     # GT « messe » écrit en clair, sortie « meſſe » → 2 ſ insérés sur 2 → 1.0.
-    obs = air_observation("messe", f"me{_LONG_S}{_LONG_S}e", _CHARS)
-    assert obs is not None and obs.value == 1.0 and obs.weight == 2
+    obs = air_statistic("messe", f"me{_LONG_S}{_LONG_S}e", _CHARS)
+    assert (obs.count, obs.total) == (2, 2)
 
 
 def test_air_faithful_archaism_is_not_added() -> None:
     # La GT porte déjà les ſ, la sortie les recopie → apport net nul.
-    obs = air_observation(f"me{_LONG_S}{_LONG_S}e", f"me{_LONG_S}{_LONG_S}e", _CHARS)
-    assert obs is not None and obs.value == 0.0 and obs.weight == 2
+    obs = air_statistic(f"me{_LONG_S}{_LONG_S}e", f"me{_LONG_S}{_LONG_S}e", _CHARS)
+    assert (obs.count, obs.total) == (0, 2)
 
 
 def test_air_none_when_output_has_no_archaic() -> None:
-    assert air_observation("messe", "messe", _CHARS) is None
+    # Aucun archaïsme produit : proportion indéfinie (0/0), pas 0.
+    assert air_statistic("messe", "messe", _CHARS) == Proportion(count=0, total=0)
 
 
 def test_air_combining_mark_inserted() -> None:
     # marque suscrite ◌ͤ ajoutée (aͤ) là où la GT a « a » nu.
-    obs = air_observation("a", f"a{_E_ABOVE}", _CHARS)
-    assert obs is not None and obs.value == 1.0 and obs.weight == 1
+    obs = air_statistic("a", f"a{_E_ABOVE}", _CHARS)
+    assert (obs.count, obs.total) == (1, 1)
 
 
 # --- hcpr : préservation ----------------------------------------------------
 
 
 def test_hcpr_all_lost() -> None:
-    obs = hcpr_observation(f"me{_LONG_S}{_LONG_S}e", "messe", _CHARS)
-    assert obs is not None and obs.value == 0.0 and obs.weight == 2
+    obs = hcpr_statistic(f"me{_LONG_S}{_LONG_S}e", "messe", _CHARS)
+    assert (obs.count, obs.total) == (0, 2)
 
 
 def test_hcpr_all_preserved() -> None:
     ref = f"me{_LONG_S}{_LONG_S}e"
-    obs = hcpr_observation(ref, ref, _CHARS)
-    assert obs is not None and obs.value == 1.0 and obs.weight == 2
+    obs = hcpr_statistic(ref, ref, _CHARS)
+    assert (obs.count, obs.total) == (2, 2)
 
 
 def test_hcpr_partial() -> None:
     # ſ perdu, þ conservé → 1 préservé sur 2.
-    obs = hcpr_observation(f"{_LONG_S}a{_THORN}", f"sa{_THORN}", _CHARS)
-    assert obs is not None and obs.value == 0.5 and obs.weight == 2
+    obs = hcpr_statistic(f"{_LONG_S}a{_THORN}", f"sa{_THORN}", _CHARS)
+    assert (obs.count, obs.total) == (1, 2)
 
 
 def test_hcpr_none_when_gt_has_no_archaic() -> None:
-    assert hcpr_observation("messe", "messe", _CHARS) is None
+    assert hcpr_statistic("messe", "messe", _CHARS) == Proportion(count=0, total=0)
 
 
 # --- listes nommées + empreinte (reproductibilité) --------------------------

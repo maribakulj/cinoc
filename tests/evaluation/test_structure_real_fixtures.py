@@ -130,7 +130,7 @@ def test_localized_marginalia_error_is_attributable() -> None:
     # 1 erreur sur 53 caractères de page (corps 49 + marginalia 4) : minuscule au
     # global, mais entièrement localisée dans une région de 4 caractères.
     assert score.value == pytest.approx(1 / 53)
-    assert score.weight == 53
+    assert (score.stat.errors, score.stat.reference_length) == (1, 53)
 
 
 def test_dropped_marginalia_region_is_penalized() -> None:

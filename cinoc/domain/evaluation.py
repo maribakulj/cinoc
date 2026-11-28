@@ -62,9 +62,10 @@ class MetricCategory(StrEnum):
 
 
 class MetricUnit(StrEnum):
-    """Ce que dénombre le **poids** d'une métrique — le dénominateur de son
-    agrégat micro (D-016) : un CER compte des caractères de référence, un WER
-    des mots. C'est l'unité que la fiche du glossaire doit nommer."""
+    """Ce que dénombre la **statistique** d'une métrique — le dénominateur de
+    son agrégat micro (D-016, D-313) : un CER compte des caractères de
+    référence, un WER des mots, un F1 d'entités des entités. C'est l'unité que
+    la fiche du glossaire doit nommer."""
 
     CHARACTER = "character"
     WORD = "word"
@@ -95,7 +96,7 @@ class MetricSpec(BaseModel):
         :class:`MetricCategory` — **requise** : une métrique sans catégorie
         n'est pas enregistrable (D-289).
     unit:
-        :class:`MetricUnit` — **requise** : ce que compte le poids.
+        :class:`MetricUnit` — **requise** : ce que compte la statistique.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -221,7 +222,7 @@ class EvaluationView(BaseModel):
 
 
 #: Ce que devient une unité en échec dans les agrégats (cf. ``EvaluationSpec``).
-FailurePolicy = Literal["exclude", "max_error"]
+FailurePolicy = Literal["exclude", "empty_page"]
 
 
 class EvaluationSpec(BaseModel):
@@ -258,10 +259,14 @@ class EvaluationSpec(BaseModel):
     ``failure_policy`` dit ce que devient une unité **en échec** (aucune sortie)
     dans les agrégats. ``"exclude"`` (défaut) : elle sort de la moyenne, et
     chaque agrégat porte « n notés / n attendus » pour le montrer.
-    ``"max_error"`` : elle est notée à l'erreur maximale — 1 pour un taux
-    d'erreur, 0 pour un score —, pondérée par sa référence, comme une page
-    rendue vide. Ni l'une ni l'autre ne touche aux cas « vérité terrain absente »
-    ou « métrique inapplicable », qui restent non notés (``None``).
+    ``"empty_page"`` (sensibilité) : elle est notée **comme une page vide** —
+    la statistique de sa référence face à une sortie vide, sous ce nom (un CER
+    de 1, une exactitude de 0, un taux d'insertion de 0 : toute la référence
+    est en suppressions). Elle remplace ``max_error``, retiré avec la
+    statistique suffisante (D-313) : « la pire valeur de l'échelle » selon le
+    signe de la métrique n'est la statistique d'aucune sortie. Ni l'une ni
+    l'autre ne touche aux cas « vérité terrain absente » ou « métrique
+    inapplicable », qui restent non notés.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")

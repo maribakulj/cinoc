@@ -197,7 +197,8 @@ def test_end_to_end_region_cer(tmp_path: Path) -> None:
     assert aggregate.support == 1
     doc_score = result.documents[0].scores[0]  # type: ignore[attr-defined]
     assert doc_score.value == pytest.approx(1 / 23)
-    assert doc_score.support == 23  # Σ caractères de référence (11 + 12)
+    # Σ caractères de référence (11 + 12), dans la statistique (K1).
+    assert doc_score.stat.reference_length == 23
     # C7 : la colonne de la métrique de structure apparaît sans rendu modifié.
     html = default_report_renderer().render(result)  # type: ignore[arg-type]
     assert "region_cer" in html

@@ -1,4 +1,11 @@
-"""Métriques de l'axe texte : CER, WER, MER.
+"""Métriques de l'axe texte : CER, WER, MER, taux d'insertion et de suppression,
+exactitudes.
+
+Chaque métrique rend sa **statistique suffisante** (``evaluation.statistics``) :
+les comptes (S, D, I, n_réf) **canoniques** — parmi les alignements de coût
+minimal, celui qui maximise S (P1) — pour les taux d'édition et le MER,
+(erreurs, n_réf) pour les exactitudes. La valeur d'un document et celle du
+corpus sont la même finalisation de ces comptes (K1).
 
 Implémentations **déterministes** (journal D-007), déléguées à ``rapidfuzz``
 pour les deux noyaux coûteux — distance et alignement. Ce n'est pas une nouvelle
@@ -13,23 +20,25 @@ inutilisable sur une page entière (11 s et ~420 Mo de matrice Python).
 ``jiwer`` sert d'**oracle de parité** (tests, dépendance *dev*) — jamais importé
 par le code de production. Cas dégénérés (référence vide) explicites.
 
-``jiwer`` reste l'oracle de parité des tests, et les valeurs n'ont pas bougé :
-les deux noyaux calculent la **même** distance de Levenshtein exacte.
+S + D + I est la distance de Levenshtein exacte : CER et WER restent ceux de
+jiwer (au corpus, dès que Σ n_réf > 0). Le départage canonique des ex æquo
+écarte en revanche D et I (donc ``ins_rate``, ``del_rate`` et le MER) de
+jiwer et de ``rapidfuzz.editops`` — écart **voulu** (M1).
 """
 
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass
 
 from rapidfuzz.distance import Levenshtein
 
 from cinoc.domain.artifacts import ArtifactType
 from cinoc.domain.evaluation import MetricCategory, MetricUnit
-from cinoc.evaluation._alignment import opcodes
+from cinoc.evaluation import statistics as st
 from cinoc.evaluation.context import DocContext
 from cinoc.evaluation.errors import EvaluationError
-from cinoc.evaluation.metric import DocumentMetric, Observation, document_metric
+from cinoc.evaluation.metric import DocumentMetric, document_metric
+from cinoc.evaluation.statistics import EditCounts, ErrorCounts, canonical_edit_counts
 from cinoc.formats.text import get_builtin_profile
 
 #: Repli diplomatique minimal (NFC + ſ long → s), appliqué symétriquement par
@@ -66,58 +75,6 @@ def _edit_distance(
     return int(Levenshtein.distance(list(reference), list(hypothesis)))
 
 
-@dataclass(frozen=True)
-class _Alignment:
-    """Décompte d'un alignement optimal : correspondances + erreurs typées."""
-
-    hits: int
-    substitutions: int
-    deletions: int
-    insertions: int
-
-    @property
-    def edits(self) -> int:
-        return self.substitutions + self.deletions + self.insertions
-
-
-def _align(reference: Sequence[object], hypothesis: Sequence[object]) -> _Alignment:
-    """Décompte d'un alignement optimal — correspondances et erreurs typées.
-
-    **Pourquoi ce n'est plus une matrice.** La version précédente allouait
-    ``(n+1)×(m+1)`` listes Python et les parcourait deux fois. Sur une page de
-    presse — 7 246 mots de chaque côté — cela fait 53 millions de cases, soit
-    ~420 Mo de pointeurs et 11 s **par appel**. Or ``mer``, ``del_rate`` et
-    ``ins_rate`` l'appellent chacun : trois fois cela par document. Ces trois
-    métriques étaient donc inutilisables sur le corpus même qu'elles visent, et
-    le disaient par une lenteur, jamais par un message.
-
-    ``rapidfuzz`` rend directement le script d'édition, d'où se comptent les
-    quatre catégories. Même alignement optimal, mêmes nombres, mémoire linéaire.
-    C'est l'alignement partagé (``evaluation._alignment.opcodes``) : la
-    taxonomie y lit les mêmes D et I (D-286).
-    """
-    hits = subs = dels = ins = 0
-    for operation in opcodes(list(reference), list(hypothesis)):
-        longueur_ref = operation.src_end - operation.src_start
-        longueur_hyp = operation.dest_end - operation.dest_start
-        if operation.tag == "equal":
-            hits += longueur_ref
-        elif operation.tag == "replace":
-            subs += longueur_ref
-        elif operation.tag == "delete":
-            dels += longueur_ref
-        else:  # "insert"
-            ins += longueur_hyp
-    return _Alignment(hits=hits, substitutions=subs, deletions=dels, insertions=ins)
-
-
-def _error_rate(edits: int, reference_length: int) -> float:
-    """``edits / reference_length`` ; référence vide → 0.0 si exact, sinon 1.0."""
-    if reference_length == 0:
-        return 0.0 if edits == 0 else 1.0
-    return edits / reference_length
-
-
 def _text_pair(ctx: DocContext) -> tuple[str, str]:
     if not isinstance(ctx.reference, str) or not isinstance(ctx.hypothesis, str):
         raise EvaluationError(
@@ -126,8 +83,16 @@ def _text_pair(ctx: DocContext) -> tuple[str, str]:
     return ctx.reference, ctx.hypothesis
 
 
+def _word_counts(ctx: DocContext) -> EditCounts:
+    """(S, D, I, n_réf) canoniques au mot — WER, MER, ``ins_rate``, ``del_rate``."""
+    reference, hypothesis = _text_pair(ctx)
+    return canonical_edit_counts(reference.split(), hypothesis.split())
+
+
 @document_metric(
     name="cer",
+    finalize=st.edit_rate,
+    terms=st.edit_terms,
     input_types=(ArtifactType.RAW_TEXT, ArtifactType.RAW_TEXT),
     category=MetricCategory.ESTABLISHED,
     unit=MetricUnit.CHARACTER,
@@ -135,16 +100,14 @@ def _text_pair(ctx: DocContext) -> tuple[str, str]:
     higher_is_better=False,
     tags=frozenset({"text", "edit_distance"}),
 )
-def cer(ctx: DocContext) -> Observation:
+def cer(ctx: DocContext) -> EditCounts:
     reference, hypothesis = _text_pair(ctx)
-    edits = _edit_distance(reference, hypothesis)
-    return Observation(
-        value=_error_rate(edits, len(reference)), weight=len(reference)
-    )
+    return canonical_edit_counts(reference, hypothesis)
 
 
 @document_metric(
     name="cer_diplo",
+    finalize=st.edit_rate,
     input_types=(ArtifactType.RAW_TEXT, ArtifactType.RAW_TEXT),
     category=MetricCategory.ADAPTED,
     unit=MetricUnit.CHARACTER,
@@ -152,16 +115,17 @@ def cer(ctx: DocContext) -> Observation:
     higher_is_better=False,
     tags=frozenset({"text", "edit_distance", "philology"}),
 )
-def cer_diplomatic(ctx: DocContext) -> Observation:
+def cer_diplomatic(ctx: DocContext) -> EditCounts:
     reference, hypothesis = _text_pair(ctx)
-    ref = _DIPLOMATIC.normalize(reference)
-    hyp = _DIPLOMATIC.normalize(hypothesis)
-    edits = _edit_distance(ref, hyp)
-    return Observation(value=_error_rate(edits, len(ref)), weight=len(ref))
+    return canonical_edit_counts(
+        _DIPLOMATIC.normalize(reference), _DIPLOMATIC.normalize(hypothesis)
+    )
 
 
 @document_metric(
     name="wer",
+    finalize=st.edit_rate,
+    terms=st.edit_terms,
     input_types=(ArtifactType.RAW_TEXT, ArtifactType.RAW_TEXT),
     category=MetricCategory.ESTABLISHED,
     unit=MetricUnit.WORD,
@@ -169,17 +133,13 @@ def cer_diplomatic(ctx: DocContext) -> Observation:
     higher_is_better=False,
     tags=frozenset({"text", "edit_distance", "word"}),
 )
-def wer(ctx: DocContext) -> Observation:
-    reference, hypothesis = _text_pair(ctx)
-    ref_words, hyp_words = reference.split(), hypothesis.split()
-    edits = _edit_distance(ref_words, hyp_words)
-    return Observation(
-        value=_error_rate(edits, len(ref_words)), weight=len(ref_words)
-    )
+def wer(ctx: DocContext) -> EditCounts:
+    return _word_counts(ctx)
 
 
 @document_metric(
     name="mer",
+    finalize=st.match_error_rate,
     input_types=(ArtifactType.RAW_TEXT, ArtifactType.RAW_TEXT),
     category=MetricCategory.ESTABLISHED,
     unit=MetricUnit.WORD,
@@ -187,17 +147,13 @@ def wer(ctx: DocContext) -> Observation:
     higher_is_better=False,
     tags=frozenset({"text", "edit_distance", "word"}),
 )
-def mer(ctx: DocContext) -> Observation:
-    reference, hypothesis = _text_pair(ctx)
-    alignment = _align(reference.split(), hypothesis.split())
-    total = alignment.hits + alignment.edits
-    return Observation(
-        value=alignment.edits / total if total else 0.0, weight=total
-    )
+def mer(ctx: DocContext) -> EditCounts:
+    return _word_counts(ctx)
 
 
 @document_metric(
     name="del_rate",
+    finalize=st.deletion_rate,
     input_types=(ArtifactType.RAW_TEXT, ArtifactType.RAW_TEXT),
     category=MetricCategory.ADAPTED,
     unit=MetricUnit.WORD,
@@ -205,18 +161,13 @@ def mer(ctx: DocContext) -> Observation:
     higher_is_better=False,
     tags=frozenset({"text", "word", "error_profile"}),
 )
-def deletion_rate(ctx: DocContext) -> Observation:
-    reference, hypothesis = _text_pair(ctx)
-    ref_words = reference.split()
-    alignment = _align(ref_words, hypothesis.split())
-    return Observation(
-        value=_error_rate(alignment.deletions, len(ref_words)),
-        weight=len(ref_words),
-    )
+def deletion_rate(ctx: DocContext) -> EditCounts:
+    return _word_counts(ctx)
 
 
 @document_metric(
     name="ins_rate",
+    finalize=st.insertion_rate,
     input_types=(ArtifactType.RAW_TEXT, ArtifactType.RAW_TEXT),
     category=MetricCategory.ADAPTED,
     unit=MetricUnit.WORD,
@@ -224,18 +175,13 @@ def deletion_rate(ctx: DocContext) -> Observation:
     higher_is_better=False,
     tags=frozenset({"text", "word", "error_profile"}),
 )
-def insertion_rate(ctx: DocContext) -> Observation:
-    reference, hypothesis = _text_pair(ctx)
-    ref_words = reference.split()
-    alignment = _align(ref_words, hypothesis.split())
-    return Observation(
-        value=_error_rate(alignment.insertions, len(ref_words)),
-        weight=len(ref_words),
-    )
+def insertion_rate(ctx: DocContext) -> EditCounts:
+    return _word_counts(ctx)
 
 
 @document_metric(
     name="char_accuracy",
+    finalize=st.accuracy,
     input_types=(ArtifactType.RAW_TEXT, ArtifactType.RAW_TEXT),
     category=MetricCategory.ADAPTED,
     unit=MetricUnit.CHARACTER,
@@ -243,16 +189,19 @@ def insertion_rate(ctx: DocContext) -> Observation:
     higher_is_better=True,
     tags=frozenset({"text", "edit_distance", "accuracy"}),
 )
-def char_accuracy(ctx: DocContext) -> Observation:
-    """``max(0, 1 − CER)`` ; poids = longueur de réf. → l'agrégat micro vaut
-    exactement ``1 − CER_micro`` (sauf plancher 0 quand un doc a CER > 1)."""
+def char_accuracy(ctx: DocContext) -> ErrorCounts:
+    """``max(0, 1 − e/n)`` sur (distance, longueur de réf.) : au corpus, le
+    plancher s'applique aux comptes cumulés — ``1 − CER_micro`` tant que le
+    CER du corpus ne dépasse pas 1 (B1)."""
     reference, hypothesis = _text_pair(ctx)
-    rate = _error_rate(_edit_distance(reference, hypothesis), len(reference))
-    return Observation(value=max(0.0, 1.0 - rate), weight=len(reference))
+    return ErrorCounts(
+        errors=_edit_distance(reference, hypothesis), reference_length=len(reference)
+    )
 
 
 @document_metric(
     name="word_accuracy",
+    finalize=st.accuracy,
     input_types=(ArtifactType.RAW_TEXT, ArtifactType.RAW_TEXT),
     category=MetricCategory.ADAPTED,
     unit=MetricUnit.WORD,
@@ -260,12 +209,13 @@ def char_accuracy(ctx: DocContext) -> Observation:
     higher_is_better=True,
     tags=frozenset({"text", "edit_distance", "word", "accuracy"}),
 )
-def word_accuracy(ctx: DocContext) -> Observation:
-    """``max(0, 1 − WER)`` ; poids = nb de mots de réf. (cf. ``char_accuracy``)."""
+def word_accuracy(ctx: DocContext) -> ErrorCounts:
+    """``max(0, 1 − e/n)`` au mot (cf. ``char_accuracy``)."""
     reference, hypothesis = _text_pair(ctx)
     ref_words, hyp_words = reference.split(), hypothesis.split()
-    rate = _error_rate(_edit_distance(ref_words, hyp_words), len(ref_words))
-    return Observation(value=max(0.0, 1.0 - rate), weight=len(ref_words))
+    return ErrorCounts(
+        errors=_edit_distance(ref_words, hyp_words), reference_length=len(ref_words)
+    )
 
 
 #: Socle de métriques texte, collecté explicitement par le registre.

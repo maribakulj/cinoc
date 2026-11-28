@@ -40,6 +40,7 @@ from cinoc.evaluation.analysis import (
     PipelineNer,
 )
 from cinoc.evaluation.errors import EvaluationError
+from cinoc.evaluation.statistics import MatchCounts, f1, precision, recall
 
 #: Seuil d'IoU pour qu'un appariement compte. Convention **de Cinoc** — ni
 #: celle de CoNLL (empans exacts), ni celles de HIPE (strict : empans exacts ;
@@ -262,18 +263,6 @@ def compute_ner(
     )
 
 
-def prf(tp: int, fp: int, fn: int) -> tuple[float, float, float]:
-    """Précision, rappel, F1 (chacun ``0.0`` si son dénominateur est nul)."""
-    precision = tp / (tp + fp) if tp + fp > 0 else 0.0
-    recall = tp / (tp + fn) if tp + fn > 0 else 0.0
-    f1 = (
-        2 * precision * recall / (precision + recall)
-        if precision + recall > 0
-        else 0.0
-    )
-    return precision, recall, f1
-
-
 @dataclass
 class _PipelineAccumulator:
     """Comptes NER cumulés d'un pipeline sur le corpus."""
@@ -328,15 +317,23 @@ class EntitiesCollector:
 
     def _row(self, pipeline: str) -> PipelineNer:
         acc = self._pipelines[pipeline]
-        precision, recall, f1 = prf(acc.tp, acc.fp, acc.fn)
+        total = MatchCounts(tp=acc.tp, fp=acc.fp, fn=acc.fn)
         categories = sorted(set(acc.cat_tp) | set(acc.cat_fp) | set(acc.cat_fn))
         per_category: list[EntityCategoryScore] = []
         for label in categories:
-            ctp, cfp, cfn = acc.cat_tp[label], acc.cat_fp[label], acc.cat_fn[label]
-            cp, cr, cf = prf(ctp, cfp, cfn)
+            # Une catégorie seulement prédite (support 0) : P = 0, R indéfini —
+            # le scalaire indéfini se dit ``None``, jamais un faux 0 ni une
+            # erreur (M3).
+            counts = MatchCounts(
+                tp=acc.cat_tp[label], fp=acc.cat_fp[label], fn=acc.cat_fn[label]
+            )
             per_category.append(
                 EntityCategoryScore(
-                    label=label, precision=cp, recall=cr, f1=cf, support=ctp + cfn
+                    label=label,
+                    precision=precision(counts).value,
+                    recall=recall(counts).value,
+                    f1=f1(counts).value,
+                    support=counts.tp + counts.fn,
                 )
             )
         return PipelineNer(
@@ -345,9 +342,11 @@ class EntitiesCollector:
             true_positives=acc.tp,
             false_positives=acc.fp,
             false_negatives=acc.fn,
-            precision=precision,
-            recall=recall,
-            f1=f1,
+            precision=precision(total).value,
+            # Une ligne n'existe qu'avec des entités GT (tp + fn ≥ 1) : rappel
+            # et F1 y sont toujours définis.
+            recall=acc.tp / (acc.tp + acc.fn),
+            f1=2 * acc.tp / (2 * acc.tp + acc.fp + acc.fn),
             per_category=tuple(per_category),
             missed=tuple(
                 EntityMention(label=e.label, text=e.text[:128]) for e in acc.missed
@@ -369,6 +368,5 @@ __all__ = [
     "build_position_map",
     "compute_ner",
     "parse_entities",
-    "prf",
     "remap_entities",
 ]

@@ -75,7 +75,7 @@ import pytest
 from cinoc.domain.artifacts import ArtifactType
 from cinoc.domain.evaluation import EvaluationView
 from cinoc.evaluation.context import DocContext
-from cinoc.evaluation.metrics.text import _edit_distance, _error_rate, cer, wer
+from cinoc.evaluation.metrics.text import _edit_distance, cer, wer
 from cinoc.evaluation.representations import prepare_text
 from cinoc.formats.text.normalization import NormalizationProfile
 
@@ -118,7 +118,11 @@ def _dh_layout(raw: str) -> str:
 
 
 def _ratio(reference: Sequence[str], hypothesis: Sequence[str]) -> float:
-    return _error_rate(_edit_distance(reference, hypothesis), len(reference))
+    """distance / |réf| ; les maillons de la chaîne ont tous une référence non
+    vide (le repli de l'ancien ``_error_rate`` sur une référence vide n'existe
+    plus : le CER y est indéfini, K1)."""
+    assert reference, "maillon à référence vide : CER indéfini"
+    return _edit_distance(reference, hypothesis) / len(reference)
 
 
 def _metric(fn: Callable[[DocContext], Any], reference: str, hypothesis: str) -> float:

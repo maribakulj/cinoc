@@ -18,15 +18,17 @@ from __future__ import annotations
 
 from cinoc.domain.artifacts import ArtifactType
 from cinoc.domain.evaluation import MetricCategory, MetricUnit
+from cinoc.evaluation import statistics as st
 from cinoc.evaluation.archaic import (
     DEFAULT_ARCHAIC_LIST,
-    air_observation,
-    hcpr_observation,
+    air_statistic,
+    hcpr_statistic,
     resolve_archaic_list,
 )
 from cinoc.evaluation.context import DocContext
 from cinoc.evaluation.errors import EvaluationError
-from cinoc.evaluation.metric import DocumentMetric, Observation, document_metric
+from cinoc.evaluation.metric import DocumentMetric, document_metric
+from cinoc.evaluation.statistics import Proportion
 
 
 def _text_pair(ctx: DocContext, name: str) -> tuple[str, str]:
@@ -42,6 +44,7 @@ def make_air_metric(chars: frozenset[str]) -> DocumentMetric:
 
     @document_metric(
         name="air",
+        finalize=st.proportion,
         input_types=(ArtifactType.RAW_TEXT, ArtifactType.RAW_TEXT),
         category=MetricCategory.EXPLORATORY,
         unit=MetricUnit.CHARACTER,
@@ -53,9 +56,9 @@ def make_air_metric(chars: frozenset[str]) -> DocumentMetric:
         higher_is_better=False,
         tags=frozenset({"text", "philology", "alignment", "archaic"}),
     )
-    def air(ctx: DocContext) -> Observation | None:
+    def air(ctx: DocContext) -> Proportion:
         reference, hypothesis = _text_pair(ctx, "air")
-        return air_observation(reference, hypothesis, chars)
+        return air_statistic(reference, hypothesis, chars)
 
     return air
 
@@ -65,6 +68,7 @@ def make_hcpr_metric(chars: frozenset[str]) -> DocumentMetric:
 
     @document_metric(
         name="hcpr",
+        finalize=st.proportion,
         input_types=(ArtifactType.RAW_TEXT, ArtifactType.RAW_TEXT),
         category=MetricCategory.EXPLORATORY,
         unit=MetricUnit.CHARACTER,
@@ -75,9 +79,9 @@ def make_hcpr_metric(chars: frozenset[str]) -> DocumentMetric:
         higher_is_better=True,
         tags=frozenset({"text", "philology", "alignment", "archaic"}),
     )
-    def hcpr(ctx: DocContext) -> Observation | None:
+    def hcpr(ctx: DocContext) -> Proportion:
         reference, hypothesis = _text_pair(ctx, "hcpr")
-        return hcpr_observation(reference, hypothesis, chars)
+        return hcpr_statistic(reference, hypothesis, chars)
 
     return hcpr
 

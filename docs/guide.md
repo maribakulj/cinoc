@@ -72,6 +72,19 @@ The families:
 
 > Levels that don't apply return **`None`**, never a misleading `0` — an absent measurement is reported as absent.
 
+#### How a corpus score is computed
+
+Every document observation carries the **counts** of its metric family — edits (S, D, I, reference length), errors and reference length, matches (true positives, false positives, missed), or a proportion (k of n) — and the value shown for an engine is the metric computed on the **summed counts**, never an average of per‑document values:
+
+- **CER / WER** = Σ (S + D + I) / Σ reference length. A page whose reference is empty has no CER of its own (*undefined*), but its insertions do count in the corpus CER.
+- **F1** (entities, regions, bag of words) = F1 of (Σ tp, Σ fp, Σ fn) — a document without reference entities still brings its false positives.
+- **Accuracies** = max(0, 1 − Σ errors / Σ length): the floor at 0 applies to the corpus, and when it is reached the report writes the untruncated error rate and the counts beside the 0.
+- The run JSON (`RunResult`, schema 6) stores these counts for every observation (`stat`), and the CSV export has them in its `statistic` column.
+
+**Alignment convention (S, D, I).** Several minimum‑cost alignments can exist (*ab* → *ba*: two substitutions, or one deletion and one insertion). Cinoc always keeps the one that **maximises substitutions**; this fixes S, D and I. The total S + D + I — hence CER and WER — is the same for every minimum‑cost alignment, so CER and WER equal jiwer's. The split is not: jiwer keeps the alignment its back‑trace finds first, so **`ins_rate`, `del_rate`, MER and cMER can differ from jiwer on such ties** (*a b* → *b a*: MER 1.0 in Cinoc, 0.667 in jiwer). Cinoc's choice does not depend on a library's traversal order, which is what makes the counts reproducible. (The highlighted diffs and confusion lists still follow the library's alignment: same total, possibly another split on ties.)
+
+**Exact arithmetic.** Counts are integers; the only fractional input summed in a statistic is a token confidence (calibration), read as the exact value of its IEEE‑754 double. Each published number is converted to a float **once**, rounded to nearest.
+
 ---
 
 ## Invariants

@@ -30,7 +30,7 @@ def test_one_substitution_counts_once() -> None:
     gt = "alpha\nbeta\ngamma"  # 5 + 4 + 5 = 14 caractères de réf.
     ocr = "alpha\nbxta\ngamma"  # une substitution dans 'beta'
     obs = fca.fn(_ctx(gt, ocr))
-    assert obs.weight == 14
+    assert (obs.stat.errors, obs.stat.reference_length) == (1, 14)
     assert obs.value == pytest.approx(1 - 1 / 14)
 
 
@@ -50,9 +50,12 @@ def test_missing_line_is_deletion() -> None:
 
 
 def test_empty_reference() -> None:
-    assert fca.fn(_ctx("", "")).value == 1.0
-    assert fca.fn(_ctx("", "x")).value == 0.0
-    assert fca.fn(_ctx("", "x")).weight == 0  # exclue du micro
+    """Référence vide : exactitude indéfinie (B1) ; une ligne inventée reste
+    une erreur, qui entre au corpus (elle n'est plus exclue du micro)."""
+    assert fca.fn(_ctx("", "")).value is None
+    blank = fca.fn(_ctx("", "x"))
+    assert blank.value is None
+    assert (blank.stat.errors, blank.stat.reference_length) == (1, 0)
 
 
 def test_higher_is_better_and_type_guard() -> None:

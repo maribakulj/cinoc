@@ -4,8 +4,9 @@ Toute métrique enregistrée déclare sa **catégorie** et son **unité** au
 registre (``MetricSpec``, une seule déclaration) ; le glossaire porte sa
 **fiche** en français et en anglais (définition, ce qu'elle mesure, limites,
 oracle) ; la définition nomme l'unité déclarée ; et cette unité est **celle du
-calcul** — ce que compte le poids de l'``Observation``, vérifié ici sur des
-échantillons dont chaque compte a été fait à la main.
+calcul** — ce que compte la statistique de l'``Observation`` (son dénominateur
+de référence, K1), vérifié ici sur des échantillons dont chaque compte a été
+fait à la main.
 """
 
 from __future__ import annotations
@@ -29,6 +30,7 @@ from cinoc.evaluation.registry import (
     metric_specs,
     register_default_metrics,
 )
+from cinoc.evaluation.statistics import EditCounts, ErrorCounts, MatchCounts
 from cinoc.reports.glossary import load_glossary
 from cinoc.reports.metric_categories import UNIT_LABELS
 
@@ -200,12 +202,24 @@ def test_every_metric_has_a_sample() -> None:
     assert {name for name, *_ in SAMPLES} == set(metric_specs())
 
 
+def _counted(stat: object) -> int:
+    """Les unités que compte la statistique : son dénominateur de référence
+    (|réf| pour un taux, tp + fn pour un appariement, n pour une proportion).
+    Sur ces échantillons, hypothèse = référence : tous les dénominateurs
+    d'une famille (précision, MER…) coïncident."""
+    if isinstance(stat, EditCounts | ErrorCounts):
+        return stat.reference_length
+    if isinstance(stat, MatchCounts):
+        return stat.tp + stat.fn
+    return int(stat.total)  # type: ignore[attr-defined]
+
+
 @pytest.mark.parametrize(
     ("name", "reference", "hypothesis", "counts"),
     SAMPLES,
     ids=[s[0] for s in SAMPLES],
 )
-def test_the_declared_unit_is_what_the_weight_counts(
+def test_the_declared_unit_is_what_the_statistic_counts(
     name: str,
     reference: object,
     hypothesis: object,
@@ -221,4 +235,4 @@ def test_the_declared_unit_is_what_the_weight_counts(
         DocContext(document_id="d", reference=reference, hypothesis=hypothesis)
     )
     assert observation is not None
-    assert observation.weight == counts[unit]
+    assert _counted(observation.stat) == counts[unit]

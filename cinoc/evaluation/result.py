@@ -21,33 +21,81 @@ supprimé ».
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from cinoc.domain.run import RunManifest
 from cinoc.domain.usage import FailureReason, ResourceUsage, UnitOutcome
 from cinoc.evaluation.analysis import Analysis
+from cinoc.evaluation.statistics import ScalarReason, Statistic
+
+#: Version du schéma. Une rupture **explicite** : un ``RunResult`` d'une autre
+#: version est refusé à la lecture, jamais converti (CLAUDE.md §5.1).
+SCHEMA_VERSION = 6
+
+
+#: Axe 1 — la métrique s'applique-t-elle à ce document (§ 2.1 b) ?
+Applicability = Literal["applicable", "no_ground_truth"]
+
+#: Axe 2 — la sortie à noter existe-t-elle ? ``output_unreadable`` : une sortie
+#: existe, mais ne se lit pas dans le type de la métrique (aucune projection) ;
+#: ``gt_unreadable`` : de même pour la vérité terrain.
+Availability = Literal[
+    "available", "gt_unreadable", "output_missing", "output_unreadable", "step_failed"
+]
+
+#: Axe 3 — la sortie est-elle entière ? (Une sortie tronquée est encore notée :
+#: l'exclure par défaut relève de la tranche 1b, R6.)
+Validity = Literal["valid", "truncated_output"]
 
 
 class MetricScore(BaseModel):
-    """Valeur d'une métrique (agrégat ou par-doc). ``None`` = non applicable."""
+    """Valeur d'une métrique (agrégat ou par-document) et sa statistique.
+
+    ``stat`` est la **statistique suffisante** de la famille de la métrique
+    (``evaluation.statistics``) ; ``value`` en est la finalisation — celle du
+    document, ou celle de la somme des statistiques pour l'agrégat (le micro,
+    K1). ``value`` peut être ``None`` alors que ``stat`` existe : le scalaire
+    est indéfini (``scalar_reason``, ex. ``zero_denominator`` pour une page à
+    référence vide), mais la statistique contribue au micro. Sans ``stat``,
+    rien n'a été mesuré.
+    """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     metric: str = Field(min_length=1, max_length=128)
     value: float | None = None
-    #: « Poids de preuve » de ``value`` : par-document = le **dénominateur** de la
-    #: métrique (longueur de réf…), qui pondère le micro-agrégat ; en agrégat = le
-    #: **nombre de documents** applicables. Deux lectures, même intention (taille).
+    stat: Statistic | None = None
+    #: Pourquoi ``value`` est ``None`` alors que ``stat`` existe (axe 4).
+    scalar_reason: ScalarReason | None = None
+    #: **Exactitudes** : le taux d'erreur e/n **avant** le plancher max(0, ·)
+    #: de ``value`` — publié à côté, avec les comptes de ``stat`` (B1).
+    untruncated_error_rate: float | None = Field(default=None, ge=0)
+    #: Axes de l'observation (**par document** ; ``None`` sur un agrégat).
+    applicability: Applicability | None = None
+    availability: Availability | None = None
+    validity: Validity | None = None
+    #: **Agrégat** : nombre de documents dont la statistique entre au micro
+    #: (pages à référence vide comprises) ; **inter-moteurs** : cas complets
+    #: du test. ``None`` par document (les dénominateurs sont dans ``stat``).
     support: int | None = Field(default=None, ge=0)
     #: **Agrégat seulement** — « n attendus » à côté de ``support`` (« n notés ») :
     #: les documents notés **plus** les unités en échec qui auraient pu l'être
     #: (vérité terrain présente pour cette métrique). L'écart entre les deux est
     #: exactement ce que la politique d'échec a retiré de la moyenne ; ses motifs
-    #: sont dans ``RunResult.usage``. ``None`` par-document, et pour un résultat
-    #: antérieur au schéma 3.
+    #: sont dans ``RunResult.usage``. ``None`` par-document.
     expected: int | None = Field(default=None, ge=0)
+
+    @model_validator(mode="after")
+    def _scalar_of_its_statistic(self) -> Self:
+        if self.scalar_reason is not None and (
+            self.stat is None or self.value is not None
+        ):
+            raise ValueError("un motif de scalaire indéfini va avec une statistique")
+        if self.stat is not None and self.value is None and self.scalar_reason is None:
+            raise ValueError("statistique sans scalaire : le motif est requis")
+        return self
 
 
 class RunDocumentResult(BaseModel):
@@ -123,41 +171,16 @@ class RunResult(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    #: 3 : une ligne d'``usage`` par unité **y compris en échec** (issue + motif)
-    #: et ``expected`` sur les agrégats. Un JSON v2 se recharge (issue ``ok`` par
-    #: défaut, ``expected`` absent) — mais ne distingue pas un échec d'une absence.
-    #: 4 : le manifeste porte ``served_models`` et ``unicode_version``, et
-    #: ``adapter_kwargs`` y devient les réglages **effectifs** ; un lecteur v3
-    #: (``extra="forbid"``) refuserait ces champs. Un JSON v3 se recharge (champs
-    #: vides) sans prétendre savoir quel modèle a été servi.
-    #: 5 : le payload ``inference`` porte le test (Wilcoxon/Friedman) ou le
-    #: motif de son absence, la p corrigée de Holm, et un post-hoc conditionné
-    #: au rejet — ``tied_groups`` (disjoints, faux) devient ``cd_groups``
-    #: (chevauchants), ``q_alpha_extrapolated`` disparaît (q exact par scipy).
-    #: Un JSON v4 **sans** payload ``inference`` (le mode rapide) se recharge ;
-    #: un JSON v4 qui en porte un est refusé : ses verdicts n'étaient pas
-    #: corrigés — on le re-note depuis son archive (``--resume-dir --offline``).
-    #: Toujours 5 : l'IC d'un pipeline (``intervals``) est celui du ratio
-    #: micro affiché (``value``), plus celui d'une moyenne macro (``mean``).
-    #: La version n'avait pas été publiée ; un payload qui porte ``mean`` est
-    #: refusé (champ inconnu), le reste d'un JSON v5 se relit tel quel.
-    #: Toujours 5 (D-285) : une ligne de calibration nomme l'étape dont elle
-    #: mesure les confiances (``step``, requis) — un payload d'avant, qui
-    #: pouvait prêter à un pipeline corrigé l'ECE de son OCR, est refusé plutôt
-    #: que relu comme attribué. Le profil d'une vue qui n'en nomme aucun devient
-    #: ``flat_text`` ; le nom est toujours écrit, et un ``null`` d'un JSON
-    #: antérieur garde son sens (comparaison brute) : rien n'est relu faux.
-    #: Toujours 5 (D-288) : la métrique ``hallucination`` s'appelle
-    #: ``unanchored_trigrams`` — même calcul. Un score d'avant garde sa clé :
-    #: le nom d'une métrique est une chaîne libre, il se relit tel quel, sous
-    #: son nom d'alors, sans conversion (et sans glossaire). Le bilan de
-    #: correction compte ``n_heavy_insertion`` (ex-``n_hallucination_heavy``) :
-    #: un payload d'avant est refusé (champ inconnu) plutôt qu'aliasé.
-    #: Toujours 5 (D-292) : une ligne d'``usage`` dit si l'unité a été relue de
-    #: l'archive (``resumed``, défaut ``False``) et compte les pages facturées
-    #: (``billed_pages``, défaut ``None``) ; une unité en échec porte ce qu'elle
-    #: a fait facturer. Un JSON v5 d'avant se relit tel quel.
-    schema_version: int = 5
+    #: 6 (refonte des contrats, tranche 1a, D-313) : une observation porte la
+    #: **statistique suffisante** de sa famille (``stat``) et non plus un ratio
+    #: et un poids ; l'agrégat est la finalisation de la somme des statistiques
+    #: (micro exact), un scalaire indéfini dit pourquoi (``scalar_reason``),
+    #: une exactitude publie son taux d'erreur non tronqué, et une observation
+    #: ses axes. Les valeurs de plusieurs métriques changent (F1 micro, pages
+    #: blanches au micro, plancher au corpus, comptes canoniques) : un JSON
+    #: antérieur est **refusé** avec un message, jamais relu ni converti — on le
+    #: re-note depuis son archive (``cinoc run --resume-dir … --offline``).
+    schema_version: Literal[6] = 6
     manifest: RunManifest
     pipelines: tuple[PipelineResult, ...] = Field(default_factory=tuple)
     documents: tuple[RunDocumentResult, ...] = Field(default_factory=tuple)
@@ -172,9 +195,28 @@ class RunResult(BaseModel):
     #: — ordre déterministe. Les rapports lisent, ne recalculent pas.
     analyses: tuple[Analysis, ...] = Field(default_factory=tuple)
 
+    @model_validator(mode="before")
+    @classmethod
+    def _refuse_other_schemas(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            version = data.get("schema_version", SCHEMA_VERSION)
+            if version != SCHEMA_VERSION:
+                raise ValueError(
+                    f"RunResult au schéma v{version}, attendu v{SCHEMA_VERSION} : "
+                    "les observations y étaient des ratios pondérés, sans "
+                    "statistique suffisante — le fichier n'est ni relu ni "
+                    "converti. Re-notez le run depuis son archive "
+                    "(cinoc run --resume-dir <archive> --offline)."
+                )
+        return data
+
 
 __all__ = [
+    "SCHEMA_VERSION",
     "Analysis",
+    "Applicability",
+    "Availability",
+    "Validity",
     "DocumentUsage",
     "MetricScore",
     "PipelineResult",

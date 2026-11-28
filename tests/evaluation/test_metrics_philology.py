@@ -31,22 +31,23 @@ def test_is_mufi_excludes_plain_letters() -> None:
 
 
 def test_mufi_error_none_when_reference_has_none() -> None:
-    assert mufi_error.fn(_ctx("hello world", "helo wrld")) is None
+    obs = mufi_error.fn(_ctx("hello world", "helo wrld"))
+    assert obs.value is None and obs.stat.total == 0  # indéfini, pas 0
 
 
 def test_mufi_error_perfect() -> None:
     ref = f"me{_LONG_S}se"
     obs = mufi_error.fn(_ctx(ref, ref))
-    assert obs is not None and obs.value == 0.0 and obs.weight == 1
+    assert obs is not None and obs.value == 0.0 and obs.stat.total == 1
 
 
 def test_mufi_error_substituted_long_s() -> None:
     # ſ (s long) lu « s » moderne : 1 cible, 1 faux → 1.0.
     obs = mufi_error.fn(_ctx(f"me{_LONG_S}se", "messe"))
-    assert obs is not None and obs.value == 1.0 and obs.weight == 1
+    assert obs is not None and obs.value == 1.0 and obs.stat.total == 1
 
 
 def test_mufi_error_partial() -> None:
     # deux cibles (ſ, þ) ; seule ſ est fausse → 0.5 sur 2.
     obs = mufi_error.fn(_ctx(f"{_LONG_S}a{_THORN}", f"a{_THORN}"))
-    assert obs is not None and obs.value == 0.5 and obs.weight == 2
+    assert obs is not None and obs.value == 0.5 and obs.stat.total == 2

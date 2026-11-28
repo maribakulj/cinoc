@@ -48,7 +48,7 @@ def test_serialisation_is_deterministic() -> None:
 
 def test_schema_version_and_stable_keys() -> None:
     result = _result()
-    assert result.schema_version == 5
+    assert result.schema_version == 6
     blob = result.model_dump_json().replace(" ", "")
     assert '"metric":"cer"' in blob
     assert '"support":1' in blob
@@ -105,61 +105,24 @@ def test_a_reason_goes_with_failed_and_only_with_it(
         )
 
 
-def test_v2_payload_still_loads_as_ok_units_without_expected() -> None:
-    """Un JSON v2 se recharge : unités ``ok`` par défaut, ``expected`` absent —
-    il ne savait pas distinguer un échec d'une absence, et ne le prétend pas."""
-    v2 = {
-        "schema_version": 2,
+@pytest.mark.parametrize("version", [1, 2, 3, 4, 5])
+def test_an_older_schema_is_refused_with_a_clear_message(version: int) -> None:
+    """Remplace ``test_v2_payload_still_loads_…`` et ``test_v4_inference_…`` :
+    le schéma 6 est une **rupture explicite** (K1, D-313) — un ``RunResult``
+    d'avant portait des ratios pondérés, sans statistique suffisante. Il n'est
+    ni relu ni converti : il est refusé, et le message dit pourquoi et quoi
+    faire, même sans aucun score à relire."""
+    old = {
+        "schema_version": version,
         "manifest": _manifest().model_dump(mode="json"),
-        "pipelines": [
-            {
-                "pipeline": "p",
-                "view": "text",
-                "aggregate": [{"metric": "cer", "value": 0.25, "support": 1}],
-            }
-        ],
-        "usage": [
-            {
-                "document_id": "d1",
-                "pipeline": "p",
-                "usage": {"duration_seconds": 1.0},
-            }
-        ],
     }
-    manifest = v2["manifest"]
-    assert isinstance(manifest, dict)
-    manifest.pop("failure_policy")
-    reloaded = RunResult.model_validate(v2)
-    assert reloaded.schema_version == 2
-    assert reloaded.usage[0].outcome == "ok"
-    assert reloaded.pipelines[0].aggregate[0].expected is None
-    assert reloaded.manifest.failure_policy == "exclude"
+    with pytest.raises(ValidationError, match=r"schéma v\d, attendu v6.*Re-notez"):
+        RunResult.model_validate(old)
 
 
-def test_v4_inference_payload_is_refused_not_misread() -> None:
-    """Un payload ``inference`` v4 (verdicts non corrigés, groupes disjoints)
-    n'est pas relu comme s'il disait ce que dit un v5 ; sans lui, un v4 se
-    recharge."""
-    v4 = {
-        "schema_version": 4,
-        "manifest": _manifest().model_dump(mode="json"),
-        "analyses": [
-            {
-                "scope": "corpus",
-                "view": "text",
-                "payload": {
-                    "kind": "inference", "metric": "cer", "alpha": 0.05,
-                    "n_documents": 8, "critical_distance": 1.17, "q_alpha": 2.343,
-                    "q_alpha_extrapolated": False,
-                    "tied_groups": [["a", "b"], ["c"]],
-                },
-            }
-        ],
-    }
-    with pytest.raises(ValidationError):
-        RunResult.model_validate(v4)
-    v4["analyses"] = []
-    assert RunResult.model_validate(v4).schema_version == 4
+def test_the_current_schema_round_trips() -> None:
+    result = _result()
+    assert RunResult.model_validate_json(result.model_dump_json()) == result
 
 
 def test_calibration_row_without_its_step_is_refused_not_misread() -> None:
@@ -173,7 +136,7 @@ def test_calibration_row_without_its_step_is_refused_not_misread() -> None:
     ]
     row = {"pipeline": "tess→llm", "n_tokens": 3, "ece": 0.1, "mce": 0.2}
     old = {
-        "schema_version": 5,
+        "schema_version": 6,
         "manifest": manifest,
         "analyses": [
             {

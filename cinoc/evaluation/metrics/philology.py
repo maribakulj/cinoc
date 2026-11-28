@@ -16,10 +16,12 @@ from __future__ import annotations
 
 from cinoc.domain.artifacts import ArtifactType
 from cinoc.domain.evaluation import MetricCategory, MetricUnit
+from cinoc.evaluation import statistics as st
 from cinoc.evaluation.context import DocContext
 from cinoc.evaluation.errors import EvaluationError
-from cinoc.evaluation.metric import DocumentMetric, Observation, document_metric
+from cinoc.evaluation.metric import DocumentMetric, document_metric
 from cinoc.evaluation.preservation import preservation_counts
+from cinoc.evaluation.statistics import Proportion
 
 #: Plages Unicode où vivent les glyphes MUFI / médiévaux.
 #: ⚠️ **Pas de signes combinants** ici (bloc U+1DC0–U+1DFF volontairement exclu) :
@@ -47,6 +49,7 @@ def _is_mufi(char: str) -> bool:
 
 @document_metric(
     name="mufi_err",
+    finalize=st.proportion,
     input_types=(ArtifactType.RAW_TEXT, ArtifactType.RAW_TEXT),
     category=MetricCategory.EXPLORATORY,
     unit=MetricUnit.CHARACTER,
@@ -55,10 +58,10 @@ def _is_mufi(char: str) -> bool:
     higher_is_better=False,
     tags=frozenset({"text", "philology", "alignment", "mufi"}),
 )
-def mufi_error(ctx: DocContext) -> Observation | None:
+def mufi_error(ctx: DocContext) -> Proportion:
     """Parmi les caractères MUFI de la **référence**, fraction mal reconnue
-    (substituée ou supprimée dans l'alignement). ``None`` si la référence n'en
-    contient aucun (non applicable) — le runner exclut ce cas de l'agrégat."""
+    (substituée ou supprimée dans l'alignement). Indéfini si la référence n'en
+    contient aucun (``zero_denominator``)."""
     if not isinstance(ctx.reference, str) or not isinstance(ctx.hypothesis, str):
         raise EvaluationError(
             "mufi_err : reference et hypothesis doivent être du texte."
@@ -67,10 +70,7 @@ def mufi_error(ctx: DocContext) -> Observation | None:
     # (substitués/supprimés). Un MUFI *inséré* (présent en hyp, absent en réf)
     # n'est pas compté : le dénominateur est l'ensemble des MUFI attendus.
     counts = preservation_counts(ctx.reference, ctx.hypothesis, _is_mufi)
-    if counts is None:
-        return None
-    n_total, n_wrong = counts
-    return Observation(value=n_wrong / n_total, weight=n_total)
+    return Proportion(count=counts.wrong, total=counts.total)
 
 
 #: Métriques philologiques MUFI (dépendent de ``rapidfuzz``).

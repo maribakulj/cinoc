@@ -193,6 +193,8 @@ backlog inexistant. **Aucune logique ne change.**
 
 > **S22 fin (D-294, P5f 8)** : `usage.py` — `ResourceUsage.tokens_cache_read`, `.tokens_cache_write`, `.tokens_reasoning` : **parties** de `tokens_in` (désormais toute l'entrée, cache compris) et de `tokens_out` (toute la sortie, raisonnement compris) ; `None` = non rendu (jamais 0 supposé), sommés `None`-tolérants par `merged_with`. Champs additifs : une archive ou un JSON antérieur les lit `None`. Preuve : `tests/adapters/test_cache_reasoning_tokens.py::test_usage_sums_the_parts_and_keeps_none`, `tests/app/test_cache_tokens_archive.py`.
 
+> **Refonte des contrats, tranche 1a (D-313)** : `evaluation.py` — `FailurePolicy` = `exclude` · `empty_page` (`max_error` retiré : « la pire valeur selon le signe » n'est la statistique d'aucune sortie) ; `MetricUnit` nomme ce que compte la **statistique** (plus « le poids »). Preuves : `tests/app/test_unit_outcome.py`, `tests/reports/test_metric_cards.py::test_the_declared_unit_is_what_the_statistic_counts`.
+
 > Tri-état : `[x]` fait **+ preuve** · `[ ]` à faire · `[~]` différé/réserve + raison.
 > Mise à jour dans le **même commit** que le code (règle d'or anti-dérive).
 > **Statut couche 1 : ✅ vert** (vérifié 2026-05-31).

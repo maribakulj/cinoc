@@ -10,6 +10,13 @@ métrique inapplicable. Les lignes ``usage`` portent la durée de chaque unité
 par (pipeline × document), sans vue — l'exécution n'a lieu qu'une fois. Une
 unité **relue de l'archive** n'a pas été mesurée par ce run : sa ligne s'appelle
 ``duration_seconds_first_run`` (la durée de sa première exécution, D10).
+
+Les trois dernières colonnes publient ce que la valeur ne dit pas seule (K1,
+B1) : ``statistic`` — les comptes de la statistique suffisante
+(``famille:composante=n;…``), dont la valeur est la finalisation ;
+``scalar_reason`` — pourquoi une valeur est vide alors que ses comptes
+existent (``zero_denominator``) ; ``untruncated_error_rate`` — le taux
+d'erreur d'une exactitude avant son plancher à 0.
 """
 
 from __future__ import annotations
@@ -17,7 +24,7 @@ from __future__ import annotations
 import csv
 import io
 
-from cinoc.evaluation.result import RunResult
+from cinoc.evaluation.result import MetricScore, RunResult
 
 _HEADER = (
     "scope",
@@ -29,7 +36,22 @@ _HEADER = (
     "support",
     "expected",
     "outcome",
+    "statistic",
+    "scalar_reason",
+    "untruncated_error_rate",
 )
+
+
+def _published(score: MetricScore) -> tuple[str, str, str]:
+    """``(statistic, scalar_reason, untruncated_error_rate)`` d'un score."""
+    statistic = ""
+    if score.stat is not None:
+        fields = score.stat.model_dump(exclude={"family"})
+        statistic = f"{score.stat.family}:" + ";".join(
+            f"{name}={value}" for name, value in fields.items()
+        )
+    rate = score.untruncated_error_rate
+    return statistic, score.scalar_reason or "", "" if rate is None else repr(rate)
 
 
 def run_result_csv(result: RunResult) -> str:
@@ -57,6 +79,7 @@ def run_result_csv(result: RunResult) -> str:
                     "" if score.support is None else score.support,
                     "" if score.expected is None else score.expected,
                     "",
+                    *_published(score),
                 )
             )
     for document in result.documents:
@@ -72,6 +95,7 @@ def run_result_csv(result: RunResult) -> str:
                     "" if score.support is None else score.support,
                     "",
                     outcomes.get((document.pipeline, document.document_id), ""),
+                    *_published(score),
                 )
             )
     for unit in result.usage:
@@ -87,6 +111,9 @@ def run_result_csv(result: RunResult) -> str:
                 "",
                 "",
                 outcomes.get((unit.pipeline, unit.document_id), ""),
+                "",
+                "",
+                "",
             )
         )
     return buffer.getvalue()

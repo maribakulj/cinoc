@@ -23,7 +23,8 @@ from cinoc.domain.layout import (
     Line,
     Region,
 )
-from cinoc.evaluation.reading_order import kendall_distance
+from cinoc.evaluation.reading_order import kendall_counts
+from cinoc.evaluation.statistics import proportion
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext
 
@@ -152,6 +153,8 @@ def test_the_metric_attributes_the_fault_to_the_order(tmp_path: Path) -> None:
     """
     page = _page()
     attendu = ["G1", "G2", "G3", "D1", "D2", "D3"]
-    desordre = kendall_distance(attendu, list(page.pages[0].reading_order))
+    desordre = proportion(
+        kendall_counts(attendu, list(page.pages[0].reading_order))
+    ).value
     assert desordre is not None and desordre > 0.0
-    assert kendall_distance(attendu, attendu) == 0.0
+    assert proportion(kendall_counts(attendu, attendu)).value == 0.0

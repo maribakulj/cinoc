@@ -51,7 +51,7 @@ def test_searchability_noise_of_short_words_finds_nothing() -> None:
     obs = searchability.fn(_ctx(gt, "xx yy zz aa bb cc dd ee ff gg"))
     assert obs is not None
     assert obs.value == 0.0
-    assert obs.weight == 10
+    assert obs.stat.total == 10
 
 
 def test_searchability_counts_missing_words() -> None:
@@ -68,7 +68,9 @@ def test_searchability_multiset_one_match_per_occurrence() -> None:
 
 
 def test_searchability_empty_reference_is_not_applicable() -> None:
-    assert searchability.fn(_ctx("", "texte")) is None
+    # Indéfinie (pas de mot à chercher), sans fabriquer de zéro : (0, 0).
+    obs = searchability.fn(_ctx("", "texte"))
+    assert obs.value is None and (obs.stat.count, obs.stat.total) == (0, 0)
 
 
 # --- unanchored_trigrams : trigrammes non ancrés ----------------------------
@@ -78,7 +80,7 @@ def test_unanchored_trigrams_zero_when_verbatim() -> None:
     obs = unanchored_trigrams.fn(_ctx("bonjour", "bonjour"))
     assert obs is not None
     assert obs.value == 0.0
-    assert obs.weight == 5  # « bonjour » : 7 chars → 5 trigrammes
+    assert obs.stat.total == 5  # « bonjour » : 7 chars → 5 trigrammes
 
 
 def test_unanchored_trigrams_hand_computed_on_invented_suffix() -> None:
@@ -87,11 +89,12 @@ def test_unanchored_trigrams_hand_computed_on_invented_suffix() -> None:
     obs = unanchored_trigrams.fn(_ctx("abcdef", "abcxyz"))
     assert obs is not None
     assert obs.value == pytest.approx(0.75)
-    assert obs.weight == 4
+    assert obs.stat.total == 4
 
 
 def test_unanchored_trigrams_short_hypothesis_not_applicable() -> None:
-    assert unanchored_trigrams.fn(_ctx("abcdef", "ab")) is None
+    obs = unanchored_trigrams.fn(_ctx("abcdef", "ab"))
+    assert obs.value is None and obs.stat.total == 0  # aucun trigramme produit
 
 
 def test_unanchored_trigrams_is_blind_to_a_duplicated_page() -> None:
@@ -102,7 +105,7 @@ def test_unanchored_trigrams_is_blind_to_a_duplicated_page() -> None:
     doubled = gt + " " + gt
     obs = unanchored_trigrams.fn(_ctx(gt, doubled))
     assert obs is not None
-    assert obs.weight == len(doubled) - 2
+    assert obs.stat.total == len(doubled) - 2
     assert obs.value == pytest.approx(3 / 141)
     assert round(obs.value, 3) == 0.021
     cer_obs = cer.fn(_ctx(gt, doubled))

@@ -55,7 +55,7 @@ def test_perfect_match_is_f1_one() -> None:
     layout = _page(100, 100, _R1, _R2)
     score = _score(layout, layout)
     assert score is not None and score.value == pytest.approx(1.0)
-    assert score.weight == 2
+    assert (score.stat.tp, score.stat.fp, score.stat.fn) == (2, 0, 0)
 
 
 def test_relative_coords_neutralize_units() -> None:
@@ -113,4 +113,4 @@ def test_real_abbyy_geometry_self_match() -> None:
     )
     assert score is not None
     assert score.value == pytest.approx(1.0)  # géométrie réelle, applicable
-    assert score.weight >= 1
+    assert score.stat.tp >= 1 and score.stat.fp == score.stat.fn == 0

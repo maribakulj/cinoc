@@ -255,6 +255,13 @@ def _replay_offline(run1: _Run1, folder: Path) -> RunSpec:
     )
 
 
+#: L'axe « validité » décrit l'**exécution** de l'unité, pas la mesure : le
+#: rejeu est une autre exécution (``precomputed``, jamais coupée), où une unité
+#: tronquée du run 1 est ``ok``. Valeurs, statistiques et autres axes, eux,
+#: doivent être identiques.
+_EXECUTION_AXES = {"validity"}
+
+
 def _scores(result: RunResult) -> dict[str, Any]:
     return {
         "aggregates": {
@@ -262,7 +269,9 @@ def _scores(result: RunResult) -> dict[str, Any]:
             for p in result.pipelines
         },
         "documents": {
-            (d.pipeline, d.view, d.document_id): [s.model_dump() for s in d.scores]
+            (d.pipeline, d.view, d.document_id): [
+                s.model_dump(exclude=_EXECUTION_AXES) for s in d.scores
+            ]
             for d in result.documents
         },
         "cross_engine": [s.model_dump() for s in result.cross_engine],

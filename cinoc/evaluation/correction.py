@@ -35,7 +35,11 @@ from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.documents import DocumentRef
 from cinoc.domain.evaluation import EvaluationView
-from cinoc.evaluation._alignment import aligned_to_reference, char_counts, char_mer
+from cinoc.evaluation._alignment import (
+    aligned_to_reference,
+    canonical_counts,
+    char_mer,
+)
 from cinoc.evaluation.analysis import (
     Analysis,
     CorrectionPayload,
@@ -188,7 +192,7 @@ class _CorrectionAccumulator:
         cmer_raw, raw_doc_edits, raw_doc_total = char_mer(reference, raw)
         self.raw_edits += raw_doc_edits
         self.raw_total += raw_doc_total
-        s, d, i = char_counts(reference, corrected)
+        s, d, i = canonical_counts(reference, corrected)
         sys_edits, sys_denom = s + d + i, len(reference) + i
         cmer_corrected = sys_edits / sys_denom if sys_denom else 0.0
         self.sys_insertions += i

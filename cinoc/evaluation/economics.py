@@ -39,7 +39,7 @@ jamais en exécutant la source). Modèle de coût simple et auditable :
 - **unités reprises** : comptées (``n_resumed``) — leur durée et leurs jetons
   sont ceux de leur première exécution (D10) ;
 - **débit effectif** : pages/h corrigé du temps de relecture des erreurs
-  résiduelles (Σ cer·poids erreurs estimées × ``time_per_error_seconds``) ;
+  résiduelles (Σ S+D+I des statistiques du CER × ``time_per_error_seconds``) ;
 - **péremption** : ``valid_until`` de la table comparé à ``completed_at`` du
   manifeste — déterministe (aucune horloge au rendu).
 
@@ -68,6 +68,7 @@ from cinoc.evaluation.analysis import (
 )
 from cinoc.evaluation.errors import EvaluationError
 from cinoc.evaluation.result import DocumentUsage, MetricScore
+from cinoc.evaluation.statistics import EditCounts
 
 
 def load_pricing() -> dict[str, Any]:
@@ -265,16 +266,13 @@ def _token_cost(
     return cost, "machine+jetons", note, ()
 
 
-def _estimated_errors(scores: Sequence[MetricScore]) -> float | None:
-    """Σ (cer_doc × poids_doc) — le poids étant le dénominateur du CER."""
-    pairs = [
-        (score.value, score.support or 0)
-        for score in scores
-        if score.value is not None
-    ]
-    if not pairs:
+def _edit_totals(scores: Sequence[MetricScore]) -> tuple[int, int] | None:
+    """(Σ S+D+I, Σ n_réf) des statistiques du CER — pages blanches comprises
+    (leurs insertions sont des erreurs à corriger) ; ``None`` sans statistique."""
+    stats = [s.stat for s in scores if isinstance(s.stat, EditCounts)]
+    if not stats:
         return None
-    return sum(value * weight for value, weight in pairs)
+    return sum(s.edits for s in stats), sum(s.reference_length for s in stats)
 
 
 def economics_analysis(
@@ -343,16 +341,10 @@ def economics_analysis(
             else None
         )
         scores = series.get(name, ())
-        errors = _estimated_errors(scores)
-        cer_values = [
-            (s.value, s.support or 0) for s in scores if s.value is not None
-        ]
-        total_weight = sum(w for _, w in cer_values)
-        cer = (
-            sum(v * w for v, w in cer_values) / total_weight
-            if total_weight > 0
-            else None
-        )
+        totals = _edit_totals(scores)
+        errors = None if totals is None else totals[0]
+        # Le CER micro affiché : la même finalisation des comptes cumulés.
+        cer = totals[0] / totals[1] if totals is not None and totals[1] else None
         pages_per_hour = (
             n_documents / (duration / 3600.0) if duration > 0 else None
         )

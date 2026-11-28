@@ -1,4 +1,10 @@
-"""L'intervalle porte sur le chiffre affiché : bootstrap du ratio micro."""
+"""L'intervalle porte sur le chiffre affiché : bootstrap du ratio micro.
+
+Le ratio micro est la finalisation des statistiques cumulées (K1) : chaque
+document y apporte ses termes (numérateur, dénominateur) — ``micro_ratio_ci``
+les rééchantillonne. Les valeurs de ces tests sont données en (taux, longueur) ;
+le numérateur est leur produit, calculé comme l'ancien code le calculait.
+"""
 
 from __future__ import annotations
 
@@ -22,7 +28,6 @@ from cinoc.evaluation.inference import (
     N_RESAMPLES,
     bootstrap_batch,
     inference_analyses,
-    micro_ratio,
     micro_ratio_ci,
 )
 from cinoc.evaluation.registry import MetricRegistry, register_default_metrics
@@ -137,7 +142,8 @@ def test_the_displayed_point_is_inside_its_interval(tmp_path: Path) -> None:
         if d.pipeline == "long"
     ]
     values = [s.value for s in scores if s.value is not None]
-    weights = [s.support or 0 for s in scores]
+    numerators = [s.stat.edits for s in scores]
+    weights = [s.stat.reference_length for s in scores]
     assert sum(values) / len(values) == pytest.approx(0.451)  # la macro
     (cer,) = (
         a.payload
@@ -147,22 +153,27 @@ def test_the_displayed_point_is_inside_its_interval(tmp_path: Path) -> None:
     interval = next(i for i in cer.intervals if i.pipeline == "long")
     assert interval.value == displayed[("text", "long", "cer")]
     assert (interval.lower, interval.upper) == pytest.approx(
-        _scipy_interval(values, weights), rel=1e-12
+        _scipy_interval(numerators, weights), rel=1e-12
     )
     # Large et honnête : sans le long document (≈ 35 % des tirages, 0,9¹⁰),
     # le ratio vaut 0,5 — l'ancien IC de la macro, [0,353 ; 0,5], l'excluait.
     assert interval.lower < 0.03 and interval.upper == pytest.approx(0.5)
 
 
-def _scipy_interval(values: list[float], weights: list[int]) -> tuple[float, float]:
+def _scipy_interval(
+    numerators: list[float], weights: list[int]
+) -> tuple[float, float]:
     """Oracle : ``scipy.stats.bootstrap`` apparié, percentile, même graine."""
 
-    def ratio(v: np.ndarray, w: np.ndarray, axis: int = -1) -> np.ndarray:
-        return (v * w).sum(axis=axis) / w.sum(axis=axis)
+    def ratio(e: np.ndarray, w: np.ndarray, axis: int = -1) -> np.ndarray:
+        return e.sum(axis=axis) / w.sum(axis=axis)
 
-    n = len(values)
+    n = len(numerators)
     result = stats.bootstrap(
-        (np.asarray(values), np.asarray(weights, dtype=np.float64)),
+        (
+            np.asarray(numerators, dtype=np.float64),
+            np.asarray(weights, dtype=np.float64),
+        ),
         ratio,
         paired=True,
         vectorized=True,
@@ -181,9 +192,15 @@ def test_interval_is_scipy_bootstrap_of_the_ratio(n: int) -> None:
     rng = np.random.default_rng(n)
     values = [float(v) for v in rng.random(n)]
     weights = [int(w) for w in rng.integers(1, 500, n)]
-    assert micro_ratio_ci(values, weights) == pytest.approx(
-        _scipy_interval(values, weights), rel=1e-12
+    numerators = _numerators(values, weights)
+    assert micro_ratio_ci(numerators, weights) == pytest.approx(
+        _scipy_interval(numerators, weights), rel=1e-12
     )
+
+
+def _numerators(values: list[float], weights: list[int]) -> list[float]:
+    """v·w, dans les flottants où l'ancien code les formait (même octets)."""
+    return [float(e) for e in np.asarray(values) * np.asarray(weights, np.float64)]
 
 
 def test_golden_interval_is_pinned_and_deterministic() -> None:
@@ -192,10 +209,11 @@ def test_golden_interval_is_pinned_and_deterministic() -> None:
     values = [0.10, 0.12, 0.08, 0.11, 0.09, 0.13, 0.10, 0.12]
     weights = [120, 80, 300, 45, 210, 60, 150, 95]
     golden = (0.08819908163265307, 0.11330935251798561)
-    assert micro_ratio_ci(values, weights) == golden  # mêmes octets
-    assert golden == pytest.approx(_scipy_interval(values, weights), rel=1e-12)
-    point = micro_ratio(values, weights)
-    assert point is not None and golden[0] <= point <= golden[1]
+    numerators = _numerators(values, weights)
+    assert micro_ratio_ci(numerators, weights) == golden  # mêmes octets
+    assert golden == pytest.approx(_scipy_interval(numerators, weights), rel=1e-12)
+    point = sum(numerators) / sum(weights)
+    assert golden[0] <= point <= golden[1]
 
 
 def test_point_is_inside_its_interval_on_seeded_corpora() -> None:
@@ -213,33 +231,61 @@ def test_point_is_inside_its_interval_on_seeded_corpora() -> None:
         if rng.random() < 0.1:
             values[:] = values[0]
         v, w = [float(x) for x in values], [int(x) for x in weights]
-        point = micro_ratio(v, w)
-        lower, upper = micro_ratio_ci(v, w)
+        e = _numerators(v, w)
+        point = sum(e) / sum(w)
+        bounds = micro_ratio_ci(e, w)
+        assert bounds is not None  # tous les dénominateurs sont > 0
+        lower, upper = bounds
         # À l'ulp près : pour des valeurs constantes, le point (``sum`` de
         # Python, compensé depuis 3.12) et les tirages (somme par paires de
         # numpy) arrondissent la même constante différemment.
         slack = 1e-12 * abs(point or 0.0)
-        assert point is not None and lower - slack <= point <= upper + slack, (v, w)
+        assert lower - slack <= point <= upper + slack, (v, w)
 
 
-def test_zero_weight_documents_weigh_nothing() -> None:
-    """Un document de poids nul (référence vide) n'entre ni dans le point ni
-    dans le rééchantillonnage : l'IC et son n sont ceux des autres."""
+def test_a_blank_page_enters_the_point_and_the_resampling() -> None:
+    """Inverse ``test_zero_weight_documents_weigh_nothing``, qui figeait « page
+    blanche hors du micro » (K1, M1) : un document de dénominateur nul
+    (référence vide) apporte ses insertions au point affiché, et il est tiré
+    comme les autres — l'IC et son n sont ceux de **tous** les documents
+    notés, et l'intervalle contient toujours le point."""
     values: dict[str, list[float | None]] = {
         "a": [0.1, 0.2, 0.3, 0.1, 0.2, 0.3],
         "b": [0.2, 0.3, 0.4, 0.2, 0.3, 0.4],
     }
-    weights = {"a": [10, 20, 30, 40, 50, 60], "b": [10, 20, 30, 40, 50, 60]}
-    padded_values: dict[str, list[float | None]] = {
-        name: [*series, 1.0] for name, series in values.items()
+    lengths = [10, 20, 30, 40, 50, 60]
+    terms = {
+        name: [(round(v * n), n) for v, n in zip(series, lengths, strict=True)]
+        for name, series in values.items()
+        if all(v is not None for v in series)
     }
-    padded_weights = {name: [*series, 0] for name, series in weights.items()}
-    (plain,) = inference_analyses([("v", "cer", values, weights)])
-    (padded,) = inference_analyses([("v", "cer", padded_values, padded_weights)])
+    padded_values = {name: [*series, None] for name, series in values.items()}
+    padded_terms = {name: [*series, (3, 0)] for name, series in terms.items()}
+    (plain,) = inference_analyses([("v", "cer", values, terms)])  # type: ignore[list-item]
+    (padded,) = inference_analyses([("v", "cer", padded_values, padded_terms)])
     assert isinstance(plain.payload, InferencePayload)
     assert isinstance(padded.payload, InferencePayload)
-    assert plain.payload.intervals == padded.payload.intervals
-    assert {i.n_documents for i in padded.payload.intervals} == {6}
+    assert {i.n_documents for i in padded.payload.intervals} == {7}
+    for interval in padded.payload.intervals:
+        assert interval.value == (sum(n for n, _ in terms[interval.pipeline]) + 3) / 210
+        assert interval.lower <= interval.value <= interval.upper
+    assert plain.payload.intervals != padded.payload.intervals
     with pytest.raises(EvaluationError):
-        micro_ratio_ci([0.1, 0.2], [3, 0])
-    assert micro_ratio([0.5], [0]) is None
+        micro_ratio_ci([0.1, 0.2], [0, 0])  # aucun dénominateur : aucun ratio
+    # Un tirage sans aucun dénominateur (ici : un seul document noté sur deux,
+    # l'autre blanc) n'a pas de ratio : pas d'intervalle, plutôt qu'un faux.
+    assert micro_ratio_ci([1.0, 3.0], [10, 0]) is None
+
+
+def test_hypothesis_denominator_micro_is_not_estimable() -> None:
+    """B9c : sans termes (dénominateur d'hypothèse — MER, cMER), aucune
+    procédure n'est validée pour le micro : le payload le dit, sans IC."""
+    values: dict[str, list[float | None]] = {
+        "a": [0.1, 0.2, 0.3, 0.1, 0.2, 0.3],
+        "b": [0.2, 0.3, 0.4, 0.2, 0.3, 0.4],
+    }
+    (analysis,) = inference_analyses([("v", "mer", values, None)])
+    assert isinstance(analysis.payload, InferencePayload)
+    assert analysis.payload.micro_estimable is False
+    assert analysis.payload.intervals == ()
+    assert analysis.payload.test == "wilcoxon"  # l'analyse de rangs demeure

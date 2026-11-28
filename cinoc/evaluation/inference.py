@@ -26,16 +26,21 @@ Data Sets*, JMLR 7:1-30 — k pipelines × n documents appariés), par
    aucune.
 
 IC : **bootstrap du chiffre affiché**. L'agrégat d'un pipeline est le ratio
-**micro** Σ(v·w)/Σw (``micro_ratio`` — le runner l'écrit au tableau ; pour un
-taux d'erreur, Σ erreurs / Σ longueurs de référence) : on rééchantillonne les
-**documents** avec remise et on recalcule ce même ratio (Davison & Hinkley
-1997, *Bootstrap Methods and their Application*, ch. 2 et 5 : bootstrap d'un
-estimateur par quotient, unités = documents, pas caractères — les erreurs d'une
-page ne sont pas indépendantes). Intervalle **percentile** (Efron & Tibshirani
-1993, *An Introduction to the Bootstrap*, ch. 13), quantiles à interpolation
-linéaire, ``N_RESAMPLES`` tirages, graine fixe → mêmes octets à chaque run
-(invariant §12). Un document de poids nul ne pèse rien dans le point : il
-n'entre pas non plus dans le rééchantillonnage. Vectorisé par numpy
+**micro** — la finalisation des statistiques cumulées ; pour un taux d'erreur,
+Σ erreurs / Σ longueurs de référence, chaque document y apportant ses termes
+(numérateur, dénominateur), une page à référence vide ses seules insertions.
+On rééchantillonne les **documents** avec remise et on recalcule ce même ratio
+(Davison & Hinkley 1997, *Bootstrap Methods and their Application*, ch. 2
+et 5 : bootstrap d'un estimateur par quotient, unités = documents, pas
+caractères — les erreurs d'une page ne sont pas indépendantes). Intervalle
+**percentile** (Efron & Tibshirani 1993, *An Introduction to the Bootstrap*,
+ch. 13), quantiles à interpolation linéaire, ``N_RESAMPLES`` tirages, graine
+fixe → mêmes octets à chaque run (invariant §12). Les documents
+rééchantillonnés sont exactement ceux du point ; un tirage dont le
+dénominateur cumulé est nul n'a pas de ratio, et l'IC n'est alors pas publié.
+**Seulement** pour un dénominateur fixé par la référence : pour un MER, le
+micro n'a pas de procédure validée — « inférence non estimable »
+(``CONTRATS.md`` B9c), le point reste publié. Vectorisé par numpy
 (``default_rng``, par lots de mémoire bornée) ; seul coût non négligeable de
 l'inférence, calculé en mode détaillé seulement (analyse ``inference``).
 """
@@ -74,12 +79,14 @@ ALPHA = 0.05
 #: non applicable).
 PerPipeline = Mapping[str, Sequence[float | None]]
 
-#: Poids de micro-agrégation (``MetricScore.support`` par document), alignés
-#: sur ``PerPipeline`` — le dénominateur de la métrique.
-PerWeights = Mapping[str, Sequence[int]]
+#: Termes (numérateur, dénominateur) du ratio micro de chaque document, alignés
+#: sur ``PerPipeline`` ; ``None`` = le document n'a pas de statistique.
+PerTerms = Mapping[str, Sequence[tuple[int, int] | None]]
 
-#: (vue, métrique, valeurs, poids) — une ligne de la famille de Holm.
-InferenceEntry = tuple[str, str, PerPipeline, PerWeights]
+#: (vue, métrique, valeurs, termes) — une ligne de la famille de Holm. Termes
+#: ``None`` : le dénominateur du micro dépend de l'hypothèse, son inférence
+#: n'est pas estimable (B9c).
+InferenceEntry = tuple[str, str, PerPipeline, PerTerms | None]
 
 #: Rééchantillons du bootstrap. Un intervalle de quantiles à 95 % en demande
 #: de l'ordre de 1 000 à 2 000 (Efron & Tibshirani 1993, contre 25 à 200 pour
@@ -163,53 +170,49 @@ def nemenyi_critical_value(k: int, alpha: float = ALPHA) -> float:
     return float(quantile) / math.sqrt(2.0)
 
 
-def micro_ratio(values: Sequence[float], weights: Sequence[int]) -> float | None:
-    """Σ(v·w)/Σw — l'agrégat **affiché** d'une métrique (``None`` sans poids).
-
-    Une seule définition, lue par le runner (tableau) et par l'IC (son point).
-    """
-    total_weight = sum(weights)
-    if total_weight <= 0:
-        return None
-    return sum(v * w for v, w in zip(values, weights, strict=True)) / total_weight
-
-
 def bootstrap_batch(n_documents: int) -> int:
     """Rééchantillons tirés par lot : au plus ``_BATCH_ELEMENTS`` indices."""
     return max(1, _BATCH_ELEMENTS // max(1, n_documents))
 
 
 def micro_ratio_ci(
-    values: Sequence[float],
-    weights: Sequence[int],
+    numerators: Sequence[float],
+    denominators: Sequence[int],
     *,
     n_resamples: int = N_RESAMPLES,
     ci: float = 0.95,
     seed: int = BOOTSTRAP_SEED,
-) -> tuple[float, float]:
-    """IC percentile du ratio micro, documents rééchantillonnés avec remise.
+) -> tuple[float, float] | None:
+    """IC percentile du ratio micro Σnum/Σden, documents rééchantillonnés avec
+    remise ; ``None`` si un tirage a un dénominateur cumulé nul (pas de ratio).
 
-    ``weights`` doivent être > 0 (un poids nul ne pèse pas dans le point, il
-    n'est pas rééchantillonné : ``_intervals`` l'écarte). Tirages
+    Un document de dénominateur nul (page à référence vide) est tiré comme les
+    autres : ses insertions sont dans le point. Tirages
     ``default_rng(seed).integers(0, n, (lot, n))`` lot après lot — la forme de
     ``scipy.stats.bootstrap(paired=True, batch=bootstrap_batch(n))``.
     """
-    if not values or len(values) != len(weights) or min(weights) <= 0:
-        raise EvaluationError("micro_ratio_ci : poids > 0 alignés sur les valeurs.")
-    weight = np.asarray(weights, dtype=np.float64)
-    errors = np.asarray(values, dtype=np.float64) * weight
-    n = len(values)
+    if (
+        not numerators
+        or len(numerators) != len(denominators)
+        or min(denominators) < 0
+        or sum(denominators) == 0
+    ):
+        raise EvaluationError(
+            "micro_ratio_ci : termes alignés, dénominateurs ≥ 0 de somme > 0."
+        )
+    weight = np.asarray(denominators, dtype=np.float64)
+    errors = np.asarray(numerators, dtype=np.float64)
+    n = len(numerators)
     rng = np.random.default_rng(seed)
     batch = bootstrap_batch(n)
-    ratios = np.concatenate(
-        [
-            errors[index].sum(axis=1) / weight[index].sum(axis=1)
-            for index in (
-                rng.integers(0, n, (min(batch, n_resamples - start), n))
-                for start in range(0, n_resamples, batch)
-            )
-        ]
-    )
+    draws = [
+        rng.integers(0, n, (min(batch, n_resamples - start), n))
+        for start in range(0, n_resamples, batch)
+    ]
+    totals = np.concatenate([weight[index].sum(axis=1) for index in draws])
+    if not totals.all():
+        return None
+    ratios = np.concatenate([errors[index].sum(axis=1) for index in draws]) / totals
     half_alpha = (1.0 - ci) / 2.0
     lower, upper = np.quantile(ratios, [half_alpha, 1.0 - half_alpha])
     return (float(lower), float(upper))
@@ -240,25 +243,22 @@ def _cd_groups(
 
 
 def _intervals(
-    names: Sequence[str], per_pipeline: PerPipeline, weights: PerWeights
+    names: Sequence[str], terms: PerTerms
 ) -> tuple[PipelineInterval, ...]:
-    """IC **marginaux** du ratio micro : chaque pipeline sur ses documents notés
-    de poids non nul — exactement ceux qui font son agrégat."""
+    """IC **marginaux** du ratio micro : chaque pipeline sur ses documents dotés
+    d'une statistique — exactement ceux qui font son agrégat."""
     intervals: list[PipelineInterval] = []
     for name in names:
-        pairs = [
-            (float(value), int(weight))
-            for value, weight in zip(per_pipeline[name], weights[name], strict=True)
-            if value is not None and weight > 0
-        ]
-        if not pairs:
+        pairs = [pair for pair in terms[name] if pair is not None]
+        numerators = [numerator for numerator, _ in pairs]
+        denominators = [denominator for _, denominator in pairs]
+        if not pairs or sum(denominators) == 0:
             continue
-        values = [value for value, _ in pairs]
-        positive = [weight for _, weight in pairs]
-        point = micro_ratio(values, positive)
-        if point is None:  # pragma: no cover -- poids > 0 par construction
+        point = sum(numerators) / sum(denominators)
+        bounds = micro_ratio_ci(numerators, denominators)
+        if bounds is None:
             continue
-        lower, upper = micro_ratio_ci(values, positive)
+        lower, upper = bounds
         intervals.append(
             PipelineInterval(
                 pipeline=name,
@@ -273,8 +273,7 @@ def _intervals(
 
 def _payload(
     metric: str,
-    per_pipeline: PerPipeline,
-    weights: PerWeights,
+    terms: PerTerms | None,
     omnibus: Omnibus,
     p_holm: float | None,
     family_size: int,
@@ -326,9 +325,10 @@ def _payload(
         mean_ranks=mean_ranks,
         cd_groups=groups,
         pairwise=pairwise,
+        micro_estimable=terms is not None,
         intervals=(
-            _intervals(names, per_pipeline, weights)
-            if with_intervals and supported
+            _intervals(names, terms)
+            if with_intervals and supported and terms is not None
             else ()
         ),
     )
@@ -357,8 +357,7 @@ def inference_analyses(
             view=view,
             payload=_payload(
                 metric,
-                per_pipeline,
-                weights,
+                terms,
                 tests[i],
                 adjusted.get(i),
                 len(computed),
@@ -366,7 +365,7 @@ def inference_analyses(
                 with_intervals,
             ),
         )
-        for i, (view, metric, per_pipeline, weights) in enumerate(entries)
+        for i, (view, metric, _, terms) in enumerate(entries)
     ]
 
 
@@ -380,7 +379,6 @@ __all__ = [
     "bootstrap_batch",
     "holm_adjusted",
     "inference_analyses",
-    "micro_ratio",
     "micro_ratio_ci",
     "nemenyi_critical_value",
     "omnibus_test",

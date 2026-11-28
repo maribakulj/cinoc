@@ -27,8 +27,10 @@ from rapidfuzz.distance import Levenshtein
 
 from cinoc.domain.artifacts import ArtifactType
 from cinoc.domain.evaluation import MetricCategory, MetricUnit
+from cinoc.evaluation import statistics as st
 from cinoc.evaluation.context import DocContext
-from cinoc.evaluation.metric import DocumentMetric, Observation, document_metric
+from cinoc.evaluation.metric import DocumentMetric, document_metric
+from cinoc.evaluation.statistics import Proportion
 
 #: Échelle ``AUTO`` : ``(longueur minimale du mot, éditions tolérées)``, du
 #: plus long au plus court. Sous 3 caractères, aucune édition.
@@ -51,6 +53,7 @@ def _search_tolerance(word: str) -> int:
 
 @document_metric(
     name="searchability",
+    finalize=st.proportion,
     input_types=(ArtifactType.RAW_TEXT, ArtifactType.RAW_TEXT),
     category=MetricCategory.ADAPTED,
     unit=MetricUnit.WORD,
@@ -62,11 +65,9 @@ def _search_tolerance(word: str) -> int:
     higher_is_better=True,
     tags=frozenset({"text", "diagnostics"}),
 )
-def searchability(ctx: DocContext) -> Observation | None:
+def searchability(ctx: DocContext) -> Proportion:
     reference, hypothesis = _text_pair(ctx)
     targets = reference.split()
-    if not targets:
-        return None
     pool = hypothesis.split()
     used = [False] * len(pool)
     found = 0
@@ -79,7 +80,7 @@ def searchability(ctx: DocContext) -> Observation | None:
                 used[index] = True
                 found += 1
                 break
-    return Observation(value=found / len(targets), weight=len(targets))
+    return Proportion(count=found, total=len(targets))
 
 
 def _ngrams(text: str) -> list[str]:
@@ -88,6 +89,7 @@ def _ngrams(text: str) -> list[str]:
 
 @document_metric(
     name="unanchored_trigrams",
+    finalize=st.proportion,
     input_types=(ArtifactType.RAW_TEXT, ArtifactType.RAW_TEXT),
     category=MetricCategory.EXPLORATORY,
     unit=MetricUnit.CHARACTER_TRIGRAM,
@@ -98,14 +100,12 @@ def _ngrams(text: str) -> list[str]:
     higher_is_better=False,
     tags=frozenset({"text", "diagnostics"}),
 )
-def unanchored_trigrams(ctx: DocContext) -> Observation | None:
+def unanchored_trigrams(ctx: DocContext) -> Proportion:
     reference, hypothesis = _text_pair(ctx)
-    produced = _ngrams(hypothesis)
-    if not produced:
-        return None  # hypothèse trop courte : rien à ancrer
+    produced = _ngrams(hypothesis)  # vide : hypothèse trop courte, indéfini
     anchored = set(_ngrams(reference))
     unanchored = sum(1 for gram in produced if gram not in anchored)
-    return Observation(value=unanchored / len(produced), weight=len(produced))
+    return Proportion(count=unanchored, total=len(produced))
 
 
 #: Socle diagnostic, collecté explicitement par le registre.

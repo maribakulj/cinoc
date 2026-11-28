@@ -73,12 +73,14 @@ def test_scalars_hand_values() -> None:
     assert strict is not None and value is not None
     assert strict.value == pytest.approx(1 / 2)  # année oui, folio non
     assert value.value == pytest.approx(1.0)
-    assert strict.weight == value.weight == 2
+    assert strict.stat.total == value.stat.total == 2
 
 
 def test_scalars_not_applicable_without_signal() -> None:
-    assert _obs(numseq_strict, "bonjour le monde", "bonjour") is None
-    assert _obs(numseq_value, "bonjour le monde", "bonjour") is None
+    # GT sans séquence : proportion indéfinie (0/0), jamais un zéro.
+    for metric in (numseq_strict, numseq_value):
+        obs = _obs(metric, "bonjour le monde", "bonjour")
+        assert obs.value is None and obs.stat.total == 0
 
 
 def test_value_at_least_strict() -> None:

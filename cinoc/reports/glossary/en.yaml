@@ -13,7 +13,7 @@
 #
 # Category and unit are NOT here: they are declared in the registry
 # (MetricSpec), and the card reads them there. The definition names the
-# unit the computation's weight counts (locked by a test).
+# unit the computation's statistic counts (locked by a test).
 
 cer:
   title: "CER — character error rate"
@@ -441,7 +441,10 @@ char_accuracy:
     better'.
   limits: >-
     Redundant with CER, which it copies up to the bound: an output long
-    enough to push CER above 1 scores 0, without saying by how much.
+    enough to push CER above 1 scores 0 — the report then writes the
+    untruncated error rate and its counts beside it. On the corpus, the
+    bound applies to the summed counts, never to an average of per-page
+    bounds.
   oracle: >-
     Reference: ISRI character accuracy, (n − errors) / n. Variant:
     bounded at 0 by Cinoc. Checked against: the CER, itself checked
@@ -497,8 +500,9 @@ bow_recall:
 bow_f1:
   title: "Bag of words — F1"
   definition: >-
-    Harmonic mean of bag-of-words precision and recall; weight = number
-    of reference words.
+    Harmonic mean of bag-of-words precision and recall,
+    2·tp / (2·tp + fp + fn) in words; on the corpus, the F1 of the summed
+    word counts, not an average of per-document F1.
   measures: >-
     The balance between correct words produced and expected words
     retrieved, regardless of order.
@@ -545,8 +549,8 @@ reading_order_tau:
   definition: >-
     Normalised Kendall distance between reading orders: share of the
     pairs of blocks (regions) present on both sides that the output
-    places in the reverse order of the reference; weight = number of
-    common regions.
+    places in the reverse order of the reference; on the corpus, summed
+    discordant pairs of regions over summed pairs.
   measures: >-
     Ordering alone, which the CER confuses with reading.
   limits: >-

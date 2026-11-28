@@ -106,6 +106,9 @@ def test_reference_vide__pipeline_qui_hallucine_est_classe_apres(
 
 
 # --- F1 et ratios non linéaires -------------------------------------------
+#
+# Agrégation NER et régions (tranche 1a, M3) sur des appariements sans
+# ambiguïté ; l'appariement (M8) est jugé en tranche 4.
 
 
 def _ner_bench(tmp_path: Path) -> Bench:

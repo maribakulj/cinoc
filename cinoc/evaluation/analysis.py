@@ -15,6 +15,7 @@ lignes, documents difficiles), ``calibration`` (ECE/MCE), ``taxonomy``
 
 from __future__ import annotations
 
+from fractions import Fraction
 from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -32,9 +33,10 @@ class PipelineRank(BaseModel):
 class PipelineInterval(BaseModel):
     """IC bootstrap (percentile, graine fixe) de l'agrégat **affiché**.
 
-    ``value`` est le ratio micro Σ(v·w)/Σw du pipeline — le chiffre du
-    tableau, même calcul (``inference.micro_ratio``) — et ``[lower, upper]``
-    l'intervalle de ce même ratio, documents rééchantillonnés. Un intervalle
+    ``value`` est le ratio micro du pipeline — Σ numérateurs / Σ
+    dénominateurs des statistiques de ses documents, le chiffre du tableau,
+    même finalisation — et ``[lower, upper]`` l'intervalle de ce même ratio,
+    documents rééchantillonnés. Un intervalle
     qui porte encore ``mean`` (moyenne macro, et l'IC de celle-ci) est
     refusé, pas relu comme l'IC du chiffre affiché.
     """
@@ -45,8 +47,8 @@ class PipelineInterval(BaseModel):
     value: float
     lower: float
     upper: float
-    #: Documents notés de poids non nul (marginal, ≠ cas complets) — ceux qui
-    #: font l'agrégat ; un document à référence vide n'y pèse rien.
+    #: Documents dotés d'une statistique (marginal, ≠ cas complets) — ceux qui
+    #: font l'agrégat, pages à référence vide comprises (leurs insertions).
     n_documents: int = Field(ge=1)
 
 
@@ -106,11 +108,17 @@ class InferencePayload(BaseModel):
     cd_groups: tuple[tuple[str, ...], ...] = ()
     #: Paires triées (a < b par nom).
     pairwise: tuple[PairwiseDifference, ...] = ()
+    #: ``False`` : le dénominateur du micro dépend de l'hypothèse (MER, cMER) —
+    #: aucune procédure validée, l'inférence du micro est **non estimable**
+    #: (``CONTRATS.md`` B9c) et ``intervals`` reste vide ; le point est publié.
+    micro_estimable: bool = True
     #: Triés par pipeline — ordre déterministe.
     intervals: tuple[PipelineInterval, ...] = ()
 
     @model_validator(mode="after")
     def _coherent(self) -> Self:
+        if self.intervals and not self.micro_estimable:
+            raise ValueError("pas d'intervalle pour un micro non estimable")
         if (self.test is None) == (self.not_computed is None):
             raise ValueError("un test calculé, ou le motif de son absence")
         if (self.p_value is None) != (self.test is None) or (
@@ -175,7 +183,7 @@ class PipelineEconomics(BaseModel):
     #: un instantané daté absent de la table prend le tarif de son alias.
     basis: str = Field(min_length=1, max_length=256)
     cer: float | None = None
-    #: Erreurs estimées sur la vue : Σ (cer_doc × poids_doc) — auditable.
+    #: Erreurs estimées sur la vue : Σ (S + D + I) des statistiques du CER.
     estimated_errors: float | None = Field(default=None, ge=0)
     pages_per_hour: float | None = Field(default=None, ge=0)
     #: Débit **simulé** : retire un temps de relecture supposé par erreur
@@ -282,7 +290,9 @@ class CalibrationBin(BaseModel):
     """Bin de fiabilité : confiance moyenne vs exactitude observée.
 
     Bornes [``lower`` ; ``upper``[, sauf le dernier bin, fermé à 1,0
-    (cf. ``evaluation.calibration``).
+    (cf. ``evaluation.calibration``). Sa statistique suffisante est
+    (``count``, ``correct``, ``confidence_sum``) — entiers et ``Fraction``
+    exacte : deux histogrammes se combinent par addition, sans arrondi (M6).
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -292,6 +302,8 @@ class CalibrationBin(BaseModel):
     mean_confidence: float = Field(ge=0, le=1)
     accuracy: float = Field(ge=0, le=1)
     count: int = Field(ge=1)
+    correct: int = Field(ge=0)
+    confidence_sum: Fraction = Field(ge=0)
 
 
 class PipelineCalibration(BaseModel):
@@ -948,16 +960,20 @@ class LinesPayload(BaseModel):
 
 
 class EntityCategoryScore(BaseModel):
-    """Précision/rappel/F1 d'une catégorie d'entité (PER, LOC, DATE…)."""
+    """Précision/rappel/F1 d'une catégorie d'entité (PER, LOC, DATE…).
+
+    ``None`` = dénominateur nul : une catégorie seulement prédite (support 0)
+    a P = 0 et R indéfini (M3).
+    """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     label: str = Field(min_length=1, max_length=32)
-    precision: float = Field(ge=0, le=1)
-    recall: float = Field(ge=0, le=1)
-    f1: float = Field(ge=0, le=1)
+    precision: float | None = Field(ge=0, le=1)
+    recall: float | None = Field(ge=0, le=1)
+    f1: float | None = Field(ge=0, le=1)
     #: Entités GT de la catégorie (TP + FN) — l'assiette du rappel.
-    support: int = Field(ge=1)
+    support: int = Field(ge=0)
 
 
 class EntityMention(BaseModel):
@@ -987,7 +1003,8 @@ class PipelineNer(BaseModel):
     true_positives: int = Field(ge=0)
     false_positives: int = Field(ge=0)
     false_negatives: int = Field(ge=0)
-    precision: float = Field(ge=0, le=1)
+    #: ``None`` sans aucune entité prédite (tp + fp = 0).
+    precision: float | None = Field(ge=0, le=1)
     recall: float = Field(ge=0, le=1)
     f1: float = Field(ge=0, le=1)
     #: Catégories présentes (TP+FN+FP > 0), ordre alphabétique.

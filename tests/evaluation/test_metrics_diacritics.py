@@ -21,21 +21,22 @@ def test_is_diacritic_excludes_plain_and_ligatures() -> None:
 
 
 def test_diacritic_error_none_when_reference_has_no_diacritics() -> None:
-    assert diacritic_error.fn(_ctx("hello world", "helo wrld")) is None
+    obs = diacritic_error.fn(_ctx("hello world", "helo wrld"))
+    assert obs.value is None and obs.stat.total == 0  # indéfini, pas 0
 
 
 def test_diacritic_error_perfect() -> None:
     obs = diacritic_error.fn(_ctx("café", "café"))
-    assert obs is not None and obs.value == 0.0 and obs.weight == 1
+    assert obs is not None and obs.value == 0.0 and obs.stat.total == 1
 
 
 def test_diacritic_error_substituted_diacritic() -> None:
     # « ü » lu « u » : 1 diacritique en réf, 1 faux → 1.0 (poids 1).
     obs = diacritic_error.fn(_ctx("Müller", "Muller"))
-    assert obs is not None and obs.value == 1.0 and obs.weight == 1
+    assert obs is not None and obs.value == 1.0 and obs.stat.total == 1
 
 
 def test_diacritic_error_partial() -> None:
     # « é » et « è » en réf ; seul « é » est faux → 0.5 sur 2 cibles.
     obs = diacritic_error.fn(_ctx("éxè", "exè"))
-    assert obs is not None and obs.value == 0.5 and obs.weight == 2
+    assert obs is not None and obs.value == 0.5 and obs.stat.total == 2

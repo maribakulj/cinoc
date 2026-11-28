@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from fractions import Fraction
 
 from cinoc.domain.run import RunManifest
 from cinoc.evaluation.analysis import (
@@ -91,7 +92,8 @@ def test_profile_includes_calibration_and_composition_when_present() -> None:
                 bins=(
                     CalibrationBin(
                         lower=0.8, upper=1.0, mean_confidence=0.9,
-                        accuracy=0.85, count=10,
+                        accuracy=0.8, count=10, correct=8,
+                        confidence_sum=Fraction(9),
                     ),
                 ),
             ),

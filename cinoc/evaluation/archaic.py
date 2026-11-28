@@ -44,8 +44,8 @@ from dataclasses import dataclass
 from rapidfuzz.distance import Levenshtein
 
 from cinoc.evaluation.errors import EvaluationError
-from cinoc.evaluation.metric import Observation
 from cinoc.evaluation.preservation import preservation_counts
+from cinoc.evaluation.statistics import Proportion
 
 #: ``◌ͤ`` (U+0364, combining latin small letter e) — marque suscrite des formes
 #: ``aͤ oͤ uͤ`` ; représente la famille à elle seule (pas de pré-composé).
@@ -119,48 +119,43 @@ def resolve_archaic_list(name: str | None = None) -> ResolvedArchaicList:
     )
 
 
-def hcpr_observation(
+def hcpr_statistic(
     reference: str, hypothesis: str, chars: frozenset[str]
-) -> Observation | None:
+) -> Proportion:
     """Taux de **préservation** des caractères de la liste présents dans la GT.
 
     ``(n_total − n_wrong) / n_total`` sur les comptes du moteur partagé (parité
-    ``diacritic_err``/``mufi_err``). ``None`` si la GT n'en porte aucun.
+    ``diacritic_err``/``mufi_err``). Indéfini si la GT n'en porte aucun.
     """
     counts = preservation_counts(reference, hypothesis, lambda ch: ch in chars)
-    if counts is None:
-        return None
-    n_total, n_wrong = counts
-    return Observation(value=(n_total - n_wrong) / n_total, weight=n_total)
+    return Proportion(count=counts.total - counts.wrong, total=counts.total)
 
 
-def air_observation(
+def air_statistic(
     reference: str, hypothesis: str, chars: frozenset[str]
-) -> Observation | None:
+) -> Proportion:
     """**Apport net** d'archaïsmes : part des caractères de la liste **insérés**.
 
     Dénominateur = occurrences de la liste dans la **sortie** ; numérateur = celles
     à une position **non** couverte par un opcode ``equal`` (insérée ou substituée,
-    donc non recopiée fidèlement de la GT). Borné [0,1]. ``None`` si la sortie n'en
-    porte aucun.
+    donc non recopiée fidèlement de la GT). Borné [0,1]. Indéfini si la sortie
+    n'en porte aucun.
     """
     targets = [j for j, char in enumerate(hypothesis) if char in chars]
-    if not targets:
-        return None
     faithful: set[int] = set()
     for op in Levenshtein.opcodes(reference, hypothesis):
         if op.tag == "equal":
             faithful.update(range(op.dest_start, op.dest_end))
     added = sum(1 for j in targets if j not in faithful)
-    return Observation(value=added / len(targets), weight=len(targets))
+    return Proportion(count=added, total=len(targets))
 
 
 __all__ = [
     "ARCHAIC_LISTS",
     "DEFAULT_ARCHAIC_LIST",
     "ResolvedArchaicList",
-    "air_observation",
+    "air_statistic",
     "archaic_list_hash",
-    "hcpr_observation",
+    "hcpr_statistic",
     "resolve_archaic_list",
 ]

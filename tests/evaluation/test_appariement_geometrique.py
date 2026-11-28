@@ -147,7 +147,7 @@ def test_les_regions_fantomes_comptent_leur_texte() -> None:
     assert observation is not None
     # 13 caractères inventés sur 14 de référence (alpha + beta + gamma).
     assert observation.value == 13 / 14
-    assert observation.weight == 14
+    assert (observation.stat.errors, observation.stat.reference_length) == (13, 14)
     # Par géométrie aussi (identifiants étrangers) : même verdict.
     autre = _page(("b0", "b1", "b2"), ("alpha", "beta", "gamma"), ("b0", "b1", "b2"))
     p = autre.pages[0]

@@ -1,9 +1,9 @@
 {
-  "schema_version": 1,
+  "schema_version": 6,
   "manifest": {
     "run_id": "demo",
     "corpus_name": "demo",
-    "n_documents": 3,
+    "n_documents": 5,
     "pipeline_specs": [
       {
         "name": "tesseract",
@@ -23,7 +23,10 @@
             "output_types": [
               "raw_text"
             ],
-            "inputs_from": {}
+            "inputs_from": {},
+            "fanout": false,
+            "crop": false,
+            "merge_from": []
           }
         ]
       },
@@ -45,7 +48,10 @@
             "output_types": [
               "raw_text"
             ],
-            "inputs_from": {}
+            "inputs_from": {},
+            "fanout": false,
+            "crop": false,
+            "merge_from": []
           }
         ]
       }
@@ -60,19 +66,21 @@
     },
     "view_specs": [
       {
-        "name": "text",
+        "name": "texte",
         "description": "",
         "candidate_types": [
           "raw_text"
         ],
         "projection": null,
         "projections_by_source_type": {},
-        "normalization_profile": null,
+        "normalization_profile": "flat_text",
         "char_exclude": null,
         "metric_names": [
           "cer",
+          "cer_diplo",
           "wer",
-          "mer"
+          "mer",
+          "air"
         ],
         "ignored_dimensions": [],
         "warnings": []
@@ -96,57 +104,226 @@
         "warnings": []
       }
     ],
-    "code_version": "0.1.1.dev25+gca59b82a2",
-    "started_at": "2026-06-01T07:07:12.591327Z",
-    "completed_at": "2026-06-01T07:07:13.202600Z",
-    "dependencies_lock": {},
+    "failure_policy": "exclude",
+    "code_version": "0.1.1.dev271+g04a1c17b1",
+    "started_at": "2026-01-01T00:00:00Z",
+    "completed_at": "2026-01-01T00:00:00Z",
+    "dependencies_lock": {
+      "cinoc": "0.1.1.dev271+g04a1c17b1",
+      "fastapi": "0.165.0",
+      "httpcore": "1.0.9",
+      "httpx": "0.29.0",
+      "jinja2": "3.1.6",
+      "lxml": "6.2.0",
+      "numpy": "2.4.6",
+      "pillow": "13.0.0",
+      "pydantic": "2.14.4",
+      "python-multipart": "0.0.34",
+      "pyyaml": "6.0.4",
+      "rapidfuzz": "3.14.6",
+      "saknussemm": "0.9.0",
+      "scipy": "1.18.1",
+      "uvicorn": "0.54.0"
+    },
     "system_binaries_lock": {},
+    "unicode_version": "15.1.0",
     "module_versions": {
       "precomputed:pero": "1.0",
       "precomputed:tesseract": "1.0"
     },
-    "metadata": {}
+    "served_models": {},
+    "metadata": {
+      "archaic_list": "archaic_core",
+      "archaic_list_hash": "71ef04713304dc76220ea57d18167313115d7807166d51a1a2936ac5387cb005"
+    },
+    "artifacts_dir": null
   },
   "pipelines": [
     {
       "pipeline": "tesseract",
-      "view": "text",
+      "view": "texte",
       "aggregate": [
         {
           "metric": "cer",
-          "value": 0.014285714285714285,
-          "support": 3
+          "value": 0.028985507246376812,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 4,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 138
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.028985507246376812,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 4,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 138
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
         },
         {
           "metric": "wer",
-          "value": 0.09090909090909091,
-          "support": 3
+          "value": 0.16666666666666666,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 4,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 24
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
         },
         {
           "metric": "mer",
-          "value": 0.09090909090909091,
-          "support": 3
+          "value": 0.16666666666666666,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 4,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 24
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
+        },
+        {
+          "metric": "air",
+          "value": null,
+          "stat": {
+            "family": "proportion",
+            "count": 0,
+            "total": 0
+          },
+          "scalar_reason": "zero_denominator",
+          "untruncated_error_rate": null,
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
         }
       ]
     },
     {
       "pipeline": "pero",
-      "view": "text",
+      "view": "texte",
       "aggregate": [
         {
           "metric": "cer",
-          "value": 0.02857142857142857,
-          "support": 3
+          "value": 0.014492753623188406,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 2,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 138
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.0,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 138
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
         },
         {
           "metric": "wer",
-          "value": 0.09090909090909091,
-          "support": 3
+          "value": 0.041666666666666664,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 1,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 24
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
         },
         {
           "metric": "mer",
-          "value": 0.09090909090909091,
-          "support": 3
+          "value": 0.041666666666666664,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 1,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 24
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
+        },
+        {
+          "metric": "air",
+          "value": 1.0,
+          "stat": {
+            "family": "proportion",
+            "count": 2,
+            "total": 2
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
         }
       ]
     },
@@ -156,18 +333,57 @@
       "aggregate": [
         {
           "metric": "cer",
-          "value": 0.0,
-          "support": 3
+          "value": 0.021739130434782608,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 3,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 138
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
         },
         {
           "metric": "wer",
-          "value": 0.0,
-          "support": 3
+          "value": 0.125,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 3,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 24
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
         },
         {
           "metric": "mer",
-          "value": 0.0,
-          "support": 3
+          "value": 0.125,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 3,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 24
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
         }
       ]
     },
@@ -178,17 +394,56 @@
         {
           "metric": "cer",
           "value": 0.0,
-          "support": 3
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 138
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
         },
         {
           "metric": "wer",
           "value": 0.0,
-          "support": 3
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 24
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
         },
         {
           "metric": "mer",
           "value": 0.0,
-          "support": 3
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 24
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": null,
+          "availability": null,
+          "validity": null,
+          "support": 5,
+          "expected": 5
         }
       ]
     }
@@ -197,134 +452,972 @@
     {
       "document_id": "folio_001",
       "pipeline": "tesseract",
-      "view": "text",
+      "view": "texte",
       "scores": [
         {
           "metric": "cer",
           "value": 0.041666666666666664,
-          "support": 24
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 1,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 24
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.041666666666666664,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 1,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 24
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
         },
         {
           "metric": "wer",
           "value": 0.25,
-          "support": 4
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 1,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 4
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
         },
         {
           "metric": "mer",
           "value": 0.25,
-          "support": 4
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 1,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 4
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "air",
+          "value": null,
+          "stat": {
+            "family": "proportion",
+            "count": 0,
+            "total": 0
+          },
+          "scalar_reason": "zero_denominator",
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
         }
-      ]
+      ],
+      "stratum": "manuscrit médiéval",
+      "image_ref": null
     },
     {
       "document_id": "folio_002",
       "pipeline": "tesseract",
-      "view": "text",
+      "view": "texte",
       "scores": [
         {
           "metric": "cer",
           "value": 0.0,
-          "support": 23
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 23
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.0,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 23
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
         },
         {
           "metric": "wer",
           "value": 0.0,
-          "support": 3
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 3
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
         },
         {
           "metric": "mer",
           "value": 0.0,
-          "support": 3
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 3
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "air",
+          "value": null,
+          "stat": {
+            "family": "proportion",
+            "count": 0,
+            "total": 0
+          },
+          "scalar_reason": "zero_denominator",
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
         }
-      ]
+      ],
+      "stratum": "manuscrit médiéval",
+      "image_ref": null
     },
     {
       "document_id": "folio_003",
       "pipeline": "tesseract",
-      "view": "text",
+      "view": "texte",
       "scores": [
         {
           "metric": "cer",
           "value": 0.0,
-          "support": 23
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 23
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.0,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 23
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
         },
         {
           "metric": "wer",
           "value": 0.0,
-          "support": 4
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 4
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
         },
         {
           "metric": "mer",
           "value": 0.0,
-          "support": 4
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 4
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "air",
+          "value": null,
+          "stat": {
+            "family": "proportion",
+            "count": 0,
+            "total": 0
+          },
+          "scalar_reason": "zero_denominator",
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
         }
-      ]
+      ],
+      "stratum": "manuscrit médiéval",
+      "image_ref": null
+    },
+    {
+      "document_id": "imprime_001",
+      "pipeline": "tesseract",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.029411764705882353,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 1,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 34
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.029411764705882353,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 1,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 34
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.16666666666666666,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 1,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 6
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.16666666666666666,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 1,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 6
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "air",
+          "value": null,
+          "stat": {
+            "family": "proportion",
+            "count": 0,
+            "total": 0
+          },
+          "scalar_reason": "zero_denominator",
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
+        }
+      ],
+      "stratum": "imprimé ancien",
+      "image_ref": null
+    },
+    {
+      "document_id": "imprime_002",
+      "pipeline": "tesseract",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.058823529411764705,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 2,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 34
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.058823529411764705,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 2,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 34
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.2857142857142857,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 2,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 7
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.2857142857142857,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 2,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 7
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "air",
+          "value": null,
+          "stat": {
+            "family": "proportion",
+            "count": 0,
+            "total": 0
+          },
+          "scalar_reason": "zero_denominator",
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
+        }
+      ],
+      "stratum": "imprimé ancien",
+      "image_ref": null
     },
     {
       "document_id": "folio_001",
       "pipeline": "pero",
-      "view": "text",
+      "view": "texte",
       "scores": [
         {
           "metric": "cer",
           "value": 0.0,
-          "support": 24
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 24
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.0,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 24
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
         },
         {
           "metric": "wer",
           "value": 0.0,
-          "support": 4
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 4
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
         },
         {
           "metric": "mer",
           "value": 0.0,
-          "support": 4
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 4
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "air",
+          "value": null,
+          "stat": {
+            "family": "proportion",
+            "count": 0,
+            "total": 0
+          },
+          "scalar_reason": "zero_denominator",
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
         }
-      ]
+      ],
+      "stratum": "manuscrit médiéval",
+      "image_ref": null
     },
     {
       "document_id": "folio_002",
       "pipeline": "pero",
-      "view": "text",
+      "view": "texte",
       "scores": [
         {
           "metric": "cer",
           "value": 0.08695652173913043,
-          "support": 23
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 2,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 23
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.0,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 23
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
         },
         {
           "metric": "wer",
           "value": 0.3333333333333333,
-          "support": 3
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 1,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 3
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
         },
         {
           "metric": "mer",
           "value": 0.3333333333333333,
-          "support": 3
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 1,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 3
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "air",
+          "value": 1.0,
+          "stat": {
+            "family": "proportion",
+            "count": 2,
+            "total": 2
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
         }
-      ]
+      ],
+      "stratum": "manuscrit médiéval",
+      "image_ref": null
     },
     {
       "document_id": "folio_003",
       "pipeline": "pero",
-      "view": "text",
+      "view": "texte",
       "scores": [
         {
           "metric": "cer",
           "value": 0.0,
-          "support": 23
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 23
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.0,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 23
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
         },
         {
           "metric": "wer",
           "value": 0.0,
-          "support": 4
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 4
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
         },
         {
           "metric": "mer",
           "value": 0.0,
-          "support": 4
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 4
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "air",
+          "value": null,
+          "stat": {
+            "family": "proportion",
+            "count": 0,
+            "total": 0
+          },
+          "scalar_reason": "zero_denominator",
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
         }
-      ]
+      ],
+      "stratum": "manuscrit médiéval",
+      "image_ref": null
+    },
+    {
+      "document_id": "imprime_001",
+      "pipeline": "pero",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.0,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 34
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.0,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 34
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.0,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 6
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.0,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 6
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "air",
+          "value": null,
+          "stat": {
+            "family": "proportion",
+            "count": 0,
+            "total": 0
+          },
+          "scalar_reason": "zero_denominator",
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
+        }
+      ],
+      "stratum": "imprimé ancien",
+      "image_ref": null
+    },
+    {
+      "document_id": "imprime_002",
+      "pipeline": "pero",
+      "view": "texte",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.0,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 34
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "cer_diplo",
+          "value": 0.0,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 34
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.0,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 7
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.0,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 7
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "air",
+          "value": null,
+          "stat": {
+            "family": "proportion",
+            "count": 0,
+            "total": 0
+          },
+          "scalar_reason": "zero_denominator",
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
+        }
+      ],
+      "stratum": "imprimé ancien",
+      "image_ref": null
     },
     {
       "document_id": "folio_001",
@@ -334,19 +1427,60 @@
         {
           "metric": "cer",
           "value": 0.0,
-          "support": 24
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 24
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
         },
         {
           "metric": "wer",
           "value": 0.0,
-          "support": 4
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 4
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
         },
         {
           "metric": "mer",
           "value": 0.0,
-          "support": 4
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 4
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
         }
-      ]
+      ],
+      "stratum": "manuscrit médiéval",
+      "image_ref": null
     },
     {
       "document_id": "folio_002",
@@ -356,19 +1490,60 @@
         {
           "metric": "cer",
           "value": 0.0,
-          "support": 23
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 23
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
         },
         {
           "metric": "wer",
           "value": 0.0,
-          "support": 3
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 3
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
         },
         {
           "metric": "mer",
           "value": 0.0,
-          "support": 3
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 3
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
         }
-      ]
+      ],
+      "stratum": "manuscrit médiéval",
+      "image_ref": null
     },
     {
       "document_id": "folio_003",
@@ -378,19 +1553,186 @@
         {
           "metric": "cer",
           "value": 0.0,
-          "support": 23
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 23
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
         },
         {
           "metric": "wer",
           "value": 0.0,
-          "support": 4
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 4
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
         },
         {
           "metric": "mer",
           "value": 0.0,
-          "support": 4
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 4
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
         }
-      ]
+      ],
+      "stratum": "manuscrit médiéval",
+      "image_ref": null
+    },
+    {
+      "document_id": "imprime_001",
+      "pipeline": "tesseract",
+      "view": "francais_medieval",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.029411764705882353,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 1,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 34
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.16666666666666666,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 1,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 6
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.16666666666666666,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 1,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 6
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
+        }
+      ],
+      "stratum": "imprimé ancien",
+      "image_ref": null
+    },
+    {
+      "document_id": "imprime_002",
+      "pipeline": "tesseract",
+      "view": "francais_medieval",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.058823529411764705,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 2,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 34
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.2857142857142857,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 2,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 7
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.2857142857142857,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 2,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 7
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
+        }
+      ],
+      "stratum": "imprimé ancien",
+      "image_ref": null
     },
     {
       "document_id": "folio_001",
@@ -400,19 +1742,60 @@
         {
           "metric": "cer",
           "value": 0.0,
-          "support": 24
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 24
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
         },
         {
           "metric": "wer",
           "value": 0.0,
-          "support": 4
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 4
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
         },
         {
           "metric": "mer",
           "value": 0.0,
-          "support": 4
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 4
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
         }
-      ]
+      ],
+      "stratum": "manuscrit médiéval",
+      "image_ref": null
     },
     {
       "document_id": "folio_002",
@@ -422,19 +1805,60 @@
         {
           "metric": "cer",
           "value": 0.0,
-          "support": 23
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 23
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
         },
         {
           "metric": "wer",
           "value": 0.0,
-          "support": 3
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 3
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
         },
         {
           "metric": "mer",
           "value": 0.0,
-          "support": 3
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 3
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
         }
-      ]
+      ],
+      "stratum": "manuscrit médiéval",
+      "image_ref": null
     },
     {
       "document_id": "folio_003",
@@ -444,51 +1868,578 @@
         {
           "metric": "cer",
           "value": 0.0,
-          "support": 23
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 23
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
         },
         {
           "metric": "wer",
           "value": 0.0,
-          "support": 4
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 4
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
         },
         {
           "metric": "mer",
           "value": 0.0,
-          "support": 4
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 4
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
         }
-      ]
+      ],
+      "stratum": "manuscrit médiéval",
+      "image_ref": null
+    },
+    {
+      "document_id": "imprime_001",
+      "pipeline": "pero",
+      "view": "francais_medieval",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.0,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 34
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.0,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 6
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.0,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 6
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
+        }
+      ],
+      "stratum": "imprimé ancien",
+      "image_ref": null
+    },
+    {
+      "document_id": "imprime_002",
+      "pipeline": "pero",
+      "view": "francais_medieval",
+      "scores": [
+        {
+          "metric": "cer",
+          "value": 0.0,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 34
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "wer",
+          "value": 0.0,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 7
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
+        },
+        {
+          "metric": "mer",
+          "value": 0.0,
+          "stat": {
+            "family": "edit_counts",
+            "substitutions": 0,
+            "deletions": 0,
+            "insertions": 0,
+            "reference_length": 7
+          },
+          "scalar_reason": null,
+          "untruncated_error_rate": null,
+          "applicability": "applicable",
+          "availability": "available",
+          "validity": "valid",
+          "support": null,
+          "expected": null
+        }
+      ],
+      "stratum": "imprimé ancien",
+      "image_ref": null
     }
   ],
   "cross_engine": [
     {
-      "metric": "text:cer:significance_p",
+      "metric": "texte:cer:significance_p",
       "value": null,
-      "support": 3
+      "stat": null,
+      "scalar_reason": null,
+      "untruncated_error_rate": null,
+      "applicability": null,
+      "availability": null,
+      "validity": null,
+      "support": 5,
+      "expected": null
     },
     {
-      "metric": "text:wer:significance_p",
+      "metric": "texte:wer:significance_p",
       "value": null,
-      "support": 3
+      "stat": null,
+      "scalar_reason": null,
+      "untruncated_error_rate": null,
+      "applicability": null,
+      "availability": null,
+      "validity": null,
+      "support": 5,
+      "expected": null
     },
     {
-      "metric": "text:mer:significance_p",
+      "metric": "texte:mer:significance_p",
       "value": null,
-      "support": 3
+      "stat": null,
+      "scalar_reason": null,
+      "untruncated_error_rate": null,
+      "applicability": null,
+      "availability": null,
+      "validity": null,
+      "support": 5,
+      "expected": null
     },
     {
       "metric": "francais_medieval:cer:significance_p",
       "value": null,
-      "support": 3
+      "stat": null,
+      "scalar_reason": null,
+      "untruncated_error_rate": null,
+      "applicability": null,
+      "availability": null,
+      "validity": null,
+      "support": 5,
+      "expected": null
     },
     {
       "metric": "francais_medieval:wer:significance_p",
       "value": null,
-      "support": 3
+      "stat": null,
+      "scalar_reason": null,
+      "untruncated_error_rate": null,
+      "applicability": null,
+      "availability": null,
+      "validity": null,
+      "support": 5,
+      "expected": null
     },
     {
       "metric": "francais_medieval:mer:significance_p",
       "value": null,
-      "support": 3
+      "stat": null,
+      "scalar_reason": null,
+      "untruncated_error_rate": null,
+      "applicability": null,
+      "availability": null,
+      "validity": null,
+      "support": 5,
+      "expected": null
+    }
+  ],
+  "usage": [
+    {
+      "document_id": "folio_001",
+      "pipeline": "pero",
+      "usage": {
+        "duration_seconds": null,
+        "tokens_in": null,
+        "tokens_out": null,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null,
+      "resumed": false
+    },
+    {
+      "document_id": "folio_002",
+      "pipeline": "pero",
+      "usage": {
+        "duration_seconds": null,
+        "tokens_in": null,
+        "tokens_out": null,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null,
+      "resumed": false
+    },
+    {
+      "document_id": "folio_003",
+      "pipeline": "pero",
+      "usage": {
+        "duration_seconds": null,
+        "tokens_in": null,
+        "tokens_out": null,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null,
+      "resumed": false
+    },
+    {
+      "document_id": "imprime_001",
+      "pipeline": "pero",
+      "usage": {
+        "duration_seconds": null,
+        "tokens_in": null,
+        "tokens_out": null,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null,
+      "resumed": false
+    },
+    {
+      "document_id": "imprime_002",
+      "pipeline": "pero",
+      "usage": {
+        "duration_seconds": null,
+        "tokens_in": null,
+        "tokens_out": null,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null,
+      "resumed": false
+    },
+    {
+      "document_id": "folio_001",
+      "pipeline": "tesseract",
+      "usage": {
+        "duration_seconds": null,
+        "tokens_in": null,
+        "tokens_out": null,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null,
+      "resumed": false
+    },
+    {
+      "document_id": "folio_002",
+      "pipeline": "tesseract",
+      "usage": {
+        "duration_seconds": null,
+        "tokens_in": null,
+        "tokens_out": null,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null,
+      "resumed": false
+    },
+    {
+      "document_id": "folio_003",
+      "pipeline": "tesseract",
+      "usage": {
+        "duration_seconds": null,
+        "tokens_in": null,
+        "tokens_out": null,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null,
+      "resumed": false
+    },
+    {
+      "document_id": "imprime_001",
+      "pipeline": "tesseract",
+      "usage": {
+        "duration_seconds": null,
+        "tokens_in": null,
+        "tokens_out": null,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null,
+      "resumed": false
+    },
+    {
+      "document_id": "imprime_002",
+      "pipeline": "tesseract",
+      "usage": {
+        "duration_seconds": null,
+        "tokens_in": null,
+        "tokens_out": null,
+        "tokens_cache_read": null,
+        "tokens_cache_write": null,
+        "tokens_reasoning": null,
+        "billed_pages": null
+      },
+      "outcome": "ok",
+      "reason": null,
+      "message": null,
+      "resumed": false
+    }
+  ],
+  "analyses": [
+    {
+      "scope": "corpus",
+      "view": "francais_medieval",
+      "pipeline": null,
+      "document_id": null,
+      "payload": {
+        "kind": "inference",
+        "metric": "cer",
+        "alpha": 0.05,
+        "n_documents": 5,
+        "test": null,
+        "not_computed": "insufficient_support",
+        "p_value": null,
+        "p_holm": null,
+        "family_size": 0,
+        "critical_distance": null,
+        "q_alpha": null,
+        "mean_ranks": [],
+        "cd_groups": [],
+        "pairwise": [],
+        "micro_estimable": true,
+        "intervals": []
+      }
+    },
+    {
+      "scope": "corpus",
+      "view": "francais_medieval",
+      "pipeline": null,
+      "document_id": null,
+      "payload": {
+        "kind": "inference",
+        "metric": "mer",
+        "alpha": 0.05,
+        "n_documents": 5,
+        "test": null,
+        "not_computed": "insufficient_support",
+        "p_value": null,
+        "p_holm": null,
+        "family_size": 0,
+        "critical_distance": null,
+        "q_alpha": null,
+        "mean_ranks": [],
+        "cd_groups": [],
+        "pairwise": [],
+        "micro_estimable": false,
+        "intervals": []
+      }
+    },
+    {
+      "scope": "corpus",
+      "view": "francais_medieval",
+      "pipeline": null,
+      "document_id": null,
+      "payload": {
+        "kind": "inference",
+        "metric": "wer",
+        "alpha": 0.05,
+        "n_documents": 5,
+        "test": null,
+        "not_computed": "insufficient_support",
+        "p_value": null,
+        "p_holm": null,
+        "family_size": 0,
+        "critical_distance": null,
+        "q_alpha": null,
+        "mean_ranks": [],
+        "cd_groups": [],
+        "pairwise": [],
+        "micro_estimable": true,
+        "intervals": []
+      }
+    },
+    {
+      "scope": "corpus",
+      "view": "texte",
+      "pipeline": null,
+      "document_id": null,
+      "payload": {
+        "kind": "inference",
+        "metric": "cer",
+        "alpha": 0.05,
+        "n_documents": 5,
+        "test": null,
+        "not_computed": "insufficient_support",
+        "p_value": null,
+        "p_holm": null,
+        "family_size": 0,
+        "critical_distance": null,
+        "q_alpha": null,
+        "mean_ranks": [],
+        "cd_groups": [],
+        "pairwise": [],
+        "micro_estimable": true,
+        "intervals": []
+      }
+    },
+    {
+      "scope": "corpus",
+      "view": "texte",
+      "pipeline": null,
+      "document_id": null,
+      "payload": {
+        "kind": "inference",
+        "metric": "mer",
+        "alpha": 0.05,
+        "n_documents": 5,
+        "test": null,
+        "not_computed": "insufficient_support",
+        "p_value": null,
+        "p_holm": null,
+        "family_size": 0,
+        "critical_distance": null,
+        "q_alpha": null,
+        "mean_ranks": [],
+        "cd_groups": [],
+        "pairwise": [],
+        "micro_estimable": false,
+        "intervals": []
+      }
+    },
+    {
+      "scope": "corpus",
+      "view": "texte",
+      "pipeline": null,
+      "document_id": null,
+      "payload": {
+        "kind": "inference",
+        "metric": "wer",
+        "alpha": 0.05,
+        "n_documents": 5,
+        "test": null,
+        "not_computed": "insufficient_support",
+        "p_value": null,
+        "p_holm": null,
+        "family_size": 0,
+        "critical_distance": null,
+        "q_alpha": null,
+        "mean_ranks": [],
+        "cd_groups": [],
+        "pairwise": [],
+        "micro_estimable": true,
+        "intervals": []
+      }
     }
   ]
 }

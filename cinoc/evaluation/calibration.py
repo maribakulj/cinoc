@@ -11,6 +11,21 @@ Networks*) — formules publiées, vérifiables à la main.
 1,0 tombe dans le dernier, une de 0,3 dans [0,3 ; 0,4[. Un bin vide n'entre ni
 dans l'ECE ni dans le MCE.
 
+**Arithmétique exacte (M6, R1).** Chaque bin porte sa statistique suffisante :
+``count`` et ``correct`` entiers, ``confidence_sum`` en ``Fraction`` (la somme
+exacte des confiances). **Entrée** : une confiance est lue comme la valeur
+exacte de son binaire IEEE 754, ``Fraction(c)`` — jamais un arrondi décimal à
+k chiffres, convention de plus qui confondrait deux jetons distincts ; c'est
+le flottant que le moteur a écrit et que le JSON a relu. **Sortie** : ECE =
+(1/N)·Σ_b |correct_b − Σconf_b| et MCE = max_b |correct_b − Σconf_b| / n_b sont
+calculés sur ces valeurs exactes, puis convertis **une** fois, au plus proche
+(``float(Fraction)``, arrondi correct) ; de même la confiance moyenne et
+l'exactitude d'un bin. Coût mesuré (D-313) : 0,37 s pour 200 000 jetons
+(0,05 s en flottants), 1,9 ko de payload ; l'histogramme
+est le même — et l'ECE identique bit à bit — quel que soit l'ordre des jetons
+ou des documents. (Une moyenne flottante par bin, pondérée en flottants, rend
+0,36666666666666664 là où la valeur exacte s'arrondit à 0,3666666666666667.)
+
 « Correct » = le mot du jeton apparaît **exactement** dans le multi-ensemble
 des mots de la référence du document — proxy volontairement simple et
 auditable (pas d'alignement positionnel : un mot juste mais déplacé reste
@@ -37,6 +52,7 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Mapping
+from fractions import Fraction
 from pathlib import Path
 
 from pydantic import TypeAdapter, ValidationError
@@ -77,33 +93,33 @@ def load_confidence_tokens(artifact: Artifact) -> list[ConfidenceToken]:
 def calibration_from_pairs(
     pairs: list[tuple[float, bool]], n_bins: int = N_BINS
 ) -> tuple[float, float, tuple[CalibrationBin, ...]]:
-    """``(ece, mce, bins)`` depuis des paires (confiance, correct)."""
-    buckets: list[list[tuple[float, bool]]] = [[] for _ in range(n_bins)]
+    """``(ece, mce, bins)`` depuis des paires (confiance, correct), en
+    arithmétique exacte (une conversion flottante par valeur publiée)."""
+    counts = [0] * n_bins
+    corrects = [0] * n_bins
+    sums = [Fraction(0)] * n_bins
     for confidence, correct in pairs:
         index = min(int(confidence * n_bins), n_bins - 1)
-        buckets[index].append((confidence, correct))
-    bins: list[CalibrationBin] = []
-    ece = 0.0
-    mce = 0.0
-    total = len(pairs)
-    for index, bucket in enumerate(buckets):
-        if not bucket:
-            continue
-        mean_confidence = sum(c for c, _ in bucket) / len(bucket)
-        accuracy = sum(1 for _, ok in bucket if ok) / len(bucket)
-        gap = abs(accuracy - mean_confidence)
-        ece += len(bucket) / total * gap
-        mce = max(mce, gap)
-        bins.append(
-            CalibrationBin(
-                lower=index / n_bins,
-                upper=(index + 1) / n_bins,
-                mean_confidence=mean_confidence,
-                accuracy=accuracy,
-                count=len(bucket),
-            )
+        counts[index] += 1
+        corrects[index] += int(correct)
+        sums[index] += Fraction(confidence)
+    occupied = [index for index in range(n_bins) if counts[index]]
+    gaps = {index: abs(corrects[index] - sums[index]) for index in occupied}
+    ece = sum(gaps.values(), Fraction(0)) / len(pairs)
+    mce = max((gaps[index] / counts[index] for index in occupied), default=Fraction(0))
+    bins = tuple(
+        CalibrationBin(
+            lower=index / n_bins,
+            upper=(index + 1) / n_bins,
+            mean_confidence=float(sums[index] / counts[index]),
+            accuracy=corrects[index] / counts[index],
+            count=counts[index],
+            correct=corrects[index],
+            confidence_sum=sums[index],
         )
-    return ece, mce, tuple(bins)
+        for index in occupied
+    )
+    return float(ece), float(mce), bins
 
 
 def _reference_words(

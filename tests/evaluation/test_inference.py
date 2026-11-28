@@ -33,8 +33,17 @@ _DATA: dict[str, list[float | None]] = {
 def _entry(
     metric: str, data: dict[str, list[float | None]]
 ) -> InferenceEntry:
-    """Une ligne de famille à poids unitaires (micro = moyenne des documents)."""
-    return ("text", metric, data, {name: [1] * len(s) for name, s in data.items()})
+    """Une ligne de famille à dénominateurs égaux (micro = moyenne des
+    documents) : les termes (numérateur, dénominateur) de chaque valeur."""
+    return (
+        "text",
+        metric,
+        data,
+        {
+            name: [None if v is None else (round(v * 1000), 1000) for v in series]
+            for name, series in data.items()
+        },
+    )
 
 
 def _payload(

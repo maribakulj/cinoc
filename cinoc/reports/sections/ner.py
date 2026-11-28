@@ -28,12 +28,20 @@ def _mentions(mentions: tuple[EntityMention, ...]) -> str:
     return f'<span class="muted">{labels}</span>'
 
 
+def _share(value: float | None, lang: str) -> str:
+    """Pourcentage localisé ; indéfini (dénominateur nul : aucune entité
+    prédite, ou catégorie seulement prédite) → « indéfini », jamais un 0 (M3)."""
+    if value is None:
+        return localized(lang, "indéfini", "undefined")
+    return localize_decimal(f"{value:.1%}", lang)
+
+
 def _global_row(row: PipelineNer, order: Mapping[str, int], lang: str) -> str:
     badge = engine_cell(row.pipeline, order.get(row.pipeline, 0))
     return (
         f'<tr><td class="eng-cell">{badge}</td>'
         f'<td class="disp">{row.n_reference}</td>'
-        f'<td class="disp">{localize_decimal(f"{row.precision:.1%}", lang)}</td>'
+        f'<td class="disp">{_share(row.precision, lang)}</td>'
         f'<td class="disp">{localize_decimal(f"{row.recall:.1%}", lang)}</td>'
         f'<td class="disp">{localize_decimal(f"{row.f1:.1%}", lang)}</td>'
         f'<td class="disp">{row.true_positives}/{row.false_positives}'
@@ -49,9 +57,9 @@ def _category_rows(row: PipelineNer, order: Mapping[str, int], lang: str) -> str
             f'<tr><td class="eng-cell">{badge}</td>'
             f'<td class="eng-cell">{escape(cat.label)}</td>'
             f'<td class="disp">{cat.support}</td>'
-            f'<td class="disp">{localize_decimal(f"{cat.precision:.1%}", lang)}</td>'
-            f'<td class="disp">{localize_decimal(f"{cat.recall:.1%}", lang)}</td>'
-            f'<td class="disp">{localize_decimal(f"{cat.f1:.1%}", lang)}</td></tr>'
+            f'<td class="disp">{_share(cat.precision, lang)}</td>'
+            f'<td class="disp">{_share(cat.recall, lang)}</td>'
+            f'<td class="disp">{_share(cat.f1, lang)}</td></tr>'
         )
     return "".join(rows)
 

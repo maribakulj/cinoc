@@ -12,6 +12,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from cinoc.evaluation.result import MetricScore
+from cinoc.evaluation.statistics import ErrorCounts
 from cinoc.reports._numbers import localize_decimal
 from cinoc.reports.glossary import load_glossary
 from cinoc.reports.html import escape, localized
@@ -28,9 +29,53 @@ def ordered_unique(values: Iterable[str]) -> tuple[str, ...]:
 
 
 def format_value(score: MetricScore, lang: str) -> str:
-    """Valeur formatée (``None`` non applicable → tiret), séparateur décimal
-    localisé (virgule en français)."""
-    return "—" if score.value is None else localize_decimal(f"{score.value:.4f}", lang)
+    """Valeur formatée, séparateur décimal localisé (virgule en français).
+
+    Sans statistique (non mesuré) → tiret. Statistique sans scalaire (page à
+    référence vide…) → « indéfini », qui n'est pas un « non mesuré » : la
+    statistique entre au total du corpus (K1). Une exactitude bornée à 0 dit
+    son taux d'erreur non tronqué et ses comptes à côté (B1)."""
+    if score.value is None:
+        if score.scalar_reason == "zero_denominator":
+            title = localized(
+                lang,
+                "Scalaire indéfini : dénominateur nul (référence vide). Ses "
+                "comptes existent et entrent au total du corpus.",
+                "Undefined scalar: zero denominator (empty reference). Its "
+                "counts exist and enter the corpus total.",
+            )
+            label = localized(lang, "indéfini", "undefined")
+            return f'<span class="muted" title="{escape(title)}">{label}</span>'
+        return "—"
+    return localize_decimal(f"{score.value:.4f}", lang) + _untruncated(score, lang)
+
+
+def _untruncated(score: MetricScore, lang: str) -> str:
+    """Taux d'erreur non tronqué et comptes d'une exactitude **bornée à 0**.
+
+    Rien quand le plancher n'est pas atteint : la valeur vaut alors 1 − e/n
+    et ne cache rien. Au-delà, 0 ne distingue plus un taux de 1,2 d'un taux
+    de 4,4 : le rapport l'écrit à côté."""
+    rate = score.untruncated_error_rate
+    stat = score.stat
+    if rate is None or rate <= 1 or not isinstance(stat, ErrorCounts):
+        return ""
+    shown = localize_decimal(f"{rate:.4f}", lang)
+    counts = f"{stat.errors}/{stat.reference_length}"
+    title = localized(
+        lang,
+        f"Exactitude bornée à 0 : {stat.errors} erreurs pour "
+        f"{stat.reference_length} unités de référence, soit un taux d'erreur "
+        "non tronqué de " + shown + ".",
+        f"Accuracy floored at 0: {stat.errors} errors for "
+        f"{stat.reference_length} reference units, an untruncated error "
+        "rate of " + shown + ".",
+    )
+    label = localized(lang, "erreurs", "errors")
+    return (
+        f' <span class="muted untruncated" title="{escape(title)}">'
+        f"({label} {shown} · {counts})</span>"
+    )
 
 
 def coverage(score: MetricScore, lang: str) -> str:

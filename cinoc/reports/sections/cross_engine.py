@@ -126,6 +126,16 @@ def _inference_block(
             f"{cells}</tr>"
         )
     posthoc = posthoc_text(payload, lang) or escape(reason_text(payload, lang))
+    if not payload.micro_estimable:
+        # B9c : dénominateur d'hypothèse — aucune procédure validée pour le
+        # micro ; le point reste au tableau, sans intervalle.
+        posthoc += " " + localized(
+            lang,
+            "Intervalle du micro : <b>inférence non estimable</b> (dénominateur "
+            "dépendant de la sortie ; aucune procédure validée).",
+            "Micro interval: <b>inference not estimable</b> (denominator "
+            "depends on the output; no validated procedure).",
+        )
     head = localized(
         lang,
         f"<h3>{view}{escape(payload.metric)} — rangs "

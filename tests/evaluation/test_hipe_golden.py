@@ -64,11 +64,12 @@ def test_cmer_matches_official_scorer_at_1e9() -> None:
                 )
             )
         )
-    weights = sum(o.weight for o in observations if o is not None)
-    micro = (
-        sum(o.value * o.weight for o in observations if o is not None) / weights
+    # Micro = somme des comptes puis ratio (§4.1) : la finalisation de la
+    # statistique cumulée, comme l'agrégat du runner (K1).
+    micro = sum(o.stat.edits for o in observations) / sum(
+        o.stat.reference_length + o.stat.insertions for o in observations
     )
-    macro = fmean(o.value for o in observations if o is not None)
+    macro = fmean(o.value for o in observations if o.value is not None)
     scores = expected["system"]
     assert micro == pytest.approx(scores["cmer_micro"], abs=_TOLERANCE)
     assert macro == pytest.approx(scores["cmer_macro"], abs=_TOLERANCE)

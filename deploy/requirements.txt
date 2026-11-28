@@ -1,7 +1,7 @@
 # Dépendances de la vitrine Cinoc (Space lecture seule).
 # Le cœur + l'extra [serve] uniquement — aucun moteur (tesseract/LLM) n'est servi.
 # Épinglé pour la reproductibilité du Space (cf. §12) ; relever au besoin.
-pydantic>=2,<3
+pydantic>=2.10,<3
 lxml>=5
 pyyaml>=6
 scipy>=1.11

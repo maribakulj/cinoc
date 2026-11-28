@@ -1,4 +1,4 @@
-"""CER / WER / MER : valeurs calculées à la main, cas dégénérés, poids, fiches."""
+"""CER / WER / MER : valeurs à la main, cas dégénérés, statistiques, fiches."""
 
 from __future__ import annotations
 
@@ -18,6 +18,8 @@ from cinoc.evaluation.metrics.text import (
     word_accuracy,
 )
 from tests.adversarial._contrat import composantes, motif_scalaire
+
+_EDITS = ("substitutions", "deletions", "insertions", "reference_length")
 
 
 def test_char_accuracy_is_one_minus_cer_bounded() -> None:
@@ -57,13 +59,13 @@ def test_cer_diplomatic_folds_long_s() -> None:
 def test_deletion_rate() -> None:
     # « a b c d » → « a b c » : dernier mot supprimé (1 sur 4 mots de réf).
     obs = deletion_rate.fn(_ctx("a b c d", "a b c"))
-    assert obs.value == 0.25 and obs.weight == 4
+    assert obs.value == 0.25 and composantes(obs, *_EDITS) == (0, 1, 0, 4)
 
 
 def test_insertion_rate() -> None:
     # « a b » → « a b c d » : « c » et « d » insérés (2 sur 2 mots de réf).
     obs = insertion_rate.fn(_ctx("a b", "a b c d"))
-    assert obs.value == 1.0 and obs.weight == 2
+    assert obs.value == 1.0 and composantes(obs, *_EDITS) == (0, 0, 2, 2)
 
 
 def test_error_profile_bounded_by_wer() -> None:
@@ -74,11 +76,17 @@ def test_error_profile_bounded_by_wer() -> None:
 
 
 def test_cer_both_empty() -> None:
-    assert cer.fn(_ctx("", "")).value == 0.0
+    """Référence vide : le scalaire est indéfini (M1), pas 0."""
+    both = cer.fn(_ctx("", ""))
+    assert both.value is None and motif_scalaire(both) == "zero_denominator"
+    assert composantes(both, *_EDITS) == (0, 0, 0, 0)
 
 
 def test_cer_empty_reference_nonempty_hypothesis() -> None:
-    assert cer.fn(_ctx("", "x")).value == 1.0
+    """Référence vide, sortie non vide : scalaire indéfini, pas 1 ; l'insertion
+    reste dans la statistique et entre au micro (M1)."""
+    blank = cer.fn(_ctx("", "x"))
+    assert blank.value is None and composantes(blank, *_EDITS) == (0, 0, 1, 0)
 
 
 def test_cer_nonempty_reference_empty_hypothesis() -> None:
@@ -111,13 +119,15 @@ def test_wer_deletion() -> None:
 
 
 def test_wer_degenerate() -> None:
-    assert wer.fn(_ctx("", "")).value == 0.0
-    assert wer.fn(_ctx("", "x")).value == 1.0
+    assert wer.fn(_ctx("", "")).value is None  # référence vide : indéfini (M1)
+    assert wer.fn(_ctx("", "x")).value is None
+    assert composantes(wer.fn(_ctx("", "x")), *_EDITS) == (0, 0, 1, 0)
     assert wer.fn(_ctx("a b", "")).value == 1.0
 
 
-def test_wer_weight_is_reference_word_count() -> None:
-    assert wer.fn(_ctx("le chat noir", "le chien noir")).weight == 3
+def test_wer_statistic_counts_reference_words() -> None:
+    obs = wer.fn(_ctx("le chat noir", "le chien noir"))
+    assert composantes(obs, *_EDITS) == (1, 0, 0, 3)
 
 
 # ── MER ──────────────────────────────────────────────────────────────────
@@ -132,20 +142,21 @@ def test_mer_insertion() -> None:
 
 
 def test_mer_both_empty() -> None:
-    assert mer.fn(_ctx("", "")).value == 0.0
+    assert mer.fn(_ctx("", "")).value is None  # dénominateur nul : indéfini
 
 
-def test_mer_weight_is_hits_plus_edits() -> None:
-    # "a b" vs "a b c" : hits=2 + ins=1 -> poids 3 (dénominateur du MER)
-    assert mer.fn(_ctx("a b", "a b c")).weight == 3
+def test_mer_denominator_is_reference_plus_insertions() -> None:
+    # "a b" vs "a b c" : n_réf 2 + I 1 = H+S+D+I = 3 (dénominateur du MER)
+    obs = mer.fn(_ctx("a b", "a b c"))
+    assert composantes(obs, *_EDITS) == (0, 0, 1, 2)
+    assert obs.value == pytest.approx(1 / 3)
 
 
 def test_mer_alignment_is_deterministic_on_ambiguous_input() -> None:
-    # "ab" vs "ba" a deux alignements optimaux (2 subs OU 1 ins+1 hit+1 del) :
-    # notre back-trace (hit>sub>del>ins) fixe le résultat à 2 subs -> MER 1.0.
-    # Comportement VERROUILLÉ ici ; il peut différer de jiwer sur ce type de cas
-    # (cf. test_metrics_parity, restreint aux alignements non ambigus).
-    assert mer.fn(_ctx("ab", "ba")).value == 1.0
+    # "a b" vs "b a" a deux alignements optimaux (2 subs OU 1 del+1 hit+1 ins) :
+    # le départage canonique (max S, P1) retient 2 subs -> MER 1.0, là où
+    # jiwer rend 2/3 (écart voulu, M1 ; cf. test_metrics_parity).
+    assert mer.fn(_ctx("a b", "b a")).value == 1.0
 
 
 # ── fiches & garde-types ──────────────────────────────────────────────────

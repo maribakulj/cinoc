@@ -108,13 +108,13 @@ def _failed_note(result: RunResult, lang: str) -> str:
         return ""
     order = engine_order(p.pipeline for p in result.pipelines)
     n = len(failed)
-    if result.manifest.failure_policy == "max_error":
+    if result.manifest.failure_policy == "empty_page":
         rule = localized(
             lang,
-            "notées à l'<strong>erreur maximale</strong> (1 pour un taux "
-            "d'erreur, 0 pour un score), pondérées par leur référence",
-            "scored at the <strong>maximum error</strong> (1 for an error rate, "
-            "0 for a score), weighted by their reference",
+            "notées comme une <strong>page vide</strong> (les comptes de leur "
+            "référence face à une sortie sans texte)",
+            "scored as an <strong>empty page</strong> (the counts of their "
+            "reference against an output with no text)",
         )
     else:
         rule = localized(

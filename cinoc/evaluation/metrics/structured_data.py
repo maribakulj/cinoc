@@ -25,10 +25,12 @@ from dataclasses import dataclass
 
 from cinoc.domain.artifacts import ArtifactType
 from cinoc.domain.evaluation import MetricCategory, MetricUnit
+from cinoc.evaluation import statistics as st
 from cinoc.evaluation.context import DocContext
 from cinoc.evaluation.errors import EvaluationError
-from cinoc.evaluation.metric import DocumentMetric, Observation, document_metric
+from cinoc.evaluation.metric import DocumentMetric, document_metric
 from cinoc.evaluation.roman import roman_to_int
+from cinoc.evaluation.statistics import Proportion
 
 #: Ordre canonique des catégories (rendu + payload).
 CATEGORIES: tuple[str, ...] = ("year", "foliation", "currency", "regnal")
@@ -165,18 +167,19 @@ def _text_pair(ctx: DocContext) -> tuple[str, str]:
     return ctx.reference, ctx.hypothesis
 
 
-def _global_score(ctx: DocContext, *, strict: bool) -> Observation | None:
+def _global_score(ctx: DocContext, *, strict: bool) -> Proportion:
     reference, hypothesis = _text_pair(ctx)
     counts = sequence_counts(reference, hypothesis)
-    total = sum(c.n_total for c in counts.values())
-    if total == 0:
-        return None  # GT sans séquence : non applicable, jamais un zéro.
-    preserved = sum((c.n_strict if strict else c.n_value) for c in counts.values())
-    return Observation(value=preserved / total, weight=total)
+    # GT sans séquence : total nul, scalaire indéfini — jamais un zéro.
+    return Proportion(
+        count=sum((c.n_strict if strict else c.n_value) for c in counts.values()),
+        total=sum(c.n_total for c in counts.values()),
+    )
 
 
 @document_metric(
     name="numseq_strict",
+    finalize=st.proportion,
     input_types=(ArtifactType.RAW_TEXT, ArtifactType.RAW_TEXT),
     category=MetricCategory.EXPLORATORY,
     unit=MetricUnit.NUMERIC_SEQUENCE,
@@ -187,12 +190,13 @@ def _global_score(ctx: DocContext, *, strict: bool) -> Observation | None:
     higher_is_better=True,
     tags=frozenset({"text", "structured_data"}),
 )
-def numseq_strict(ctx: DocContext) -> Observation | None:
+def numseq_strict(ctx: DocContext) -> Proportion:
     return _global_score(ctx, strict=True)
 
 
 @document_metric(
     name="numseq_value",
+    finalize=st.proportion,
     input_types=(ArtifactType.RAW_TEXT, ArtifactType.RAW_TEXT),
     category=MetricCategory.EXPLORATORY,
     unit=MetricUnit.NUMERIC_SEQUENCE,
@@ -203,7 +207,7 @@ def numseq_strict(ctx: DocContext) -> Observation | None:
     higher_is_better=True,
     tags=frozenset({"text", "structured_data"}),
 )
-def numseq_value(ctx: DocContext) -> Observation | None:
+def numseq_value(ctx: DocContext) -> Proportion:
     return _global_score(ctx, strict=False)
 
 

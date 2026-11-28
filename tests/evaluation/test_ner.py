@@ -22,9 +22,9 @@ from cinoc.evaluation.ner import (
     build_position_map,
     compute_ner,
     parse_entities,
-    prf,
     remap_entities,
 )
+from cinoc.evaluation.statistics import MatchCounts, f1, precision, recall
 
 
 def _es(text: str, *entities: tuple[str, int, int]) -> EntitySet:
@@ -92,6 +92,11 @@ class TestPositionMapAndRemap:
 
 
 class TestAlignAndCompute:
+    """**Appariement** (glouton par IoU, reprojection R14) : objet de la tranche
+    4 (M8, appariement unique) — **non modifié** par la tranche 1a, qui ne
+    touche que l'agrégation des comptes. Seul ``test_prf_hand_derived`` lit la
+    finalisation (P/R/F de 1a) sur les comptes qu'il produit."""
+
     def test_iou_threshold_and_label_casefold(self) -> None:
         refs = [Entity("PER", 0, 10), Entity("LOC", 20, 30)]
         # hyp 0 overlaps ref0 at IoU 0.8 (label 'per' casefold) ; hyp 1 wrong label.
@@ -129,10 +134,10 @@ class TestAlignAndCompute:
         )
         counts = compute_ner(gt, hyp)
         assert (counts.tp, counts.fp, counts.fn) == (2, 1, 1)
-        precision, recall, f1 = prf(counts.tp, counts.fp, counts.fn)
-        assert precision == pytest.approx(2 / 3)
-        assert recall == pytest.approx(2 / 3)
-        assert f1 == pytest.approx(2 / 3)
+        stat = MatchCounts(tp=counts.tp, fp=counts.fp, fn=counts.fn)
+        assert precision(stat).value == pytest.approx(2 / 3)
+        assert recall(stat).value == pytest.approx(2 / 3)
+        assert f1(stat).value == pytest.approx(2 / 3)
 
     def test_per_category_counts(self) -> None:
         gt = _es("aaaa bbbb", ("PER", 0, 4), ("LOC", 5, 9))
@@ -151,6 +156,8 @@ class TestAlignAndCompute:
 
 
 class TestEntitiesCollector:
+    """**Agrégation** (tranche 1a, M3) : comptes cumulés sur le corpus."""
+
     def test_micro_aggregate_and_payload(self) -> None:
         collector = EntitiesCollector()
         # doc1: 1 PER matched, 1 LOC missed. doc2: 1 PER matched.
@@ -216,7 +223,8 @@ class TestExactName:
         span, exact = ner_f1.fn(ctx), ner_f1_exact.fn(ctx)
         assert span is not None and span.value == 1.0
         assert exact is not None and exact.value == 0.0
-        assert exact.weight == 1
+        # L'apparié mal écrit : manqué et ajouté (fn + fp) pour la forme exacte.
+        assert (exact.stat.tp, exact.stat.fp, exact.stat.fn) == (0, 1, 1)
         counts = compute_ner(gt, hyp)
         assert (counts.tp, counts.tp_exact) == (1, 0)
 

@@ -49,7 +49,7 @@ class RunManifest(BaseModel):
         Vues d'évaluation appliquées.
     failure_policy:
         Ce qu'une unité en échec devient dans les agrégats (``exclude`` :
-        hors de la moyenne ; ``max_error`` : notée à l'erreur maximale). Un
+        hors de la moyenne ; ``empty_page`` : notée comme une page vide). Un
         agrégat ne se relit pas sans elle.
     code_version:
         Version du code.

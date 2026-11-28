@@ -181,8 +181,9 @@ def test_view_profile_is_named_and_defined_text_views_only() -> None:
 def test_conventions_follow_the_failure_policy_in_both_languages() -> None:
     """Reste de S12 (D-284) : « un document non produit par un moteur est omis
     de ses agrégats » était écrit quelle que soit la politique — faux sous
-    ``failure_policy: max_error``, où l'unité en échec est notée à l'erreur
-    maximale. La phrase suit désormais la politique du run."""
+    une politique qui note l'unité en échec (``empty_page`` depuis D-313, qui
+    remplace ``max_error`` : la note d'une page vide, sous ce nom). La phrase
+    suit la politique du run."""
     for policy, fr_rule, en_rule in (
         (
             "exclude",
@@ -190,9 +191,9 @@ def test_conventions_follow_the_failure_policy_in_both_languages() -> None:
             "is <b>left out</b> of its aggregates",
         ),
         (
-            "max_error",
-            "est noté à l’<b>erreur maximale</b>",
-            "is scored at the <b>maximum error</b>",
+            "empty_page",
+            "est noté comme une <b>page vide</b>",
+            "is scored as an <b>empty page</b>",
         ),
     ):
         manifest = _manifest(failure_policy=policy)
@@ -207,3 +208,19 @@ def test_conventions_follow_the_failure_policy_in_both_languages() -> None:
         assert en_rule in english, policy
         assert f"<code>failure_policy: {policy}</code>" in french
         assert f"<code>failure_policy: {policy}</code>" in english
+
+
+def test_the_alignment_convention_and_its_jiwer_gap_are_published() -> None:
+    """D-313 (P1) : le départage canonique « maximiser S » est écrit dans la
+    méthodologie, FR et EN, avec l'écart à jiwer qu'il entraîne sur les ex
+    æquo (MER, cMER, ``ins_rate``, ``del_rate``) — CER et WER inchangés."""
+    manifest = _manifest(failure_policy="exclude")
+    french = MethodologySection().render(_result(manifest), SectionContext())
+    english = MethodologySection().render(
+        _result(manifest), SectionContext(lang="en")
+    )
+    assert french is not None and english is not None
+    assert "maximisent les substitutions" in french
+    assert "peuvent s’écarter de jiwer" in french
+    assert "maximise substitutions" in english
+    assert "can differ from jiwer" in english

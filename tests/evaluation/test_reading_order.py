@@ -3,14 +3,25 @@
 Un texte projeté dans le mauvais ordre a un CER catastrophique — mais ce CER ne
 dit pas **où** est la faute : dans la reconnaissance ou dans l'ordonnancement.
 Ces deux fonctions ne répondent qu'à la seconde question, et le fait qu'elles
-s'y tiennent est l'essentiel de ce qui est vérifié ici.
+s'y tiennent est l'essentiel de ce qui est vérifié ici. Elles rendent des
+**comptes** (K1) ; les tests lisent leur finalisation.
 """
 
 from __future__ import annotations
 
 import pytest
 
-from cinoc.evaluation.reading_order import kendall_distance, order_coverage
+from cinoc.evaluation.reading_order import kendall_counts, order_counts
+from cinoc.evaluation.statistics import proportion
+
+
+def kendall_distance(reference: list[str], hypothesis: list[str]) -> float | None:
+    """Le désaccord finalisé (discordantes / paires) ; ``None`` sans paire."""
+    return proportion(kendall_counts(reference, hypothesis)).value
+
+
+def order_coverage(reference: list[str], hypothesis: list[str]) -> float | None:
+    return proportion(order_counts(reference, hypothesis)).value
 
 #: Une page à deux colonnes de trois blocs, lue colonne par colonne.
 REFERENCE = ["G1", "G2", "G3", "D1", "D2", "D3"]
@@ -70,6 +81,13 @@ def test_coverage_is_the_mandatory_companion() -> None:
 
 def test_coverage_without_a_reference_is_none() -> None:
     assert order_coverage([], ["G1"]) is None
+
+
+def test_the_counts_are_what_the_corpus_sums() -> None:
+    """Au corpus, Σ discordantes / Σ paires (K1) : les comptes, pas le ratio."""
+    entrelace = ["G1", "D1", "G2", "D2", "G3", "D3"]
+    assert (kendall_counts(REFERENCE, entrelace).count,
+            kendall_counts(REFERENCE, entrelace).total) == (3, 15)
 
 
 def test_the_distance_is_comparable_across_page_sizes() -> None:
