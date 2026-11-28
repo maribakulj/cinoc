@@ -394,13 +394,24 @@ def test_n7__une_liste_tronquee_ne_se_presente_pas_comme_la_decomposition_des_co
     decompose = "ni plus ni moins" if lang == "fr" else "exactly the substitutions"
     assert decompose not in texte, "une liste tronquée est présentée comme complète"
     if lang == "fr":
-        assert re.search(r"les\s+10\s+plus\s+fréquentes\s+sur\s+12\b", texte), (
-            "« les 10 plus fréquentes sur 12 » absent"
+        # Formulation unique fixée le 28/11 (CONTRATS.md, réponses aux tests
+        # rouges de la seconde revue) : « les k paires les plus fréquentes sur N
+        # paires distinctes (S substitutions) ».
+        assert re.search(
+            r"les\s+10\s+paires\s+les\s+plus\s+fréquentes\s+sur\s+12\s+paires"
+            r"\s+distinctes\s+\(12\s+substitutions\)",
+            texte,
+        ), (
+            "« les 10 paires les plus fréquentes sur 12 paires distinctes "
+            "(12 substitutions) » absent"
         )
+        assert texte.count("plus fréquentes") == 1, "formulation dédoublée"
     else:
-        assert re.search(r"\b10\b.{0,80}\b12\b|\b12\b.{0,80}\b10\b", texte), (
-            "les nombres 10 (affichées) et 12 (distinctes) ne sont pas écrits ensemble"
-        )
+        assert re.search(
+            r"the\s+10\s+most\s+frequent\s+of\s+12\s+distinct\s+pairs\s+\(12\s+substitutions\)",
+            texte,
+        ), "« the 10 most frequent of 12 distinct pairs (12 substitutions) » absent"
+        assert texte.count("most frequent") == 1, "formulation dédoublée"
 
 
 # --------------------------------------------------------------------------
