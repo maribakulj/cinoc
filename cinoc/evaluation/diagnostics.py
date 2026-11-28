@@ -130,6 +130,8 @@ class DiagnosticsCollector:
                         bucket.items(), key=lambda kv: (-kv[1], kv[0])
                     )[:_TOP_CONFUSIONS]
                 ),
+                n_pairs=len(bucket),
+                n_substitutions=sum(bucket.values()),
             )
             for pipeline, bucket in sorted(self._confusions.items())
             if bucket

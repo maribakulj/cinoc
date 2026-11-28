@@ -31,6 +31,10 @@ def _result() -> RunResult:
                     # paire porteuse de méta-caractères : vérifie l'échappement.
                     CharConfusion(expected="&", observed="<", count=5),
                 ),
+                # Liste complète : le payload le dit (N7), sans quoi la phrase
+                # « ni plus ni moins » n'est pas écrite.
+                n_pairs=2,
+                n_substitutions=17,
             ),
         ),
         worst_lines=(

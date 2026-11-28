@@ -11,13 +11,17 @@ déterministe, zéro donnée reconstruite. Réutilise les builders SVG (U2).
 from __future__ import annotations
 
 from cinoc.evaluation.analysis import CalibrationPayload, TaxonomyPayload
-from cinoc.evaluation.result import PipelineResult, RunResult
+from cinoc.evaluation.result import MetricScore, PipelineResult, RunResult
 from cinoc.reports._binning import histogram
 from cinoc.reports._numbers import fmt_pct
 from cinoc.reports.engine_badges import engine_accent, engine_letter, engine_order
 from cinoc.reports.html import escape, localized
 from cinoc.reports.section import Html, SectionContext
-from cinoc.reports.sections._tables import ordered_unique
+from cinoc.reports.sections._tables import (
+    ordered_unique,
+    other_quality,
+    other_quality_legend,
+)
 from cinoc.reports.sections.composition import settings_html
 from cinoc.reports.sections.taxonomy import composition_html
 from cinoc.reports.svg import bar_series, calibration_curve
@@ -31,7 +35,7 @@ _N_BINS = 24
 def _per_doc_cer(result: RunResult, pipeline: str, view: str) -> list[float]:
     return [
         score.value
-        for doc in result.documents
+        for doc in result.viewed_documents
         if doc.pipeline == pipeline and doc.view == view
         for score in doc.scores
         if score.metric == _METRIC and score.value is not None
@@ -66,15 +70,32 @@ def _composition(result: RunResult, view: str, pipeline: str, lang: str) -> str:
     return ""
 
 
-def _kpi(label: str, value: str) -> str:
+def _kpi(label: str, value: str, other: str = "") -> str:
     return (
         f'<div class="kpi"><div class="kpi-k">{escape(label)}</div>'
-        f'<div class="kpi-v">{escape(value)}</div></div>'
+        f'<div class="kpi-v">{escape(value)}</div>{other}</div>'
     )
 
 
 def _pct(v: float, lang: str) -> str:
     return fmt_pct(v, lang)
+
+
+def _other_kpi(
+    result: RunResult,
+    pipe: PipelineResult,
+    metric: str,
+    others: dict[str, MetricScore],
+    lang: str,
+) -> str:
+    """Sous la valeur d'une fiche, l'autre qualité (``other_quality``), en
+    pourcentage comme le principal ; vide quand les deux coïncident ou que
+    l'autre n'a pas de valeur."""
+    other = others.get(metric)
+    if other is None or other.value is None:
+        return ""
+    span = other_quality(result, pipe, metric, lang, _pct(other.value, lang))
+    return f'<div class="kpi-o muted">{span.strip()}</div>' if span else ""
 
 
 def _config_block(result: RunResult, name: str, lang: str) -> str:
@@ -125,7 +146,7 @@ def _stratum_block(result: RunResult, name: str, view: str, lang: str) -> str:
     selon le sous-corpus. Rendu seulement si ≥ 2 strates portent des documents
     notés (jamais une strate inventée). Trié du meilleur au pire."""
     buckets: dict[str, list[float]] = {}
-    for d in result.documents:
+    for d in result.viewed_documents:
         if d.pipeline != name or d.view != view or not d.stratum:
             continue
         cer = next(
@@ -199,8 +220,15 @@ class EngineProfileSection:
         prev_idx = order[engines[(pos - 1) % total]]
         next_idx = order[engines[(pos + 1) % total]]
         # KPIs : métriques d'agrégat (réelles) + ECE si calibration présente.
+        # L'autre qualité à côté de chaque valeur, avec sa couverture (N9) ; la
+        # valeur est écrite comme le principal (pourcentage).
+        others = {s.metric: s for s in result.other_aggregate(pipe)}
         kpis = [
-            _kpi(s.metric, _pct(s.value, lang))
+            _kpi(
+                s.metric,
+                _pct(s.value, lang),
+                _other_kpi(result, pipe, s.metric, others, lang),
+            )
             for s in result.principal_aggregate(pipe)
             if s.value is not None
         ]
@@ -269,6 +297,7 @@ class EngineProfileSection:
             f"<span>{escape(name)}</span>"
             f'<span class="muted drill-pos">{pos_label}</span></div>'
             f'<div class="kpi-band">{"".join(kpis)}</div>'
+            f'<p class="muted">{other_quality_legend(result, lang)}</p>'
             f"{chart}{extras}{config}</div>"
         )
 

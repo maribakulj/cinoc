@@ -24,6 +24,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
+from cinoc.domain.evaluation import FailurePolicy
 from cinoc.evaluation.analysis import (
     InferencePayload,
     InterEngineComplementarity,
@@ -41,6 +42,7 @@ from cinoc.reports.sections._inference_text import (
     p_text,
     posthoc_text,
     reason_text,
+    support_name,
 )
 
 
@@ -65,7 +67,10 @@ def _payloads(result: RunResult) -> dict[tuple[str, str], InferencePayload]:
 
 
 def _row(
-    score: MetricScore, payload: InferencePayload | None, lang: str
+    score: MetricScore,
+    payload: InferencePayload | None,
+    lang: str,
+    policy: FailurePolicy,
 ) -> tuple[str, str, str, str]:
     """(test, p brute, p Holm, statut) d'une ligne du tableau."""
     if payload is None:
@@ -79,7 +84,7 @@ def _row(
     if payload.test is None:
         label = (
             f'{omnibus_label(payload, lang)} <span class="muted">'
-            f"({escape(reason_text(payload, lang))})</span>"
+            f"({escape(reason_text(payload, lang, policy))})</span>"
         )
         return label, "—", "—", '<td class="verdict">—</td>'
     verdict = f'<td class="verdict">{exploratory_label(lang)}</td>'
@@ -92,7 +97,11 @@ def _row(
 
 
 def _inference_block(
-    view: str, payload: InferencePayload, order: Mapping[str, int], lang: str
+    view: str,
+    payload: InferencePayload,
+    order: Mapping[str, int],
+    lang: str,
+    policy: FailurePolicy,
 ) -> str:
     """Rendu d'un payload ``inference`` : rangs, post-hoc, IC (mode détaillé)."""
     rows: list[str] = []
@@ -120,7 +129,9 @@ def _inference_block(
             f'<td class="disp">{localize_decimal(f"{rank.mean_rank:.3f}", lang)}</td>'
             f"{cells}</tr>"
         )
-    posthoc = posthoc_text(payload, lang) or escape(reason_text(payload, lang))
+    posthoc = posthoc_text(payload, lang) or escape(
+        reason_text(payload, lang, policy)
+    )
     if not payload.micro_estimable:
         # B9c : dénominateur d'hypothèse — aucune procédure validée pour le
         # micro ; le point reste au tableau, sans intervalle.
@@ -368,13 +379,14 @@ class CrossEngineSection:
         if not result.cross_engine and not inter_engine:
             return None
         significance = ""
+        policy = result.manifest.failure_policy
         payloads = _payloads(result)
         if result.cross_engine:
             body: list[str] = []
             for score in result.cross_engine:
                 view, metric = _split_key(score.metric)
                 test, raw, holm, verdict = _row(
-                    score, payloads.get((view, metric)), lang
+                    score, payloads.get((view, metric)), lang, policy
                 )
                 body.append(
                     f'<tr><td class="eng-cell">{escape(view_label(view, lang))}</td>'
@@ -413,12 +425,14 @@ class CrossEngineSection:
             )
             prose = localized(
                 lang,
-                '<p class="muted">Test apparié sur les cas complets (n) : '
+                f'<p class="muted">Test apparié sur les '
+                f"{support_name(policy, lang)} (n) : "
                 "Wilcoxon signé-rangs à 2 pipelines, Friedman à 3 et plus. "
                 "Seules les métriques <strong>établies</strong> sont testées ; "
                 "les adaptées et les exploratoires restent au diagnostic, sans "
                 f"test. {correction}</p>\n",
-                '<p class="muted">Paired test over complete cases (n): '
+                f'<p class="muted">Paired test over the '
+                f"{support_name(policy, lang)} (n): "
                 "Wilcoxon signed-rank for 2 pipelines, Friedman for 3 or more. "
                 "Only <strong>established</strong> metrics are tested; adapted "
                 "and exploratory ones stay diagnostic, untested. "
@@ -446,14 +460,16 @@ class CrossEngineSection:
         blocks = "".join(
             _inference_block(
                 f"{escape(view_label(analysis.view, lang))} · " if multi else "",
-                analysis.payload, order, lang,
+                analysis.payload, order, lang, result.manifest.failure_policy,
             )
             for analysis in result.analyses
             if isinstance(analysis.payload, InferencePayload)
             and analysis.payload.mean_ranks
         )
         title = localized(
-            lang, "Significativité inter-moteurs", "Inter-engine significance"
+            lang,
+            "Tests inter-moteurs (exploratoires)",
+            "Inter-engine tests (exploratory)",
         )
         return Html(
             f"<h2>{title}</h2>\n"

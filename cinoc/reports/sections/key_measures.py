@@ -23,6 +23,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from cinoc.evaluation.analysis import InferencePayload
+from cinoc.evaluation.comparison import ComparisonPayload
 from cinoc.evaluation.result import (
     DocumentUsage,
     MetricScore,
@@ -46,6 +47,7 @@ from cinoc.reports.sections._inference_text import (
     p_text,
     posthoc_text,
     reason_text,
+    support_label,
 )
 from cinoc.reports.sections._profile_text import convention_html
 from cinoc.reports.sections._tables import (
@@ -54,6 +56,8 @@ from cinoc.reports.sections._tables import (
     in_ranking_order,
     is_displayed,
     ordered_unique,
+    other_quality,
+    other_quality_legend,
 )
 from cinoc.reports.svg import dot_plot_ci
 
@@ -212,6 +216,7 @@ class KeyMeasuresSection:
         )
         return Html(
             f"<h2>{title}</h2>\n<p class=\"muted\">{caption}</p>\n"
+            f'<p class="muted">{other_quality_legend(result, lang)}</p>\n'
             + "".join(blocks)
             + _duration_note(durations, lang)
         )
@@ -257,12 +262,14 @@ class KeyMeasuresSection:
                 score = _score(result, p, m)
                 v = score.value if score is not None else None
                 cov = coverage(score, lang) if score is not None else ""
+                other = other_quality(result, p, m, lang)
                 if v is None:
-                    cells += f'<td class="disp muted">—{cov}</td>'
+                    cells += f'<td class="disp muted">—{cov}{other}</td>'
                 else:
                     disp = localize_decimal(f"{v:.4f}", lang)
                     cells += (
-                        f'<td class="disp" data-sort="{v:.6f}">{disp}{cov}</td>'
+                        f'<td class="disp" data-sort="{v:.6f}">'
+                        f"{disp}{cov}{other}</td>"
                     )
             if durations:
                 timing = durations.get(p.pipeline)
@@ -363,13 +370,16 @@ class KeyMeasuresSection:
         if payload is None:
             txt = localized(lang, "test non calculé.", "test not computed.")
             return f'<p class="muted">{head}{txt}</p>\n'
+        policy = result.manifest.failure_policy
+        values = KeyMeasuresSection._support_values(result, view, payload, lang)
         if payload.test is None or payload.p_value is None or payload.p_holm is None:
+            reason = escape(reason_text(payload, lang, policy))
             txt = localized(
                 lang,
-                f"test non calculé : {escape(reason_text(payload, lang))}.",
-                f"test not computed: {escape(reason_text(payload, lang))}.",
+                f"test non calculé : {reason}.",
+                f"test not computed: {reason}.",
             )
-            return f'<p class="muted">{head}{txt}</p>\n'
+            return f'<p class="muted">{head}{txt}{values}</p>\n'
         status = exploratory_label(lang)
         k = len(payload.mean_ranks)
         between = localized(
@@ -379,18 +389,70 @@ class KeyMeasuresSection:
         )
         raw, holm = p_text(payload.p_value, lang), p_text(payload.p_holm, lang)
         m = payload.family_size
+        support = support_label(payload.n_documents, policy, lang)
         txt = localized(
             lang,
             f"{escape(omnibus_label(payload, lang))} : p = {raw}, corrigée de "
             f"Holm sur {m} test(s) : {holm} → résultat ({status}) {between} "
-            f"({payload.n_documents} cas complets).",
+            f"({support}).",
             f"{escape(omnibus_label(payload, lang))}: p = {raw}, Holm-corrected "
             f"over {m} test(s): {holm} → result ({status}) {between} "
-            f"({payload.n_documents} complete cases).",
+            f"({support}).",
         )
         posthoc = posthoc_text(payload, lang) if payload.test == "friedman" else ""
         tail = f" {posthoc}" if posthoc else ""
-        return f'<p class="muted">{head}{txt}{tail}</p>\n'
+        return f'<p class="muted">{head}{txt}{values}{tail}</p>\n'
+
+    @staticmethod
+    def _support_values(
+        result: RunResult, view: str, payload: InferencePayload, lang: str
+    ) -> str:
+        """Le CER micro de chaque moteur **sur le support du test** (N4).
+
+        Le tableau donne les valeurs de chaque pipeline sur son propre support ;
+        elles ne sont pas celles que le test a comparées, et un Δ ou un test ne
+        se lisent que sur un même support. Lu du support global publié
+        (``ComparisonPayload``), jamais recalculé ici."""
+        for analysis in result.analyses:
+            comparison = analysis.payload
+            if (
+                analysis.view == view
+                and isinstance(comparison, ComparisonPayload)
+                and comparison.metric == _PRIMARY
+            ):
+                support = comparison.global_support
+                break
+        else:
+            return ""
+        if not support.micro_documents:
+            return ""
+        names = (*support.ranking, *sorted(set(support.micro) - set(support.ranking)))
+        shown = " · ".join(
+            f"{escape(name)} "
+            + (
+                "—"
+                if support.micro.get(name) is None
+                else localize_decimal(f"{support.micro[name]:.4f}", lang)
+            )
+            for name in names
+        )
+        n = len(support.micro_documents)
+        scope = (
+            localized(lang, "sur ces observations", "over these observations")
+            if n == payload.n_documents
+            else localized(
+                lang,
+                "sur le support commun "
+                f"({support_label(n, result.manifest.failure_policy, lang)})",
+                "over the common support "
+                f"({support_label(n, result.manifest.failure_policy, lang)})",
+            )
+        )
+        return localized(
+            lang,
+            f" CER micro de chaque moteur {scope} : {shown}.",
+            f" Each engine's micro CER {scope}: {shown}.",
+        )
 
 
 def _mean(values: tuple[float, ...], lang: str) -> str:

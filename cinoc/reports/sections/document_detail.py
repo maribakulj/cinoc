@@ -204,7 +204,7 @@ def _hallucination_block(
 def _doc_cer(result: RunResult, doc_id: str, view: str) -> list[tuple[str, float]]:
     """(pipeline, CER) du document, pour la vue."""
     out: list[tuple[str, float]] = []
-    for d in result.documents:
+    for d in result.viewed_documents:
         if d.document_id == doc_id and d.view == view:
             for s in d.scores:
                 if s.metric == _METRIC and s.value is not None:
@@ -243,10 +243,10 @@ class DocumentDetailSection:
     requires: tuple[str, ...] = ()
 
     def render(self, result: RunResult, ctx: SectionContext) -> Html | None:
-        if not result.documents:
+        if not result.viewed_documents:
             return None
-        view = ordered_unique(d.view for d in result.documents)[0]
-        rows = [d for d in result.documents if d.view == view]
+        view = ordered_unique(d.view for d in result.viewed_documents)[0]
+        rows = [d for d in result.viewed_documents if d.view == view]
         doc_ids = list(ordered_unique(d.document_id for d in rows))
         order = engine_order(p.pipeline for p in result.pipelines) or engine_order(
             d.pipeline for d in rows

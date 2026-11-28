@@ -35,6 +35,24 @@ class RunSpec(BaseModel):
     metadata: dict[str, str] = Field(default_factory=dict)
 
     @model_validator(mode="after")
+    def _check_steps_declare_outputs(self) -> RunSpec:
+        """Une étape **déclare** ses types de sortie.
+
+        Une étape sans ``output_types`` n'est vue d'aucune vue : son pipeline
+        sort de toutes les évaluations sans qu'aucune erreur ne le dise
+        (« jamais un défaut muet », F8). Refusée au chargement, par son nom.
+        """
+        for pipeline in self.pipelines:
+            for step in pipeline.steps:
+                if not step.output_types:
+                    raise CinocError(
+                        f"pipeline {pipeline.name!r} : l'étape {step.id!r} ne "
+                        "déclare aucun type de sortie ('output_types' vide) — "
+                        "sans eux, aucune vue ne peut la voir."
+                    )
+        return self
+
+    @model_validator(mode="after")
     def _check_view_targets(self) -> RunSpec:
         """Chaque vue désigne, dans chaque pipeline, **une** sortie à noter.
 

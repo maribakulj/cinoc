@@ -128,7 +128,24 @@ suivantes ne les répètent pas.
     `alignment_path` (`rapidfuzz`), de même que les cartes de mots, la fidélité
     textuelle et le bilan de correction, et le rapport l'écrit ; les confusions
     et la taxonomie portent `matches_canonical_counts` ; les comptes d'édition
-    sont canoniques (`EditCounts.alignment_path`).
+    sont canoniques (`EditCounts.alignment_path`) ;
+  - seconde revue : « Significativité inter-moteurs » et « Significativité &
+    recouvrement » deviennent « Tests inter-moteurs (exploratoires) » et
+    « Tests et recouvrement (exploratoires) » ; le texte d'un test nomme ses
+    observations (« observations complètes » sous `exclude`, « observations
+    opérationnelles (échecs notés comme une sortie vide) » sous `empty_page`, plus
+    jamais « cas complets ») et écrit le CER micro de chaque moteur **sur le
+    support du test** ; l'autre qualité est écrite à côté de l'agrégat principal
+    (mesures clés, comparaison des moteurs, fiches moteur), avec sa couverture ;
+    la flèche de tri suit le sens de la métrique ; une liste de confusions
+    tronquée dit « les k plus fréquentes sur N » ; un sidecar sans classe de
+    ligne s'écrit « classes non déclarées par l'archive », jamais des zéros ; un
+    pipeline hors vue n'a aucune ligne dans les tableaux par document ; la
+    comparaison de deux runs dit la politique et la qualité de chacun ;
+  - un document sans grappe forme sa propre grappe, distincte d'une grappe
+    déclarée de même nom (le macro par grappe ne les fusionne plus) ;
+    `stat_partielle` est `None` pour une sortie illisible, même partielle ou
+    tronquée (sa statistique vide va dans `stat_vide`).
 
 **Format**
 
@@ -150,9 +167,18 @@ suivantes ne les répètent pas.
   et un pipeline qui ne voit pas une vue (aucune étape ne déclare un type
   qu'elle note) n'a aucun agrégat dans cette vue. `PairwiseDifference` perd son
   booléen `significant`.
+  Seconde revue de 1a + 1b : un JSON **sans** `schema_version` est refusé comme
+  un JSON antérieur (le chargeur et le widget « comparer un run »), le CSV
+  exporte les **deux qualités** (colonnes `quality` et `principal`), `diagnostics`
+  porte `n_pairs` et `n_substitutions` par pipeline (une liste de confusions
+  tronquée le dit), et `decisions` porte `status` : `not_declared` pour un
+  sidecar sans `line_class`, sans aucun compte.
 
 **Ce qui est désormais refusé au lieu d'être ignoré**
 
+- Une étape qui ne déclare aucun type de sortie (`output_types` vide) : refusée
+  au chargement, par son nom (`load_run_spec`, `cinoc run --check`, dépôt de
+  spec du web).
 - Un réglage qu'une brique ne déclare pas, et un réglage pour une étape
   facultative non retenue.
 - Une table « classe → réglage » qui ne parle pas la langue de son segmenteur

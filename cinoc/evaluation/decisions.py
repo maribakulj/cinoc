@@ -92,24 +92,28 @@ def _pipeline_decisions(
     reviews: Counter[str] = Counter()
     echantillons: list[DecisionSample] = []
     vu = False
+    undeclared = False
 
     for document_id in sorted(by_document):
         artifact = by_document[document_id].get(ArtifactType.DECISIONS)
         if artifact is None:
             continue
         vu = True
-        for ligne in _lines_of(artifact):
-            classe = ligne.get("line_class")
-            if classe not in _CLASSES:
-                # Une ligne dont l'adaptateur ne déclare pas la classe n'est pas
-                # rangée au hasard : elle n'est pas comptée.
-                logger.warning(
-                    "[decisions] dégradé : ligne %s/%s sans classe déclarée",
-                    ligne.get("page_id"),
-                    ligne.get("line_id"),
-                )
-                continue
-            line_class = cast(LineClass, classe)
+        lignes = _lines_of(artifact)
+        if any(ligne.get("line_class") not in _CLASSES for ligne in lignes):
+            # Une unité dont **une** ligne n'a pas de classe déclarée l'est
+            # entièrement : un compte partiel sous-compterait sans le dire, et
+            # une classe devinée d'après le statut ou les textes serait une
+            # reconstruction (D6, N3).
+            logger.warning(
+                "[decisions] dégradé : le document %s porte des lignes sans classe "
+                "déclarée, aucun compte n'est publié pour ce pipeline",
+                document_id,
+            )
+            undeclared = True
+            continue
+        for ligne in lignes:
+            line_class = cast(LineClass, ligne["line_class"])
             code = ligne.get("class_code")
             counts[line_class] += 1
             if line_class == "refused":
@@ -141,6 +145,8 @@ def _pipeline_decisions(
                 )
     if not vu:
         return None
+    if undeclared:
+        return PipelineDecisions(pipeline=pipeline, status="not_declared")
     return PipelineDecisions(
         pipeline=pipeline,
         n_lines=sum(counts.values()),

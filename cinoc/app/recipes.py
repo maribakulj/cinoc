@@ -490,6 +490,8 @@ def spec_for_corpus(document: str, corpus: CorpusSpec, *, run_id: str) -> RunSpe
         return RunSpec.model_validate(brut)
     except ValidationError as exc:
         raise RecipeError(f"spec invalide : {exc}") from exc
+    except CinocError as exc:  # étape sans types de sortie, cible de vue inconnue…
+        raise RecipeError(f"spec invalide : {exc}") from exc
 
 
 def referenced_kinds(spec: RunSpec) -> set[str]:

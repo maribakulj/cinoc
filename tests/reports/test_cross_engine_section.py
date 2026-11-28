@@ -122,7 +122,8 @@ def test_a_test_not_computed_gives_its_reason() -> None:
         _result("text:cer:significance_p", None, payload), SectionContext()
     )
     assert html is not None
-    assert "non calculé" in html and "3 cas complets, il en faut au moins 6" in html
+    assert "non calculé" in html
+    assert "3 observations complètes, il en faut au moins 6" in html
 
 
 def test_none_value_rendered_as_dash() -> None:

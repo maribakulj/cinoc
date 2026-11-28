@@ -2,6 +2,10 @@
 
 Un seul fichier, tableur-compatible : une ligne par score, colonne ``scope``
 (``aggregate`` ou ``document``). Ordre = celui du ``RunResult`` (déterministe).
+Un pipeline a **deux** lignes d'agrégat par métrique, une par qualité : la
+colonne ``quality`` dit ``conditional`` ou ``operational`` (les noms des champs
+stockés) et ``principal`` marque (``true``) celle que la politique d'échec du run
+désigne comme principale (« publié veut dire affiché »).
 ``expected`` (agrégats) = « n attendus » face à ``support`` (« n notés ») ;
 ``outcome`` (documents) = issue de l'unité, ``failed:<motif>`` en cas d'échec —
 une valeur vide n'a pas le même sens selon qu'elle vient d'un échec ou d'une
@@ -39,6 +43,8 @@ _HEADER = (
     "statistic",
     "scalar_reason",
     "untruncated_error_rate",
+    "quality",
+    "principal",
 )
 
 
@@ -66,22 +72,30 @@ def run_result_csv(result: RunResult) -> str:
         )
         for u in result.usage
     }
+    empty_page = result.manifest.failure_policy == "empty_page"
+    principal = "operational" if empty_page else "conditional"
     for pipeline in result.pipelines:
-        for score in result.principal_aggregate(pipeline):
-            writer.writerow(
-                (
-                    "aggregate",
-                    pipeline.view,
-                    pipeline.pipeline,
-                    "",
-                    score.metric,
-                    "" if score.value is None else repr(score.value),
-                    "" if score.support is None else score.support,
-                    "" if score.expected is None else score.expected,
-                    "",
-                    *_published(score),
+        for quality, scores in (
+            ("conditional", pipeline.conditional_aggregate),
+            ("operational", pipeline.operational_aggregate),
+        ):
+            for score in scores:
+                writer.writerow(
+                    (
+                        "aggregate",
+                        pipeline.view,
+                        pipeline.pipeline,
+                        "",
+                        score.metric,
+                        "" if score.value is None else repr(score.value),
+                        "" if score.support is None else score.support,
+                        "" if score.expected is None else score.expected,
+                        "",
+                        *_published(score),
+                        quality,
+                        "true" if quality == principal else "false",
+                    )
                 )
-            )
     for document in result.documents:
         for score in document.scores:
             writer.writerow(
@@ -96,6 +110,8 @@ def run_result_csv(result: RunResult) -> str:
                     "",
                     outcomes.get((document.pipeline, document.document_id), ""),
                     *_published(score),
+                    "",
+                    "",
                 )
             )
     for unit in result.usage:
@@ -111,6 +127,8 @@ def run_result_csv(result: RunResult) -> str:
                 "",
                 "",
                 outcomes.get((unit.pipeline, unit.document_id), ""),
+                "",
+                "",
                 "",
                 "",
                 "",

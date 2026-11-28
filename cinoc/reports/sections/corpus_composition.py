@@ -19,7 +19,7 @@ from cinoc.reports.sections._tables import ordered_unique
 def _strata_by_doc(result: RunResult, view: str) -> dict[str, str]:
     """``document_id -> strate`` (1ʳᵉ occurrence) pour les docs qui en portent une."""
     out: dict[str, str] = {}
-    for d in result.documents:
+    for d in result.viewed_documents:
         if d.view == view and d.stratum and d.document_id not in out:
             out[d.document_id] = d.stratum
     return out
@@ -32,9 +32,9 @@ class CorpusCompositionSection:
     requires: tuple[str, ...] = ()
 
     def render(self, result: RunResult, ctx: SectionContext) -> Html | None:
-        if not result.documents:
+        if not result.viewed_documents:
             return None
-        view = ordered_unique(d.view for d in result.documents)[0]
+        view = ordered_unique(d.view for d in result.viewed_documents)[0]
         strata = _strata_by_doc(result, view)
         if not strata:
             return None  # aucune strate → pas de carte (jamais de strate inventée)

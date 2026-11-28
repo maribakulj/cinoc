@@ -33,7 +33,7 @@ recoupée par dinglehopper**, l'estimation du coût Mistral. Restent :
 | `bnl-sans-cle.run_result.json` | `RunResult` v5 du run S30 (566 Ko, aucun chemin local) |
 | `dresden-sans-cle.run_result.json` | idem (169 Ko) |
 | `v6/` | les **réévaluations v6** des deux `RunResult` ci-dessus (code `abee7b5`, tranche 1a), à part, avec leur provenance ([`v6/PROVENANCE.md`](v6/PROVENANCE.md)) ; les v5 restent intacts |
-| `v7/` | les **réévaluations v7** (revue de 1a + 1b : deux qualités, couverture, macro, supports) des mêmes archives S30, à part, avec leur provenance ([`v7/PROVENANCE.md`](v7/PROVENANCE.md)) ; v5 et v6 restent intacts |
+| `v7/` | les **réévaluations v7** (revue de 1a + 1b : deux qualités, couverture, macro, supports) des mêmes archives S30, à part, avec leur provenance ([`v7/PROVENANCE.md`](v7/PROVENANCE.md)) ; v5 et v6 restent intacts. **Réserve** : la qualité conditionnelle v7 de E3 et E4 est non conforme au § 2.1 f (sidecars en repli, état non porté par le cache) et ne doit pas être citée — voir la provenance |
 
 Chaque pipeline d'une spec sans clé est, au caractère près, un pipeline de la
 spec complète, avec les mêmes réglages de briques — la clé d'unité en dérive,

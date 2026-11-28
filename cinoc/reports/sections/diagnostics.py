@@ -9,7 +9,12 @@ prominents, barre de fréquence — « voir les symboles » et leur direction.
 
 from __future__ import annotations
 
-from cinoc.evaluation.analysis import CharConfusion, DiagnosticsPayload, WorstLine
+from cinoc.evaluation.analysis import (
+    CharConfusion,
+    DiagnosticsPayload,
+    PipelineConfusions,
+    WorstLine,
+)
 from cinoc.evaluation.result import RunResult
 from cinoc.reports._numbers import localize_decimal
 from cinoc.reports.engine_badges import engine_cell, engine_order
@@ -58,6 +63,27 @@ def _confusion_chip(pair: CharConfusion, max_count: int) -> str:
     )
 
 
+def _is_truncated(block: PipelineConfusions) -> bool:
+    """La liste est tronquée : moins de paires montrées que de paires distinctes."""
+    return block.n_pairs is not None and len(block.pairs) < block.n_pairs
+
+
+def _truncation_note(block: PipelineConfusions, lang: str) -> str:
+    """« les k plus fréquentes sur N » : une liste tronquée ne se présente pas
+    comme la décomposition des comptes (N7)."""
+    if not _is_truncated(block):
+        return ""
+    k, n, s = len(block.pairs), block.n_pairs, block.n_substitutions
+    text = localized(
+        lang,
+        f"Liste tronquée : les {k} plus fréquentes sur {n} : "
+        f"{k} paires sur {n} paires distinctes ({s} substitutions).",
+        f"Truncated list: the {k} most frequent of {n}: "
+        f"{k} of {n} distinct pairs ({s} substitutions).",
+    )
+    return f'<p class="muted cf-truncated">{text}</p>'
+
+
 def _confusion_flow(
     payload: DiagnosticsPayload, lang: str, order: dict[str, int]
 ) -> str:
@@ -75,14 +101,24 @@ def _confusion_flow(
         badge = engine_cell(block.pipeline, order.get(block.pipeline, 0))
         groups.append(
             f'<div class="cf-engine"><span class="cf-eng-name">{badge}</span>'
+            f"{_truncation_note(block, lang)}"
             f'<div class="cf-grid">{chips}</div></div>'
         )
     if not groups:
         return ""
     text = _CONFUSION_TEXT.get(lang, _CONFUSION_TEXT["fr"])
     # Ces confusions ne sont les substitutions du CER que si l'alignement qui les
-    # nomme égale les comptes canoniques (``matches_canonical_counts``, D8).
-    decomposes = text["decomposes"] if payload.matches_canonical_counts else ""
+    # nomme égale les comptes canoniques (``matches_canonical_counts``, D8) **et**
+    # que la liste est complète : une liste tronquée ne décompose rien (N7), pas
+    # plus qu'une liste dont on ne sait pas si elle l'est.
+    complete = all(
+        block.n_pairs is not None and not _is_truncated(block)
+        for block in payload.confusions
+        if block.pairs
+    )
+    decomposes = (
+        text["decomposes"] if payload.matches_canonical_counts and complete else ""
+    )
     return (
         f"<h4>{text['title']}</h4>\n"
         f'<p class="muted">{text["intro"]}{decomposes}</p>\n'

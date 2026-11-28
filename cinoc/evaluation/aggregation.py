@@ -42,6 +42,16 @@ from cinoc.evaluation.statistics import (
     reference_defines,
 )
 
+#: Clé de regroupement d'un document pour le macro par grappe : ``("declared",
+#: grappe)`` ou ``("singleton", document)``. Un document sans grappe forme **la
+#: sienne**, distincte de toute grappe déclarée de même nom (N6, B3).
+ClusterKey = tuple[Literal["declared", "singleton"], str]
+
+
+def cluster_key(cluster: str | None, document_id: str) -> ClusterKey:
+    """La clé de regroupement d'un document (grappe déclarée, ou singleton)."""
+    return ("singleton", document_id) if cluster is None else ("declared", cluster)
+
 
 def is_complete(score: MetricScore) -> bool:
     """Observation **complète** : applicable, disponible, valide, et mesurée."""
@@ -81,7 +91,7 @@ def expected_of(scores: Sequence[MetricScore]) -> int:
 def macro_of(
     metric: DocumentMetric,
     items: Sequence[tuple[int, Counts]],
-    clusters: Sequence[str],
+    clusters: Sequence[ClusterKey],
     weighting: str,
 ) -> tuple[float | None, int | None]:
     """``(macro, |D^M_P|)`` des observations ``items`` (index de document,
@@ -96,7 +106,7 @@ def macro_of(
     """
     if not metric.macro:
         return None, None
-    values: dict[str, list[Fraction]] = {}
+    values: dict[ClusterKey | str, list[Fraction]] = {}
     count = 0
     for index, stat in items:
         if not reference_defines(stat):
@@ -120,7 +130,7 @@ def publish(
     metric: DocumentMetric,
     items: Sequence[tuple[int, Counts]],
     scores: Sequence[MetricScore],
-    clusters: Sequence[str],
+    clusters: Sequence[ClusterKey],
     weighting: str,
 ) -> MetricScore:
     """L'agrégat d'une qualité : la finalisation de la somme de ``items``.
@@ -171,7 +181,7 @@ def _micro(metric: DocumentMetric, stats: Sequence[Counts]) -> float | None:
 def _macro(
     metric: DocumentMetric,
     items: Sequence[tuple[int, Counts]],
-    clusters: Sequence[str],
+    clusters: Sequence[ClusterKey],
     weighting: str,
 ) -> float | None:
     return macro_of(metric, items, clusters, weighting)[0]
@@ -182,7 +192,7 @@ def _support(
     pipelines: Sequence[str],
     series: Series,
     document_ids: Sequence[str],
-    clusters: Sequence[str],
+    clusters: Sequence[ClusterKey],
     weighting: str,
 ) -> _Support:
     """``(D^μ, D^M, micro, macro)`` de ``pipelines`` sur leur intersection."""
@@ -223,7 +233,7 @@ def comparison_payload(
     pipelines: Sequence[str],
     series: Series,
     document_ids: Sequence[str],
-    clusters: Sequence[str],
+    clusters: Sequence[ClusterKey],
     weighting: str,
 ) -> ComparisonPayload | None:
     """Supports apparié (par paire) et global d'une (vue × métrique).

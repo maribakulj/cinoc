@@ -94,12 +94,12 @@ class DocumentGallerySection:
     requires: tuple[str, ...] = ()
 
     def render(self, result: RunResult, ctx: SectionContext) -> Html | None:
-        if not result.documents:
+        if not result.viewed_documents:
             return None
-        views = ordered_unique(d.view for d in result.documents)
+        views = ordered_unique(d.view for d in result.viewed_documents)
         view = views[0]
         multi = len(views) > 1
-        rows = [d for d in result.documents if d.view == view]
+        rows = [d for d in result.viewed_documents if d.view == view]
         # Ordre canonique des moteurs (badge stable, partagé avec les autres sections).
         order = engine_order(p.pipeline for p in result.pipelines) or engine_order(
             d.pipeline for d in rows

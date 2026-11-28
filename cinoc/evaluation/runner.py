@@ -28,6 +28,8 @@ from cinoc.domain.run import RunManifest
 from cinoc.domain.usage import LineOutcomes
 from cinoc.evaluation._view_collectors import COLLECTEURS, ViewCollectors
 from cinoc.evaluation.aggregation import (
+    ClusterKey,
+    cluster_key,
     comparison_payload,
     complete_statistic,
     invention_payload,
@@ -135,7 +137,9 @@ def evaluate_run(
     units = {(u.pipeline, u.document_id): u for u in usage}
     document_ids = [document.id for document in corpus.documents]
     #: Grappe de chaque document (un document sans grappe est la sienne, B3).
-    clusters = [document.cluster or document.id for document in corpus.documents]
+    clusters = [
+        cluster_key(document.cluster, document.id) for document in corpus.documents
+    ]
     # Les analyses qui lisent la sortie **finale** d'un pipeline (calibration,
     # correction, décisions) en lisent le pool : une lecture de ``by_step``.
     pools = {
@@ -365,7 +369,7 @@ def _pipeline_result(
     metrics: list[DocumentMetric],
     series: _Series,
     operational: _Operational,
-    clusters: list[str],
+    clusters: list[ClusterKey],
     corpus: CorpusSpec,
     line_outcomes: LineOutcomes | None,
 ) -> PipelineResult:
@@ -442,7 +446,7 @@ def _support_analyses(
     series: _Series,
     operational: _Operational,
     document_ids: list[str],
-    clusters: list[str],
+    clusters: list[ClusterKey],
     weighting: str,
     probes: Mapping[str, ReferenceProbe],
     empty_page: bool,

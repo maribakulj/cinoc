@@ -41,6 +41,12 @@ from cinoc.evaluation.statistics import ScalarReason, Statistic
 #: version est refusé à la lecture, jamais converti (CLAUDE.md §5.1).
 SCHEMA_VERSION = 7
 
+#: Ce qu'on dit à qui présente un JSON d'un autre schéma (ou sans version).
+RENOTATION = (
+    "Re-notez le run depuis son archive "
+    "(cinoc run --resume-dir <archive> --offline)."
+)
+
 
 #: Axe 1 — la métrique s'applique-t-elle à ce document (§ 2.1 b) ? Les
 #: « attendus » sont les observations ``applicable``. ``no_ground_truth`` : le
@@ -227,6 +233,13 @@ class PipelineResult(BaseModel):
             return self.operational_aggregate
         return self.conditional_aggregate
 
+    def other_aggregate(self, policy: FailurePolicy) -> tuple[MetricScore, ...]:
+        """L'**autre** qualité que celle que ``policy`` désigne comme principale :
+        un rapport qui écrit l'une écrit aussi l'autre, avec sa couverture (N9)."""
+        if policy == "empty_page":
+            return self.conditional_aggregate
+        return self.operational_aggregate
+
 
 class DocumentUsage(BaseModel):
     """Enregistrement d'une unité (pipeline × document) : issue + ressources.
@@ -327,6 +340,26 @@ class RunResult(BaseModel):
         qualité opérationnelle. Jamais stocké une seconde fois (Q9)."""
         return entry.principal_aggregate(self.manifest.failure_policy)
 
+    def other_aggregate(self, entry: PipelineResult) -> tuple[MetricScore, ...]:
+        """L'autre qualité, dérivée de la même politique (N9)."""
+        return entry.other_aggregate(self.manifest.failure_policy)
+
+    @property
+    def viewed_documents(self) -> tuple[RunDocumentResult, ...]:
+        """Les entrées par document **vues** par leur vue.
+
+        Un pipeline hors vue (aucune étape ne déclare un type candidat, D1) a
+        toutes ses observations ``not_in_view`` : il n'a pas d'entrée d'agrégat
+        dans cette vue, et pas de ligne dans ses tableaux par document
+        (question 8). Ses entrées restent dans ``documents`` ; ses faits
+        d'exécution restent dans ``usage``. Dérivé, jamais stocké."""
+        return tuple(
+            d
+            for d in self.documents
+            if not d.scores
+            or any(s.applicability != "not_in_view" for s in d.scores)
+        )
+
     @model_validator(mode="before")
     @classmethod
     def _refuse_other_schemas(cls, data: Any) -> Any:
@@ -336,13 +369,13 @@ class RunResult(BaseModel):
                 raise ValueError(
                     f"RunResult au schéma v{version}, attendu v{SCHEMA_VERSION} : "
                     "le sens ou la forme des agrégats a changé depuis — le "
-                    "fichier n'est ni relu ni converti. Re-notez le run depuis "
-                    "son archive (cinoc run --resume-dir <archive> --offline)."
+                    f"fichier n'est ni relu ni converti. {RENOTATION}"
                 )
         return data
 
 
 __all__ = [
+    "RENOTATION",
     "SCHEMA_VERSION",
     "Analysis",
     "Applicability",

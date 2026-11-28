@@ -101,18 +101,19 @@ def _invention_block(
                 "construction).</p>\n",
             )
         )
-    unit = (
-        localized(lang, "insertions", "insertions")
-        if payload.unit == "insertions"
-        else localized(lang, "faux positifs", "false positives")
-    )
+    # « insertions inventées » (féminin), « faux positifs inventés » (masculin) :
+    # l'accord suit le nom, jamais l'identifiant de l'unité (``false_positives``).
+    if payload.unit == "insertions":
+        invented_fr, invented_en = "insertions inventées", "insertions invented"
+    else:
+        invented_fr, invented_en = "faux positifs inventés", "false positives invented"
     th_a = localized(lang, "Moteur A", "Engine A")
     th_b = localized(lang, "Moteur B", "Engine B")
     th_docs = localized(
         lang, "Pages sans référence (communes)", "Pages without reference (common)"
     )
-    th_a_inv = localized(lang, f"A : {unit} inventés", f"A: {unit} invented")
-    th_b_inv = localized(lang, f"B : {unit} inventés", f"B: {unit} invented")
+    th_a_inv = localized(lang, f"A : {invented_fr}", f"A: {invented_en}")
+    th_b_inv = localized(lang, f"B : {invented_fr}", f"B: {invented_en}")
     rows = "".join(
         f'<tr><td class="eng-cell">{engine_cell(p.a, order.get(p.a, 0))}</td>'
         f'<td class="eng-cell">{engine_cell(p.b, order.get(p.b, 0))}</td>'

@@ -115,8 +115,13 @@ def _observed(
                 "stat": observation.stat,
                 "scalar_reason": observation.scalar_reason,
                 "untruncated_error_rate": observation.untruncated_error_rate,
+                # ``stat_partielle`` porte ce qui a été **produit et lu** (N5) :
+                # une sortie inexploitable n'a rien produit de lisible — sa
+                # statistique est la « sortie vide », déjà dans ``stat_vide``.
                 "stat_partielle": (
-                    observation.stat if validity != "valid" else None
+                    observation.stat
+                    if validity != "valid" and empty is None
+                    else None
                 ),
             }
         )

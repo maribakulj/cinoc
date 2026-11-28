@@ -90,21 +90,23 @@ def test_csv_exact_content() -> None:
     # lit « échec du moteur », celui du WER de ``d1`` « non applicable ». Puis
     # la durée de chaque unité (D-289, pilote D11) — vide pour l'échec. Les
     # comptes de la statistique, le motif d'un scalaire indéfini et le taux
-    # non tronqué d'une exactitude sont publiés à côté (K1, B1).
+    # non tronqué d'une exactitude sont publiés à côté (K1, B1). Les deux
+    # dernières colonnes disent la qualité d'une ligne d'agrégat et si elle est
+    # la principale (Q9) ; l'opérationnelle de ce résultat est vide.
     edits = "edit_counts:substitutions=1;deletions=0;insertions=0;reference_length=4"
     blank = "edit_counts:substitutions=0;deletions=0;insertions=3;reference_length=0"
     assert run_result_csv(_result()) == (
         "scope,view,pipeline,document_id,metric,value,support,expected,outcome,"
-        "statistic,scalar_reason,untruncated_error_rate\n"
-        f"aggregate,text,tess,,cer,0.25,1,2,,{edits},,\n"
+        "statistic,scalar_reason,untruncated_error_rate,quality,principal\n"
+        f"aggregate,text,tess,,cer,0.25,1,2,,{edits},,,conditional,true\n"
         "aggregate,text,tess,,char_accuracy,0.0,1,2,,"
-        "error_counts:errors=44;reference_length=10,,4.4\n"
-        f"document,text,tess,d1,cer,0.25,,,ok,{edits},,\n"
-        "document,text,tess,d1,wer,,,,ok,,,\n"
-        f"document,text,tess,d1,ins_rate,,,,ok,{blank},zero_denominator,\n"
-        "document,text,tess,d2,cer,,,,failed:engine,,,\n"
-        "usage,,tess,d1,duration_seconds,1.5,,,ok,,,\n"
-        "usage,,tess,d2,duration_seconds,,,,failed:engine,,,\n"
+        "error_counts:errors=44;reference_length=10,,4.4,conditional,true\n"
+        f"document,text,tess,d1,cer,0.25,,,ok,{edits},,,,\n"
+        "document,text,tess,d1,wer,,,,ok,,,,,\n"
+        f"document,text,tess,d1,ins_rate,,,,ok,{blank},zero_denominator,,,\n"
+        "document,text,tess,d2,cer,,,,failed:engine,,,,,\n"
+        "usage,,tess,d1,duration_seconds,1.5,,,ok,,,,,\n"
+        "usage,,tess,d2,duration_seconds,,,,failed:engine,,,,,\n"
     )
 
 

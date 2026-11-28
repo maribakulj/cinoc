@@ -21,6 +21,21 @@
     return;
   }
   var currentCer = current.cer || {};
+  var currentPolicy = current.failure_policy;
+  var SCHEMA = 7;
+  // Politique d'échec -> qualité que mesure l'agrégat principal du run.
+  var QUALITY = { exclude: "conditionnelle", empty_page: "opérationnelle" };
+  var RENOTATION =
+    "Re-notez le run depuis son archive (cinoc run --resume-dir <archive> --offline).";
+
+  function policyOf(run) {
+    var policy = run && run.manifest && run.manifest.failure_policy;
+    return policy === "empty_page" ? "empty_page" : "exclude";
+  }
+
+  function describePolicy(policy) {
+    return policy + " (qualité " + (QUALITY[policy] || "inconnue") + ")";
+  }
 
   function cerMap(run) {
     var map = {};
@@ -28,8 +43,7 @@
     if (!Array.isArray(pipelines)) return map;
     // L'agrégat principal n'est pas stocké : il se dérive de la politique
     // d'échec du run (exclude -> conditionnel, empty_page -> opérationnel).
-    var policy = run.manifest && run.manifest.failure_policy;
-    var key = policy === "empty_page" ? "operational_aggregate" : "conditional_aggregate";
+    var key = policyOf(run) === "empty_page" ? "operational_aggregate" : "conditional_aggregate";
     for (var i = 0; i < pipelines.length; i++) {
       var p = pipelines[i];
       if (!p || typeof p.pipeline !== "string" || !Array.isArray(p[key])) continue;
@@ -72,7 +86,7 @@
     parent.appendChild(row);
   }
 
-  function render(otherMap) {
+  function render(otherMap, otherPolicy) {
     var el = banner();
     el.textContent = "";
     var keys = Object.keys(currentCer).sort();
@@ -81,6 +95,21 @@
     title.className = "cb-title";
     title.textContent = "Δ CER (run chargé − ce rapport)";
     el.appendChild(title);
+    // Deux runs sous des politiques différentes ne mesurent pas la même qualité :
+    // le Δ d'un CER conditionnel avec un CER opérationnel n'est pas un écart de
+    // pipeline. On le dit, avec la politique de chaque run (N11).
+    var policies = document.createElement("span");
+    policies.className = "cb-policy";
+    var mine = currentPolicy === "empty_page" ? "empty_page" : "exclude";
+    policies.textContent =
+      "ce rapport : " +
+      describePolicy(mine) +
+      " · run chargé : " +
+      describePolicy(otherPolicy) +
+      (mine !== otherPolicy
+        ? " — politiques différentes : ce Δ compare deux qualités, pas deux pipelines."
+        : ".");
+    el.appendChild(policies);
     for (var i = 0; i < keys.length; i++) {
       var key = keys[i];
       if (!(key in otherMap)) continue;
@@ -114,7 +143,17 @@
         window.alert("JSON invalide.");
         return;
       }
-      render(cerMap(other));
+      // Un JSON sans schema_version, ou d'un autre schéma que le 7, n'a pas le
+      // sens d'agrégat de celui-ci : refusé, jamais relu comme courant (N10).
+      if (!other || typeof other !== "object" || other.schema_version !== SCHEMA) {
+        window.alert(
+          "Run refusé : schema_version " +
+            (other && other.schema_version !== undefined ? other.schema_version : "absent") +
+            ", attendu " + SCHEMA + ". " + RENOTATION
+        );
+        return;
+      }
+      render(cerMap(other), policyOf(other));
     };
     reader.readAsText(file);
   });

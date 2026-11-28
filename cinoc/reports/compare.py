@@ -78,6 +78,40 @@ def _side(result: RunResult, source: str | None) -> str:
     return f"{escape(result.manifest.run_id)} ({escape(detail)})"
 
 
+def _policy(result: RunResult, lang: str) -> str:
+    """La politique d'échec d'un run et la **qualité** que mesure son agrégat
+    principal : ``exclude`` → conditionnelle, ``empty_page`` → opérationnelle."""
+    policy = result.manifest.failure_policy
+    quality = (
+        localized(lang, "conditionnelle", "conditional")
+        if policy == "exclude"
+        else localized(lang, "opérationnelle", "operational")
+    )
+    label = localized(lang, "politique", "policy")
+    word = localized(lang, "qualité", "quality")
+    return f"{label} <code>{escape(policy)}</code> ({word} {quality})"
+
+
+def _policy_warning(run_a: RunResult, run_b: RunResult, lang: str) -> str:
+    """Deux runs sous des politiques différentes ne mesurent pas la même qualité :
+    le Δ d'un CER conditionnel avec un CER opérationnel passerait pour un écart
+    de pipeline (N11)."""
+    if run_a.manifest.failure_policy == run_b.manifest.failure_policy:
+        return ""
+    chapeau = localized(
+        lang,
+        "Attention : les deux runs n'ont pas la même politique d'échec. Leurs "
+        "valeurs mesurent deux qualités différentes (conditionnelle : "
+        "observations complètes ; opérationnelle : échecs notés comme une "
+        "sortie vide) ; un Δ ci-dessous n'est pas un écart de pipeline.",
+        "Warning: the two runs do not share the same failure policy. Their "
+        "values measure two different qualities (conditional: complete "
+        "observations; operational: failures scored as empty output); a Δ "
+        "below is not a pipeline gap.",
+    )
+    return f"<p><strong>{chapeau}</strong></p>\n"
+
+
 def _composition_warning(paires: tuple[PairedDifference, ...], lang: str) -> str:
     """Les chaînes appariées par leur nom qui ne sont pas composées pareil :
     leur delta mêle l'effet de ces réglages au changement qu'on croit lire."""
@@ -139,8 +173,10 @@ def render_comparison(
         "<th>Pipeline</th><th>View</th><th>Metric</th>",
     )
     body = Html(
-        f'<p class="muted">A = {_side(run_a, source_a)} · '
-        f"B = {_side(run_b, source_b)} · Δ = B − A ({note}).</p>\n"
+        f'<p class="muted">A = {_side(run_a, source_a)}, {_policy(run_a, lang)} · '
+        f"B = {_side(run_b, source_b)}, {_policy(run_b, lang)} · "
+        f"Δ = B − A ({note}).</p>\n"
+        + _policy_warning(run_a, run_b, lang)
         + _composition_warning(paired_differences(run_a.manifest, run_b.manifest), lang)
         + f"<table>\n<thead><tr>{head}"
         + "<th>A</th><th>B</th><th>Δ</th></tr></thead>\n"

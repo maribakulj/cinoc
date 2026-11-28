@@ -14,11 +14,7 @@ from cinoc.evaluation.result import PipelineResult, RunResult
 from cinoc.reports.composition_diff import homonym_hints
 from cinoc.reports.engine_badges import engine_cell, engine_order
 from cinoc.reports.html import escape, localized, view_label
-from cinoc.reports.metric_categories import (
-    category_legend,
-    category_mark,
-    is_established,
-)
+from cinoc.reports.metric_categories import category_legend, category_mark
 from cinoc.reports.section import Html, SectionContext
 from cinoc.reports.sections._tables import (
     bar_cell,
@@ -98,7 +94,9 @@ def _qualities_block(result: RunResult, view_name: str, lang: str) -> str:
     """Les **deux qualités** (§ 2.1 f), avec leur couverture, là où elles
     diffèrent : la conditionnelle (observations complètes) et l'opérationnelle
     (ce que l'utilisateur reçoit : partielles telles que produites, échecs notés
-    comme une sortie vide). Rien quand toutes les unités sont complètes."""
+    comme une sortie vide). Toute métrique du tableau au-dessus, établie, adaptée
+    ou exploratoire : partout où l'agrégat principal est écrit, l'autre qualité
+    l'est aussi (N9). Rien quand toutes les unités sont complètes."""
     rows: list[str] = []
     order = engine_order(p.pipeline for p in result.pipelines)
     for entry in result.pipelines:
@@ -114,7 +112,7 @@ def _qualities_block(result: RunResult, view_name: str, lang: str) -> str:
                 operational.value,
                 operational.support,
             )
-            if same or not (is_established(metric) and is_displayed(metric)):
+            if same or not is_displayed(metric):
                 continue
             expected = conditional.expected if conditional.expected is not None else 0
             motifs = " · ".join(

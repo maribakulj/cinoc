@@ -257,7 +257,7 @@ def test_exploratoire__le_texte_dinference_n_emploie_aucun_verdict(
     payload, _, _, _ = CASES[case]
     texts = [
         inference_text.omnibus_label(payload, lang),
-        inference_text.reason_text(payload, lang),
+        inference_text.reason_text(payload, lang, "exclude"),
         inference_text.posthoc_text(payload, lang),
     ]
     for text in texts:

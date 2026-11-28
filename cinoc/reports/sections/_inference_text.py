@@ -17,6 +17,7 @@ paires que la distance critique **sépare**, comme paires.
 
 from __future__ import annotations
 
+from cinoc.domain.evaluation import FailurePolicy
 from cinoc.evaluation.analysis import InferencePayload
 from cinoc.evaluation.inference import MIN_SUPPORT
 from cinoc.reports._numbers import localize_decimal
@@ -36,7 +37,28 @@ def omnibus_label(payload: InferencePayload, lang: str) -> str:
     return localized(lang, "non calculé", "not computed")
 
 
-def reason_text(payload: InferencePayload, lang: str) -> str:
+def support_name(policy: FailurePolicy, lang: str, *, plural: bool = True) -> str:
+    """Les observations que compare un test : « observations complètes » sous
+    ``exclude`` ; « observations opérationnelles (échecs notés comme une sortie
+    vide) » sous ``empty_page``. C'est le support de l'agrégat principal du run :
+    jamais « cas complets » quand des échecs y sont notés comme une sortie vide
+    (N4)."""
+    s = "s" if plural else ""
+    if policy == "empty_page":
+        return localized(
+            lang,
+            f"observation{s} opérationnelle{s} (échecs notés comme une sortie vide)",
+            f"operational observation{s} (failures scored as empty output)",
+        )
+    return localized(lang, f"observation{s} complète{s}", f"complete observation{s}")
+
+
+def support_label(n: int, policy: FailurePolicy, lang: str) -> str:
+    """« n observations complètes » (ou opérationnelles) : la taille du support."""
+    return f"{n} {support_name(policy, lang, plural=n != 1)}"
+
+
+def reason_text(payload: InferencePayload, lang: str, policy: FailurePolicy) -> str:
     """Pourquoi le test n'a pas été calculé (vide s'il l'a été)."""
     n = payload.n_documents
     if payload.not_computed == "single_pipeline":
@@ -44,14 +66,16 @@ def reason_text(payload: InferencePayload, lang: str) -> str:
     if payload.not_computed == "insufficient_support":
         return localized(
             lang,
-            f"{n} cas complets, il en faut au moins {MIN_SUPPORT}",
-            f"{n} complete cases, at least {MIN_SUPPORT} are needed",
+            f"{support_label(n, policy, lang)}, il en faut au moins {MIN_SUPPORT}",
+            f"{support_label(n, policy, lang)}, at least {MIN_SUPPORT} are needed",
         )
     if payload.not_computed == "no_difference":
         return localized(
             lang,
-            f"aucune différence entre pipelines sur les {n} cas complets",
-            f"no difference between pipelines over the {n} complete cases",
+            f"aucune différence entre pipelines sur les "
+            f"{support_label(n, policy, lang)}",
+            f"no difference between pipelines over the "
+            f"{support_label(n, policy, lang)}",
         )
     return ""
 
@@ -132,4 +156,6 @@ __all__ = [
     "posthoc_text",
     "reason_text",
     "separated_pairs",
+    "support_label",
+    "support_name",
 ]

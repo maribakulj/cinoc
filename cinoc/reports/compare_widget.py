@@ -3,7 +3,8 @@
 Trois morceaux insérés en fin de ``<body>`` du rapport :
 
 1. un **bouton** + un ``<input type=file>`` caché ;
-2. les **données CER du run courant** dans un bloc ``type="application/json"``
+2. les **données CER du run courant**, et sa politique d'échec (qui dit quelle
+   qualité mesure ce CER), dans un bloc ``type="application/json"``
    **inerte** (non exécuté → hors ``script-src``), échappé contre toute rupture
    de ``</script>`` ;
 3. le **script statique** ``_assets/compare.js`` inliné (autonomie : il voyage
@@ -52,7 +53,12 @@ def _safe_json(data: object) -> str:
 
 def compare_widget(result: RunResult) -> Html:
     """Bouton + données du run courant + script — à insérer en fin de ``<body>``."""
-    payload = _safe_json({"cer": _cer_by_key(result)})
+    payload = _safe_json(
+        {
+            "cer": _cer_by_key(result),
+            "failure_policy": result.manifest.failure_policy,
+        }
+    )
     return Html(
         '<div class="compare-bar">'
         '<button id="cinoc-compare-btn" class="compare-btn" type="button">'

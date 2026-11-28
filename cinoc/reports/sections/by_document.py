@@ -30,21 +30,21 @@ class DocumentSection:
     requires: tuple[str, ...] = ()  # générique ; absent si aucun détail par-doc
 
     def render(self, result: RunResult, ctx: SectionContext) -> Html | None:
-        if not result.documents:
+        if not result.viewed_documents:
             return None
         # Ordre canonique des moteurs (badge stable) : première apparition dans
         # le run ; repli sur l'ordre des documents si aucun agrégat.
         order = engine_order(p.pipeline for p in result.pipelines) or engine_order(
-            d.pipeline for d in result.documents
+            d.pipeline for d in result.viewed_documents
         )
         # Titre de vue porté par le héros (renderer) ; ici, les tables par vue.
-        views = ordered_unique(d.view for d in result.documents)
+        views = ordered_unique(d.view for d in result.viewed_documents)
         multi = len(views) > 1
         parts: list[str] = []
         for view_name in views:
             parts.append(
                 _table_for_view(
-                    result.documents, view_name, order, ctx.lang, multi=multi
+                    result.viewed_documents, view_name, order, ctx.lang, multi=multi
                 )
             )
         return Html("\n".join(parts) + "\n")

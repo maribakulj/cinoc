@@ -118,9 +118,9 @@ def test_significance_as_neutral_fact_wilcoxon() -> None:
     # différence de « significative » ; le test est étiqueté exploratoire.
     assert not verdicts(html)
     assert etiquette_exploratoire(html)
-    # Le support du test (cas complets, apparié) est dit : ce n'est pas celui
+    # Le support du test (observations complètes, apparié) est dit : ce n'est pas celui
     # d'un agrégat quand un moteur a perdu une unité.
-    assert "(20 cas complets)" in html
+    assert "(20 observations complètes)" in html
 
 
 def test_incomplete_aggregate_shows_scored_over_expected() -> None:
@@ -262,7 +262,7 @@ def test_test_not_computed_says_why() -> None:
     )
     html = KeyMeasuresSection().render(result, SectionContext())
     assert html is not None
-    assert "test non calculé : 3 cas complets, il en faut au moins 6." in html
+    assert "test non calculé : 3 observations complètes, il en faut au moins 6." in html
     # Sans payload (résultat antérieur au schéma 5) : le dire, pas se taire.
     bare = KeyMeasuresSection().render(
         result.model_copy(update={"analyses": ()}), SectionContext(lang="en")

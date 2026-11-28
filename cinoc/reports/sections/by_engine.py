@@ -29,6 +29,7 @@ from cinoc.reports.metric_categories import (
     category_label,
     category_legend,
     category_of,
+    higher_is_better,
     is_established,
 )
 from cinoc.reports.section import Html, SectionContext
@@ -42,6 +43,8 @@ from cinoc.reports.sections._tables import (
     metric_th,
     nonempty_metric_indices,
     ordered_unique,
+    other_quality,
+    other_quality_legend,
 )
 
 
@@ -105,7 +108,7 @@ class EngineSection:
             )
         if diagnostic:
             out += self._diagnostic(
-                ordered, aggregates, metrics, diagnostic, order, ctx.lang
+                result, ordered, aggregates, metrics, diagnostic, order, ctx.lang
             )
         return Html(out) if out else None
 
@@ -125,18 +128,25 @@ class EngineSection:
     ) -> str:
         maxes = [col_max([aggregates[p.pipeline] for p in ordered], i) for i in keep]
         profil_title = localized(lang, "Profil", "Profile")
+        # La flèche suit le sens de la métrique triée, comme la légende des
+        # mesures clés : ↓ pour un taux d'erreur, ↑ pour une exactitude (N8).
+        arrow = "↑" if higher_is_better(sort_metric) else "↓"
         body: list[str] = []
         # Lignes ordonnées selon le tri global (un **tri** lisible, pas un rang
         # ordinal attribué : aucune colonne « # », aucun gagnant désigné).
         for pipeline in ordered:
             cells = "".join(
                 bar_cell(
-                    aggregates[pipeline.pipeline][i], maxes[j], lang=lang, sortable=True
+                    aggregates[pipeline.pipeline][i],
+                    maxes[j],
+                    lang=lang,
+                    sortable=True,
+                    other=other_quality(result, pipeline, metrics[i], lang),
                 )
                 for j, i in enumerate(keep)
             )
             vals = _per_doc_values(
-                result.documents, pipeline.pipeline, view, sort_metric
+                result.viewed_documents, pipeline.pipeline, view, sort_metric
             )
             disp = (
                 localize_decimal(
@@ -166,14 +176,16 @@ class EngineSection:
             lang,
             f'<p class="muted">Métriques <strong>établies</strong> — conformes à '
             f"une référence nommée, les seules classées et testées. Ordonné selon "
-            f"le tri du support global ({escape(sort_metric)} ↑ sur les documents "
+            "le tri du support global "
+            f"({escape(sort_metric)} {arrow} sur les documents "
             "que tous les moteurs ont notés ; un tri, pas un rang attribué) · "
             f"dispersion = {escape(sort_metric)} min · médiane · "
             "max par document. Cliquer un en-tête de métrique pour réordonner ; "
             "survoler pour la définition. Aucun gagnant n'est déclaré.</p>\n",
             f'<p class="muted"><strong>Established</strong> metrics — conforming '
             f"to a named reference, the only ones ranked and tested. Ordered by "
-            f"the global-support ranking ({escape(sort_metric)} ↑ over the documents "
+            "the global-support ranking "
+            f"({escape(sort_metric)} {arrow} over the documents "
             "every engine scored; a sort, not an assigned rank) · "
             f"dispersion = {escape(sort_metric)} min · median · "
             "max per document. Click a metric header to reorder; hover for the "
@@ -191,10 +203,12 @@ class EngineSection:
             f'<th class="num-cell">{th_dispersion}</th></tr></thead>\n'
             f"<tbody>{''.join(body)}</tbody>\n</table></div>\n"
             + bar_legend(lang)
+            + f'<p class="muted">{other_quality_legend(result, lang)}</p>\n'
         )
 
     @staticmethod
     def _diagnostic(
+        result: RunResult,
         ordered: list[PipelineResult],
         aggregates: dict[str, tuple[MetricScore, ...]],
         metrics: tuple[str, ...],
@@ -209,7 +223,12 @@ class EngineSection:
             f'<tr><td class="eng-cell">'
             f"{engine_cell(p.pipeline, order.get(p.pipeline, 0))}</td>"
             + "".join(
-                bar_cell(aggregates[p.pipeline][i], maxes[j], lang=lang)
+                bar_cell(
+                    aggregates[p.pipeline][i],
+                    maxes[j],
+                    lang=lang,
+                    other=other_quality(result, p, metrics[i], lang),
+                )
                 for j, i in enumerate(keep)
             )
             + "</tr>"
@@ -254,6 +273,7 @@ class EngineSection:
             f"<thead>{group_row}<tr><th>{th_engine}</th>{header}</tr></thead>\n"
             f"<tbody>{body}</tbody>\n</table></div>\n"
             + category_legend(display, lang)
+            + f'<p class="muted">{other_quality_legend(result, lang)}</p>\n'
         )
 
 

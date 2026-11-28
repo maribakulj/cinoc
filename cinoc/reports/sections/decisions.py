@@ -33,14 +33,19 @@ class _Row:
     """Les comptes déclarés d'un pipeline, d'où qu'ils viennent."""
 
     pipeline: str
-    n_lines: int
-    corrected: int
-    review_required: int
-    abstained: int
+    n_lines: int | None
+    corrected: int | None
+    review_required: int | None
+    abstained: int | None
     refused: tuple[tuple[str, int], ...]
     fallback: tuple[tuple[str, int], ...]
     review_reasons: tuple[tuple[str, int], ...] = ()
     detail: PipelineDecisions | None = None
+
+    @property
+    def declared(self) -> bool:
+        """Faux quand l'archive n'a pas déclaré la classe de ses lignes (N3)."""
+        return self.n_lines is not None
 
 
 def _from_payload(row: PipelineDecisions) -> _Row:
@@ -94,13 +99,26 @@ def _part(n: int, total: int, lang: str) -> str:
     return localize_decimal(f"{n / total:.1%}", lang)
 
 
-def _count(n: int, total: int, lang: str) -> str:
+def _count(n: int | None, total: int | None, lang: str) -> str:
+    assert n is not None and total is not None  # une ligne déclarée
+
     share = _part(n, total, lang)
     return f'<td class="disp">{n} <span class="muted">({share})</span></td>'
 
 
 def _row_html(row: _Row, order: dict[str, int], lang: str) -> str:
     badge = engine_cell(row.pipeline, order.get(row.pipeline, 0))
+    if not row.declared:
+        # Une non-mesure, jamais un zéro : aucun nombre dans la ligne (N3).
+        texte = localized(
+            lang,
+            "classes non déclarées par l'archive",
+            "line classes not declared by the archive",
+        )
+        return (
+            f'<tr><td class="eng-cell">{badge}</td>'
+            f'<td class="muted" colspan="6">{texte}</td></tr>'
+        )
     refused = sum(n for _, n in row.refused)
     fallback = sum(n for _, n in row.fallback)
     return (

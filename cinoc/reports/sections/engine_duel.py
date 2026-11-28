@@ -34,15 +34,15 @@ class EngineDuelSection:
     requires: tuple[str, ...] = ()
 
     def render(self, result: RunResult, ctx: SectionContext) -> Html | None:
-        if not result.documents:
+        if not result.viewed_documents:
             return None
-        view = ordered_unique(d.view for d in result.documents)[0]
+        view = ordered_unique(d.view for d in result.viewed_documents)[0]
         order = engine_order(p.pipeline for p in result.pipelines) or engine_order(
-            d.pipeline for d in result.documents
+            d.pipeline for d in result.viewed_documents
         )
         present = {
             d.pipeline
-            for d in result.documents
+            for d in result.viewed_documents
             if d.view == view and d.pipeline in order
         }
         engines = sorted(present, key=lambda n: order[n])
@@ -50,7 +50,7 @@ class EngineDuelSection:
             return None  # un duel suppose au moins deux moteurs
         # {doc: {engine: cer}}
         per_doc: dict[str, dict[str, float]] = {}
-        for doc in result.documents:
+        for doc in result.viewed_documents:
             if doc.view != view or doc.pipeline not in order:
                 continue
             for score in doc.scores:

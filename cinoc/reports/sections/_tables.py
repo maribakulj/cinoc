@@ -127,6 +127,72 @@ def coverage(score: MetricScore, lang: str) -> str:
     )
 
 
+def quality_names(result: RunResult, lang: str) -> tuple[str, str]:
+    """``(principale, autre)`` : le nom de la qualité que mesure l'agrégat
+    principal du run (conditionnelle sous ``exclude``, opérationnelle sous
+    ``empty_page``) et celui de l'autre."""
+    conditional = localized(lang, "conditionnelle", "conditional")
+    operational = localized(lang, "opérationnelle", "operational")
+    if result.manifest.failure_policy == "empty_page":
+        return operational, conditional
+    return conditional, operational
+
+
+def other_quality(
+    result: RunResult,
+    pipeline: PipelineResult,
+    metric: str,
+    lang: str,
+    value_text: str | None = None,
+) -> str:
+    """L'**autre** qualité d'une métrique, à côté de l'agrégat principal : sa
+    valeur et sa couverture « notées / attendues » (N9 ; « publié veut dire
+    affiché »).
+
+    Rien quand elle coïncide avec le principal (même valeur, même support) : les
+    deux qualités ne se distinguent que là où une unité a échoué ou n'est que
+    partielle, comme dans « Deux qualités de lecture ». ``value_text`` : la
+    valeur déjà formatée par l'appelant (un pourcentage dans les fiches, le
+    format à quatre décimales sinon)."""
+    principal = next(
+        (s for s in result.principal_aggregate(pipeline) if s.metric == metric), None
+    )
+    other = next(
+        (s for s in result.other_aggregate(pipeline) if s.metric == metric), None
+    )
+    if principal is None or other is None:
+        return ""
+    if (principal.value, principal.support) == (other.value, other.support):
+        return ""
+    name = quality_names(result, lang)[1]
+    shown = value_text if value_text is not None else format_value(other, lang)
+    expected = other.expected if other.expected is not None else 0
+    title = localized(
+        lang,
+        f"Qualité {name} : {other.support} notées sur {expected} attendues.",
+        f"{name.capitalize()} quality: {other.support} scored out of {expected} "
+        "expected.",
+    )
+    return (
+        f' <span class="muted other-quality" title="{escape(title)}">'
+        f"· {name} {shown} {other.support}/{expected}</span>"
+    )
+
+
+def other_quality_legend(result: RunResult, lang: str) -> str:
+    """La phrase qui explique le second chiffre des cellules (N9)."""
+    principal, other = quality_names(result, lang)
+    return localized(
+        lang,
+        f"Chaque valeur est celle de la qualité <b>{principal}</b> ; quand "
+        f"l'autre qualité (<b>{other}</b>) diffère, elle est écrite à côté avec "
+        "sa couverture « notées/attendues ».",
+        f"Each value is the <b>{principal}</b> quality; when the other quality "
+        f"(<b>{other}</b>) differs, it is written next to it with its coverage "
+        "“scored/expected”.",
+    )
+
+
 def col_max(rows: list[tuple[MetricScore, ...]], index: int) -> float:
     """Plus grande valeur (non ``None``) de la colonne → échelle des barres."""
     values = [v for r in rows if (v := r[index].value) is not None]
@@ -163,7 +229,12 @@ def nonempty_metric_indices(rows: list[tuple[MetricScore, ...]]) -> list[int]:
 
 
 def bar_cell(
-    score: MetricScore, column_max: float, *, lang: str, sortable: bool = False
+    score: MetricScore,
+    column_max: float,
+    *,
+    lang: str,
+    sortable: bool = False,
+    other: str = "",
 ) -> str:
     """Cellule ``td.databar`` : **teinte de fond** ∝ position sur l'axe de la
     colonne (échelle commune par colonne, façon canon) + valeur. Plus de barre
@@ -172,8 +243,9 @@ def bar_cell(
     voisines).
 
     ``sortable`` ajoute ``data-sort`` (valeur brute) → le tri client de
-    ``report.js`` réordonne le DOM par cette clé (aucune donnée reconstruite)."""
-    text = format_value(score, lang) + coverage(score, lang)
+    ``report.js`` réordonne le DOM par cette clé (aucune donnée reconstruite).
+    ``other`` : l'autre qualité (``other_quality``), écrite à côté."""
+    text = format_value(score, lang) + coverage(score, lang) + other
     sort = (
         f' data-sort="{score.value:.6f}"'
         if sortable and score.value is not None
@@ -322,4 +394,7 @@ __all__ = [
     "metric_th",
     "nonempty_metric_indices",
     "ordered_unique",
+    "other_quality",
+    "other_quality_legend",
+    "quality_names",
 ]

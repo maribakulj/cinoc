@@ -47,7 +47,7 @@ def _percentile(values: list[float], q: float) -> float | None:
 
 def _by_doc(result: RunResult, view: str, metric: str) -> dict[str, list[float]]:
     out: dict[str, list[float]] = {}
-    for doc in result.documents:
+    for doc in result.viewed_documents:
         if doc.view != view:
             continue
         for score in doc.scores:

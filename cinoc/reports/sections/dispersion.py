@@ -44,18 +44,18 @@ class DispersionSection:
     requires: tuple[str, ...] = ()
 
     def render(self, result: RunResult, ctx: SectionContext) -> Html | None:
-        if not result.documents:
+        if not result.viewed_documents:
             return None
-        views = ordered_unique(d.view for d in result.documents)
+        views = ordered_unique(d.view for d in result.viewed_documents)
         view = views[0]
         multi = len(views) > 1
         order = engine_order(p.pipeline for p in result.pipelines) or engine_order(
-            d.pipeline for d in result.documents
+            d.pipeline for d in result.viewed_documents
         )
         # (pipeline, valeurs) dans l'ordre canonique des badges.
         series: list[tuple[str, list[float]]] = []
         for pipeline in sorted(order, key=lambda p: order[p]):
-            vals = _per_doc_cer(result.documents, pipeline, view)
+            vals = _per_doc_cer(result.viewed_documents, pipeline, view)
             if vals:
                 series.append((pipeline, vals))
         if not series:

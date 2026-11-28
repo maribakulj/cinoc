@@ -250,12 +250,21 @@ class CharConfusion(BaseModel):
 
 
 class PipelineConfusions(BaseModel):
-    """Top des confusions d'un pipeline sur le corpus (tri : -count, paire)."""
+    """Top des confusions d'un pipeline sur le corpus (tri : -count, paire).
+
+    ``pairs`` est **tronquée** aux plus fréquentes : ``n_pairs`` (paires
+    distinctes) et ``n_substitutions`` (leur total) disent sur quoi elle porte,
+    pour qu'une liste de dix paires ne passe pas pour la décomposition des
+    substitutions d'un corpus qui en compte douze (N7). ``None`` : un JSON qui ne
+    l'écrivait pas.
+    """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     pipeline: str = Field(min_length=1, max_length=128)
     pairs: tuple[CharConfusion, ...] = ()
+    n_pairs: int | None = Field(default=None, ge=0)
+    n_substitutions: int | None = Field(default=None, ge=0)
 
 
 class WorstLine(BaseModel):
@@ -1189,16 +1198,38 @@ class PipelineDecisions(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     pipeline: str = Field(min_length=1, max_length=128)
-    n_lines: int = Field(ge=0)
-    corrected: int = Field(ge=0)
-    review_required: int = Field(ge=0)
-    abstained: int = Field(ge=0)
+    #: ``not_declared`` : l'archive n'a pas déclaré la classe de ses lignes (un
+    #: sidecar sans ``line_class``, N3). Une unité dont **une** ligne au moins
+    #: n'a pas de classe est entièrement non déclarée — un compte partiel
+    #: sous-compterait sans le dire — et le pipeline qui en porte une l'est
+    #: aussi. Aucun compte n'est alors publié : ``None``, jamais un zéro.
+    status: Literal["not_declared"] | None = None
+    n_lines: int | None = Field(default=None, ge=0)
+    corrected: int | None = Field(default=None, ge=0)
+    review_required: int | None = Field(default=None, ge=0)
+    abstained: int | None = Field(default=None, ge=0)
     #: Refus techniques par code, triés.
     refused: tuple[DecisionReasonCount, ...] = ()
     #: Replis (incidents d'exécution) par code, triés.
     fallback: tuple[DecisionReasonCount, ...] = ()
     review_reasons: tuple[DecisionReasonCount, ...] = ()
     samples: tuple[DecisionSample, ...] = ()
+
+    @model_validator(mode="after")
+    def _counts_follow_the_status(self) -> Self:
+        counts = (self.n_lines, self.corrected, self.review_required, self.abstained)
+        if self.status == "not_declared":
+            if (
+                any(c is not None for c in counts)
+                or self.refused
+                or self.fallback
+                or self.review_reasons
+                or self.samples
+            ):
+                raise ValueError("des classes non déclarées ne portent aucun compte")
+        elif any(c is None for c in counts):
+            raise ValueError("des classes déclarées portent leurs quatre comptes")
+        return self
 
 
 class DecisionsPayload(BaseModel):
