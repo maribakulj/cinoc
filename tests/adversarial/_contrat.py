@@ -33,8 +33,10 @@ Composantes de ``stat`` (§ 2.1 a) :
     exactitudes         : ``errors``, ``reference_length``
     appariement P/R/F   : ``tp``, ``fp``, ``fn``
 
-Agrégat d'un pipeline — un ``MetricScore`` de ``PipelineResult.aggregate``
-(§ 2.1 a, c) :
+Agrégat d'un pipeline — un ``MetricScore`` de
+``PipelineResult.conditional_aggregate`` ou ``operational_aggregate`` (le principal,
+``RunResult.principal_aggregate``, est dérivé de ``failure_policy`` : jamais
+stocké ; § 2.1 a, c) :
     ``value`` = micro, finalisation de la combinaison ; ``stat`` = combinaison
     ``macro`` ; ``support`` = |D^μ_P| (renommé ici depuis ``micro_support`` : le champ
     existait déjà, c'est lui que lisent rapport, CSV et garde du README) ;
@@ -63,8 +65,8 @@ et le statut ``exploratory`` ; le reste est la forme choisie par le test) :
     produit (axe 3 ``partial_output``/``truncated_output``), ``None`` sans sortie
     ``PipelineResult.operational_aggregate`` : un ``MetricScore`` par métrique,
     la qualité opérationnelle (partielles notées telles que produites, échecs
-    notés comme sortie vide) ; ``PipelineResult.aggregate`` reste la qualité
-    conditionnelle. La couverture (``expected``, ``coverage``,
+    notés comme sortie vide) ; ``PipelineResult.conditional_aggregate`` est la
+    qualité conditionnelle. La couverture (``expected``, ``coverage``,
     ``micro_support``) est celle de l'agrégat conditionnel, reprise à
     l'identique sur l'opérationnel
     ``StepOutput.partial`` : motif (``str``) d'un module qui déclare son étape
@@ -312,7 +314,8 @@ def agregat_operationnel(
 ) -> MetricScore:
     """Agrégat **opérationnel** d'un (pipeline, vue, métrique) (§ 2.1 f).
 
-    ``PipelineResult.aggregate`` reste l'agrégat conditionnel (défaut).
+    ``PipelineResult.conditional_aggregate`` est l'agrégat conditionnel ; le
+    principal se dérive de ``failure_policy`` (``RunResult.principal_aggregate``).
     """
     for entry in result.pipelines:
         if (entry.pipeline, entry.view) == (pipeline, view):

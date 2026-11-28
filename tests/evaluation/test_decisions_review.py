@@ -82,9 +82,19 @@ def test_review_count_does_not_depend_on_sample_limit_or_available_reasons(
     assert [(r.code, r.n) for r in row.review_reasons] == [("sans_motif", 41)]
 
 
-def test_decision_counts_use_complete_text_not_the_display_excerpt(
+def test_decision_counts_come_from_the_declared_classes_not_from_the_texts(
     tmp_path: Path,
 ) -> None:
+    """Réécrit (N12, seconde revue : l'ancien test posait ``line_class`` à la main
+    puis vérifiait que cette classe était comptée, ce qui est vrai de toute
+    implémentation et ne prouve rien du texte). Les comptes viennent des classes
+    **déclarées** par l'adaptateur (D6, § 2.1 f), jamais d'une comparaison de
+    textes — qu'elle porte sur les textes complets ou sur l'extrait affiché
+    (300 caractères). Chaque ligne a donc une classe que ses textes ne disent
+    pas : l'une, intacte, est déclarée corrigée ; l'autre, modifiée, est déclarée
+    abstention. Une lecture par les textes complets (``final != source``) donnerait
+    deux corrigées et trois abstentions ; une lecture par l'extrait, qui coupe avant
+    la différence, cinq abstentions."""
     prefix = "a" * 300
     row = _payload(
         decisions_analysis(
@@ -92,22 +102,34 @@ def test_decision_counts_use_complete_text_not_the_display_excerpt(
             _outputs(
                 tmp_path,
                 _ligne(
-                    "L1", prefix + "x", prefix + "y", proposed=prefix + "y",
+                    "L1", prefix + "x", prefix + "x", proposed=prefix + "x",
                     line_class="corrected",
                 ),
                 _ligne(
-                    "L2", prefix + "x", prefix + "x", proposed=prefix + "x",
+                    "L2", prefix + "x", prefix + "y", proposed=prefix + "y",
                     line_class="abstained",
                 ),
                 _ligne(
                     "L3", prefix + "x", prefix + "x", proposed=prefix + "y",
-                    line_class="refused",
+                    line_class="refused", reason="too_different_from_source",
                 ),
+                _ligne(
+                    "L4", prefix + "x", prefix + "x", proposed=None,
+                    line_class="fallback", reason="all_attempts_exhausted",
+                ),
+                _ligne("L5", prefix + "x", prefix + "y", line_class="review_required"),
             ),
         )
     ).pipelines[0]
-    assert (row.corrected, row.abstained, sum(r.n for r in row.refused)) == (1, 1, 1)
-    assert row.samples[0].source_text == row.samples[0].final_text == prefix
+    assert (row.n_lines, row.corrected, row.review_required, row.abstained) == (
+        5, 1, 1, 1,
+    )
+    assert [(r.code, r.n) for r in row.refused] == [("too_different_from_source", 1)]
+    assert [(r.code, r.n) for r in row.fallback] == [("all_attempts_exhausted", 1)]
+    # L'extrait montré est coupé à 300 caractères : il ne dit pas la différence,
+    # et les comptes ci-dessus n'en dépendent pas.
+    assert {s.source_text for s in row.samples} == {prefix}
+    assert {s.final_text for s in row.samples} == {prefix}
 
 
 def test_review_status_and_reasons_are_escaped_in_the_report(tmp_path: Path) -> None:

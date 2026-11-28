@@ -12,12 +12,17 @@ contre-exemple exécutable. Ce module porte ce qu'ils partagent :
   ``RunResult``), pour vérifier qu'une valeur est *affichée* ;
 - ``recalcule`` : l'oracle **indépendant** de la validation sémantique (somme des
   statistiques sérialisées, ``Fraction``), qui n'importe rien de
-  ``cinoc.evaluation.aggregation``.
+  ``cinoc.evaluation.aggregation`` ;
+- ``cle_regroupement`` : la clé de regroupement d'un document, qui distingue une
+  grappe **déclarée** d'un **singleton** (N6, seconde revue) ;
+- ``BriqueArchiveSansClasses`` : une étape de correction qui rend un sidecar de
+  décisions **sans** ``line_class`` (N3, seconde revue : une archive S30).
 """
 
 from __future__ import annotations
 
 import dataclasses
+import json
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -38,6 +43,7 @@ from cinoc.adapters.extension import (
 )
 from cinoc.domain.evaluation import EvaluationView
 from cinoc.domain.layout import CanonicalLayout, LayoutPage, Line, Region
+from cinoc.domain.pipeline import PipelineStep
 from cinoc.domain.projection import ProjectionSpec
 from cinoc.evaluation.result import RunResult
 
@@ -112,6 +118,74 @@ class BriqueOctets:
         if document in self.partial:
             output = dataclasses.replace(output, partial="ce_perte")  # type: ignore[call-arg]
         return output
+
+
+@dataclass
+class BriqueArchiveSansClasses:
+    """Étape de correction dont le sidecar ``DECISIONS`` est **à l'ancienne forme** :
+    chaque ligne porte son statut et ses textes, **sans** ``line_class`` ni
+    ``class_code`` — ce que dit le cache de format 3 des archives S30 (N3, seconde
+    revue). Le texte corrigé est ``texte`` pour chaque document.
+    """
+
+    name: str
+    texte: str
+    lignes: Sequence[Mapping[str, object]]
+    version: str = "1.0"
+
+    @property
+    def input_types(self) -> frozenset[ArtifactType]:
+        return frozenset({T.IMAGE})
+
+    @property
+    def output_types(self) -> frozenset[ArtifactType]:
+        return frozenset({T.CORRECTED_TEXT, T.DECISIONS})
+
+    def execute(
+        self,
+        inputs: Mapping[ArtifactType, Artifact],
+        params: Mapping[str, object],
+        context: RunContext,
+        control: RunControl,
+    ) -> StepOutput:
+        control.raise_if_cancelled()
+        document = context.document_id
+        assert context.workspace_uri is not None
+        nom = self.name.replace(":", "_")
+        texte = self.texte.encode("utf-8")
+        chemin_texte = workspace_artifact_path(
+            context.workspace_uri, document, nom, "txt"
+        )
+        chemin_texte.write_bytes(texte)
+        sidecar = json.dumps(
+            {
+                "document_id": document,
+                "lines": [{"document_id": document, **ligne} for ligne in self.lignes],
+            },
+            ensure_ascii=False,
+        ).encode("utf-8")
+        chemin_decisions = workspace_artifact_path(
+            context.workspace_uri, document, nom + ".decisions", "json"
+        )
+        chemin_decisions.write_bytes(sidecar)
+        return StepOutput(
+            artifacts={
+                T.CORRECTED_TEXT: Artifact(
+                    id=f"{document}:{self.name}:corrected_text",
+                    document_id=document,
+                    type=T.CORRECTED_TEXT,
+                    uri=str(chemin_texte),
+                    content_hash=compute_content_hash(texte),
+                ),
+                T.DECISIONS: Artifact(
+                    id=f"{document}:{self.name}:decisions",
+                    document_id=document,
+                    type=T.DECISIONS,
+                    uri=str(chemin_decisions),
+                    content_hash=compute_content_hash(sidecar),
+                ),
+            }
+        )
 
 
 def layout_octets(texte: str) -> bytes:
@@ -251,6 +325,28 @@ def grappe_serialisee(data: Mapping[str, Any], document: str) -> str:
             return grappe
     raise AssertionError(f"le document {document!r} est absent du JSON")
 
+
+def cle_regroupement(data: Mapping[str, Any], document: str) -> tuple[str, str]:
+    """La clé de regroupement de ``document`` **lue dans le JSON** (``CONTRATS.md``
+    N6 : « la clé de regroupement distingue « déclarée » de « singleton » ») :
+    ``("declaree", grappe)`` si le document porte une grappe, ``("singleton",
+    document)`` s'il n'en porte pas (champ ``cluster`` présent et ``null``).
+
+    Un document sans grappe forme **sa propre** grappe : elle ne se confond avec
+    aucune grappe déclarée, même de même nom."""
+    for entree in data.get("documents", ()):
+        if entree.get("document_id") == document:
+            assert "cluster" in entree, (
+                f"le champ « cluster » est absent de l'entrée du document {document!r}"
+            )
+            grappe = entree["cluster"]
+            if grappe is None:
+                return ("singleton", document)
+            assert isinstance(grappe, str) and grappe, grappe
+            return ("declaree", grappe)
+    raise AssertionError(f"le document {document!r} est absent du JSON")
+
+
 def _contributions(
     data: Mapping[str, Any],
     pipeline: str,
@@ -320,6 +416,29 @@ def _contributions(
     return entrees
 
 
+def micro_sur_support(
+    data: Mapping[str, Any],
+    pipeline: str,
+    view: str,
+    references: Mapping[str, str],
+    qualite: str,
+    documents: Sequence[str] | frozenset[str],
+) -> float | None:
+    """Le CER micro d'un pipeline **restreint à** ``documents`` (un support de
+    test), recalculé depuis le seul JSON : somme des statistiques de la qualité
+    ``qualite`` sur ces documents, puis finalisation (oracle indépendant, N4 :
+    « les valeurs affichées à côté d'un test sont calculées sur le support de ce
+    test »)."""
+    gardees = [
+        stat
+        for document, stat in _contributions(data, pipeline, view, references, qualite)
+        if document in documents
+    ]
+    somme = _somme(gardees)
+    longueur = somme["reference_length"]
+    return None if longueur == 0 else _erreurs(somme) / longueur
+
+
 def recalcule(
     data: Mapping[str, Any],
     pipeline: str,
@@ -328,11 +447,17 @@ def recalcule(
     qualite: str,
     ponderation: str,
     grappes: Mapping[str, str] | None = None,
+    implicites: bool = False,
 ) -> dict[str, Any]:
     """Recalcule, **sans** ``cinoc.evaluation.aggregation``, l'agrégat CER d'une
     qualité à partir des seules observations sérialisées (somme des statistiques,
     ``Fraction``). ``grappes`` (document → grappe) n'est lu dans le JSON que si la
     pondération est « par grappe » et que l'appelant n'en donne pas.
+
+    ``implicites`` (défaut ``False`` : comportement inchangé, un document sans
+    grappe dans le JSON est une erreur du test) : un document dont ``cluster``
+    est ``null`` forme sa propre grappe, distincte de toute grappe déclarée de
+    même nom (``cle_regroupement``, N6).
     """
     contributions = _contributions(data, pipeline, view, references, qualite)
     somme = _somme([stat for _, stat in contributions])
@@ -345,13 +470,16 @@ def recalcule(
     ]
     if scalaires:
         if ponderation == "cluster":
-            par_grappe: dict[str, list[Fraction]] = {}
+            par_grappe: dict[Any, list[Fraction]] = {}
             for document, scalaire in scalaires:
-                cle = (
-                    grappes[document]
-                    if grappes
-                    else grappe_serialisee(data, document)
-                )
+                if implicites:
+                    cle: Any = cle_regroupement(data, document)
+                else:
+                    cle = (
+                        grappes[document]
+                        if grappes
+                        else grappe_serialisee(data, document)
+                    )
                 par_grappe.setdefault(cle, []).append(scalaire)
             moyennes = [sum(g) / len(g) for g in par_grappe.values()]
             macro_exact = sum(moyennes) / len(moyennes)
@@ -391,10 +519,13 @@ def verifie_agregat(
     qualite: str,
     ponderation: str,
     grappes: Mapping[str, str] | None = None,
+    implicites: bool = False,
 ) -> None:
     """Le publié égale le recalculé : statistique, micro (exact), supports, macro
     (à l'arrondi flottant près : l'exactitude de la conversion est D5)."""
-    attendu = recalcule(data, pipeline, view, references, qualite, ponderation, grappes)
+    attendu = recalcule(
+        data, pipeline, view, references, qualite, ponderation, grappes, implicites
+    )
     publie = agregat_json(data, pipeline, view, qualite)
     nom = f"{pipeline}/{qualite}"
     stat = _stat(publie["stat"])
@@ -434,4 +565,68 @@ def run_decisions(
             analyses=None if analyses is None else list(analyses),
         ),
         registry_with(sak._Pages(), sak._corrector(sak._ScriptedClient(sak._script()))),
+    )
+
+
+#: Les lignes d'un sidecar **à l'ancienne forme** (statut et textes, sans classe) :
+#: trois lignes, dont une corrigée et une repliée — de quoi produire des comptes
+#: non nuls si on les devinait d'après les textes ou le statut.
+LIGNES_SANS_CLASSE: tuple[dict[str, object], ...] = (
+    {
+        "page_id": "P1",
+        "line_id": "l1",
+        "status": "corrected",
+        "source_text": "le ſoleil luit",
+        "final_text": "le soleil luit",
+        "proposed_text": "le soleil luit",
+        "reason_code": None,
+        "reason_detail": None,
+    },
+    {
+        "page_id": "P1",
+        "line_id": "l2",
+        "status": "corrected",
+        "source_text": "rien a dire",
+        "final_text": "rien a dire",
+        "proposed_text": "rien a dire",
+        "reason_code": None,
+        "reason_detail": None,
+    },
+    {
+        "page_id": "P1",
+        "line_id": "l3",
+        "status": "fallback",
+        "source_text": "la ſeine coule",
+        "final_text": "la ſeine coule",
+        "proposed_text": None,
+        "reason_code": "all_attempts_exhausted",
+        "reason_detail": None,
+    },
+)
+
+
+def run_archive_sans_classes(tmp_path: Path) -> RunResult:
+    """Un run dont la correction rend un sidecar ``DECISIONS`` sans ``line_class``
+    (archive S30), avec l'analyse des décisions."""
+    brique = BriqueArchiveSansClasses(
+        "ce_archive", "le soleil luit", LIGNES_SANS_CLASSE
+    )
+    chaine = pipeline(
+        "archive",
+        PipelineStep(
+            id="corr",
+            kind="correction",
+            adapter_name="ce_archive",
+            input_types=(T.IMAGE,),
+            output_types=(T.CORRECTED_TEXT, T.DECISIONS),
+        ),
+    )
+    return execute(
+        spec(
+            corpus(tmp_path, {"d1": "le soleil luit", "d2": "le soleil luit"}),
+            [chaine],
+            [text_view(candidates=(T.CORRECTED_TEXT,))],
+            analyses=["decisions"],
+        ),
+        registry_with(brique),
     )

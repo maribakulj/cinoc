@@ -76,7 +76,9 @@ def test_significant_verdict_and_parsed_columns() -> None:
         SectionContext(),
     )
     assert html is not None
-    assert "Significativité" in html
+    # Question 7 (seconde revue) : plus de « Significativité » en titre.
+    assert "Tests inter-moteurs (exploratoires)" in html
+    assert "Significativité" not in html
     # clé éclatée en colonnes Vue / Métrique (vue affichée en libellé humain)
     assert ">Texte<" in html and ">cer<" in html
     assert "0,0300" in html
@@ -273,7 +275,9 @@ def test_renders_english_labels() -> None:
     result = _result("text:cer:significance_p", 0.03, _wilcoxon(0.03, 0.03, 1))
     html = CrossEngineSection().render(result, SectionContext(lang="en"))
     assert html is not None
-    assert "Inter-engine significance" in html and "Significativité" not in html
+    assert "Inter-engine tests (exploratory)" in html
+    assert "Inter-engine significance" not in html
+    assert "Tests inter-moteurs" not in html
     assert etiquette_exploratoire(html, "en") and not etiquette_exploratoire(html)
     assert not verdicts(html) and "significatif" not in html
     assert "Wilcoxon signed-rank" in html and "raw p" in html

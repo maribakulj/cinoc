@@ -247,7 +247,9 @@ def test_bnl_posthoc_shows_the_pair_that_differs(bnl_result: RunResult) -> None:
     # Rév. 7 : la paire reste nommée, sans verdict « significative », et le
     # test est étiqueté exploratoire dans le rapport.
     assert "easyocr – fra" in html and "paires significatives" not in html
-    section = html.split("<h2>Significativité inter-moteurs</h2>", 1)[1].split(
+    section = html.split(
+        "<h2>Tests inter-moteurs (exploratoires)</h2>", 1
+    )[1].split(
         "<h2>", 1
     )[0]
     assert etiquette_exploratoire(section)
