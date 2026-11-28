@@ -20,6 +20,7 @@ from datetime import UTC, datetime
 
 from cinoc.adapters.storage.history_store import HistoryRecord, HistoryStore
 from cinoc.evaluation.longitudinal import (
+    MIN_POINTS_FOR_TEST,
     PettittResult,
     TrendResult,
     linear_trend,
@@ -82,7 +83,9 @@ class SeriesInsight:
     """Tendance + rupture d'une série (corpus, profil, pipeline, vue) d'historique.
 
     ``rupture_run_id`` = le **premier run du nouveau régime**, renseigné dès que
-    le test de Pettitt est calculable, **quelle que soit sa p** : filtrer sur la
+    le test de Pettitt est calculable — **au moins** ``MIN_POINTS_FOR_TEST``
+    (3) runs, comme la p de la pente : à 2 points la p vaut 1 par construction,
+    la rupture est alors ``None`` — et **quelle que soit sa p** : filtrer sur la
     significativité serait un verdict implicite. La rupture est publiée avec sa
     p, étiquetée exploratoire (``CONTRATS.md`` § 2.1 f, révision n° 7).
     """
@@ -115,7 +118,11 @@ def series_insight(records: Sequence[HistoryRecord]) -> SeriesInsight:
         rows.append((stamp, record.run_id, record.value))
     rows.sort(key=lambda row: (row[0], row[1]))
     trend = linear_trend([(stamp, value) for stamp, _, value in rows])
-    rupture = pettitt([value for _, _, value in rows])
+    rupture = (
+        pettitt([value for _, _, value in rows])
+        if len(rows) >= MIN_POINTS_FOR_TEST
+        else None
+    )
     rupture_run_id = rows[rupture.boundary][1] if rupture is not None else None
     return SeriesInsight(trend=trend, rupture=rupture, rupture_run_id=rupture_run_id)
 

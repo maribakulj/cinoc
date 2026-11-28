@@ -202,7 +202,7 @@ _STRINGS: dict[str, dict[str, str]] = {
         "(échelle locale). Pente par jour (moindres carrés) et rupture (test de "
         "Pettitt), chacune avec sa p : ces tests sont exploratoires — la p est "
         "un nombre, jamais un verdict, et la rupture est affichée dès que le "
-        "test est calculable.",
+        "test est calculable (au moins 3 runs).",
         "history_slope": "pente/j",
         "history_exploratory": "exploratoire",
         "history_trend_untested": "aucun test à 2 runs",
@@ -461,7 +461,7 @@ _STRINGS: dict[str, dict[str, str]] = {
         "(local scale). Slope per day (least squares) and change point "
         "(Pettitt test), each with its p: these tests are exploratory — the p "
         "is a number, never a verdict, and the change point is shown as soon "
-        "as the test can be computed.",
+        "as the test can be computed (at least 3 runs).",
         "history_slope": "slope/day",
         "history_exploratory": "exploratory",
         "history_trend_untested": "no test with 2 runs",

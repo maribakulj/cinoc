@@ -26,7 +26,10 @@ multi-runs), deux questions :
 **Exploratoire (rév. 7, ``CONTRATS.md`` § 2.1 d).** Les booléens ``significant``
 de ces deux résultats sont des **calculs internes** : l'historique publie la p
 comme un nombre, étiquetée *exploratoire*, et affiche la rupture dès qu'elle est
-calculable, quelle que soit sa p — jamais un verdict « significatif ».
+calculable, quelle que soit sa p — jamais un verdict « significatif ». « Calculable » =
+au moins ``MIN_POINTS_FOR_TEST`` (3) points pour la rupture *publiée*, comme
+pour la p de la pente (le seuil est appliqué par ``app.history`` ; ``pettitt``
+reste calculable dès 2 points, sa p y valant 1 par construction).
 
 Entrées **déjà parsées** (``datetime``/``float``) : le parsing tolérant
 multi-formats à skip silencieux de la source n'est pas porté — la conversion
@@ -45,6 +48,12 @@ from scipy import stats  # type: ignore[import-untyped]
 
 #: Seuil de signification par défaut (pente et rupture).
 _DEFAULT_ALPHA = 0.05
+
+#: Nombre minimal de points pour qu'un test existe : à 2 points la pente n'a
+#: aucun degré de liberté (``p`` absente) et la p de Pettitt est fixée à 1 par
+#: construction. Règle commune à la pente et à la rupture publiées par
+#: l'historique (``app.history``) ; ``pettitt`` reste calculable dès 2 points.
+MIN_POINTS_FOR_TEST = 3
 
 #: Secondes par jour (pente exprimée par jour).
 _DAY_SECONDS = 86400.0
@@ -121,7 +130,7 @@ def linear_trend(
             significant=False,
         )
     fit = stats.linregress(xs, ys)
-    p_value = float(fit.pvalue) if len(points) > 2 else None
+    p_value = float(fit.pvalue) if len(points) >= MIN_POINTS_FOR_TEST else None
     return TrendResult(
         slope_per_day=float(fit.slope),
         intercept=float(fit.intercept),
@@ -176,4 +185,10 @@ def pettitt(
     )
 
 
-__all__ = ["PettittResult", "TrendResult", "linear_trend", "pettitt"]
+__all__ = [
+    "MIN_POINTS_FOR_TEST",
+    "PettittResult",
+    "TrendResult",
+    "linear_trend",
+    "pettitt",
+]
