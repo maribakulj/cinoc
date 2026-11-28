@@ -760,7 +760,7 @@ def test_propriete_a2__quatre_axes(documents: list[tuple[str, int, int]]) -> Non
         expected = {
             "ok": green,
             "blank": green,
-            "no_gt": ("no_ground_truth", applicability, validity),
+            "no_gt": ("no_ground_truth", availability, validity),
             "failed": ("applicable", "step_failed", validity),
             "truncated": ("applicable", "available", "truncated_output"),
         }[state]
