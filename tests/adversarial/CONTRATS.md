@@ -276,7 +276,15 @@ La couverture (complètes / partielles / en échec / attendues) est publiée à 
 La quatrième est un **incident d'exécution**.
 - **Repli**. Aucune proposition exploitable n'a pu être obtenue (`all_attempts_exhausted` : délais, réponses illisibles ; `chunk_error_absorbed`). La source est gardée par nécessité : l'étape est **partielle**. Une unité dont **toutes** les lignes sont en repli est partielle, sans aucune correction, et ne passe **jamais** pour `ok`.
 
-**Comptes publiés par unité et par pipeline** : lignes corrigées, `review_required`, abstentions, refus par code, replis par code.
+**Comptes publiés par unité et par pipeline** : lignes corrigées, `review_required`, abstentions, refus par code, replis par code. Ces classes sont **disjointes** : `corrected` n'inclut pas `review_required`, et le total des corrections est leur somme.
+
+**Précisions d'implémentation tranchées le 28/11**, après les tests rouges :
+- **`failure_policy`.** Elle choisit lequel des deux agrégats est l'agrégat **principal** : `exclude` donne le conditionnel, `empty_page` donne l'opérationnel. Les deux sont **toujours** publiés.
+- **Couverture.** Ses catégories sont : complètes, partielles (`partial_output` **et** `truncated_output`, ventilées par motif), en échec, attendues. La couverture publiée à côté de l'opérationnel est la même que celle du conditionnel.
+- **Diff surligné.** Son payload de données (`document_texts`, couche 3) porte `alignment_path`, que le rendu affiche.
+- **Statut `exploratory`.** Tout payload de l'ancienne inférence le porte, y compris `not_computed`.
+- **Historique web.** Une rupture de Pettitt est affichée dès que le test est calculable, avec sa p et l'étiquette exploratoire, quelle que soit la valeur de p. Filtrer sur la significativité serait un verdict implicite.
+- **Wording des sections.** Toute phrase qui qualifie un résultat de test de « verdict » est reformulée en « résultat (exploratoire) ».
 - Le CER compare le texte produit à la vérité terrain, quelle que soit la classe.
 - La classe change seulement l'axe 3 (repli ⇒ `partial_output`) et les comptes publiés.
 

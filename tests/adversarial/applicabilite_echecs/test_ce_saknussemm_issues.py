@@ -275,14 +275,10 @@ PART = {
 
 
 def _same(comptes: dict[str, Any], attendu: dict[str, Any], doc: str) -> None:
-    """Compare des comptes de lignes. § 2.1 f ne dit pas si ``corrected``
-    inclut ``review_required`` (« dont … compté à part ») : les deux lectures
-    sont admises, le reste est exact."""
-    corrige, revue = attendu["corrected"], attendu["review_required"]
-    assert comptes["corrected"] in {corrige, corrige + revue}, (doc, comptes)
-    assert {k: v for k, v in comptes.items() if k != "corrected"} == {
-        k: v for k, v in attendu.items() if k != "corrected"
-    }, (doc, comptes)
+    """Compare des comptes de lignes, exactement. Arbitrage du 28/11 (§ 2.1 f,
+    révision n° 7) : ``corrected`` et ``review_required`` sont des classes
+    **disjointes** — le total des corrections est leur somme."""
+    assert comptes == attendu, (doc, comptes)
 
 
 # --------------------------------------------------------------------------
