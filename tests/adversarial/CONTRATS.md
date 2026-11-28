@@ -15,6 +15,20 @@ Ce document fait suite à `README.md`, `CONVENTIONS.md`, `BIBLIOTHEQUES.md`, `ra
 
 Les scripts de vérification de l'auteur sont tous dans **un seul dossier**, `tests/adversarial/rapports/revision2_verifications/`. Ceux de la revue sont dans `tests/adversarial/rapports/revue_contre_exemples/`.
 
+## Révision n° 7 (arbitrages du mainteneur du 28/11, après la tranche 1a)
+
+Ce sont des précisions ciblées, pas une révision générale.
+
+| Point | Section | Ce qui change |
+|---|---|---|
+| Observations partielles et correction structurée | § 2.1 f (nouveau) | Une observation partielle est conservée. On publie une qualité **conditionnelle** (observations complètes, par défaut) et une qualité **opérationnelle** (ce que l'utilisateur reçoit), toujours avec la couverture. Les lignes de saknussemm se répartissent en quatre classes : corrigée (dont `review_required`), abstention volontaire, refus technique, repli. Seul le repli rend l'étape partielle. L'évaluation lit l'état déclaré et ne le reconstruit pas ; la tranche 2 le porte au `StepRecord`. |
+| Chemins d'alignement des analyses qualitatives | § 2.1 a, § 6.2 | Les confusions, la taxonomie et le diff surligné gardent **temporairement** le chemin RapidFuzz. La convention est inscrite dans chaque résultat concerné (`alignment_path: "rapidfuzz"`, contre `"canonical"` pour les comptes). Le résultat ne prétend pas décomposer exactement les comptes canoniques quand ils divergent. La fréquence et l'ampleur des divergences seront mesurées avant toute reconstruction canonique (question ouverte, non bloquante). |
+| Taille du JSON | § 2.1 a | Le JSON complet est conservé. Sa taille compressée est mesurée et publiée, sans nouveau format. |
+| Verdicts de l'ancienne inférence | § 2.1 d | Jusqu'à la livraison de la tranche I, aucun verdict n'est **confirmatoire**. Tout résultat de test produit par l'ancienne inférence est étiqueté **exploratoire** dans le rapport et le `RunResult`, et le mot « significatif » n'est plus employé comme verdict. Le chantier de recherche statistique n'est pas rouvert pour autant. |
+| Validation sémantique de l'archive | § 2.3 e, I (tranche 3) | Une archive relue est validée sémantiquement. Chaque scalaire doit égaler la finalisation de sa statistique, et chaque agrégat doit égaler la combinaison des observations conservées. Sinon l'archive est refusée. |
+| Coût de l'alignement canonique | § 2.1 a | Il est mesuré sur des textes longs et fortement dégradés (pages entières bruitées, CER élevé), pas seulement sur les petits exemples. |
+| Réévaluations | D-313 | Les réévaluations faites sur `abee7b5` seul (S30) sont distinguées de celles qui demandent les deux correctifs gelés (`aba0fe7`, `50cad9f` : S31, S31L). Les `RunResult` v5 d'origine et leurs réévaluations v6 sont conservés comme artefacts distincts, avec leur provenance. L'écart d'un ULP du CER Dresden E5 est consigné dans D-313. |
+
 ## Révision n° 6 (arbitrages du mainteneur)
 
 | Point | Section | Ce qui change |
@@ -240,6 +254,37 @@ Règles :
 | **Bibliothèques** | `scipy.stats` (`permutation_test`, `wilcoxon` avec `PermutationMethod`, `friedmanchisquare`) ; `rapidfuzz` (distances simple et pondérée) ; `fractions` (stdlib). Oracles : DP lexicographique (S/D/I), jiwer (S+D+I quand Σ n_réf > 0), énumération exhaustive (NER, régions), scipy |
 | **Couche** | `evaluation` (3) ; `partial` en `domain/usage.py` (1) ; `not_transcribed` déclaré par l'importeur (`app`, 6) ; validation préalable en `app` |
 | **Ne fait pas** | Pas d'algèbre générique, pas de méthode delta pour l'IC, pas de bornes dans `MetricSpec`, pas d'imputation par défaut |
+
+#### f. Observations partielles et issues de la correction structurée (révision n° 7, tranche 1b)
+
+**Une observation partielle est conservée.** Son axe 3 vaut `partial_output` ou `truncated_output`, et sa statistique est calculée sur ce qui a été produit, puis stockée (`stat_partielle`). Elle n'est jamais jetée, ni imputée en silence.
+
+**Deux qualités publiées, toujours avec leur couverture.**
+
+| Qualité | Population | Rôle |
+|---|---|---|
+| **Conditionnelle** (défaut) | observations complètes : axes 1 à 3 au vert | qualité de ce que le pipeline sait faire quand il va au bout |
+| **Opérationnelle** | toutes les unités attendues : partielles notées telles que produites ; échecs notés comme une sortie vide (politique `empty_page`) | qualité de ce que l'utilisateur reçoit réellement |
+
+La couverture (complètes / partielles / en échec / attendues) est publiée à côté des deux. Les deux qualités sont **métrologiques** : aucune inférence n'en découle sans procédure validée (§ 2.1 d).
+
+**Issues d'une ligne de correction structurée (saknussemm), en quatre classes.** Les trois premières sont des **décisions du correcteur**. L'unité reste complète et sa sortie est notée normalement.
+- **Corrigée** (`corrected` avec texte modifié). `review_required` en est une sous-classe : la correction est gardée, et le correcteur déclare ne pas pouvoir l'établir. Elle est comptée à part.
+- **Abstention volontaire**. Le producteur propose le texte source inchangé (statut `corrected` avec `final_text == source_text`). C'est aussi le cas d'une règle qui ne s'applique pas. Ce n'est ni un échec ni un repli.
+- **Refus technique**. Les garde-fous de la bibliothèque ou une revue refusent la proposition. La source est gardée, avec un code dans l'ensemble fermé `FALLBACK_REASON_CODES`, hors `all_attempts_exhausted` et `chunk_error_absorbed` : étage C (`too_different_from_source`, `closer_to_*`, `absorbs_*`, `unanchored_run`, `rejected`), césure et paires, passes document-wide, revue humaine. C'est une décision valide, pas une panne.
+
+La quatrième est un **incident d'exécution**.
+- **Repli**. Aucune proposition exploitable n'a pu être obtenue (`all_attempts_exhausted` : délais, réponses illisibles ; `chunk_error_absorbed`). La source est gardée par nécessité : l'étape est **partielle**. Une unité dont **toutes** les lignes sont en repli est partielle, sans aucune correction, et ne passe **jamais** pour `ok`.
+
+**Comptes publiés par unité et par pipeline** : lignes corrigées, `review_required`, abstentions, refus par code, replis par code.
+- Le CER compare le texte produit à la vérité terrain, quelle que soit la classe.
+- La classe change seulement l'axe 3 (repli ⇒ `partial_output`) et les comptes publiés.
+
+**Où vit chaque état** (dépendance documentée avec la tranche 2) :
+- **Adaptateur (couche 5)** : il classe les lignes à partir du rapport de la bibliothèque (`DecisionStage.status`, `reason.code`), sans lire de texte pour deviner, et déclare la complétude de son étape.
+- **Exécuteur (couche 4)** : il porte cette déclaration dans `UnitOutcome = partial` avec ses comptes.
+- **Évaluation** : elle **lit** l'état déclaré et ne le **reconstruit jamais**, ni à partir des textes ni à partir d'heuristiques.
+- **Tranche 2** : en 1b, l'état est porté par unité. La tranche 2 le déplace dans le `StepRecord` de l'étape concernée, sans changer sa sémantique.
 
 ### 2.2 K3 : enregistrement par étape (point 6 ; P9, P10, P14)
 
