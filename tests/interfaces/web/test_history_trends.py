@@ -73,8 +73,8 @@ def test_history_no_sparkline_when_empty(tmp_path: Path) -> None:
 def test_history_renders_slope_without_rupture_on_short_series(
     tmp_path: Path,
 ) -> None:
-    # 2 runs : pente OLS affichée ; Pettitt non significatif (p clampée à 1
-    # sur n=2) → aucune ligne « rupture » (jamais une rupture inventée).
+    # 2 runs : pente OLS affichée ; Pettitt non calculable sous 3 runs (rév. 7,
+    # 28/11 : à 2 points sa p vaut 1 par construction) → aucune ligne « rupture ».
     store = HistoryStore(tmp_path / "h.db")
     store.add(
         [
