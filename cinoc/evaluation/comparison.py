@@ -16,8 +16,12 @@ pas l'invention sur un document sans référence (N3) ; l'analyse
 « invention hors référence » la rend visible, sur le support apparié de chaque
 paire, avec la couverture des pages sans référence par pipeline.
 
-Seules les observations **complètes** (axes 1 à 3 au vert) entrent ici : la
-couverture dit ce qui manque. Ce module ne porte que les **modèles** (feuilles
+Les observations sont celles de l'agrégat **principal** du run (D10) : les
+complètes (axes 1 à 3 au vert) sous ``exclude``, les opérationnelles — échecs
+notés comme une sortie vide, partielles telles que produites — sous
+``empty_page``. Un test et le Δ qui l'accompagne ont ainsi le même support ; la
+couverture dit ce qui manque. Seuls les pipelines que la vue **voit** (une étape
+déclare un type candidat) y entrent. Ce module ne porte que les **modèles** (feuilles
 de l'union ``AnalysisPayload``) ; leur calcul est dans ``evaluation.aggregation``.
 """
 

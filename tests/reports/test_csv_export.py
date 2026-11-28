@@ -29,7 +29,7 @@ def _result() -> RunResult:
         pipelines=(
             PipelineResult(
                 pipeline="tess", view="text",
-                aggregate=(
+                conditional_aggregate=(
                     MetricScore(
                         metric="cer", value=0.25, support=1, expected=2,
                         stat=EditCounts(

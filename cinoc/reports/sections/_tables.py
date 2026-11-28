@@ -9,9 +9,10 @@ donc le rapport reste octet-stable.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 
-from cinoc.evaluation.result import MetricScore
+from cinoc.evaluation.comparison import ComparisonPayload
+from cinoc.evaluation.result import MetricScore, PipelineResult, RunResult
 from cinoc.evaluation.statistics import ErrorCounts
 from cinoc.reports._numbers import localize_decimal
 from cinoc.reports.glossary import load_glossary
@@ -26,6 +27,30 @@ def ordered_unique(values: Iterable[str]) -> tuple[str, ...]:
         if value not in seen:
             seen.append(value)
     return tuple(seen)
+
+
+def global_ranking(result: RunResult, view: str, metric: str) -> tuple[str, ...]:
+    """Le **tri global** publié de ``(vue, métrique)`` : le seul ordre
+    multi-pipelines (B7), calculé sur le support de toute la famille. Vide si
+    la vue n'a pas de comparaison (un seul pipeline), ou aucun support commun."""
+    for analysis in result.analyses:
+        payload = analysis.payload
+        if (
+            analysis.view == view
+            and isinstance(payload, ComparisonPayload)
+            and payload.metric == metric
+        ):
+            return payload.global_support.ranking
+    return ()
+
+
+def in_ranking_order(
+    pipelines: Sequence[PipelineResult], ranking: Sequence[str]
+) -> list[PipelineResult]:
+    """``pipelines`` dans l'ordre du tri global ; ceux qu'il ne classe pas
+    (valeur indéfinie, ou pas de support commun) suivent, dans l'ordre du run."""
+    position = {name: index for index, name in enumerate(ranking)}
+    return sorted(pipelines, key=lambda p: position.get(p.pipeline, len(position)))
 
 
 def format_value(score: MetricScore, lang: str) -> str:

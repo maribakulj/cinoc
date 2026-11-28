@@ -97,8 +97,9 @@ class DocumentExecution:
     ``partial`` : au moins une étape a **déclaré** sa sortie incomplète
     (``StepOutput.partial``) ; l'issue de l'unité le dit (``partial`` l'emporte
     sur ``truncated`` : la part manquante est la cause, la coupure un détail).
-    ``step_issues`` : l'état déclaré **par étape** (``partial`` ou ``truncated``) —
-    ce que chaque vue lit pour savoir si **son** étape est entière.
+    ``step_issues`` : l'état déclaré **par étape** — l'ensemble trié de ses
+    issues (``partial``, ``truncated``, ou les deux) —, ce que chaque vue lit
+    pour savoir si **son** étape est entière.
     ``line_outcomes`` : somme des issues de lignes déclarées par les étapes de
     correction structurée (§ 2.1 f) — portées par unité, et déplacées dans le
     ``StepRecord`` par la tranche 2 sans changer de sémantique.
@@ -111,7 +112,7 @@ class DocumentExecution:
     message: str | None = None
     billed: ResourceUsage | None = None
     line_outcomes: LineOutcomes | None = None
-    step_issues: Mapping[str, StepIssue] = field(default_factory=dict)
+    step_issues: Mapping[str, tuple[StepIssue, ...]] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if (self.outcome == "failed") != (self.reason is not None):

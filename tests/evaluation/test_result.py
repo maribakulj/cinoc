@@ -36,7 +36,9 @@ def _result() -> RunResult:
             PipelineResult(
                 pipeline="p",
                 view="text",
-                aggregate=(MetricScore(metric="cer", value=0.25, support=1),),
+                conditional_aggregate=(
+                    MetricScore(metric="cer", value=0.25, support=1),
+                ),
             ),
         ),
     )
@@ -48,7 +50,7 @@ def test_serialisation_is_deterministic() -> None:
 
 def test_schema_version_and_stable_keys() -> None:
     result = _result()
-    assert result.schema_version == 6
+    assert result.schema_version == 7
     blob = result.model_dump_json().replace(" ", "")
     assert '"metric":"cer"' in blob
     assert '"support":1' in blob
@@ -105,18 +107,19 @@ def test_a_reason_goes_with_failed_and_only_with_it(
         )
 
 
-@pytest.mark.parametrize("version", [1, 2, 3, 4, 5])
+@pytest.mark.parametrize("version", [1, 2, 3, 4, 5, 6])
 def test_an_older_schema_is_refused_with_a_clear_message(version: int) -> None:
     """Remplace ``test_v2_payload_still_loads_…`` et ``test_v4_inference_…`` :
-    le schéma 6 est une **rupture explicite** (K1, D-313) — un ``RunResult``
-    d'avant portait des ratios pondérés, sans statistique suffisante. Il n'est
-    ni relu ni converti : il est refusé, et le message dit pourquoi et quoi
-    faire, même sans aucun score à relire."""
+    le schéma 7 est une **rupture explicite** (K1, D-313) — un ``RunResult``
+    d'avant portait des ratios pondérés, ou (v6) un agrégat principal stocké,
+    sans les statistiques « sortie vide » ni la grappe de chaque document. Il
+    n'est ni relu ni converti : il est refusé, et le message dit pourquoi et
+    quoi faire, même sans aucun score à relire."""
     old = {
         "schema_version": version,
         "manifest": _manifest().model_dump(mode="json"),
     }
-    with pytest.raises(ValidationError, match=r"schéma v\d, attendu v6.*Re-notez"):
+    with pytest.raises(ValidationError, match=r"schéma v\d, attendu v7.*Re-notez"):
         RunResult.model_validate(old)
 
 
@@ -136,7 +139,7 @@ def test_calibration_row_without_its_step_is_refused_not_misread() -> None:
     ]
     row = {"pipeline": "tess→llm", "n_tokens": 3, "ece": 0.1, "mce": 0.2}
     old = {
-        "schema_version": 6,
+        "schema_version": 7,
         "manifest": manifest,
         "analyses": [
             {

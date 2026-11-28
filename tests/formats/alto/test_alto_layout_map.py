@@ -17,7 +17,6 @@ from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.documents import DocumentRef, GroundTruthRef
 from cinoc.domain.evaluation import EvaluationSpec, EvaluationView
 from cinoc.domain.layout import BBox, CanonicalLayout, LayoutPage, Line, Region
-from cinoc.domain.pipeline import PipelineSpec
 from cinoc.domain.run import RunManifest
 from cinoc.evaluation.registry import MetricRegistry, register_default_metrics
 from cinoc.evaluation.representations import load_representation
@@ -35,6 +34,7 @@ from cinoc.formats.alto import (
     write_alto,
 )
 from cinoc.formats.alto.layout_map import alto_to_layout, layout_to_alto
+from tests.declared_specs import declared_pipeline
 
 FIXED = datetime(2026, 1, 1, tzinfo=UTC)
 
@@ -229,7 +229,7 @@ def test_region_cer_end_to_end_over_alto_gt(tmp_path: Path) -> None:
             corpus_name="c",
             n_documents=1,
             pipeline_specs=(
-                PipelineSpec(name="seg", initial_inputs=(ArtifactType.IMAGE,)),
+                declared_pipeline("seg"),
             ),
             code_version="1.0",
             started_at=FIXED,
@@ -237,7 +237,7 @@ def test_region_cer_end_to_end_over_alto_gt(tmp_path: Path) -> None:
         ),
     )
     # b1 exact (0/11) ; b2 1 substitution (1/12) → micro page = 1/23.
-    aggregate = result.pipelines[0].aggregate[0]
+    aggregate = result.principal_aggregate(result.pipelines[0])[0]
     assert aggregate.metric == "region_cer"
     assert aggregate.value == pytest.approx(1 / 23)
     assert aggregate.support == 1

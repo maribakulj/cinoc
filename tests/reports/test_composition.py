@@ -216,8 +216,8 @@ def test_pipelines_are_ordered_like_everywhere_else() -> None:
     result = RunResult(
         manifest=_manifest([_spec("second", []), _spec("premier", [])]),
         pipelines=(
-            PipelineResult(pipeline="premier", view="v", aggregate=()),
-            PipelineResult(pipeline="second", view="v", aggregate=()),
+            PipelineResult(pipeline="premier", view="v", conditional_aggregate=()),
+            PipelineResult(pipeline="second", view="v", conditional_aggregate=()),
         ),
         documents=(),
     )

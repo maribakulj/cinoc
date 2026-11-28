@@ -47,7 +47,9 @@ def _result(docs: tuple[RunDocumentResult, ...], analyses: tuple = ()) -> RunRes
     )
     pipes = tuple(
         PipelineResult(pipeline=p, view="text",
-                       aggregate=(MetricScore(metric="cer", value=0.1, support=1),))
+                       conditional_aggregate=(
+                           MetricScore(metric="cer", value=0.1, support=1),
+                       ))
         for p in dict.fromkeys(d.pipeline for d in docs)
     )
     return RunResult(manifest=manifest, pipelines=pipes, documents=docs,

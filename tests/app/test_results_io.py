@@ -41,7 +41,9 @@ def _sample() -> RunResult:
             PipelineResult(
                 pipeline="eng",
                 view="text",
-                aggregate=(MetricScore(metric="cer", value=0.25, support=1),),
+                conditional_aggregate=(
+                    MetricScore(metric="cer", value=0.25, support=1),
+                ),
             ),
         ),
         cross_engine=(

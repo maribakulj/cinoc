@@ -399,7 +399,9 @@ def test_applicabilite__pipeline_non_applicable_nannule_pas_le_test_des_autres(
         ),
         registry_with(*bricks),
     )
-    assert aggregate(result, "C").support == 0  # C est bien non applicable
+    # C est non applicable (D1) : « hors vue » est une propriété du pipeline, et
+    # un pipeline hors vue n'a aucune entrée d'agrégat dans cette vue.
+    assert "C" not in {entry.pipeline for entry in result.pipelines}
     ab = paire(comparaison(result, "texte", "cer"), "A", "B")
     assert tuple(ab.micro_documents) == tuple(sorted(refs))
     assert axes(per_document(result, "C", "d0"))[0] == "not_in_view"

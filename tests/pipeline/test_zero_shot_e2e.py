@@ -69,7 +69,7 @@ def test_zero_shot_runs_and_reports_tokens(
     result = run(spec, registry=_registry(), code_version="1.0")
 
     # Le texte transcrit == GT → CER 0 (le run a bien produit du RAW_TEXT scoré).
-    aggregate = result.pipelines[0].aggregate[0]
+    aggregate = result.principal_aggregate(result.pipelines[0])[0]
     assert aggregate.metric == "cer"
     assert aggregate.value == 0.0
 

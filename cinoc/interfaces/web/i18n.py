@@ -201,8 +201,9 @@ _STRINGS: dict[str, dict[str, str]] = {
         "history_trends_desc": "Évolution du CER par moteur au fil des runs "
         "(échelle locale). Pente par jour (moindres carrés) et rupture (test de "
         "Pettitt), chacune avec sa p : ces tests sont exploratoires — la p est "
-        "un nombre, jamais un verdict, et la rupture est affichée dès que le "
-        "test est calculable (au moins 3 runs).",
+        "un nombre publié tel quel, sans seuil ni décision, et la rupture est "
+        "affichée dès que le test est calculable (au moins 3 runs, série non "
+        "constante).",
         "history_slope": "pente/j",
         "history_exploratory": "exploratoire",
         "history_trend_untested": "aucun test à 2 runs",
@@ -460,8 +461,9 @@ _STRINGS: dict[str, dict[str, str]] = {
         "history_trends_desc": "CER evolution per engine across runs "
         "(local scale). Slope per day (least squares) and change point "
         "(Pettitt test), each with its p: these tests are exploratory — the p "
-        "is a number, never a verdict, and the change point is shown as soon "
-        "as the test can be computed (at least 3 runs).",
+        "is a number published as is, with no threshold and no decision, and "
+        "the change point is shown as soon as the test can be computed (at "
+        "least 3 runs, non-constant series).",
         "history_slope": "slope/day",
         "history_exploratory": "exploratory",
         "history_trend_untested": "no test with 2 runs",

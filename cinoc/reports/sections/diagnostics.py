@@ -15,6 +15,7 @@ from cinoc.reports._numbers import localize_decimal
 from cinoc.reports.engine_badges import engine_cell, engine_order
 from cinoc.reports.html import escape, localized, view_prefix
 from cinoc.reports.section import Html, SectionContext
+from cinoc.reports.sections._alignment_note import alignment_note
 from cinoc.reports.text_diff import char_diff
 
 #: Libellés bilingues du **flux de confusion** (#8) ; les pires lignes le sont
@@ -26,8 +27,10 @@ _CONFUSION_TEXT: dict[str, dict[str, str]] = {
         "intro": (
             "Le glyphe attendu (vérité-terrain) → le glyphe produit par le "
             "moteur ; la barre indique la fréquence. La <strong>direction</strong> "
-            "compte : « ſ → f » (long s lu f) n'est pas « f → ſ ». Ce sont les "
-            "substitutions que compte le CER, ni plus ni moins."
+            "compte : « ſ → f » (long s lu f) n'est pas « f → ſ »."
+        ),
+        "decomposes": (
+            " Ce sont les substitutions que compte le CER, ni plus ni moins."
         ),
     },
     "en": {
@@ -35,9 +38,9 @@ _CONFUSION_TEXT: dict[str, dict[str, str]] = {
         "intro": (
             "The expected glyph (ground truth) → the glyph the engine produced; "
             "the bar shows frequency. <strong>Direction</strong> matters: "
-            "“ſ → f” (long s read as f) is not “f → ſ”. These are exactly the "
-            "substitutions the CER counts."
+            "“ſ → f” (long s read as f) is not “f → ſ”."
         ),
+        "decomposes": " These are exactly the substitutions the CER counts.",
     },
 }
 
@@ -77,9 +80,18 @@ def _confusion_flow(
     if not groups:
         return ""
     text = _CONFUSION_TEXT.get(lang, _CONFUSION_TEXT["fr"])
+    # Ces confusions ne sont les substitutions du CER que si l'alignement qui les
+    # nomme égale les comptes canoniques (``matches_canonical_counts``, D8).
+    decomposes = text["decomposes"] if payload.matches_canonical_counts else ""
     return (
         f"<h4>{text['title']}</h4>\n"
-        f'<p class="muted">{text["intro"]}</p>\n' + "".join(groups)
+        f'<p class="muted">{text["intro"]}{decomposes}</p>\n'
+        + alignment_note(
+            payload.alignment_path,
+            lang,
+            concordant=payload.matches_canonical_counts,
+        )
+        + "".join(groups)
     )
 
 

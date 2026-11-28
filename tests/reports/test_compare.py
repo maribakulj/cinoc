@@ -28,7 +28,9 @@ def _result(run_id: str, cer: float | None) -> RunResult:
             PipelineResult(
                 pipeline="eng",
                 view="text",
-                aggregate=(MetricScore(metric="cer", value=cer, support=1),),
+                conditional_aggregate=(
+                    MetricScore(metric="cer", value=cer, support=1),
+                ),
             ),
         ),
     )

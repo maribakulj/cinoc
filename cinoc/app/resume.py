@@ -319,10 +319,17 @@ class ResumeStore:
             return None
         raw_issues = data.get("step_issues", {})
         if not isinstance(raw_issues, dict) or not all(
-            value in _STEP_ISSUES for value in raw_issues.values()
+            isinstance(issues, list)
+            and issues
+            and issues == sorted(set(issues))
+            and set(issues) <= _STEP_ISSUES
+            for issues in raw_issues.values()
         ):
             return None
-        step_issues = cast(dict[str, StepIssue], dict(raw_issues))
+        step_issues = {
+            step_id: cast(tuple[StepIssue, ...], tuple(issues))
+            for step_id, issues in raw_issues.items()
+        }
         return DocumentExecution(
             by_step=by_step,
             step_usage=step_usage,
@@ -387,7 +394,10 @@ class ResumeStore:
                     if execution.line_outcomes is not None
                     else None
                 ),
-                "step_issues": dict(execution.step_issues),
+                "step_issues": {
+                    step_id: list(issues)
+                    for step_id, issues in execution.step_issues.items()
+                },
             }
             (unit_dir / "index.json").write_text(
                 json.dumps(payload, ensure_ascii=False, sort_keys=True),

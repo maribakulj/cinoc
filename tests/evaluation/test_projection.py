@@ -18,13 +18,13 @@ from cinoc.domain.documents import DocumentRef, GroundTruthRef
 from cinoc.domain.errors import ProjectionError
 from cinoc.domain.evaluation import EvaluationSpec, EvaluationView
 from cinoc.domain.layout import CanonicalLayout, LayoutPage, Line, Region
-from cinoc.domain.pipeline import PipelineSpec
 from cinoc.domain.projection import ProjectionSpec
 from cinoc.domain.run import RunManifest
 from cinoc.evaluation.errors import EvaluationError
 from cinoc.evaluation.projectors import get_projector, layout_to_text
 from cinoc.evaluation.registry import MetricRegistry, register_default_metrics
 from cinoc.evaluation.runner import evaluate_run
+from tests.declared_specs import declared_pipeline
 
 FIXED = datetime(2026, 1, 1, tzinfo=UTC)
 _LAYOUT_TO_TEXT = ProjectionSpec(
@@ -88,7 +88,7 @@ def _manifest() -> RunManifest:
         corpus_name="c",
         n_documents=1,
         pipeline_specs=(
-            PipelineSpec(name="seg", initial_inputs=(ArtifactType.IMAGE,)),
+            declared_pipeline("seg"),
         ),
         code_version="1.0",
         started_at=FIXED,
@@ -133,7 +133,7 @@ def test_layout_candidate_scored_by_text_metric_via_projection(tmp_path: Path) -
         metric_names=("cer",),
     )
     result = _run(tmp_path, view)
-    aggregate = result.pipelines[0].aggregate[0]  # type: ignore[attr-defined]
+    aggregate = result.principal_aggregate(result.pipelines[0])[0]  # type: ignore[attr-defined]
     assert aggregate.metric == "cer"
     # ref = "hello world\n\nsecond block", mise à plat par le profil par défaut
     # (D-285) : "hello world second block" (24 car.), 1 substitution → 1/24.
@@ -150,6 +150,6 @@ def test_layout_candidate_without_projection_is_not_applicable(tmp_path: Path) -
         metric_names=("cer",),
     )
     result = _run(tmp_path, view)
-    aggregate = result.pipelines[0].aggregate[0]  # type: ignore[attr-defined]
+    aggregate = result.principal_aggregate(result.pipelines[0])[0]  # type: ignore[attr-defined]
     assert aggregate.value is None
     assert aggregate.support == 0

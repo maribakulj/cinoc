@@ -27,7 +27,9 @@ def _result(value: float | None) -> RunResult:
             PipelineResult(
                 pipeline="tesseract",
                 view="text",
-                aggregate=(MetricScore(metric="cer", value=value, support=2),),
+                conditional_aggregate=(
+                    MetricScore(metric="cer", value=value, support=2),
+                ),
             ),
         ),
     )
@@ -65,7 +67,7 @@ def _pipe(name: str, value: float) -> PipelineResult:
     return PipelineResult(
         pipeline=name,
         view="text",
-        aggregate=(MetricScore(metric="cer", value=value, support=2),),
+        conditional_aggregate=(MetricScore(metric="cer", value=value, support=2),),
     )
 
 

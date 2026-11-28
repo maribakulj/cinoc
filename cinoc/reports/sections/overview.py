@@ -14,13 +14,19 @@ from cinoc.evaluation.result import PipelineResult, RunResult
 from cinoc.reports.composition_diff import homonym_hints
 from cinoc.reports.engine_badges import engine_cell, engine_order
 from cinoc.reports.html import escape, localized, view_label
-from cinoc.reports.metric_categories import category_legend, category_mark
+from cinoc.reports.metric_categories import (
+    category_legend,
+    category_mark,
+    is_established,
+)
 from cinoc.reports.section import Html, SectionContext
 from cinoc.reports.sections._tables import (
     bar_cell,
     bar_legend,
     col_max,
+    format_value,
     group_header_row,
+    is_displayed,
     metric_short_label,
     nonempty_metric_indices,
     ordered_unique,
@@ -44,13 +50,121 @@ class OverviewSection:
             f'<p class="muted">{corpus} : '
             f"{escape(result.manifest.corpus_name)}</p>",
         ]
+        population = _population_note(result, ctx.lang)
+        if population:
+            parts.append(population)
         note = failures_note(result, ctx.lang)
         if note:
             parts.append(note)
         multi = len(views) > 1
         for view_name in views:
             parts.append(_table_for_view(result, view_name, ctx.lang, multi=multi))
-        return Html("\n".join(parts) + "\n")
+            parts.append(_qualities_block(result, view_name, ctx.lang))
+        return Html("\n".join(part for part in parts if part) + "\n")
+
+
+def _population_note(result: RunResult, lang: str) -> str:
+    """La **population cible** du corpus et la **pondération** de son macro (B3),
+    quand le corpus les déclare : l'échantillon représente quelque chose, et le
+    macro est une moyenne par document ou par grappe."""
+    entry = next(iter(result.pipelines), None)
+    if entry is None:
+        return ""
+    by_cluster = entry.cluster_weighting == "cluster"
+    if entry.target_population is None and not by_cluster:
+        return ""
+    weighting = localized(
+        lang,
+        "moyenne par grappe (chaque grappe pèse autant)"
+        if by_cluster
+        else "moyenne par document",
+        "mean per cluster (each cluster weighs the same)"
+        if by_cluster
+        else "mean per document",
+    )
+    pieces = []
+    if entry.target_population is not None:
+        pieces.append(
+            f"{localized(lang, 'Population cible', 'Target population')} : "
+            f"{escape(entry.target_population)}"
+        )
+    pieces.append(
+        f"{localized(lang, 'Pondération du macro', 'Macro weighting')} : {weighting}"
+    )
+    return f'<p class="muted">{" · ".join(pieces)}</p>'
+
+
+def _qualities_block(result: RunResult, view_name: str, lang: str) -> str:
+    """Les **deux qualités** (§ 2.1 f), avec leur couverture, là où elles
+    diffèrent : la conditionnelle (observations complètes) et l'opérationnelle
+    (ce que l'utilisateur reçoit : partielles telles que produites, échecs notés
+    comme une sortie vide). Rien quand toutes les unités sont complètes."""
+    rows: list[str] = []
+    order = engine_order(p.pipeline for p in result.pipelines)
+    for entry in result.pipelines:
+        if entry.view != view_name:
+            continue
+        operationals = {s.metric: s for s in entry.operational_aggregate}
+        for conditional in entry.conditional_aggregate:
+            metric = conditional.metric
+            operational = operationals.get(metric)
+            if operational is None:
+                continue
+            same = (conditional.value, conditional.support) == (
+                operational.value,
+                operational.support,
+            )
+            if same or not (is_established(metric) and is_displayed(metric)):
+                continue
+            expected = conditional.expected if conditional.expected is not None else 0
+            motifs = " · ".join(
+                f"{escape(motif)} {n}"
+                for motif, n in (conditional.coverage or {}).items()
+            )
+            badge = engine_cell(entry.pipeline, order.get(entry.pipeline, 0))
+            rows.append(
+                f'<tr><td class="eng-cell">{badge}'
+                f"</td><td>{escape(conditional.metric)}</td>"
+                f'<td class="disp">{format_value(conditional, lang)} '
+                f'<span class="muted">{conditional.support}/{expected}</span></td>'
+                f'<td class="disp">{format_value(operational, lang)} '
+                f'<span class="muted">{operational.support}/{expected}</span></td>'
+                f'<td class="muted">{motifs or "—"}</td></tr>'
+            )
+    if not rows:
+        return ""
+    title = localized(lang, "Deux qualités de lecture", "Two readings of quality")
+    prose = localized(
+        lang,
+        '<p class="muted"><b>Conditionnelle</b> : les observations complètes '
+        "seules — ce que le pipeline sait faire quand il va au bout. "
+        "<b>Opérationnelle</b> : toutes les unités attendues, les partielles "
+        "telles que produites et les échecs notés comme une sortie vide — ce que "
+        "l'utilisateur reçoit. Chaque cellule dit « notées / attendues » ; la "
+        "couverture donne, par motif, les attendues non entrées dans "
+        "l'agrégat conditionnel.</p>\n",
+        '<p class="muted"><b>Conditional</b>: complete observations only — what '
+        "the pipeline does when it goes through. <b>Operational</b>: every "
+        "expected unit, partial ones as produced and failures scored as an "
+        "empty output — what the user actually gets. Each cell reads “scored / "
+        "expected”; the coverage lists, by reason, the expected units that did "
+        "not enter the conditional aggregate.</p>\n",
+    )
+    th = (
+        localized(lang, "Pipeline", "Pipeline"),
+        localized(lang, "Métrique", "Metric"),
+        localized(lang, "Conditionnelle", "Conditional"),
+        localized(lang, "Opérationnelle", "Operational"),
+        localized(lang, "Couverture (motifs)", "Coverage (reasons)"),
+    )
+    return (
+        f"<h3>{title}</h3>\n{prose}"
+        '<div class="table-scroll"><table class="data">\n'
+        f"<thead><tr><th>{th[0]}</th><th>{th[1]}</th>"
+        f'<th class="num-cell">{th[2]}</th><th class="num-cell">{th[3]}</th>'
+        f"<th>{th[4]}</th></tr></thead>\n"
+        f"<tbody>{''.join(rows)}</tbody>\n</table></div>\n"
+    )
 
 
 #: Libellé du motif codé d'un échec (``FailureReason``) : ``(fr, en)``.
@@ -181,13 +295,15 @@ def _table_for_view(
     pipelines = [p for p in result.pipelines if p.view == view_name]
     order = engine_order(p.pipeline for p in result.pipelines)
     hints = homonym_hints(result.manifest)
-    rows = [p.aggregate for p in pipelines]
+    rows = [result.principal_aggregate(p) for p in pipelines]
     keep = nonempty_metric_indices(rows)  # masque les colonnes tout-« — »
     if not keep:
         # Un tableau d'en-têtes sans une valeur ne dit rien — pire, il laisse
         # croire à un rendu cassé. On dit pourquoi rien n'est noté (D-307).
         return _unscored_note(result, pipelines, view_name, lang, multi=multi)
-    all_metrics = tuple(score.metric for score in pipelines[0].aggregate)
+    all_metrics = tuple(
+        score.metric for score in result.principal_aggregate(pipelines[0])
+    )
     metrics = [all_metrics[i] for i in keep]
     header = "".join(
         f'<th class="num-cell" title="{escape(m)}">'
@@ -198,7 +314,9 @@ def _table_for_view(
     body_rows: list[str] = []
     for pipeline in pipelines:
         cells = "".join(
-            bar_cell(pipeline.aggregate[i], maxes[j], lang=lang)
+            bar_cell(
+                result.principal_aggregate(pipeline)[i], maxes[j], lang=lang
+            )
             for j, i in enumerate(keep)
         )
         badge = engine_cell(

@@ -90,7 +90,13 @@ class MethodologySection:
         lang = ctx.lang
         eval_docs = len({d.document_id for d in result.documents})
         engines = sorted({p.pipeline for p in result.pipelines})
-        metrics = sorted({s.metric for p in result.pipelines for s in p.aggregate})
+        metrics = sorted(
+            {
+                s.metric
+                for p in result.pipelines
+                for s in result.principal_aggregate(p)
+            }
+        )
         # Documents : taille du corpus ; nombre réellement évalué si différent.
         docs_val = str(m.n_documents)
         if eval_docs and eval_docs != m.n_documents:

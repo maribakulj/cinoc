@@ -12,6 +12,7 @@ from cinoc.evaluation.result import RunResult
 from cinoc.reports._numbers import localize_decimal
 from cinoc.reports.html import escape, localized
 from cinoc.reports.section import Html, SectionContext
+from cinoc.reports.sections._alignment_note import alignment_note
 from cinoc.reports.sections._payload import render_payload_section
 
 
@@ -240,7 +241,8 @@ class CorrectionSection:
             ctx,
             payload_type=CorrectionPayload,
             title=localized(ctx.lang, "Bilan de correction", "Correction balance"),
-            block=lambda view, payload: _block(view, payload, ctx.lang),
+            block=lambda view, payload: _block(view, payload, ctx.lang)
+            + alignment_note(payload.alignment_path, ctx.lang),
         )
 
 

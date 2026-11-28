@@ -32,11 +32,11 @@ def _result(*docs: RunDocumentResult) -> RunResult:
     pipelines = (
         PipelineResult(
             pipeline="tesseract", view="text",
-            aggregate=(MetricScore(metric="cer", value=0.25, support=2),),
+            conditional_aggregate=(MetricScore(metric="cer", value=0.25, support=2),),
         ),
         PipelineResult(
             pipeline="openai", view="text",
-            aggregate=(MetricScore(metric="cer", value=0.10, support=1),),
+            conditional_aggregate=(MetricScore(metric="cer", value=0.10, support=1),),
         ),
     )
     return RunResult(manifest=manifest, pipelines=pipelines, documents=docs)

@@ -158,9 +158,14 @@ def test_failure_isolation_under_parallel(tmp_path: Path) -> None:
     )
     result = run(spec, registry=_registry(), code_version="1.0", max_workers=4)
     by_name = {p.pipeline: p for p in result.pipelines}
-    assert by_name["ok"].aggregate[0].value == pytest.approx(0.0)  # scoré, parfait
+    ok = result.principal_aggregate(by_name["ok"])[0]
+    assert ok.value == pytest.approx(0.0)  # scoré, parfait
     ko = by_name.get("ko")
-    assert ko is None or not ko.aggregate or ko.aggregate[0].value is None
+    assert (
+        ko is None
+        or not result.principal_aggregate(ko)
+        or result.principal_aggregate(ko)[0].value is None
+    )
 
 
 def test_resolve_workers_clamps_and_reads_env(monkeypatch: pytest.MonkeyPatch) -> None:

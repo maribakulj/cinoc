@@ -40,7 +40,11 @@ def _copies(archive: Path) -> list[Path]:
 
 def _cer(result: object) -> dict[str, float | None]:
     return {
-        p.pipeline: next(s.value for s in p.aggregate if s.metric == "cer")
+        p.pipeline: next(
+            s.value
+            for s in result.principal_aggregate(p)  # type: ignore[attr-defined]
+            if s.metric == "cer"
+        )
         for p in result.pipelines  # type: ignore[attr-defined]
     }
 

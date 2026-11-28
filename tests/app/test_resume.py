@@ -109,7 +109,7 @@ def test_second_run_executes_nothing_and_scores_identically(tmp_path: Path) -> N
     cer = {
         (p.pipeline, s.metric): s.value
         for p in second.pipelines
-        for s in p.aggregate
+        for s in second.principal_aggregate(p)
     }
     assert cer[("p", "cer")] == 0.0
     # L'usage du run d'origine est restauré (pas un coût de cache mensonger).

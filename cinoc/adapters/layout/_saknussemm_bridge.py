@@ -210,25 +210,78 @@ def manifest_page_ids(manifest: Any) -> list[str]:
     return [page.page_id for page in manifest.pages]
 
 
+def declared_class(outcome: Any) -> tuple[str, str | None]:
+    """``(classe, code)`` d'**une** ligne d'un rapport de la bibliothèque : la
+    classe que l'adaptateur **déclare**, lue au **statut** (``DecisionStage.
+    status``) et au **code de raison** (``DecisionReason.code``, ensemble fermé
+    ``saknussemm.core.decide.FALLBACK_REASON_CODES``), jamais devinée d'après les
+    textes (D6) :
+
+    - ``corrected`` avec un texte modifié : ``corrected`` ; avec ``final_text ==
+      source_text`` (l'égalité **exacte**, qui constate l'abstention sans rien
+      deviner, Q6) : ``abstained`` — le producteur propose la source, ou aucune
+      règle ne s'applique ;
+    - ``review_required`` : correction gardée que le correcteur déclare ne pas
+      pouvoir établir — classe **disjointe** de ``corrected`` ;
+    - ``fallback`` hors ``INCIDENT_CODES`` : ``refused`` (refus technique), avec
+      son code ;
+    - ``fallback`` dans ``INCIDENT_CODES`` : ``fallback`` (repli, incident
+      d'exécution), avec son code — seul à rendre l'étape partielle.
+
+    Un statut ou un code hors vocabulaire est un défaut de la bibliothèque : il
+    lève, il n'est pas rangé au hasard.
+    """
+    from saknussemm.core.decide import (  # type: ignore[import-not-found]  # noqa: PLC0415
+        FALLBACK_REASON_CODES,
+    )
+
+    decision = outcome.decision
+    status = decision.status
+    if status == "corrected":
+        if decision.final_text == outcome.source_text:
+            return "abstained", None
+        return "corrected", None
+    if status == "review_required":
+        return "review_required", None
+    if status == "fallback":
+        code: str = decision.reason.code if decision.reason is not None else ""
+        if code not in FALLBACK_REASON_CODES:
+            raise AdapterStepError(
+                f"saknussemm : ligne {outcome.page_id}/{outcome.line_id} en "
+                f"repli avec un code hors de FALLBACK_REASON_CODES ({code!r}) "
+                "— bibliothèque incompatible."
+            )
+        return ("fallback" if code in INCIDENT_CODES else "refused"), code
+    raise AdapterStepError(
+        f"saknussemm : ligne {outcome.page_id}/{outcome.line_id} au "
+        f"statut inconnu {status!r} — bibliothèque incompatible."
+    )
+
+
 def decisions_json(result: object, document_id: str) -> bytes:
     """Sérialise ce que la bibliothèque a décidé, ligne par ligne.
 
-    Le **statut** distingue trois situations qu'un texte corrigé confond :
-    la ligne a changé, une garde a refusé un changement proposé, ou rien n'a
-    été proposé. Sans cette distinction, un correcteur prudent et un correcteur
-    inerte rendent le même artefact.
+    Chaque ligne porte la **classe que l'adaptateur déclare** (``line_class`` et
+    son ``class_code``, voir :func:`declared_class`) : l'analyse des décisions et
+    le rapport la **lisent**, sans la recalculer d'après les textes. Elle
+    distingue ce qu'un texte corrigé confond : la ligne a changé, une garde a
+    refusé un changement proposé, ou rien n'a été proposé — sans cela, un
+    correcteur prudent et un correcteur inerte rendent le même artefact.
     """
     lignes = []
     for outcome in result.report.lines:  # type: ignore[attr-defined]
         decision = outcome.decision
         propose = outcome.proposal.output_text if outcome.proposal else None
         raison = decision.reason
+        classe, code = declared_class(outcome)
         lignes.append(
             {
                 "document_id": document_id,
                 "page_id": outcome.page_id,
                 "line_id": outcome.line_id,
                 "status": decision.status,
+                "line_class": classe,
+                "class_code": code,
                 "source_text": outcome.source_text,
                 "final_text": decision.final_text,
                 "proposed_text": propose,
@@ -247,57 +300,23 @@ def decisions_json(result: object, document_id: str) -> bytes:
 
 
 def classify_lines(result: object) -> LineOutcomes:
-    """Les issues des lignes d'un rapport de la bibliothèque, en quatre classes.
-
-    La classe se lit au **statut** (``DecisionStage.status``) et au **code de
-    raison** (``DecisionReason.code``, ensemble fermé
-    ``saknussemm.core.decide.FALLBACK_REASON_CODES``), jamais au texte : la
-    source sort identique d'une abstention, d'un refus technique et d'un repli.
-
-    - ``corrected`` avec un texte modifié : corrigée ; avec ``final_text ==
-      source_text`` : abstention volontaire (le producteur propose la source,
-      ou aucune règle ne s'applique) ;
-    - ``review_required`` : correction gardée que le correcteur déclare ne pas
-      pouvoir établir — classe **disjointe** de ``corrected`` ;
-    - ``fallback`` hors ``INCIDENT_CODES`` : refus technique, par code ;
-    - ``fallback`` dans ``INCIDENT_CODES`` : repli, par code — seul à rendre
-      l'étape partielle.
-
-    Un statut ou un code hors vocabulaire est un défaut de la bibliothèque : il
-    lève, il n'est pas rangé au hasard.
-    """
-    from saknussemm.core.decide import (  # type: ignore[import-not-found]  # noqa: PLC0415
-        FALLBACK_REASON_CODES,
-    )
-
+    """Les issues des lignes d'un rapport de la bibliothèque, en quatre classes :
+    la somme des classes que :func:`declared_class` déclare pour **chaque** ligne
+    — une seule définition, partagée avec le sidecar des décisions."""
     corrected = review_required = abstained = 0
     refused: dict[str, int] = {}
     fallback: dict[str, int] = {}
     for outcome in result.report.lines:  # type: ignore[attr-defined]
-        decision = outcome.decision
-        status = decision.status
-        if status == "corrected":
-            if decision.final_text == outcome.source_text:
-                abstained += 1
-            else:
-                corrected += 1
-        elif status == "review_required":
+        classe, code = declared_class(outcome)
+        if classe == "corrected":
+            corrected += 1
+        elif classe == "review_required":
             review_required += 1
-        elif status == "fallback":
-            code: str = decision.reason.code if decision.reason is not None else ""
-            if code not in FALLBACK_REASON_CODES:
-                raise AdapterStepError(
-                    f"saknussemm : ligne {outcome.page_id}/{outcome.line_id} en "
-                    f"repli avec un code hors de FALLBACK_REASON_CODES ({code!r}) "
-                    "— bibliothèque incompatible."
-                )
-            bucket = fallback if code in INCIDENT_CODES else refused
-            bucket[code] = bucket.get(code, 0) + 1
+        elif classe == "abstained":
+            abstained += 1
         else:
-            raise AdapterStepError(
-                f"saknussemm : ligne {outcome.page_id}/{outcome.line_id} au "
-                f"statut inconnu {status!r} — bibliothèque incompatible."
-            )
+            bucket = fallback if classe == "fallback" else refused
+            bucket[str(code)] = bucket.get(str(code), 0) + 1
     return LineOutcomes(
         corrected=corrected,
         review_required=review_required,

@@ -53,6 +53,7 @@ from cinoc.evaluation.result import (
 )
 from cinoc.evaluation.scoring import (
     ReferenceProbe,
+    declares_view,
     metric_of,
     score_unit,
     view_outcome,
@@ -119,6 +120,7 @@ def evaluate_run(
     document_id) pour un ordre déterministe.
     """
     pipeline_order = [spec.name for spec in manifest.pipeline_specs]
+    pipeline_specs = {spec.name: spec for spec in manifest.pipeline_specs}
     pipelines: list[PipelineResult] = []
     documents: list[RunDocumentResult] = []
     cross_engine: list[MetricScore] = []
@@ -148,6 +150,13 @@ def evaluate_run(
         series: _Series = {name: {} for name in view.metric_names}
         operational: _Operational = {name: {} for name in view.metric_names}
         collectors = ViewCollectors(view, actives)
+        #: La **famille** de la vue : les pipelines dont une étape déclare un type
+        #: candidat. Un pipeline hors vue n'entre dans aucun agrégat, support,
+        #: tri ni test de cette vue, et ses échecs ne changent le support de
+        #: personne (D1).
+        family = [
+            name for name in pipeline_order if declares_view(view, pipeline_specs[name])
+        ]
         # La référence de chaque document, lue **une fois** pour tous les pipelines.
         probes = {
             document.id: ReferenceProbe(view, document, registry)
@@ -168,7 +177,7 @@ def evaluate_run(
                     view,
                     probes[document.id],
                     candidate,
-                    candidate is not None or not by_step,
+                    pipeline_name in family,
                     view_outcome(unit, list(by_step), step_id),
                     None if unit is None else unit.reason,
                     registry,
@@ -193,35 +202,45 @@ def evaluate_run(
                         view=view.name,
                         scores=scored.scores,
                         stratum=document.metadata.get("stratum"),
+                        cluster=document.cluster,
                         image_ref=document.image_uri,
                     )
                 )
-            pipelines.append(
-                _pipeline_result(
-                    pipeline_name,
-                    view.name,
-                    [metric_of(registry, name) for name in view.metric_names],
-                    series,
-                    operational,
-                    clusters,
-                    corpus,
-                    empty_page,
-                    _line_outcomes(pipeline_name, units),
+            if pipeline_name in family:
+                pipelines.append(
+                    _pipeline_result(
+                        pipeline_name,
+                        view.name,
+                        [metric_of(registry, name) for name in view.metric_names],
+                        series,
+                        operational,
+                        clusters,
+                        corpus,
+                        _line_outcomes(pipeline_name, units),
+                    )
                 )
-            )
-        cross_engine.extend(_cross_engine_scores(view, series, registry))
-        tests.extend(_inference_entries(view, series, registry))
+        in_family = {
+            name: {
+                pipeline: rows
+                for pipeline, rows in by_pipeline.items()
+                if pipeline in family
+            }
+            for name, by_pipeline in series.items()
+        }
+        cross_engine.extend(_cross_engine_scores(view, in_family, registry))
+        tests.extend(_inference_entries(view, in_family, registry))
         analyses.extend(
             _support_analyses(
                 view.name,
                 [metric_of(registry, name) for name in view.metric_names],
-                pipeline_order,
+                family,
                 series,
                 operational,
                 document_ids,
                 clusters,
                 corpus.cluster_weighting,
                 probes,
+                empty_page,
             )
         )
         analyses.extend(
@@ -272,7 +291,9 @@ def evaluate_run(
     # Post-passe cross-vues : la conformité HIPE lit les résultats des vues
     # raw/hipe/heritage déjà calculés (zéro re-scoring) — cf. ``conformity``.
     conformity = (
-        conformity_analysis(evaluation.views, pipelines, documents)
+        conformity_analysis(
+            evaluation.views, pipelines, documents, evaluation.failure_policy
+        )
         if actives is None or "hipe" in actives
         else None
     )
@@ -346,10 +367,9 @@ def _pipeline_result(
     operational: _Operational,
     clusters: list[str],
     corpus: CorpusSpec,
-    empty_page: bool,
     line_outcomes: LineOutcomes | None,
 ) -> PipelineResult:
-    """Les agrégats d'un pipeline : les deux qualités, et la principale.
+    """Les agrégats d'un pipeline : les deux qualités.
 
     **Conditionnelle** : la finalisation de la **somme** des statistiques des
     observations complètes (le micro, K1 : Σ erreurs / Σ longueurs de référence
@@ -358,8 +378,9 @@ def _pipeline_result(
     par sa statistique. **Opérationnelle** : ce que l'utilisateur reçoit — les
     partielles et tronquées telles que produites, les échecs comme une sortie
     vide. Les deux portent la **même** couverture (« n notés / n attendus » et
-    ses motifs). ``failure_policy`` choisit la principale (``aggregate``) :
-    ``exclude`` → conditionnelle, ``empty_page`` → opérationnelle (§ 2.1 e, f).
+    ses motifs). ``failure_policy`` choisit la principale, que
+    ``RunResult.principal_aggregate`` dérive : ``exclude`` → conditionnelle,
+    ``empty_page`` → opérationnelle (§ 2.1 e, f) ; elle n'est pas stockée.
     """
     conditional: list[MetricScore] = []
     operational_scores: list[MetricScore] = []
@@ -394,7 +415,6 @@ def _pipeline_result(
     return PipelineResult(
         pipeline=pipeline,
         view=view,
-        aggregate=tuple(operational_scores if empty_page else conditional),
         conditional_aggregate=tuple(conditional),
         operational_aggregate=tuple(operational_scores),
         target_population=corpus.target_population,
@@ -418,25 +438,29 @@ def _line_outcomes(
 def _support_analyses(
     view: str,
     metrics: list[DocumentMetric],
-    pipeline_order: list[str],
+    family: list[str],
     series: _Series,
     operational: _Operational,
     document_ids: list[str],
     clusters: list[str],
     weighting: str,
     probes: Mapping[str, ReferenceProbe],
+    empty_page: bool,
 ) -> list[Analysis]:
     """Supports apparié et global, et invention hors référence, par métrique.
 
-    Les pipelines que la vue **voit** seuls y entrent (un ``not_in_view`` n'est
-    comparable à personne et ne change le support de personne) ; seules les
-    observations complètes y comptent (§ 2.1 c, A4, A6).
+    Seuls les pipelines de la **famille** de la vue y entrent (un pipeline hors
+    vue n'est comparable à personne et ne change le support de personne), et,
+    parmi eux, ceux que la métrique lit. Les observations sont celles de
+    l'agrégat **principal** : complètes sous ``exclude``, opérationnelles sous
+    ``empty_page`` — le Δ, le tri et le test exploratoire qui l'accompagne ont
+    ainsi le même support (§ 2.1 c, A4, A6 ; D10).
     """
     out: list[Analysis] = []
     for metric in metrics:
         viewed = [
             pipeline
-            for pipeline in pipeline_order
+            for pipeline in family
             if any(
                 score.applicability != "not_in_view"
                 for score in series[metric.name][pipeline]
@@ -445,7 +469,11 @@ def _support_analyses(
         if len(viewed) < 2:
             continue
         stats = {
-            pipeline: [complete_statistic(s) for s in series[metric.name][pipeline]]
+            pipeline: (
+                list(operational[metric.name][pipeline])
+                if empty_page
+                else [complete_statistic(s) for s in series[metric.name][pipeline]]
+            )
             for pipeline in viewed
         }
         comparison = comparison_payload(
@@ -516,6 +544,7 @@ def _cross_engine_scores(
                     metric=f"{view.name}:{base_metric}:{metric.name}",
                     value=value,
                     support=support,
+                    status="exploratory",
                 )
             )
     return scores

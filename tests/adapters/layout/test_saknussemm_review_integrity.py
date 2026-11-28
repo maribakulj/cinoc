@@ -87,7 +87,13 @@ def test_real_review_referral_reaches_artifact_analysis_and_report(
     analysis = decisions_analysis("text", {"p": {"doc1": artifacts}})
     assert analysis is not None and isinstance(analysis.payload, DecisionsPayload)
     row = analysis.payload.pipelines[0]
-    assert (row.n_lines, row.changed, row.refused, row.review_required) == (1, 1, 0, 1)
+    # Classes disjointes : une ligne à relire n'est pas comptée corrigée.
+    assert (
+        row.n_lines,
+        row.corrected,
+        sum(r.n for r in row.refused),
+        row.review_required,
+    ) == (1, 0, 0, 1)
     assert {reason.code: reason.n for reason in row.review_reasons} == {
         "digits_changed": 1
     }

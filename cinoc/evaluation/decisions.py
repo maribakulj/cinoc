@@ -10,16 +10,21 @@ deux distinguables — c'est ce que le CER seul ne peut pas faire. La campagne d
 2026-08-21 l'a montré chiffres en main : sur le même corpus, un modèle qui
 gagnait *plus* de CER qu'un autre **abîmait quatre fois plus de lignes**.
 
-Lecture seule : aucun recalcul, aucun verdict. Le rapport lit ce que
-l'adaptateur a écrit.
+Lecture seule : aucun recalcul, aucun jugement. La **classe** de chaque ligne
+(corrigée, à revoir, abstention, refus technique, repli) est **déclarée** par
+l'adaptateur dans le sidecar (``line_class`` et son ``class_code``) ; cette
+couche la lit et la compte, elle ne la reconstruit jamais d'après les textes
+(D6, § 2.1 f). Le rapport lit ce que l'adaptateur a écrit.
 """
 
 from __future__ import annotations
 
 import json
+import logging
 from collections import Counter
 from collections.abc import Mapping
 from pathlib import Path
+from typing import cast, get_args
 
 from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.evaluation.analysis import (
@@ -28,8 +33,11 @@ from cinoc.evaluation.analysis import (
     DecisionReviewReason,
     DecisionSample,
     DecisionsPayload,
+    LineClass,
     PipelineDecisions,
 )
+
+logger = logging.getLogger(__name__)
 
 #: Lignes montrées en exemple par pipeline (cf. ``analysis._MAX_DECISION_SAMPLES``).
 _MAX_SAMPLES = 40
@@ -72,11 +80,15 @@ def _review_reasons(ligne: dict[str, object]) -> tuple[DecisionReviewReason, ...
     )
 
 
+_CLASSES: frozenset[str] = frozenset(get_args(LineClass))
+
+
 def _pipeline_decisions(
     pipeline: str, by_document: Mapping[str, Mapping[ArtifactType, Artifact]]
 ) -> PipelineDecisions | None:
-    total = changed = refused = untouched = review_required = 0
-    motifs: Counter[str] = Counter()
+    counts: Counter[str] = Counter()
+    refused: Counter[str] = Counter()
+    fallback: Counter[str] = Counter()
     reviews: Counter[str] = Counter()
     echantillons: list[DecisionSample] = []
     vu = False
@@ -87,55 +99,59 @@ def _pipeline_decisions(
             continue
         vu = True
         for ligne in _lines_of(artifact):
-            total += 1
-            source = str(ligne.get("source_text") or "")
-            final = str(ligne.get("final_text") or "")
-            propose = ligne.get("proposed_text")
-            code = ligne.get("reason_code")
-            review = ligne.get("status") == "review_required"
+            classe = ligne.get("line_class")
+            if classe not in _CLASSES:
+                # Une ligne dont l'adaptateur ne déclare pas la classe n'est pas
+                # rangée au hasard : elle n'est pas comptée.
+                logger.warning(
+                    "[decisions] dégradé : ligne %s/%s sans classe déclarée",
+                    ligne.get("page_id"),
+                    ligne.get("line_id"),
+                )
+                continue
+            line_class = cast(LineClass, classe)
+            code = ligne.get("class_code")
+            counts[line_class] += 1
+            if line_class == "refused":
+                refused[str(code or "sans_motif")] += 1
+            elif line_class == "fallback":
+                fallback[str(code or "sans_motif")] += 1
             review_reasons = _review_reasons(ligne)
-            if review:
-                review_required += 1
+            if line_class == "review_required":
                 reviews.update({r.code for r in review_reasons} or {"sans_motif"})
-            if final != source:
-                changed += 1
-            elif code or (propose is not None and str(propose) != source):
-                # Une proposition existait et la ligne n'a pas bougé : c'est un
-                # refus, pas une absence de proposition.
-                refused += 1
-                motifs[str(code or "sans_motif")] += 1
-            else:
-                untouched += 1
-            if final != source or code or review:
-                if len(echantillons) < _MAX_SAMPLES:
-                    echantillons.append(
-                        DecisionSample(
-                            document_id=str(ligne.get("document_id") or document_id),
-                            page_id=str(ligne.get("page_id") or "?"),
-                            line_id=str(ligne.get("line_id") or "?"),
-                            status=str(ligne.get("status") or "?"),
-                            source_text=_texte(source),
-                            final_text=_texte(final),
-                            reason_code=str(code) if code else None,
-                            reason_detail=(
-                                _texte(ligne.get("reason_detail"))
-                                if ligne.get("reason_detail")
-                                else None
-                            ),
-                            review_reasons=review_reasons,
-                        )
+            if line_class != "abstained" and len(echantillons) < _MAX_SAMPLES:
+                echantillons.append(
+                    DecisionSample(
+                        document_id=str(ligne.get("document_id") or document_id),
+                        page_id=str(ligne.get("page_id") or "?"),
+                        line_id=str(ligne.get("line_id") or "?"),
+                        line_class=line_class,
+                        source_text=_texte(ligne.get("source_text")),
+                        final_text=_texte(ligne.get("final_text")),
+                        reason_code=str(ligne["reason_code"])
+                        if ligne.get("reason_code")
+                        else None,
+                        reason_detail=(
+                            _texte(ligne.get("reason_detail"))
+                            if ligne.get("reason_detail")
+                            else None
+                        ),
+                        review_reasons=review_reasons,
                     )
+                )
     if not vu:
         return None
     return PipelineDecisions(
         pipeline=pipeline,
-        n_lines=total,
-        changed=changed,
-        refused=refused,
-        untouched=untouched,
-        review_required=review_required,
-        reasons=tuple(
-            DecisionReasonCount(code=code, n=n) for code, n in sorted(motifs.items())
+        n_lines=sum(counts.values()),
+        corrected=counts["corrected"],
+        review_required=counts["review_required"],
+        abstained=counts["abstained"],
+        refused=tuple(
+            DecisionReasonCount(code=code, n=n) for code, n in sorted(refused.items())
+        ),
+        fallback=tuple(
+            DecisionReasonCount(code=code, n=n) for code, n in sorted(fallback.items())
         ),
         review_reasons=tuple(
             DecisionReasonCount(code=code, n=n) for code, n in sorted(reviews.items())

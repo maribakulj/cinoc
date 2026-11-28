@@ -119,7 +119,7 @@ class PipelineExecutor:
         # et les issues de lignes qu'elles comptent : déclarées par l'étape,
         # portées ici, jamais reconstruites en aval.
         partials: list[str] = []
-        step_issues: dict[str, StepIssue] = {}
+        step_issues: dict[str, tuple[StepIssue, ...]] = {}
         line_outcomes: LineOutcomes | None = None
 
         for step in spec.steps:
@@ -155,12 +155,17 @@ class PipelineExecutor:
             stamped = self._stamp(output, step, module)
             self._check_outputs(step, stamped)
             by_step[step.id] = stamped
+            issues: set[StepIssue] = set()
             if output.truncation is not None:
                 truncations.append(f"étape {step.id!r} : {output.truncation}")
-                step_issues[step.id] = "truncated"
+                issues.add("truncated")
             if output.partial is not None:
                 partials.append(f"étape {step.id!r} : {output.partial}")
-                step_issues[step.id] = "partial"
+                issues.add("partial")
+            if issues:
+                # L'ensemble **trié** des issues de l'étape : la troncature reste
+                # typée à côté de ``partial`` (D12), pas seulement dans le message.
+                step_issues[step.id] = tuple(sorted(issues))  # type: ignore[arg-type]
             if output.line_outcomes is not None:
                 line_outcomes = output.line_outcomes.merged_with(line_outcomes)
         return DocumentExecution(

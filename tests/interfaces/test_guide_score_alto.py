@@ -38,7 +38,9 @@ def test_the_guide_scores_an_existing_alto_without_engine(tmp_path: Path) -> Non
                  "--json", str(sortie)]) == 0
     result = json.loads(sortie.read_text(encoding="utf-8"))
     (texte,) = [p for p in result["pipelines"] if p["view"] == "texte"]
-    cer = next(s["value"] for s in texte["aggregate"] if s["metric"] == "cer")
+    cer = next(
+        s["value"] for s in texte["conditional_aggregate"] if s["metric"] == "cer"
+    )
     # L'ALTO porte exactement la transcription : rien à reprocher.
     assert cer == 0.0
 

@@ -54,7 +54,7 @@ def records_from_run(run_result: RunResult) -> tuple[HistoryRecord, ...]:
                 pipeline.pipeline,
             )
             continue
-        for score in pipeline.aggregate:
+        for score in run_result.principal_aggregate(pipeline):
             if score.value is None:
                 continue
             records.append(
@@ -86,7 +86,7 @@ class SeriesInsight:
     le test de Pettitt est calculable — **au moins** ``MIN_POINTS_FOR_TEST``
     (3) runs, comme la p de la pente : à 2 points la p vaut 1 par construction,
     la rupture est alors ``None`` — et **quelle que soit sa p** : filtrer sur la
-    significativité serait un verdict implicite. La rupture est publiée avec sa
+    significativité serait une décision implicite. La rupture est publiée avec sa
     p, étiquetée exploratoire (``CONTRATS.md`` § 2.1 f, révision n° 7).
     """
 

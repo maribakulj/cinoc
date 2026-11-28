@@ -66,7 +66,9 @@ def _run(*langs: str, run_id: str = "r") -> RunResult:
             PipelineResult(
                 pipeline=p.name,
                 view="texte",
-                aggregate=(MetricScore(metric="cer", value=0.1, support=1),),
+                conditional_aggregate=(
+                    MetricScore(metric="cer", value=0.1, support=1),
+                ),
             )
             for p in spec.pipelines
         ),

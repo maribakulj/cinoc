@@ -401,8 +401,9 @@ significance_p:
     Wilcoxon signé-rangs à 2 pipelines, Friedman à 3 et plus, sur les
     documents notés chez tous.
   measures: >-
-    Le degré de surprise d'un écart de performance ; le verdict lit la
-    p-valeur corrigée de Holm sur tous les tests du run, sous α = 0,05.
+    Le degré de surprise d'un écart de performance. Le résultat du test
+    (exploratoire) s'appuie sur la p-valeur corrigée de Holm sur tous les
+    tests calculés du run, comparée au seuil de référence α = 0,05.
   limits: >-
     Ne mesure ni l'ampleur ni l'importance pratique de l'écart ; sensible à
     la taille du corpus. Un Friedman dit qu'au moins un pipeline diffère :

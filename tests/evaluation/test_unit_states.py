@@ -19,7 +19,7 @@ from cinoc.domain.evaluation import EvaluationSpec
 from cinoc.domain.usage import ResourceUsage
 from cinoc.evaluation.registry import MetricRegistry, register_default_metrics
 from cinoc.evaluation.result import DocumentUsage
-from cinoc.evaluation.scoring import missing_ground_truths, view_outcome
+from cinoc.evaluation.scoring import unusable_ground_truths, view_outcome
 from cinoc.evaluation.statistics import (
     EditCounts,
     MatchCounts,
@@ -46,10 +46,12 @@ STEPS = ["__initial__", "ocr", "corr"]
 def test_a_view_reads_the_declared_state_of_its_own_step() -> None:
     """Une correction aval coupée laisse la lecture amont complète ; une étape
     amont incomplète rend incomplet ce qui en dérive."""
-    cut = _unit("truncated", step_issues={"corr": "truncated"})
+    cut = _unit("truncated", step_issues={"corr": ("truncated",)})
     assert view_outcome(cut, STEPS, "ocr") == "ok"
     assert view_outcome(cut, STEPS, "corr") == "truncated"
-    upstream = _unit("partial", step_issues={"ocr": "partial", "corr": "truncated"})
+    upstream = _unit(
+        "partial", step_issues={"ocr": ("partial",), "corr": ("truncated",)}
+    )
     assert view_outcome(upstream, STEPS, "corr") == "partial"
     assert view_outcome(upstream, STEPS, "__initial__") == "ok"
 
@@ -86,7 +88,7 @@ def test_references_absent_from_the_disk_are_named_before_any_call(
     )
     registry = MetricRegistry()
     register_default_metrics(registry)
-    missing = missing_ground_truths(
+    missing = unusable_ground_truths(
         corpus, EvaluationSpec(views=(TEXT_VIEW,)), registry
     )
     assert missing == [("b", str(tmp_path / "b.gt.txt"))]

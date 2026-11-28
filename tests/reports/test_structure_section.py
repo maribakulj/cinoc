@@ -33,7 +33,7 @@ def test_renders_region_f1_and_cer() -> None:
     pipe = PipelineResult(
         pipeline="seg",
         view="structure (mise en page)",
-        aggregate=(
+        conditional_aggregate=(
             MetricScore(metric="region_detection", value=0.82, support=3),
             MetricScore(metric="region_cer", value=0.0345, support=120),
         ),
@@ -49,6 +49,6 @@ def test_absent_without_region_metrics() -> None:
     pipe = PipelineResult(
         pipeline="eng",
         view="text",
-        aggregate=(MetricScore(metric="cer", value=0.1, support=10),),
+        conditional_aggregate=(MetricScore(metric="cer", value=0.1, support=10),),
     )
     assert StructureSection().render(_result((pipe,)), SectionContext()) is None

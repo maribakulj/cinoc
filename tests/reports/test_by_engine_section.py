@@ -6,7 +6,9 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from cinoc.domain.run import RunManifest
+from cinoc.evaluation.comparison import ComparisonPayload, GlobalSupport
 from cinoc.evaluation.result import (
+    Analysis,
     MetricScore,
     PipelineResult,
     RunDocumentResult,
@@ -22,7 +24,7 @@ def _agg(pipeline: str, cer: float) -> PipelineResult:
     return PipelineResult(
         pipeline=pipeline,
         view="text",
-        aggregate=(MetricScore(metric="cer", value=cer, support=2),),
+        conditional_aggregate=(MetricScore(metric="cer", value=cer, support=2),),
     )
 
 
@@ -52,6 +54,17 @@ def _result() -> RunResult:
             _doc("d2", "slow", 0.20),
             _doc("d1", "fast", 0.05),
             _doc("d2", "fast", 0.15),
+        ),
+        # Le tri est celui du support global publié (D7) : l'ordre du tableau le lit.
+        analyses=(
+            Analysis(
+                scope="corpus",
+                view="text",
+                payload=ComparisonPayload(
+                    metric="cer",
+                    global_support=GlobalSupport(ranking=("fast", "slow")),
+                ),
+            ),
         ),
     )
 
@@ -115,7 +128,7 @@ def test_air_and_hcpr_render_as_diagnostic_columns() -> None:
     pipeline = PipelineResult(
         pipeline="eng",
         view="text",
-        aggregate=(
+        conditional_aggregate=(
             MetricScore(metric="cer", value=0.10, support=1),
             MetricScore(metric="air", value=0.25, support=1),
             MetricScore(metric="hcpr", value=0.80, support=1),

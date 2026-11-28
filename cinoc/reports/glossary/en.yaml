@@ -389,8 +389,9 @@ significance_p:
     for 2 pipelines, Friedman for 3 or more, over the documents scored for
     all of them.
   measures: >-
-    How surprising a performance gap is; the verdict reads the p-value
-    corrected by Holm over all the run's tests, below α = 0.05.
+    How surprising a performance gap is. The test result (exploratory)
+    rests on the p-value corrected by Holm over all the run's computed
+    tests, compared with the reference threshold α = 0.05.
   limits: >-
     Measures neither the magnitude nor the practical importance of the gap;
     sensitive to corpus size. A Friedman test says at least one pipeline

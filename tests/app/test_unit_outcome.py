@@ -72,7 +72,9 @@ def _run(config: Path, **evaluation: object) -> RunResult:
 def _agg(result: RunResult, pipeline: str, metric: str = "cer") -> MetricScore:
     for entry in result.pipelines:
         if entry.pipeline == pipeline and entry.view == "texte":
-            return next(s for s in entry.aggregate if s.metric == metric)
+            return next(
+                s for s in result.principal_aggregate(entry) if s.metric == metric
+            )
     raise AssertionError(pipeline)
 
 
@@ -97,7 +99,7 @@ def test_failed_unit_is_recorded_with_its_reason(tmp_path: Path) -> None:
     assert "folio_002.pero.txt" in (failed[0].message or "")
     # Chaque unité a sa ligne, en échec comprise : 2 pipelines × 5 documents.
     assert len(result.usage) == 10
-    assert result.schema_version == 6
+    assert result.schema_version == 7
 
 
 def test_exclude_policy_shows_scored_over_expected(tmp_path: Path) -> None:
@@ -127,7 +129,7 @@ def test_json_written_by_the_cli_carries_support_and_reason(
         s
         for p in data["pipelines"]
         if p["pipeline"] == "pero" and p["view"] == "texte"
-        for s in p["aggregate"]
+        for s in p["conditional_aggregate"]
         if s["metric"] == "cer"
     )
     assert (cer["support"], cer["expected"]) == (4, 5)
@@ -167,7 +169,9 @@ def test_nothing_is_marked_when_every_unit_succeeds(tmp_path: Path) -> None:
     result = _run(_example_copy(tmp_path, pero_folio_002="x"))
     assert all(u.outcome == "ok" for u in result.usage)
     assert all(
-        s.support == s.expected for p in result.pipelines for s in p.aggregate
+        s.support == s.expected
+        for p in result.pipelines
+        for s in result.principal_aggregate(p)
     )
     html = default_report_renderer().render(result)
     assert "Unités en échec" not in html
@@ -272,7 +276,7 @@ def test_a_failure_without_ground_truth_is_not_expected(tmp_path: Path) -> None:
     )
     result = run(spec, registry=_registry(), code_version="test")
     assert [u.outcome for u in result.usage] == ["ok", "failed"]
-    cer = result.pipelines[0].aggregate[0]
+    cer = result.principal_aggregate(result.pipelines[0])[0]
     assert (cer.support, cer.expected) == (1, 1)
 
 
@@ -417,7 +421,9 @@ def test_statistical_tests_use_complete_cases_and_say_so(tmp_path: Path) -> None
     )
     result = run(spec, registry=_registry(), code_version="test")
 
-    by_name = {p.pipeline: p.aggregate[0] for p in result.pipelines}
+    by_name = {
+        p.pipeline: result.principal_aggregate(p)[0] for p in result.pipelines
+    }
     assert (by_name["a"].support, by_name["a"].expected) == (7, 7)
     assert (by_name["b"].support, by_name["b"].expected) == (6, 7)
     (payload,) = [

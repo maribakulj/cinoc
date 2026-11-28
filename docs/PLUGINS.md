@@ -168,7 +168,7 @@ result = run(
 )
 report.write_text(default_report_renderer().render(result), encoding="utf-8")
 for pipeline in result.pipelines:
-    for score in pipeline.aggregate:
+    for score in result.principal_aggregate(pipeline):
         print(pipeline.pipeline, pipeline.view, score.metric, score.value)
 ```
 

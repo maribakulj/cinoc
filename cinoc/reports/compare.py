@@ -60,7 +60,7 @@ def _index(result: RunResult) -> dict[_Key, float | None]:
     return {
         (pipeline.pipeline, pipeline.view, score.metric): score.value
         for pipeline in result.pipelines
-        for score in pipeline.aggregate
+        for score in result.principal_aggregate(pipeline)
     }
 
 

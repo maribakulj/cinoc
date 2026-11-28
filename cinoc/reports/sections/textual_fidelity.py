@@ -19,6 +19,7 @@ from cinoc.reports._numbers import localize_decimal
 from cinoc.reports.engine_badges import engine_cell, engine_order
 from cinoc.reports.html import escape, localized
 from cinoc.reports.section import Html, SectionContext
+from cinoc.reports.sections._alignment_note import alignment_note
 from cinoc.reports.sections._payload import render_payload_section
 
 
@@ -152,7 +153,8 @@ class TextualFidelitySection:
             ctx,
             payload_type=TextualFidelityPayload,
             title=localized(ctx.lang, "Fidélité textuelle", "Textual fidelity"),
-            block=lambda view, payload: _block(view, payload, ctx.lang, order),
+            block=lambda view, payload: _block(view, payload, ctx.lang, order)
+            + alignment_note(payload.alignment_path, ctx.lang),
         )
 
 

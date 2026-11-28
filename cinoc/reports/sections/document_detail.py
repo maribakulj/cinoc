@@ -26,6 +26,7 @@ from cinoc.reports._numbers import fmt_pct, localize_decimal
 from cinoc.reports.engine_badges import engine_accent, engine_letter, engine_order
 from cinoc.reports.html import escape, localized
 from cinoc.reports.section import Html, SectionContext
+from cinoc.reports.sections._alignment_note import alignment_note
 from cinoc.reports.sections._tables import ordered_unique
 from cinoc.reports.text_diff import char_diff
 
@@ -211,14 +212,17 @@ def _doc_cer(result: RunResult, doc_id: str, view: str) -> list[tuple[str, float
     return out
 
 
-def _doc_texts(result: RunResult, view: str, doc_id: str) -> DocumentTexts | None:
-    """Textes complets de ce document si le payload (top-N pires) les porte."""
+def _doc_texts(
+    result: RunResult, view: str, doc_id: str
+) -> tuple[DocumentTexts, DocumentTextsPayload] | None:
+    """Textes complets de ce document si le payload (top-N pires) les porte, et
+    le payload (son chemin d'alignement est celui du diff)."""
     for analysis in result.analyses:
         payload = analysis.payload
         if analysis.view == view and isinstance(payload, DocumentTextsPayload):
             for dt in payload.documents:
                 if dt.document_id == doc_id:
-                    return dt
+                    return dt, payload
     return None
 
 
@@ -300,9 +304,9 @@ class DocumentDetailSection:
         )
         # Diff **pleine page** (texte complet + sélecteur de moteur) si le payload
         # textes porte ce doc (top-N pires) ; sinon **pires lignes** (toujours là).
-        full = _doc_texts(result, view, doc_id)
-        if full is not None and full.hypotheses:
-            diffs = self._full_diff(full, order, lang)
+        found = _doc_texts(result, view, doc_id)
+        if found is not None and found[0].hypotheses:
+            diffs = self._full_diff(*found, order, lang)
         else:
             worst = _worst_lines(result, doc_id, view)
             diffs = ""
@@ -390,7 +394,12 @@ class DocumentDetailSection:
         )
 
     @staticmethod
-    def _full_diff(texts: DocumentTexts, order: dict[str, int], lang: str) -> str:
+    def _full_diff(
+        texts: DocumentTexts,
+        payload: DocumentTextsPayload,
+        order: dict[str, int],
+        lang: str,
+    ) -> str:
         """Diff **pleine page** : vérité-terrain ↔ sortie, **sélecteur de moteur**.
 
         Un bloc par moteur (révélé par ``report.js`` ; sans JS, empilés). Le diff
@@ -428,7 +437,13 @@ class DocumentDetailSection:
             f'<div class="dd-fullwrap"><div class="drill-caption">{full_title}'
             "</div>"
             f'<div class="dd-engine-tabs segmented" role="tablist">{tabs}</div>'
-            f"{blocks}</div>"
+            f"{blocks}"
+            + alignment_note(
+                payload.alignment_path,
+                lang,
+                concordant=payload.matches_canonical_counts,
+            )
+            + "</div>"
         )
 
     @staticmethod

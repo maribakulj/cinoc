@@ -97,7 +97,7 @@ def test_remote_image_materialized_then_scored(
     assert seen["url"] == _REMOTE_URL
     assert str(seen["dest"]).endswith(".jpg")
     # La chaîne aboutit à un vrai score (1 substitution / 4).
-    aggregate = result.pipelines[0].aggregate[0]
+    aggregate = result.principal_aggregate(result.pipelines[0])[0]
     assert aggregate.metric == "cer"
     assert aggregate.value == pytest.approx(0.25)
     # La spec n'est PAS réécrite : le RunResult garde la **référence** distante
@@ -145,8 +145,8 @@ def test_unreachable_remote_image_fails_unit_not_run(
     assert outcomes == {"ok": ("ok", None), "doc1": ("failed", "infrastructure")}
     failed = next(u for u in result.usage if u.document_id == "doc1")
     assert "statut HTTP 404" in (failed.message or "")
-    assert (result.pipelines[0].aggregate[0].support,
-            result.pipelines[0].aggregate[0].expected) == (1, 2)
+    assert (result.principal_aggregate(result.pipelines[0])[0].support,
+            result.principal_aggregate(result.pipelines[0])[0].expected) == (1, 2)
 
 
 def test_private_ip_reference_refused_by_ssrf_guard(tmp_path: Path) -> None:

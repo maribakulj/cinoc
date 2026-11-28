@@ -32,7 +32,9 @@ def _result(manifest: RunManifest, *, docs: int = 0) -> RunResult:
     pipelines = (
         PipelineResult(
             pipeline="tesseract", view="text",
-            aggregate=(MetricScore(metric="cer", value=0.2, support=docs or 1),),
+            conditional_aggregate=(
+                MetricScore(metric="cer", value=0.2, support=docs or 1),
+            ),
         ),
     )
     documents = tuple(

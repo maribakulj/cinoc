@@ -107,7 +107,7 @@ def test_a_blank_page_keeps_its_counts_and_reason_in_the_json(tmp_path: Path) ->
         "reference_length": 0,
     }
     (accuracy,) = [
-        s for p in raw["pipelines"] for s in p["aggregate"]
+        s for p in raw["pipelines"] for s in p["conditional_aggregate"]
         if s["metric"] == "char_accuracy"
     ]
     assert accuracy["stat"] == {
@@ -124,10 +124,10 @@ def test_the_file_written_by_cinoc_run_carries_the_statistics(tmp_path: Path) ->
         "-o", str(tmp_path / "r.html"), "--json", str(out),
     ]) == 0
     result = load_run_result(out)
-    assert result.schema_version == 6
+    assert result.schema_version == 7
     checked = 0
     for entry in result.pipelines:
-        for aggregate in entry.aggregate:
+        for aggregate in result.principal_aggregate(entry):
             stats = [
                 score.stat
                 for doc in result.documents

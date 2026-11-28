@@ -11,13 +11,13 @@ from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.documents import DocumentRef, GroundTruthRef
 from cinoc.domain.evaluation import EvaluationSpec, EvaluationView
-from cinoc.domain.pipeline import PipelineSpec
 from cinoc.domain.run import RunManifest
 from cinoc.evaluation.analysis import DiagnosticsPayload, InferencePayload
 from cinoc.evaluation.errors import EvaluationError
 from cinoc.evaluation.registry import MetricRegistry, register_default_metrics
 from cinoc.evaluation.result import RunResult
 from cinoc.evaluation.runner import evaluate_run
+from tests.declared_specs import declared_pipeline
 
 FIXED = datetime(2026, 1, 1, tzinfo=UTC)
 TEXT_VIEW = EvaluationView(
@@ -49,7 +49,7 @@ def _candidate(document_id: str, uri: Path) -> Artifact:
 
 
 def _manifest(n: int) -> RunManifest:
-    pipeline = PipelineSpec(name="eng", initial_inputs=(ArtifactType.IMAGE,))
+    pipeline = declared_pipeline("eng")
     return RunManifest(
         run_id="r",
         corpus_name="c",
@@ -87,7 +87,7 @@ def test_aggregate_and_per_document(tmp_path: Path) -> None:
         registry=_registry(),
         manifest=_manifest(2),
     )
-    aggregate = result.pipelines[0].aggregate[0]
+    aggregate = result.principal_aggregate(result.pipelines[0])[0]
     assert aggregate.metric == "cer"
     assert aggregate.support == 2
     # micro = Σ erreurs / Σ longueurs = (1 + 0) / (4 + 2) = 1/6, PAS la moyenne
@@ -115,7 +115,7 @@ def test_missing_ground_truth_is_not_applicable(tmp_path: Path) -> None:
         registry=_registry(),
         manifest=_manifest(1),
     )
-    aggregate = result.pipelines[0].aggregate[0]
+    aggregate = result.principal_aggregate(result.pipelines[0])[0]
     assert aggregate.value is None
     assert aggregate.support == 0
     assert result.documents[0].scores[0].value is None
@@ -142,7 +142,7 @@ def test_normalization_profile_neutralises_case(tmp_path: Path) -> None:
         registry=_registry(),
         manifest=_manifest(1),
     )
-    assert result.pipelines[0].aggregate[0].value == 0.0
+    assert result.principal_aggregate(result.pipelines[0])[0].value == 0.0
 
 
 def test_unknown_normalization_profile_raises(tmp_path: Path) -> None:
@@ -209,7 +209,8 @@ _MULTI = EvaluationView(
 def test_candidate_is_the_most_downstream_step(tmp_path: Path) -> None:
     # Sans cible : l'étape la plus aval (``llm``), pas l'ordre des types.
     result = _two_text_views(tmp_path, "beta", "alpha", _MULTI)
-    assert result.pipelines[0].aggregate[0].value == 0.0  # CORRECTED choisi
+    corrected = result.principal_aggregate(result.pipelines[0])[0]
+    assert corrected.value == 0.0  # CORRECTED choisi
 
 
 def test_target_step_scores_an_upstream_step(tmp_path: Path) -> None:
@@ -217,7 +218,9 @@ def test_target_step_scores_an_upstream_step(tmp_path: Path) -> None:
     réexécution (P5e 1b)."""
     ocr_seul = _MULTI.model_copy(update={"name": "ocr_seul", "target_step": "ocr"})
     result = _two_text_views(tmp_path, "alphb", "alpha", ocr_seul, _MULTI)
-    by_view = {p.view: p.aggregate[0].value for p in result.pipelines}
+    by_view = {
+        p.view: result.principal_aggregate(p)[0].value for p in result.pipelines
+    }
     assert by_view == {"ocr_seul": pytest.approx(0.2), "multi": 0.0}
 
 
@@ -264,7 +267,7 @@ def test_candidate_is_the_terminal_step_not_the_richest_type(tmp_path: Path) -> 
         manifest=_manifest(1),
     )
     # L'étape terminale est ``txt`` : c'est son RAW_TEXT qui est noté.
-    assert result.pipelines[0].aggregate[0].value == 0.0
+    assert result.principal_aggregate(result.pipelines[0])[0].value == 0.0
 
 
 def test_one_step_publishing_two_candidate_types_is_refused(tmp_path: Path) -> None:
@@ -311,8 +314,8 @@ def test_cross_engine_significance_written(tmp_path: Path) -> None:
         corpus_name="c",
         n_documents=2,
         pipeline_specs=(
-            PipelineSpec(name="a", initial_inputs=(ArtifactType.IMAGE,)),
-            PipelineSpec(name="b", initial_inputs=(ArtifactType.IMAGE,)),
+            declared_pipeline("a"),
+            declared_pipeline("b"),
         ),
         code_version="1.0",
         started_at=FIXED,
@@ -366,7 +369,7 @@ def test_inference_analyses_through_evaluate_run(tmp_path: Path) -> None:
         corpus_name="c",
         n_documents=6,
         pipeline_specs=tuple(
-            PipelineSpec(name=n, initial_inputs=(ArtifactType.IMAGE,))
+            declared_pipeline(n)
             for n in ("alpha", "beta", "gamma")
         ),
         code_version="1.0",
@@ -497,7 +500,7 @@ def test_only_established_metrics_are_tested(tmp_path: Path) -> None:
         manifest=RunManifest(
             run_id="r", corpus_name="c", n_documents=6,
             pipeline_specs=tuple(
-                PipelineSpec(name=n, initial_inputs=(ArtifactType.IMAGE,))
+                declared_pipeline(n)
                 for n in ("alpha", "beta", "gamma")
             ),
             code_version="1.0", started_at=FIXED, completed_at=FIXED,
@@ -514,5 +517,5 @@ def test_only_established_metrics_are_tested(tmp_path: Path) -> None:
         "text:cer:significance_p", "text:wer:significance_p",
     }
     # Toutes restent notées : le diagnostic ne perd rien.
-    aggregate = {s.metric for s in result.pipelines[0].aggregate}
+    aggregate = {s.metric for s in result.principal_aggregate(result.pipelines[0])}
     assert aggregate == set(view.metric_names)

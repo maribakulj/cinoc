@@ -17,8 +17,13 @@ from cinoc.reports.section import Html, SectionContext
 _METRICS = ("region_detection", "region_cer")
 
 
-def _value(pipeline: PipelineResult, metric: str) -> float | None:
-    return next((s.value for s in pipeline.aggregate if s.metric == metric), None)
+def _value(
+    result: RunResult, pipeline: PipelineResult, metric: str
+) -> float | None:
+    return next(
+        (s.value for s in result.principal_aggregate(pipeline) if s.metric == metric),
+        None,
+    )
 
 
 def _cell(value: float | None, lang: str) -> str:
@@ -37,7 +42,7 @@ class StructureSection:
         rows = [
             p
             for p in result.pipelines
-            if any(s.metric in _METRICS for s in p.aggregate)
+            if any(s.metric in _METRICS for s in result.principal_aggregate(p))
         ]
         if not rows:
             return None
@@ -62,8 +67,8 @@ class StructureSection:
         body = "".join(
             f'<tr><td class="eng-cell">'
             f"{engine_cell(p.pipeline, order.get(p.pipeline, 0))}</td>"
-            + _cell(_value(p, "region_detection"), ctx.lang)
-            + _cell(_value(p, "region_cer"), ctx.lang)
+            + _cell(_value(result, p, "region_detection"), ctx.lang)
+            + _cell(_value(result, p, "region_cer"), ctx.lang)
             + "</tr>"
             for p in rows
         )

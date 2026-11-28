@@ -102,7 +102,9 @@ def _run(config: Path, resume_store: ResumeStore | None = None) -> RunResult:
 
 def _cer(result: RunResult, view: str) -> MetricScore:
     (entry,) = [p for p in result.pipelines if p.view == view]
-    return next(s for s in entry.aggregate if s.metric == "cer")
+    return next(
+        s for s in result.principal_aggregate(entry) if s.metric == "cer"
+    )
 
 
 def _single_engine_cer(engine: str) -> float:
@@ -115,7 +117,9 @@ def _single_engine_cer(engine: str) -> float:
     )
     for entry in result.pipelines:
         if entry.pipeline == engine and entry.view == "texte":
-            value = next(s for s in entry.aggregate if s.metric == "cer").value
+            value = next(
+                s for s in result.principal_aggregate(entry) if s.metric == "cer"
+            ).value
             assert value is not None
             return value
     raise AssertionError(engine)

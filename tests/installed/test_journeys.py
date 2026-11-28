@@ -174,7 +174,10 @@ def test_a_bare_install_scores_an_existing_alto(tmp_path: Path) -> None:
             continue
         result = json.loads((work / "corpus" / "run.json").read_text(encoding="utf-8"))
         (texte,) = [p for p in result["pipelines"] if p["view"] == "texte"]
-        assert next(s["value"] for s in texte["aggregate"] if s["metric"] == "cer") == 0
+        cer = next(
+            s["value"] for s in texte["conditional_aggregate"] if s["metric"] == "cer"
+        )
+        assert cer == 0
 
 
 @installed

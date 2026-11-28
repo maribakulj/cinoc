@@ -19,7 +19,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from statistics import fmean
 
-from cinoc.domain.evaluation import EvaluationView
+from cinoc.domain.evaluation import EvaluationView, FailurePolicy
 from cinoc.evaluation.analysis import (
     Analysis,
     ConformityPayload,
@@ -38,12 +38,16 @@ def _view_with_profile(
 
 
 def _micro(
-    pipelines: Sequence[PipelineResult], view: str, pipeline: str, metric: str
+    pipelines: Sequence[PipelineResult],
+    policy: FailurePolicy,
+    view: str,
+    pipeline: str,
+    metric: str,
 ) -> float | None:
     for result in pipelines:
         if result.view != view or result.pipeline != pipeline:
             continue
-        for score in result.aggregate:
+        for score in result.principal_aggregate(policy):
             if score.metric == metric:
                 return score.value
     return None
@@ -73,6 +77,7 @@ def _macro(values: Sequence[float | None]) -> float | None:
 
 def _delta(
     pipelines: Sequence[PipelineResult],
+    policy: FailurePolicy,
     other_view: EvaluationView | None,
     pipeline: str,
     hipe_micro: float | None,
@@ -80,7 +85,7 @@ def _delta(
     """``cmer(autre vue) − cmer(hipe)`` ; ``None`` si l'un des deux manque."""
     if other_view is None or hipe_micro is None:
         return None
-    other = _micro(pipelines, other_view.name, pipeline, "cmer")
+    other = _micro(pipelines, policy, other_view.name, pipeline, "cmer")
     if other is None:
         return None
     return other - hipe_micro
@@ -90,6 +95,7 @@ def conformity_analysis(
     views: Sequence[EvaluationView],
     pipelines: Sequence[PipelineResult],
     documents: Sequence[RunDocumentResult],
+    policy: FailurePolicy,
 ) -> Analysis | None:
     """Construit le payload ``hipe``, ou ``None`` sans vue portant ``cmer``.
 
@@ -123,19 +129,19 @@ def conformity_analysis(
     rows: list[PipelineConformity] = []
     for pipeline in order:
         cmer_values = _per_document(documents, anchor.name, pipeline, "cmer")
-        cmer_micro = _micro(pipelines, anchor.name, pipeline, "cmer")
+        cmer_micro = _micro(pipelines, policy, anchor.name, pipeline, "cmer")
         rows.append(
             PipelineConformity(
                 pipeline=pipeline,
                 cmer_micro=cmer_micro,
                 cmer_macro=_macro(cmer_values),
-                wmer_micro=_micro(pipelines, anchor.name, pipeline, "mer"),
+                wmer_micro=_micro(pipelines, policy, anchor.name, pipeline, "mer"),
                 wmer_macro=_macro(
                     _per_document(documents, anchor.name, pipeline, "mer")
                 ),
-                delta_norm=_delta(pipelines, raw_view, pipeline, cmer_micro),
+                delta_norm=_delta(pipelines, policy, raw_view, pipeline, cmer_micro),
                 delta_heritage=_delta(
-                    pipelines, heritage_view, pipeline, cmer_micro
+                    pipelines, policy, heritage_view, pipeline, cmer_micro
                 ),
                 n_missing=sum(1 for v in cmer_values if v is None),
             )

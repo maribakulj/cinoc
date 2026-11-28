@@ -34,7 +34,7 @@ def _cer_by_key(result: RunResult) -> dict[str, float]:
     """CER agrégé par ``"<pipeline> · <view>"`` (clé de jointure entre deux runs)."""
     out: dict[str, float] = {}
     for pipeline in result.pipelines:
-        for score in pipeline.aggregate:
+        for score in result.principal_aggregate(pipeline):
             if score.metric == "cer" and score.value is not None:
                 out[f"{pipeline.pipeline} · {pipeline.view}"] = score.value
     return out

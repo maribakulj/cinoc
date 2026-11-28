@@ -7,9 +7,13 @@ maximal. Référence : Guo et al. 2017 (*On Calibration of Modern Neural
 Networks*) — formules publiées, vérifiables à la main.
 
 **Bins** : dix bins de largeur 0,1, le bin *b* = [b/10 ; (b+1)/10[, le dernier
-**fermé** [0,9 ; 1,0] — indice ``min(⌊10·c⌋, 9)``, si bien qu'une confiance de
-1,0 tombe dans le dernier, une de 0,3 dans [0,3 ; 0,4[. Un bin vide n'entre ni
-dans l'ECE ni dans le MCE.
+**fermé** [0,9 ; 1,0]. Les **bornes** sont les binary64 les plus proches de
+k/10 — les littéraux ``0.1`` … ``0.9`` — et la confiance leur est comparée
+**exactement** (D14) : une confiance de 0,3 (le binaire ``0.3``) tombe dans
+[0,3 ; 0,4[, ``0.8999999999999999`` dans [0,8 ; 0,9[, une de 1,0 dans le dernier.
+Ni ``int(c·10)`` en flottant (il arrondit ``0.8999999999999999`` à la classe du
+dessus), ni une borne rationnelle 3/10 (elle chasserait le ``0.3`` déclaré dans
+la classe du dessous). Un bin vide n'entre ni dans l'ECE ni dans le MCE.
 
 **Arithmétique exacte (M6, R1).** Chaque bin porte sa statistique suffisante :
 ``count`` et ``correct`` entiers, ``confidence_sum`` en ``Fraction`` (la somme
@@ -50,6 +54,7 @@ d'analyse (``None``), jamais un score fabriqué.
 
 from __future__ import annotations
 
+from bisect import bisect_right
 from collections import Counter
 from collections.abc import Mapping
 from fractions import Fraction
@@ -98,8 +103,10 @@ def calibration_from_pairs(
     counts = [0] * n_bins
     corrects = [0] * n_bins
     sums = [Fraction(0)] * n_bins
+    #: Bornes intérieures : ``float(k / n_bins)``, comparées exactement (D14).
+    bounds = [k / n_bins for k in range(1, n_bins)]
     for confidence, correct in pairs:
-        index = min(int(confidence * n_bins), n_bins - 1)
+        index = min(bisect_right(bounds, confidence), n_bins - 1)
         counts[index] += 1
         corrects[index] += int(correct)
         sums[index] += Fraction(confidence)

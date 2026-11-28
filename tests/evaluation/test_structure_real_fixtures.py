@@ -28,13 +28,13 @@ from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.documents import DocumentRef, GroundTruthRef
 from cinoc.domain.evaluation import EvaluationSpec, EvaluationView
 from cinoc.domain.layout import CanonicalLayout, Line
-from cinoc.domain.pipeline import PipelineSpec
 from cinoc.domain.run import RunManifest
 from cinoc.evaluation.context import DocContext
 from cinoc.evaluation.metrics.layout import region_cer
 from cinoc.evaluation.registry import MetricRegistry, register_default_metrics
 from cinoc.evaluation.representations import load_representation
 from cinoc.evaluation.runner import evaluate_run
+from tests.declared_specs import declared_pipeline
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "formats" / "fixtures"
 _ESCRIPTORIUM = str(_FIXTURES / "escriptorium.page.xml")
@@ -186,14 +186,14 @@ def test_region_cer_through_runner_on_real_gt(tmp_path: Path) -> None:
             corpus_name="c",
             n_documents=1,
             pipeline_specs=(
-                PipelineSpec(name="seg", initial_inputs=(ArtifactType.IMAGE,)),
+                declared_pipeline("seg"),
             ),
             code_version="1.0",
             started_at=FIXED,
             completed_at=FIXED,
         ),
     )
-    aggregate = result.pipelines[0].aggregate[0]
+    aggregate = result.principal_aggregate(result.pipelines[0])[0]
     assert aggregate.metric == "region_cer"
     assert aggregate.value == pytest.approx(1 / 53)
     assert aggregate.support == 1

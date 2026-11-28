@@ -30,7 +30,9 @@ def _result(cer: float = 0.1) -> RunResult:
         pipelines=(
             PipelineResult(
                 pipeline="tesseract", view="text",
-                aggregate=(MetricScore(metric="cer", value=cer, support=1),),
+                conditional_aggregate=(
+                    MetricScore(metric="cer", value=cer, support=1),
+                ),
             ),
         ),
     )
@@ -61,7 +63,9 @@ def test_payload_escapes_angle_brackets() -> None:
         pipelines=(
             PipelineResult(
                 pipeline="</script><x>", view="text",
-                aggregate=(MetricScore(metric="cer", value=0.2, support=1),),
+                conditional_aggregate=(
+                    MetricScore(metric="cer", value=0.2, support=1),
+                ),
             ),
         ),
     )

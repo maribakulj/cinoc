@@ -122,7 +122,7 @@ def test_the_web_recipe_reads_a_deposited_cinoc_alto(tmp_path: Path) -> None:
         s.value
         for p in result.pipelines
         if p.view == "texte"
-        for s in p.aggregate
+        for s in result.principal_aggregate(p)
         if s.metric == "cer"
     )
     assert cer == 0.0

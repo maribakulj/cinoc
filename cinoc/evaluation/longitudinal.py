@@ -21,15 +21,19 @@ multi-runs), deux questions :
   Σ_{j>t} sgn(x_j − x_i)``, ``K = max|U_t|``, approximation asymptotique
   publiée ``p ≈ 2·exp(−6K²/(n³+n²))`` (clampée ≤ 1) ; rupture **significative
   seulement si p ≤ α** — le max-diff de la source « détectait » toujours
-  quelque chose (aucune statistique de test) ; réparation R11.
+  quelque chose (aucune statistique de test) ; réparation R11. Une série sans
+  variation (K = 0) n'a pas de rupture : la position n'en est pas définie, le
+  test n'est pas calculé.
 
 **Exploratoire (rév. 7, ``CONTRATS.md`` § 2.1 d).** Les booléens ``significant``
 de ces deux résultats sont des **calculs internes** : l'historique publie la p
 comme un nombre, étiquetée *exploratoire*, et affiche la rupture dès qu'elle est
-calculable, quelle que soit sa p — jamais un verdict « significatif ». « Calculable » =
+calculable, quelle que soit sa p, sans qualifier le résultat de « significatif ».
+« Calculable » =
 au moins ``MIN_POINTS_FOR_TEST`` (3) points pour la rupture *publiée*, comme
 pour la p de la pente (le seuil est appliqué par ``app.history`` ; ``pettitt``
-reste calculable dès 2 points, sa p y valant 1 par construction).
+reste calculable dès 2 points, sa p y valant 1 par construction) et une série
+non constante.
 
 Entrées **déjà parsées** (``datetime``/``float``) : le parsing tolérant
 multi-formats à skip silencieux de la source n'est pas porté — la conversion
@@ -154,8 +158,9 @@ def pettitt(
 
     ``U`` est balayé incrémentalement (O(n²) : à chaque déplacement de la
     frontière, seules les paires impliquant l'élément déplacé changent).
-    ``None`` si moins de 2 points. ``K = 0`` (série constante) → ``p``
-    clampée à 1.0, jamais significatif.
+    ``None`` si moins de 2 points, **ou si K = max|U_t| = 0** (série sans
+    variation : la position de la rupture n'est pas définie — rien n'est publié,
+    pas une « rupture » arbitraire à p = 1, Q8).
     """
     n = len(values)
     if n < 2:
@@ -169,6 +174,8 @@ def pettitt(
         if abs(u) > abs(best_u):
             best_u, best_boundary = u, boundary
     k = abs(best_u)
+    if k == 0:
+        return None
     p_value = min(1.0, 2.0 * math.exp(-6.0 * k * k / (n**3 + n**2)))
     mean_before = fmean(values[:best_boundary])
     mean_after = fmean(values[best_boundary:])

@@ -145,12 +145,10 @@ class TestPettitt:
         assert result.p_value == pytest.approx(0.2907, abs=1e-3)
         assert result.significant is False
 
-    def test_constant_series_never_significant(self) -> None:
-        result = pettitt([0.2] * 8)
-        assert result is not None
-        assert result.u_statistic == 0
-        assert result.p_value == 1.0  # clampée (la formule donnerait 2)
-        assert result.significant is False
+    def test_constant_series_has_no_change_point(self) -> None:
+        # K = max|U_t| = 0 : la position de la rupture n'est pas définie, rien
+        # n'est publié (Q8) — pas une « rupture » arbitraire à p = 1.
+        assert pettitt([0.2] * 8) is None
 
     def test_p_value_clamped_at_one(self) -> None:
         result = pettitt([0.1, 0.5])  # K=1, formule → 2·e^(−0.5) ≈ 1.21

@@ -19,7 +19,6 @@ from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.documents import DocumentRef, GroundTruthRef
 from cinoc.domain.evaluation import EvaluationSpec, EvaluationView
-from cinoc.domain.pipeline import PipelineSpec
 from cinoc.domain.run import RunManifest
 from cinoc.evaluation.analysis import InferencePayload
 from cinoc.evaluation.errors import EvaluationError
@@ -33,6 +32,7 @@ from cinoc.evaluation.inference import (
 from cinoc.evaluation.registry import MetricRegistry, register_default_metrics
 from cinoc.evaluation.result import RunResult
 from cinoc.evaluation.runner import evaluate_run
+from tests.declared_specs import declared_pipeline
 
 FIXED = datetime(2026, 1, 1, tzinfo=UTC)
 
@@ -97,7 +97,7 @@ def _unbalanced_run(tmp_path: Path) -> RunResult:
             corpus_name="c",
             n_documents=len(documents),
             pipeline_specs=tuple(
-                PipelineSpec(name=name, initial_inputs=(ArtifactType.IMAGE,))
+                declared_pipeline(name)
                 for name in ("long", "exact")
             ),
             code_version="1.0",
@@ -114,7 +114,7 @@ def test_the_displayed_point_is_inside_its_interval(tmp_path: Path) -> None:
     displayed = {
         (p.view, p.pipeline, score.metric): score.value
         for p in result.pipelines
-        for score in p.aggregate
+        for score in result.principal_aggregate(p)
     }
     assert displayed[("text", "long", "cer")] == 65 / 2090
     checked = 0

@@ -39,7 +39,7 @@ def test_completed_run_is_recorded(tmp_path: Path) -> None:
     sample = next(
         (p, s)
         for p in result.pipelines
-        for s in p.aggregate
+        for s in result.principal_aggregate(p)
         if s.value is not None
     )
     pipeline, score = sample

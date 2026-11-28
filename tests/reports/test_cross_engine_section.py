@@ -152,9 +152,9 @@ def _friedman(**update: object) -> InferencePayload:
         ),
         cd_groups=(("alpha", "beta"), ("beta", "gamma")),
         pairwise=(
-            PairwiseDifference(a="alpha", b="beta", rank_gap=0.8, significant=False),
-            PairwiseDifference(a="alpha", b="gamma", rank_gap=1.6, significant=True),
-            PairwiseDifference(a="beta", b="gamma", rank_gap=0.8, significant=False),
+            PairwiseDifference(a="alpha", b="beta", rank_gap=0.8),
+            PairwiseDifference(a="alpha", b="gamma", rank_gap=1.6),
+            PairwiseDifference(a="beta", b="gamma", rank_gap=0.8),
         ),
         intervals=(
             PipelineInterval(

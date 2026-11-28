@@ -46,11 +46,13 @@ def test_the_unit_is_partial_and_names_its_step(tmp_path: Path) -> None:
     )
     (unit,) = result.usage
     assert unit.outcome == "partial" and unit.reason is None
-    assert unit.step_issues == {"ocr": "partial"}
+    assert unit.step_issues == {"ocr": ("partial",)}
     assert unit.line_outcomes == _OUTCOMES
     (pipeline,) = result.pipelines
     assert pipeline.line_outcomes == _OUTCOMES
-    (cer,) = (s for s in pipeline.aggregate if s.metric == "cer")
+    (cer,) = (
+        s for s in result.principal_aggregate(pipeline) if s.metric == "cer"
+    )
     # Non notée par défaut (R6), conservée à part, et comptée à la couverture.
     assert cer.value is None and cer.coverage == {"partial_output": 1}
     assert result.documents[0].scores[0].stat_partielle is not None
@@ -73,5 +75,5 @@ def test_a_normal_resume_retries_it_and_offline_restores_it(tmp_path: Path) -> N
     assert calls == ["d1", "d1"]  # hors ligne : rien ne s'exécute
     (unit,) = replay.usage
     assert unit.outcome == "partial" and unit.resumed
-    assert unit.step_issues == {"ocr": "partial"}
+    assert unit.step_issues == {"ocr": ("partial",)}
     assert unit.line_outcomes == _OUTCOMES

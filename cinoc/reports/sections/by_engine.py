@@ -2,8 +2,8 @@
 **dispersion** du taux d'erreur par-document. Couche 7.
 
 Distinct de l'overview (tables descriptives, une par vue) : ici la table des
-métriques **établies** — les seules classées (D-289) —, **ordonnée** par CER
-croissant (un tri, pas un verdict — aucun rang ordinal n'est attribué), plus
+métriques **établies** — les seules classées (D-289) —, **ordonnée** selon le tri
+du support global (un tri, pas un rang ordinal attribué), plus
 l'**étendue** (min · médiane · max) du CER sur les documents, c.-à-d. la
 **fiabilité** que l'agrégat masque (et que ni l'overview ni le par-document ne
 donnent). Puis une table **diagnostic** des métriques adaptées et exploratoires,
@@ -16,7 +16,12 @@ from __future__ import annotations
 from statistics import median
 
 from cinoc.domain.evaluation import MetricCategory
-from cinoc.evaluation.result import PipelineResult, RunDocumentResult, RunResult
+from cinoc.evaluation.result import (
+    MetricScore,
+    PipelineResult,
+    RunDocumentResult,
+    RunResult,
+)
 from cinoc.reports._numbers import localize_decimal
 from cinoc.reports.engine_badges import engine_cell, engine_order
 from cinoc.reports.html import escape, localized, view_label
@@ -31,7 +36,9 @@ from cinoc.reports.sections._tables import (
     bar_cell,
     bar_legend,
     col_max,
+    global_ranking,
     group_header_row,
+    in_ranking_order,
     metric_th,
     nonempty_metric_indices,
     ordered_unique,
@@ -63,21 +70,20 @@ class EngineSection:
             return None
         view = ordered_unique(p.view for p in result.pipelines)[0]
         rows = [p for p in result.pipelines if p.view == view]
-        metrics = tuple(s.metric for s in rows[0].aggregate)
+        aggregates = {p.pipeline: result.principal_aggregate(p) for p in rows}
+        metrics = tuple(s.metric for s in aggregates[rows[0].pipeline])
         if not metrics:
             return None
         sort_metric = "cer" if "cer" in metrics else metrics[0]
-        sort_idx = metrics.index(sort_metric)
-
-        def _key(p: PipelineResult) -> tuple[bool, float, str]:
-            value = p.aggregate[sort_idx].value
-            return (value is None, value if value is not None else 0.0, p.pipeline)
-
-        ordered = sorted(rows, key=_key)
+        # Le tri est celui du **support global** publié (B7) : classer d'après
+        # les valeurs propres de chaque pipeline, sur des supports différents,
+        # contredirait le tri que le résultat publie (D7).
+        ordered = in_ranking_order(rows, global_ranking(result, view, sort_metric))
         # Badge moteur (lettre + accent) = identité STABLE, indépendante du rang :
         # ordre canonique = première apparition dans le run (partagé entre sections).
         order = engine_order(p.pipeline for p in result.pipelines)
-        keep = nonempty_metric_indices([p.aggregate for p in rows])  # masque tout-« — »
+        # Masque les colonnes tout-« — ».
+        keep = nonempty_metric_indices([aggregates[p.pipeline] for p in rows])
         ranked = [i for i in keep if is_established(metrics[i])]
         # Adaptées puis exploratoires (ordre de la vue dans chaque catégorie).
         diagnostic = sorted(
@@ -92,12 +98,15 @@ class EngineSection:
         out = ""
         if ranked:
             out += self._ranking(
-                result, view, ordered, metrics, ranked, sort_metric, order, ctx.lang,
+                result, view, ordered, aggregates, metrics, ranked, sort_metric,
+                order, ctx.lang,
                 f" (vue : {vlbl})" if multi else "",
                 f" (view: {vlbl})" if multi else "",
             )
         if diagnostic:
-            out += self._diagnostic(ordered, metrics, diagnostic, order, ctx.lang)
+            out += self._diagnostic(
+                ordered, aggregates, metrics, diagnostic, order, ctx.lang
+            )
         return Html(out) if out else None
 
     @staticmethod
@@ -105,6 +114,7 @@ class EngineSection:
         result: RunResult,
         view: str,
         ordered: list[PipelineResult],
+        aggregates: dict[str, tuple[MetricScore, ...]],
         metrics: tuple[str, ...],
         keep: list[int],
         sort_metric: str,
@@ -113,14 +123,16 @@ class EngineSection:
         suffix_fr: str,
         suffix_en: str,
     ) -> str:
-        maxes = [col_max([p.aggregate for p in ordered], i) for i in keep]
+        maxes = [col_max([aggregates[p.pipeline] for p in ordered], i) for i in keep]
         profil_title = localized(lang, "Profil", "Profile")
         body: list[str] = []
-        # Lignes ordonnées par CER croissant (un **tri** lisible, pas un rang
+        # Lignes ordonnées selon le tri global (un **tri** lisible, pas un rang
         # ordinal attribué : aucune colonne « # », aucun gagnant désigné).
         for pipeline in ordered:
             cells = "".join(
-                bar_cell(pipeline.aggregate[i], maxes[j], lang=lang, sortable=True)
+                bar_cell(
+                    aggregates[pipeline.pipeline][i], maxes[j], lang=lang, sortable=True
+                )
                 for j, i in enumerate(keep)
             )
             vals = _per_doc_values(
@@ -153,15 +165,17 @@ class EngineSection:
         prose = localized(
             lang,
             f'<p class="muted">Métriques <strong>établies</strong> — conformes à '
-            f"une référence nommée, les seules classées et testées. Ordonné par "
-            f"{escape(sort_metric)} ↑ (un tri, pas un "
-            f"rang attribué) · dispersion = {escape(sort_metric)} min · médiane · "
+            f"une référence nommée, les seules classées et testées. Ordonné selon "
+            f"le tri du support global ({escape(sort_metric)} ↑ sur les documents "
+            "que tous les moteurs ont notés ; un tri, pas un rang attribué) · "
+            f"dispersion = {escape(sort_metric)} min · médiane · "
             "max par document. Cliquer un en-tête de métrique pour réordonner ; "
             "survoler pour la définition. Aucun gagnant n'est déclaré.</p>\n",
             f'<p class="muted"><strong>Established</strong> metrics — conforming '
             f"to a named reference, the only ones ranked and tested. Ordered by "
-            f"{escape(sort_metric)} ↑ (a sort, not an "
-            f"assigned rank) · dispersion = {escape(sort_metric)} min · median · "
+            f"the global-support ranking ({escape(sort_metric)} ↑ over the documents "
+            "every engine scored; a sort, not an assigned rank) · "
+            f"dispersion = {escape(sort_metric)} min · median · "
             "max per document. Click a metric header to reorder; hover for the "
             "definition. No winner is declared.</p>\n",
         )
@@ -182,6 +196,7 @@ class EngineSection:
     @staticmethod
     def _diagnostic(
         ordered: list[PipelineResult],
+        aggregates: dict[str, tuple[MetricScore, ...]],
         metrics: tuple[str, ...],
         keep: list[int],
         order: dict[str, int],
@@ -189,12 +204,12 @@ class EngineSection:
     ) -> str:
         """Adaptées et exploratoires : mêmes moteurs, même ordre, **sans tri**
         ni test — au diagnostic, affichées comme telles (D-289)."""
-        maxes = [col_max([p.aggregate for p in ordered], i) for i in keep]
+        maxes = [col_max([aggregates[p.pipeline] for p in ordered], i) for i in keep]
         body = "".join(
             f'<tr><td class="eng-cell">'
             f"{engine_cell(p.pipeline, order.get(p.pipeline, 0))}</td>"
             + "".join(
-                bar_cell(p.aggregate[i], maxes[j], lang=lang)
+                bar_cell(aggregates[p.pipeline][i], maxes[j], lang=lang)
                 for j, i in enumerate(keep)
             )
             + "</tr>"

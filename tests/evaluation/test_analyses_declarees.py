@@ -16,7 +16,6 @@ from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.documents import DocumentRef, GroundTruthRef
 from cinoc.domain.evaluation import EvaluationSpec, EvaluationView
-from cinoc.domain.pipeline import PipelineSpec
 from cinoc.domain.run import RunManifest
 from cinoc.evaluation._view_collectors import COLLECTEURS, ViewCollectors
 from cinoc.evaluation.analysis import InferencePayload
@@ -24,6 +23,7 @@ from cinoc.evaluation.errors import EvaluationError
 from cinoc.evaluation.registry import MetricRegistry, register_default_metrics
 from cinoc.evaluation.result import RunResult
 from cinoc.evaluation.runner import ANALYSES_CONNUES, evaluate_run
+from tests.declared_specs import declared_pipeline
 
 FIXED = datetime(2026, 1, 1, tzinfo=UTC)
 
@@ -75,7 +75,7 @@ def _run(tmp_path: Path, analyses: tuple[str, ...] | str | None):
             corpus_name="c",
             n_documents=1,
             pipeline_specs=(
-                PipelineSpec(name="eng", initial_inputs=(ArtifactType.IMAGE,)),
+                declared_pipeline("eng"),
             ),
             code_version="1.0",
             started_at=FIXED,
@@ -94,7 +94,7 @@ def test_le_defaut_est_le_mode_rapide(tmp_path: Path) -> None:
     """
     resultat = _run(tmp_path, None)
     _seulement_les_tests(resultat)
-    assert resultat.pipelines[0].aggregate[0].metric == "cer"
+    assert resultat.principal_aggregate(resultat.pipelines[0])[0].metric == "cer"
 
 
 def _seulement_les_tests(resultat: RunResult) -> None:
@@ -115,7 +115,7 @@ def test_tuple_vide_ne_produit_aucune_analyse(tmp_path: Path) -> None:
     resultat = _run(tmp_path, ())
     _seulement_les_tests(resultat)
     # …mais les métriques déclarées, elles, sont bien là.
-    assert resultat.pipelines[0].aggregate[0].metric == "cer"
+    assert resultat.principal_aggregate(resultat.pipelines[0])[0].metric == "cer"
 
 
 def test_selection_ne_garde_que_ce_qui_est_demande(tmp_path: Path) -> None:

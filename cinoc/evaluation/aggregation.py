@@ -22,8 +22,8 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Mapping, Sequence
+from fractions import Fraction
 from itertools import combinations
-from math import fsum
 from typing import Literal
 
 from cinoc.evaluation.comparison import (
@@ -88,19 +88,20 @@ def macro_of(
     statistique) : la moyenne des scalaires des documents dont la **référence**
     définit le scalaire.
 
-    ``weighting == "cluster"`` : moyenne des moyennes par grappe (un document
-    sans grappe est la sienne). Somme exacte (``fsum``), une division. ``None``
-    pour une métrique sans macro (dénominateur d'hypothèse) ; ``(None, 0)`` si
-    D^M_P est vide.
+    **Exact** (D5, R1) : la moyenne est celle des scalaires **rationnels**
+    (``Scalar.exact``), en ``Fraction`` ; la conversion flottante n'a lieu
+    qu'une fois, à la fin. ``weighting == "cluster"`` : moyenne des moyennes par
+    grappe (un document sans grappe est la sienne). ``None`` pour une métrique
+    sans macro (dénominateur d'hypothèse) ; ``(None, 0)`` si D^M_P est vide.
     """
     if not metric.macro:
         return None, None
-    values: dict[str, list[float]] = {}
+    values: dict[str, list[Fraction]] = {}
     count = 0
     for index, stat in items:
         if not reference_defines(stat):
             continue
-        scalar = metric.finalize(stat).value
+        scalar = metric.finalize(stat).exact
         if scalar is None:
             continue
         count += 1
@@ -109,9 +110,10 @@ def macro_of(
     if not count:
         return None, 0
     if weighting == "cluster":
-        means = [fsum(group) / len(group) for group in values.values()]
-        return fsum(means) / len(means), count
-    return fsum(v for group in values.values() for v in group) / count, count
+        means = [sum(group, Fraction(0)) / len(group) for group in values.values()]
+        return float(sum(means, Fraction(0)) / len(means)), count
+    total = sum((v for group in values.values() for v in group), Fraction(0))
+    return float(total / count), count
 
 
 def publish(

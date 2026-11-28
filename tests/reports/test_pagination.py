@@ -29,7 +29,7 @@ def _result() -> RunResult:
     )
     pipelines = (PipelineResult(
         pipeline="tesseract", view="text",
-        aggregate=(MetricScore(metric="cer", value=0.2, support=_N),),
+        conditional_aggregate=(MetricScore(metric="cer", value=0.2, support=_N),),
     ),)
     docs = tuple(
         RunDocumentResult(

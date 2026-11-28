@@ -81,7 +81,7 @@ def summarize_runs(results: Sequence[RunResult]) -> VarianceSummary:
     valeurs: dict[tuple[str, str, str], list[float]] = {}
     for result in results:
         for pipeline in result.pipelines:
-            for score in pipeline.aggregate:
+            for score in result.principal_aggregate(pipeline):
                 if score.value is None:
                     continue
                 cle = (pipeline.pipeline, pipeline.view, score.metric)

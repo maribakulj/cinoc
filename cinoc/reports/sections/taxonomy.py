@@ -17,6 +17,7 @@ from cinoc.evaluation.result import RunResult
 from cinoc.reports.engine_badges import engine_accent, engine_cell, engine_order
 from cinoc.reports.html import escape, localized
 from cinoc.reports.section import Html, SectionContext
+from cinoc.reports.sections._alignment_note import alignment_note
 from cinoc.reports.sections._payload import render_payload_section
 from cinoc.reports.svg import composition_bar
 
@@ -162,21 +163,45 @@ def _block(
         f"{view}composition des erreurs",
         f"{view}error composition",
     )
+    # Les classes décomposent les comptes du WER **seulement** si l'alignement
+    # qui les nomme les égale (``matches_canonical_counts``, D8).
+    concordant = payload.matches_canonical_counts
+    edit_fr = (
+        "Chaque édition du WER" if concordant else "Chaque édition de l'alignement"
+    )
+    edit_en = "Each WER edit" if concordant else "Each alignment edit"
+    decomposition_fr = (
+        " : les omissions sont ses suppressions, les insertions ses insertions, "
+        "hors fusions et scissions de mots"
+        if concordant
+        else ""
+    )
+    decomposition_en = (
+        ": omissions are its deletions, insertions its insertions, outside word "
+        "merges and splits"
+        if concordant
+        else ""
+    )
     prose = localized(
         lang,
         '<p class="muted">Classification par règles pures (casse, diacritiques, '
         "ligatures, confusions visuelles, segmentation, lacunes, insertions) — "
         "part relative au total des erreurs de mots du pipeline. Chaque édition "
-        "du WER reçoit une classe et une seule : les omissions sont ses "
-        "suppressions, les insertions ses insertions, hors fusions et "
-        "scissions de mots.</p>\n",
+        f"{edit_fr} reçoit une classe et une seule{decomposition_fr}.</p>\n",
         '<p class="muted">Pure rule-based classification (case, diacritics, '
         "ligatures, visual confusions, segmentation, gaps, insertions) — "
-        "share relative to the pipeline's total word errors. Each WER edit gets "
-        "exactly one class: omissions are its deletions, insertions its "
-        "insertions, outside word merges and splits.</p>\n",
+        "share relative to the pipeline's total word errors. "
+        f"{edit_en} gets exactly one class{decomposition_en}.</p>\n",
     )
-    parts: list[str] = [f"<h3>{head}</h3>\n", prose]
+    parts: list[str] = [
+        f"<h3>{head}</h3>\n",
+        prose,
+        alignment_note(
+            payload.alignment_path,
+            lang,
+            concordant=payload.matches_canonical_counts,
+        ),
+    ]
     for pipeline in payload.pipelines:
         block = composition_html(payload.classes, pipeline, lang)
         if block:

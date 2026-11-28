@@ -111,28 +111,45 @@ suivantes ne les répètent pas.
     revoir, abstention, refus par code, repli par code) sont comptées par unité
     et par pipeline ; seul le repli rend l'étape partielle ;
   - tout résultat de test de l'ancienne inférence est **exploratoire**
-    (`InferencePayload.status`) : ni « significatif » ni « non significatif »
-    n'est écrit comme verdict, dans les sections inter-moteurs et mesures clés
-    comme dans l'historique ; la rupture de Pettitt s'affiche dès que le test est
-    calculable, avec sa p ;
+    (`InferencePayload.status`, `significance_p`) : ni « significatif » ni « non
+    significatif » ne qualifie un résultat, dans les sections inter-moteurs et
+    mesures clés comme dans l'historique ; la rupture de Pettitt s'affiche dès
+    que le test est calculable (au moins 3 runs, série non constante), avec sa
+    p ;
+  - le rapport **affiche** ce que le résultat publie : les deux qualités avec
+    leur couverture, le tri du support global, une section « comparaison
+    appariée » (supports par paire, invention hors référence), la population
+    cible et la pondération du macro, les issues de lignes déclarées par
+    l'adaptateur (classes disjointes : corrigée, à revoir, abstention, refus,
+    repli) ; une sortie illisible (mise en page invalide, octets non UTF-8) est
+    notée comme une sortie vide dans la qualité opérationnelle, et une vérité
+    terrain illisible refuse le run avant le premier appel de moteur ;
   - les confusions, la taxonomie et le diff surligné portent leur
-    `alignment_path` (`rapidfuzz`) et `matches_canonical_counts` ; les comptes
-    d'édition sont canoniques (`EditCounts.alignment_path`).
+    `alignment_path` (`rapidfuzz`), de même que les cartes de mots, la fidélité
+    textuelle et le bilan de correction, et le rapport l'écrit ; les confusions
+    et la taxonomie portent `matches_canonical_counts` ; les comptes d'édition
+    sont canoniques (`EditCounts.alignment_path`).
 
 **Format**
 
-- `RunResult` passe en version **6** (D-313) : `MetricScore` gagne `stat`
+- `RunResult` passe en version **7** (D-313) : `MetricScore` gagne `stat`
   (la statistique suffisante), `scalar_reason`, `untruncated_error_rate` et
   les axes de l'observation ; par document, `support` n'est plus un poids
   (les dénominateurs sont dans `stat`). Un JSON d'une version antérieure est
   **refusé** avec un message — ni relu, ni converti — et se re-note depuis son
   archive (`cinoc run --resume-dir … --offline`). Le CSV gagne les colonnes
-  `statistic`, `scalar_reason` et `untruncated_error_rate`. La tranche 1b
-  ajoute au `RunResult` v6 (qui n'a jamais été publiée) des champs
-  facultatifs : `stat_partielle`, `macro`, `macro_support`, `coverage`, les
-  agrégats `conditional_aggregate` et `operational_aggregate`, `line_outcomes`,
-  `step_issues`, `target_population`, `cluster_weighting`, les analyses
-  `comparison` et `invention_outside_reference`, `status` de l'inférence.
+  `statistic`, `scalar_reason` et `untruncated_error_rate`. Les versions 6 et 7
+  n'ont jamais été publiées : `stat_partielle`, `stat_vide` (la statistique
+  « sortie vide » de chaque unité notée vide), `macro`, `macro_support`,
+  `coverage`, les agrégats `conditional_aggregate` et `operational_aggregate`,
+  `line_outcomes`, `step_issues` (par étape, l'ensemble trié de ses issues),
+  `cluster` (par document), `target_population`, `cluster_weighting`, les
+  analyses `comparison` et `invention_outside_reference`, `status` de
+  l'inférence et de `significance_p`. L'agrégat **principal** n'est plus
+  stocké : il se dérive de `failure_policy` (`RunResult.principal_aggregate`),
+  et un pipeline qui ne voit pas une vue (aucune étape ne déclare un type
+  qu'elle note) n'a aucun agrégat dans cette vue. `PairwiseDifference` perd son
+  booléen `significant`.
 
 **Ce qui est désormais refusé au lieu d'être ignoré**
 

@@ -21,7 +21,7 @@ from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.documents import DocumentRef, GroundTruthRef
 from cinoc.domain.evaluation import EvaluationSpec, EvaluationView
-from cinoc.domain.pipeline import PipelineSpec
+from cinoc.domain.pipeline import PipelineSpec, PipelineStep
 from cinoc.domain.run import RunManifest
 from cinoc.domain.usage import ResourceUsage
 from cinoc.evaluation.analysis import InferencePayload
@@ -155,10 +155,26 @@ class Bench:
             run_id="r",
             corpus_name="c",
             n_documents=len(self.documents),
+            # Une étape par pipeline, qui **déclare** le type que la vue note :
+            # « hors vue » est une propriété du pipeline, lue sur ses types de
+            # sortie déclarés (D1) — un pipeline sans étape ne voit aucune vue.
             pipeline_specs=tuple(
-                PipelineSpec(name=p, initial_inputs=(ArtifactType.IMAGE,))
+                PipelineSpec(
+                    name=p,
+                    initial_inputs=(ArtifactType.IMAGE,),
+                    steps=(
+                        PipelineStep(
+                            id="step",
+                            kind="ocr",
+                            adapter_name="bench",
+                            input_types=(ArtifactType.IMAGE,),
+                            output_types=tuple(sorted(view.candidate_types)),
+                        ),
+                    ),
+                )
                 for p in self.pipelines
             ),
+            failure_policy=failure_policy,  # type: ignore[arg-type]
             code_version="1.0",
             started_at=FIXED,
             completed_at=FIXED,
@@ -187,7 +203,9 @@ def view(
 
 def aggregate(result: RunResult, pipeline: str, metric: str) -> MetricScore:
     (row,) = [p for p in result.pipelines if p.pipeline == pipeline]
-    (score,) = [s for s in row.aggregate if s.metric == metric]
+    (score,) = [
+        s for s in result.principal_aggregate(row) if s.metric == metric
+    ]
     return score
 
 

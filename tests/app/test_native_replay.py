@@ -276,7 +276,8 @@ def _scores(result: RunResult) -> dict[str, Any]:
     return {
         "aggregates": {
             (p.pipeline, p.view): [
-                s.model_dump(exclude={"coverage"}) for s in p.aggregate
+                s.model_dump(exclude={"coverage"})
+                for s in result.principal_aggregate(p)
             ]
             for p in result.pipelines
         },
@@ -301,7 +302,9 @@ def test_a_cloud_run_replayed_offline_from_its_sidecars_gives_the_same_metrics(
     # Pas un accord par vacuité : des scores réels, différents d'un moteur à
     # l'autre, et les pages coupées sont notées (2/2) sur leur sortie réelle.
     cer = {
-        p.pipeline: next(s for s in p.aggregate if s.metric == "cer")
+        p.pipeline: next(
+            s for s in run1.result.principal_aggregate(p) if s.metric == "cer"
+        )
         for p in run1.result.pipelines
     }
     assert len(cer) == 8 and all(s.value is not None for s in cer.values())

@@ -24,13 +24,13 @@ from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.documents import DocumentRef, GroundTruthRef
 from cinoc.domain.evaluation import EvaluationSpec, EvaluationView
-from cinoc.domain.pipeline import PipelineSpec
 from cinoc.domain.projection import ProjectionSpec
 from cinoc.domain.run import RunManifest
 from cinoc.evaluation.projectors import layout_to_text
 from cinoc.evaluation.registry import MetricRegistry, register_default_metrics
 from cinoc.evaluation.representations import load_representation
 from cinoc.evaluation.runner import evaluate_run
+from tests.declared_specs import declared_pipeline
 
 _FIXTURE = (
     Path(__file__).resolve().parents[1]
@@ -91,14 +91,14 @@ def test_real_alto_scored_through_runner() -> None:
             corpus_name="bnl",
             n_documents=1,
             pipeline_specs=(
-                PipelineSpec(name="abbyy", initial_inputs=(ArtifactType.IMAGE,)),
+                declared_pipeline("abbyy"),
             ),
             code_version="1.0",
             started_at=FIXED,
             completed_at=FIXED,
         ),
     )
-    aggregate = result.pipelines[0].aggregate[0]
+    aggregate = result.principal_aggregate(result.pipelines[0])[0]
     assert aggregate.metric == "cer"
     assert aggregate.value == 0.0
     assert aggregate.support == 1

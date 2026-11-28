@@ -77,7 +77,8 @@ def test_run_command_writes_json(tmp_path: Path) -> None:
 
     assert code == 0
     assert json_out.is_file()
-    assert load_run_result(json_out).pipelines[0].aggregate[0].value == 0.25
+    loaded = load_run_result(json_out)
+    assert loaded.principal_aggregate(loaded.pipelines[0])[0].value == 0.25
 
 
 def test_run_command_report_dir_writes_bundle(tmp_path: Path) -> None:

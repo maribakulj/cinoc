@@ -67,7 +67,7 @@ def run_result_csv(result: RunResult) -> str:
         for u in result.usage
     }
     for pipeline in result.pipelines:
-        for score in pipeline.aggregate:
+        for score in result.principal_aggregate(pipeline):
             writer.writerow(
                 (
                     "aggregate",

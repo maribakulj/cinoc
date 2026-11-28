@@ -3,7 +3,7 @@
 Pour chaque ``vue:métrique`` de ``RunResult.cross_engine`` : le **test**
 apparié (Wilcoxon signé-rangs à 2 pipelines, Friedman au-delà), sa p brute,
 sa p **corrigée de Holm** sur les tests du run, et son **statut** —
-``exploratoire`` : aucun verdict, les p sont des nombres — ou le **motif**
+``exploratoire`` : aucune décision, les p sont des nombres — ou le **motif**
 pour lequel le test n'a pas été calculé. Le statut est une **fonction
 auditable** du payload ``inference`` — une étiquette, pas de la prose
 (narratif supprimé, ``CLAUDE.md`` §6). Une ligne
@@ -356,7 +356,7 @@ def _inter_engine_blocks(
 
 
 class CrossEngineSection:
-    """Tests inter-moteurs (Wilcoxon / Friedman), Holm, post-hoc + verdict."""
+    """Tests inter-moteurs (Wilcoxon / Friedman), Holm, post-hoc (exploratoires)."""
 
     name = "cross_engine"
     requires: tuple[str, ...] = ()

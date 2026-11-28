@@ -30,6 +30,7 @@ from cinoc.reports.engine_badges import (
 )
 from cinoc.reports.html import escape
 from cinoc.reports.section import Html, SectionContext
+from cinoc.reports.sections._alignment_note import alignment_note
 from cinoc.reports.sections._payload import render_payload_section
 from cinoc.reports.svg import donut_chart, word_engine_heatmap, word_overlap_venn
 from cinoc.reports.text_diff import char_diff
@@ -418,7 +419,8 @@ class WordErrorsSection:
             ctx,
             payload_type=WordErrorPayload,
             title=text["title"],
-            block=lambda view, payload: _block(view, payload, order, ctx.lang),
+            block=lambda view, payload: _block(view, payload, order, ctx.lang)
+            + alignment_note(payload.alignment_path, ctx.lang),
         )
 
 

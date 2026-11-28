@@ -43,14 +43,19 @@ def _ligne(
     source: str,
     final: str,
     *,
+    line_class: str,
     proposed: str | None = None,
     reason: str | None = None,
 ) -> dict[str, object]:
+    """Une ligne du sidecar, avec **la classe que l'adaptateur déclare** : la
+    couche d'évaluation la lit, elle ne la recalcule pas d'après les textes."""
     return {
         "document_id": "doc1",
         "page_id": "P1",
         "line_id": line_id,
         "status": "corrected" if final != source else "fallback",
+        "line_class": line_class,
+        "class_code": reason,
         "source_text": source,
         "final_text": final,
         "proposed_text": proposed,
@@ -66,15 +71,29 @@ def _payload(analysis) -> DecisionsPayload:
 
 
 def test_the_three_outcomes_are_told_apart(tmp_path: Path) -> None:
-    """Changée, refusée, intacte — trois situations, pas deux."""
+    """Corrigée, refusée, abstention — trois situations, pas deux."""
     outputs = _outputs(
         tmp_path,
-        _ligne("L1", "le ſoleil", "le soleil", proposed="le soleil"),
-        _ligne("L2", "v'a rien", "v'a rien", proposed="n'a rien", reason="e1_context"),
-        _ligne("L3", "rien à faire", "rien à faire"),
+        _ligne(
+            "L1", "le ſoleil", "le soleil", proposed="le soleil", line_class="corrected"
+        ),
+        _ligne(
+            "L2",
+            "v'a rien",
+            "v'a rien",
+            proposed="n'a rien",
+            reason="e1_context",
+            line_class="refused",
+        ),
+        _ligne("L3", "rien à faire", "rien à faire", line_class="abstained"),
     )
     row = _payload(decisions_analysis("text", outputs)).pipelines[0]
-    assert (row.n_lines, row.changed, row.refused, row.untouched) == (3, 1, 1, 1)
+    assert (
+        row.n_lines,
+        row.corrected,
+        sum(r.n for r in row.refused),
+        row.abstained,
+    ) == (3, 1, 1, 1)
 
 
 def test_a_refusal_without_a_code_is_still_a_refusal(tmp_path: Path) -> None:
@@ -84,22 +103,31 @@ def test_a_refusal_without_a_code_is_still_a_refusal(tmp_path: Path) -> None:
     modèle et l'application — précisément ce qu'on veut voir.
     """
     outputs = _outputs(
-        tmp_path, _ligne("L1", "abc", "abc", proposed="abd")
+        tmp_path, _ligne("L1", "abc", "abc", proposed="abd", line_class="refused")
     )
     row = _payload(decisions_analysis("text", outputs)).pipelines[0]
-    assert (row.refused, row.untouched) == (1, 0)
-    assert [r.code for r in row.reasons] == ["sans_motif"]
+    assert (sum(r.n for r in row.refused), row.abstained) == (1, 0)
+    assert [r.code for r in row.refused] == ["sans_motif"]
 
 
 def test_reasons_are_counted_and_ordered_by_weight(tmp_path: Path) -> None:
     outputs = _outputs(
         tmp_path,
-        _ligne("L1", "a", "a", proposed="b", reason="e5_boundary_word"),
-        _ligne("L2", "c", "c", proposed="d", reason="e1_context_line"),
-        _ligne("L3", "e", "e", proposed="f", reason="e1_context_line"),
+        _ligne(
+            "L1", "a", "a", proposed="b", reason="e5_boundary_word",
+            line_class="refused",
+        ),
+        _ligne(
+            "L2", "c", "c", proposed="d", reason="e1_context_line",
+            line_class="refused",
+        ),
+        _ligne(
+            "L3", "e", "e", proposed="f", reason="e1_context_line",
+            line_class="refused",
+        ),
     )
     row = _payload(decisions_analysis("text", outputs)).pipelines[0]
-    assert {r.code: r.n for r in row.reasons} == {
+    assert {r.code: r.n for r in row.refused} == {
         "e1_context_line": 2,
         "e5_boundary_word": 1,
     }
@@ -140,10 +168,11 @@ def test_an_unreadable_sidecar_does_not_kill_the_run(tmp_path: Path) -> None:
 def test_samples_are_capped(tmp_path: Path) -> None:
     """Un rapport n'est pas un journal : au-delà, on ne lit plus, on défile."""
     lignes = [
-        _ligne(f"L{i}", f"a{i}", f"b{i}", proposed=f"b{i}") for i in range(80)
+        _ligne(f"L{i}", f"a{i}", f"b{i}", proposed=f"b{i}", line_class="corrected")
+        for i in range(80)
     ]
     row = _payload(decisions_analysis("text", _outputs(tmp_path, *lignes))).pipelines[0]
-    assert row.changed == 80
+    assert row.corrected == 80
     assert len(row.samples) == 40
 
 
@@ -159,8 +188,14 @@ def test_the_section_renders_the_three_columns(tmp_path: Path) -> None:
         "text",
         _outputs(
             tmp_path,
-            _ligne("L1", "le ſoleil", "le soleil", proposed="le soleil"),
-            _ligne("L2", "v'a", "v'a", proposed="n'a", reason="e1_context_line"),
+            _ligne(
+                "L1", "le ſoleil", "le soleil", proposed="le soleil",
+                line_class="corrected",
+            ),
+            _ligne(
+                "L2", "v'a", "v'a", proposed="n'a", reason="e1_context_line",
+                line_class="refused",
+            ),
         ),
     )
     assert analysis is not None
@@ -214,7 +249,10 @@ def test_both_languages_render(tmp_path: Path, lang: str) -> None:
     from cinoc.reports.sections.decisions import DecisionsSection
 
     analysis = decisions_analysis(
-        "text", _outputs(tmp_path, _ligne("L1", "a", "b", proposed="b"))
+        "text",
+        _outputs(
+            tmp_path, _ligne("L1", "a", "b", proposed="b", line_class="corrected")
+        ),
     )
     assert analysis is not None
     result = RunResult(

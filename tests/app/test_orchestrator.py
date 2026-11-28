@@ -72,7 +72,7 @@ def test_run_end_to_end(tmp_path: Path) -> None:
         registry=_registry(),
         code_version="1.0",
     )
-    aggregate = result.pipelines[0].aggregate[0]
+    aggregate = result.principal_aggregate(result.pipelines[0])[0]
     assert aggregate.metric == "cer"
     assert aggregate.value == pytest.approx(0.25)  # 1 substitution / 4
     assert result.manifest.corpus_name == "c"
@@ -152,10 +152,15 @@ def test_failing_competitor_does_not_abort_run(tmp_path: Path) -> None:
     )
     result = run(spec, registry=_registry(), code_version="1.0")  # ne lève pas
     by_name = {p.pipeline: p for p in result.pipelines}
-    assert by_name["ok"].aggregate[0].value == pytest.approx(0.25)  # scoré
+    ok = result.principal_aggregate(by_name["ok"])[0]
+    assert ok.value == pytest.approx(0.25)  # scoré
     # « ko » a échoué : soit absent du rapport, soit présent mais non scoré.
     ko = by_name.get("ko")
-    assert ko is None or not ko.aggregate or ko.aggregate[0].value is None
+    assert (
+        ko is None
+        or not result.principal_aggregate(ko)
+        or result.principal_aggregate(ko)[0].value is None
+    )
 
 
 def test_archaic_list_binds_air_and_hcpr(tmp_path: Path) -> None:
@@ -185,7 +190,7 @@ def test_archaic_list_binds_air_and_hcpr(tmp_path: Path) -> None:
         metadata={"archaic_list": "archaic_core", "archaic_list_hash": "abc123"},
     )
     result = run(spec, registry=_registry(), code_version="1.0")
-    scores = {s.metric: s for s in result.pipelines[0].aggregate}
+    scores = {s.metric: s for s in result.principal_aggregate(result.pipelines[0])}
     # ſ recopié fidèlement : préservé (hcpr=1), aucun apport net (air=0).
     assert scores["hcpr"].value == pytest.approx(1.0)
     assert scores["air"].value == pytest.approx(0.0)
@@ -253,7 +258,7 @@ def _cer(result: RunResult, pipeline: str) -> float | None:
         score.value
         for pr in result.pipelines
         if pr.pipeline == pipeline
-        for score in pr.aggregate
+        for score in result.principal_aggregate(pr)
         if score.metric == "cer"
     )
     return value

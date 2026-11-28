@@ -36,7 +36,15 @@ FILE_BUDGETS: dict[str, int] = {
     # Rév. n° 7 / tranche 1b : statut ``exploratory`` de l'inférence, chemin
     # d'alignement et concordance des confusions / taxonomie / diff (1295 LOC ;
     # les deux payloads de supports vivent à part, ``evaluation/comparison.py``).
-    "evaluation/analysis.py": 1300,
+    # Revue de 1a + 1b : chemin d'alignement de ``word_errors``, ``textual_
+    # fidelity`` et ``correction`` (D8), classes déclarées du bilan des décisions
+    # (D6) — moins le booléen de Nemenyi (D11) : 1316 LOC.
+    "evaluation/analysis.py": 1350,
+    # ``evaluate_run`` : les trois passes d'une vue (par document, agrégats,
+    # inter-moteurs) et les supports forment un seul flux. Revue de 1a + 1b : la
+    # famille de la vue (``declares_view``, D1) et les supports sur l'agrégat
+    # principal (D10) y entrent (610 LOC).
+    "evaluation/runner.py": 640,
     # Orchestrateur de run (couche 6) : la boucle de reprise, d'exécution
     # parallèle et d'assemblage déterministe forme un seul flux. Tranche 1b :
     # refus des vérités terrain absentes avant le premier appel, issues de

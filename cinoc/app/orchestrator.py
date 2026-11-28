@@ -52,7 +52,7 @@ from cinoc.evaluation.metrics.archaic import make_air_metric, make_hcpr_metric
 from cinoc.evaluation.registry import MetricRegistry, register_default_metrics
 from cinoc.evaluation.result import DocumentUsage, RunResult
 from cinoc.evaluation.runner import evaluate_run
-from cinoc.evaluation.scoring import missing_ground_truths
+from cinoc.evaluation.scoring import unusable_ground_truths
 from cinoc.pipeline.executor import (
     UNIT_FAILURES,
     PipelineExecutor,
@@ -225,15 +225,16 @@ def run(
     metric_registry = MetricRegistry()
     register_default_metrics(metric_registry)
     _bind_archaic_metrics(metric_registry, spec)
-    # F8 : une vérité terrain référencée mais absente du disque est refusée
-    # **avant** le premier appel de moteur — jamais payée pour rien.
-    missing = missing_ground_truths(spec.corpus, spec.evaluation, metric_registry)
-    if missing:
-        shown = ", ".join(f"{document} → {uri}" for document, uri in missing[:5])
-        more = f" (+{len(missing) - 5})" if len(missing) > 5 else ""
+    # F8, D9 : une vérité terrain référencée mais absente du disque, ou qui ne
+    # se décode pas, est refusée **avant** le premier appel de moteur — jamais
+    # payée pour rien.
+    unusable = unusable_ground_truths(spec.corpus, spec.evaluation, metric_registry)
+    if unusable:
+        shown = ", ".join(f"{document} → {uri}" for document, uri in unusable[:5])
+        more = f" (+{len(unusable) - 5})" if len(unusable) > 5 else ""
         raise OrchestrationError(
-            f"{len(missing)} vérité(s) terrain référencée(s) mais absente(s) du "
-            f"disque : {shown}{more}. Rien n'a été exécuté."
+            f"{len(unusable)} vérité(s) terrain référencée(s) mais absente(s) du "
+            f"disque ou illisible(s) : {shown}{more}. Rien n'a été exécuté."
         )
 
     documents = spec.corpus.documents

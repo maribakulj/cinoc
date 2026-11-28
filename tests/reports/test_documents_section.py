@@ -31,7 +31,11 @@ def _result() -> RunResult:
     )
     return RunResult(
         manifest=manifest,
-        pipelines=(PipelineResult(pipeline="tess", view="text", aggregate=()),),
+        pipelines=(
+            PipelineResult(
+                pipeline="tess", view="text", conditional_aggregate=()
+            ),
+        ),
         documents=(_doc("d1", "tess", 0.10), _doc("d2", "tess", 0.20)),
     )
 

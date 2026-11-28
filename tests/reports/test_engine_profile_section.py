@@ -44,11 +44,11 @@ def _result() -> RunResult:
     pipelines = (
         PipelineResult(
             pipeline="tesseract", view="text",
-            aggregate=(MetricScore(metric="cer", value=0.20, support=2),),
+            conditional_aggregate=(MetricScore(metric="cer", value=0.20, support=2),),
         ),
         PipelineResult(
             pipeline="pero", view="text",
-            aggregate=(MetricScore(metric="cer", value=0.10, support=2),),
+            conditional_aggregate=(MetricScore(metric="cer", value=0.10, support=2),),
         ),
     )
     docs = (

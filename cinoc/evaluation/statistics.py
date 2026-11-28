@@ -185,20 +185,24 @@ def invented_units(stat: Counts) -> tuple[str, int] | None:
 class Scalar(NamedTuple):
     """Finalisation d'une statistique : le scalaire, ou le motif de son absence.
 
-    ``untruncated_error_rate`` n'est rempli que par les exactitudes : le taux
-    d'erreur e/n **avant** le plancher max(0, ·), publié à côté (B1).
+    ``exact`` est le **rationnel** dont ``value`` est l'unique conversion
+    flottante (arrondi au plus proche) : le macro moyenne ces rationnels, jamais
+    des flottants déjà arrondis (D5, R1). ``untruncated_error_rate`` n'est
+    rempli que par les exactitudes : le taux d'erreur e/n **avant** le plancher
+    max(0, ·), publié à côté (B1).
     """
 
     value: float | None
     reason: ScalarReason | None = None
     untruncated_error_rate: float | None = None
+    exact: Fraction | None = None
 
 
 def _ratio(numerator: int, denominator: int) -> Scalar:
     # ``int / int`` est arrondi correctement : une seule conversion.
     if denominator == 0:
         return Scalar(None, "zero_denominator")
-    return Scalar(numerator / denominator)
+    return Scalar(numerator / denominator, exact=Fraction(numerator, denominator))
 
 
 def edit_rate(stat: EditCounts) -> Scalar:
@@ -234,9 +238,11 @@ def accuracy(stat: ErrorCounts) -> Scalar:
     if stat.reference_length == 0:
         return Scalar(None, "zero_denominator")
     rate = Fraction(stat.errors, stat.reference_length)
+    exact = max(Fraction(0), 1 - rate)
     return Scalar(
-        float(max(Fraction(0), 1 - rate)),
+        float(exact),
         untruncated_error_rate=stat.errors / stat.reference_length,
+        exact=exact,
     )
 
 

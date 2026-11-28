@@ -222,7 +222,9 @@ def aggregate(
 ) -> MetricScore:
     for entry in result.pipelines:
         if (entry.pipeline, entry.view) == (pipeline_name, view):
-            return next(s for s in entry.aggregate if s.metric == metric)
+            return next(
+                s for s in result.principal_aggregate(entry) if s.metric == metric
+            )
     raise AssertionError((pipeline_name, view))
 
 

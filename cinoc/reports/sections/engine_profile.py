@@ -201,7 +201,7 @@ class EngineProfileSection:
         # KPIs : métriques d'agrégat (réelles) + ECE si calibration présente.
         kpis = [
             _kpi(s.metric, _pct(s.value, lang))
-            for s in pipe.aggregate
+            for s in result.principal_aggregate(pipe)
             if s.value is not None
         ]
         cal = _calibration(result, view, name)

@@ -13,7 +13,7 @@ Data Sets*, JMLR 7:1-30 — k pipelines × n documents appariés), par
 2. **Holm** (1979, *A simple sequentially rejective multiple test procedure*,
    Scand. J. Statist. 6:65-70) sur la **famille des tests calculés du run** —
    les lignes du tableau de significativité, que le lecteur lit comme autant de
-   verdicts. Holm contrôle le risque de famille sous **toute** dépendance
+   résultats. Holm contrôle le risque de famille sous **toute** dépendance
    (ici forte : mêmes documents, vues voisines), sans l'hypothèse
    d'indépendance de Šidák ni la perte de puissance de Bonferroni.
 3. **Post-hoc de Nemenyi**, seulement si le Friedman est rejeté **après**
@@ -69,10 +69,10 @@ from cinoc.evaluation.errors import EvaluationError
 #: Plancher de **puissance**, partagé avec ``metrics.stats.significance`` :
 #: sous 6 cas complets, un Wilcoxon bilatéral ne peut pas atteindre p < 0,05
 #: (n = 5 → p_min exact = 0,0625) et un Friedman à 2-5 blocs est dégénéré — on
-#: dit « non calculé » plutôt qu'un verdict artefact de petit n.
+#: dit « non calculé » plutôt qu'un résultat artefact de petit n.
 MIN_SUPPORT = 6
 
-#: Seuil des verdicts (risque de famille après Holm, et du post-hoc).
+#: Seuil de référence (risque de famille après Holm, et du post-hoc).
 ALPHA = 0.05
 
 #: Séries par pipeline, **alignées** (même index = même document ; ``None`` =
@@ -303,10 +303,7 @@ def _payload(
         groups = _cd_groups(names, means, critical_distance)
         pairwise = tuple(
             PairwiseDifference(
-                a=names[i],
-                b=names[j],
-                rank_gap=abs(means[i] - means[j]),
-                significant=abs(means[i] - means[j]) > critical_distance,
+                a=names[i], b=names[j], rank_gap=abs(means[i] - means[j])
             )
             for i in range(k)
             for j in range(i + 1, k)

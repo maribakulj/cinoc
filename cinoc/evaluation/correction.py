@@ -47,6 +47,7 @@ from cinoc.evaluation.analysis import (
     PipelineCorrection,
     RegressionSample,
 )
+from cinoc.evaluation.errors import EvaluationError
 from cinoc.evaluation.representations import load_representation, prepare_text
 
 logger = logging.getLogger(__name__)
@@ -108,16 +109,35 @@ def _text_of(
     artifact = outputs.get(pipeline, {}).get(document_id, {}).get(kind)
     if artifact is None or artifact.uri is None:
         return None
-    return prepare_text(str(load_representation(artifact.uri, kind)), view)
+    try:
+        return prepare_text(str(load_representation(artifact.uri, kind)), view)
+    except EvaluationError as exc:
+        # Une sortie illisible prive ce bilan d'un étage ; elle ne perd pas le
+        # run (D9) : l'étage compte comme absent.
+        logger.warning(
+            "[correction] dégradé : sortie illisible (%s, %s) : %s",
+            pipeline,
+            document_id,
+            exc,
+        )
+        return None
 
 
 def _ground_truth(document: DocumentRef, view: EvaluationView) -> str | None:
     reference = document.gt_for(ArtifactType.RAW_TEXT)
     if reference is None:
         return None
-    return prepare_text(
-        str(load_representation(reference.uri, ArtifactType.RAW_TEXT)), view
-    )
+    try:
+        return prepare_text(
+            str(load_representation(reference.uri, ArtifactType.RAW_TEXT)), view
+        )
+    except EvaluationError as exc:
+        logger.warning(
+            "[correction] dégradé : vérité terrain illisible (%s) : %s",
+            document.id,
+            exc,
+        )
+        return None
 
 
 def _two_stage_pipelines(outputs: _Outputs) -> list[str]:

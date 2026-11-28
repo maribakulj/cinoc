@@ -16,12 +16,12 @@ from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.documents import DocumentRef, GroundTruthRef
 from cinoc.domain.evaluation import EvaluationSpec, EvaluationView
-from cinoc.domain.pipeline import PipelineSpec
 from cinoc.domain.run import RunManifest
 from cinoc.evaluation.analysis import NerPayload
 from cinoc.evaluation.registry import MetricRegistry, register_default_metrics
 from cinoc.evaluation.result import RunResult
 from cinoc.evaluation.runner import evaluate_run
+from tests.declared_specs import declared_pipeline
 
 FIXED = datetime(2026, 1, 1, tzinfo=UTC)
 ENTITIES_VIEW = EvaluationView(
@@ -51,7 +51,7 @@ def _manifest() -> RunManifest:
         corpus_name="c",
         n_documents=1,
         pipeline_specs=(
-            PipelineSpec(name="alpha", initial_inputs=(ArtifactType.IMAGE,)),
+            declared_pipeline("alpha"),
         ),
         code_version="1.0",
         started_at=FIXED,
@@ -108,7 +108,9 @@ def test_ner_f1_and_payload_through_evaluate_run(tmp_path: Path) -> None:
     )
     # Scalaire : R14 reprojette → les 2 entités matchent → ner_f1 micro = 1.0.
     (pipeline,) = result.pipelines
-    ner_score = next(s for s in pipeline.aggregate if s.metric == "ner_f1")
+    ner_score = next(
+        s for s in result.principal_aggregate(pipeline) if s.metric == "ner_f1"
+    )
     assert ner_score.value == 1.0
     assert ner_score.support == 1  # 1 document applicable (poids interne = 2 entités)
     # Payload : présent, F1 parfait, deux catégories, aucune manquée/hallucinée.

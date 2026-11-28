@@ -23,6 +23,7 @@ _SECTION_LABELS = {
     "overview": "Vue d'ensemble",
     "corpus_composition": "Composition",
     "by_engine": "Par moteur",
+    "paired_comparison": "Comparaison appariée",
     "engine_profiles": "Profils moteur",
     "document_details": "Détail document",
     "documents": "Par document",
@@ -54,6 +55,7 @@ _SECTION_LABELS_EN = {
     "overview": "Overview",
     "corpus_composition": "Composition",
     "by_engine": "By engine",
+    "paired_comparison": "Paired comparison",
     "engine_profiles": "Engine profiles",
     "document_details": "Document detail",
     "documents": "By document",
@@ -102,7 +104,7 @@ _GROUPS: tuple[tuple[str, str, str, str, tuple[str, ...]], ...] = (
     ("rapport", "key", "Mesures clés", "Key measures",
      ("key_measures", "overview", "corpus_composition", "composition")),
     ("rapport", "compare", "Comparaison", "Engine comparison",
-     ("by_engine", "dispersion")),
+     ("by_engine", "paired_comparison", "dispersion")),
     ("rapport", "crosses", "Significativité & recouvrement", "Significance & overlap",
      ("cross_engine", "engine_duel", "word_errors")),
     ("rapport", "errors", "Familles d'erreurs & analyses fines",
@@ -135,7 +137,8 @@ _WIDE_SECTIONS: frozenset[str] = frozenset({
     # replie sur trois lignes et le montage devient illisible — c'est-à-dire
     # que la section rate précisément ce pour quoi elle existe.
     "composition",
-    "key_measures", "overview", "by_engine", "engine_profiles", "conformity",
+    "key_measures", "overview", "by_engine", "paired_comparison",
+    "engine_profiles", "conformity",
     "structured_data", "ner", "lines", "economics", "cross_engine",
     "word_errors", "taxonomy", "correction", "decisions", "textual_fidelity",
     "documents",
@@ -297,7 +300,7 @@ class ReportRenderer:
         known = {
             score.metric
             for pipeline in result.pipelines
-            for score in pipeline.aggregate
+            for score in result.principal_aggregate(pipeline)
         }
         ctx = SectionContext(
             title=title,
@@ -353,6 +356,7 @@ def default_report_renderer() -> ReportRenderer:
     from cinoc.reports.sections.methodology import MethodologySection
     from cinoc.reports.sections.ner import NerSection
     from cinoc.reports.sections.overview import OverviewSection
+    from cinoc.reports.sections.paired_comparison import PairedComparisonSection
     from cinoc.reports.sections.philology import PhilologySection
     from cinoc.reports.sections.structure import StructureSection
     from cinoc.reports.sections.structured_data import StructuredDataSection
@@ -367,6 +371,7 @@ def default_report_renderer() -> ReportRenderer:
             CorpusCompositionSection(),
             CompositionSection(),
             EngineSection(),
+            PairedComparisonSection(),
             EngineProfileSection(),
             DispersionSection(),
             DocumentsSection(),

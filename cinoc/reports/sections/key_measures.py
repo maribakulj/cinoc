@@ -12,7 +12,7 @@ Friedman (≥ 3), p brute et p corrigée de Holm, puis les paires que Nemenyi
 sépare quand le Friedman est rejeté — ou le motif pour lequel le test n'a pas
 été calculé.
 
-**Aucun verdict** : pas de « meilleur » déclaré, pas de recommandation. On trie
+**Aucune décision** : pas de « meilleur » déclaré, pas de recommandation. On trie
 par une valeur mesurée, on affiche un fait statistique — l'utilisateur interprète
 (remplace l'ancienne « Synthèse » qui nommait un gagnant ; cf. moteur narratif
 supprimé §6, anti-hallucination §12). Gatée sur ``cer``.
@@ -48,7 +48,13 @@ from cinoc.reports.sections._inference_text import (
     reason_text,
 )
 from cinoc.reports.sections._profile_text import convention_html
-from cinoc.reports.sections._tables import coverage, is_displayed, ordered_unique
+from cinoc.reports.sections._tables import (
+    coverage,
+    global_ranking,
+    in_ranking_order,
+    is_displayed,
+    ordered_unique,
+)
 from cinoc.reports.svg import dot_plot_ci
 
 _PRIMARY = "cer"
@@ -99,12 +105,17 @@ def _seconds_per_page(usage: tuple[DocumentUsage, ...]) -> dict[str, _Durations]
     return out
 
 
-def _score(pipeline: PipelineResult, metric: str) -> MetricScore | None:
-    return next((s for s in pipeline.aggregate if s.metric == metric), None)
+def _score(
+    result: RunResult, pipeline: PipelineResult, metric: str
+) -> MetricScore | None:
+    return next(
+        (s for s in result.principal_aggregate(pipeline) if s.metric == metric),
+        None,
+    )
 
 
-def _val(pipeline: PipelineResult, metric: str) -> float | None:
-    score = _score(pipeline, metric)
+def _val(result: RunResult, pipeline: PipelineResult, metric: str) -> float | None:
+    score = _score(result, pipeline, metric)
     return score.value if score is not None else None
 
 
@@ -127,7 +138,7 @@ class KeyMeasuresSection:
     requires: tuple[str, ...] = (_PRIMARY,)
 
     def render(self, result: RunResult, ctx: SectionContext) -> Html | None:
-        if not any(_val(p, _PRIMARY) is not None for p in result.pipelines):
+        if not any(_val(result, p, _PRIMARY) is not None for p in result.pipelines):
             return None  # gatée sur le CER (cf. ``requires``)
         order = engine_order(p.pipeline for p in result.pipelines)
         lang = ctx.lang
@@ -141,10 +152,10 @@ class KeyMeasuresSection:
             # Les établies seules (D-289), dans l'ordre de la vue.
             cols = [
                 s.metric
-                for s in pipes[0].aggregate
+                for s in result.principal_aggregate(pipes[0])
                 if is_established(s.metric)
                 and is_displayed(s.metric)
-                and any(_val(p, s.metric) is not None for p in pipes)
+                and any(_val(result, p, s.metric) is not None for p in pipes)
             ]
             if not cols:
                 continue
@@ -159,7 +170,7 @@ class KeyMeasuresSection:
             blocks.append(
                 head
                 + self._table(
-                    pipes, cols, durations, order, lang,
+                    result, pipes, cols, durations, order, lang,
                     homonym_hints(result.manifest),
                 )
                 + self._dotplot(result, view, order, lang)
@@ -173,10 +184,10 @@ class KeyMeasuresSection:
         par_vue = (
             localized(
                 lang,
-                " Chaque vue a son test : un verdict ne vaut que pour sa vue "
-                "(sa normalisation, ses unités).",
-                " Each view has its own test: a verdict holds for its view only "
-                "(its normalisation, its units).",
+                " Chaque vue a son test : un résultat (exploratoire) ne vaut que "
+                "pour sa vue (sa normalisation, ses unités).",
+                " Each view has its own test: an (exploratory) result holds for its "
+                "view only (its normalisation, its units).",
             )
             if multi
             else ""
@@ -207,6 +218,7 @@ class KeyMeasuresSection:
 
     @staticmethod
     def _table(
+        result: RunResult,
         pipes: list[PipelineResult],
         cols: list[str],
         durations: dict[str, _Durations],
@@ -233,19 +245,16 @@ class KeyMeasuresSection:
                 f'title="{escape(tip)}">{localized(lang, "s/page", "s/page")} '
                 "↓</th>"
             )
-        ranked = sorted(
-            pipes,
-            key=lambda p: (
-                _val(p, _PRIMARY) is None,
-                _val(p, _PRIMARY) if _val(p, _PRIMARY) is not None else 0.0,
-                p.pipeline,
-            ),
-        )
+        # Le tri est celui du **support global** (B7) : les valeurs affichées sont
+        # celles de chaque pipeline sur son propre support, dont l'ordre ne
+        # compose pas un classement (D7).
+        view = pipes[0].view
+        ranked = in_ranking_order(pipes, global_ranking(result, view, _PRIMARY))
         body: list[str] = []
         for p in ranked:
             cells = ""
             for m in cols:
-                score = _score(p, m)
+                score = _score(result, p, m)
                 v = score.value if score is not None else None
                 cov = coverage(score, lang) if score is not None else ""
                 if v is None:
@@ -285,7 +294,14 @@ class KeyMeasuresSection:
         payload = _inference(result, view)
         if payload is None or not payload.intervals:
             return ""
-        items = sorted(payload.intervals, key=lambda it: (it.value, it.pipeline))
+        ranking = global_ranking(result, view, _PRIMARY)
+        items = sorted(
+            payload.intervals,
+            key=lambda it: (
+                ranking.index(it.pipeline) if it.pipeline in ranking else len(ranking),
+                it.pipeline,
+            ),
+        )
         rows = [
             (
                 engine_letter(order.get(it.pipeline, 0)),
@@ -305,11 +321,12 @@ class KeyMeasuresSection:
             lang,
             f'<span class="muted">CER par moteur — point = CER du tableau (micro : '
             f"Σ erreurs / Σ caractères de référence), barre = son IC 95 % "
-            f"(bootstrap des documents, n={n}), trié par CER croissant, "
-            f"axe commun.</span>",
+            f"(bootstrap des documents, n={n}), trié selon le tri du support "
+            f"global, axe commun.</span>",
             f'<span class="muted">CER per engine — dot = the table’s CER (micro: '
             f"Σ errors / Σ reference characters), bar = its 95% CI "
-            f"(document bootstrap, n={n}), sorted by CER, shared axis.</span>",
+            f"(document bootstrap, n={n}), sorted by the global-support ranking, "
+            f"shared axis.</span>",
         )
         return (
             f'<div class="prof-chart"><div class="drill-caption">{cap}</div>'

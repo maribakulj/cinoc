@@ -14,12 +14,12 @@ from cinoc.domain.artifacts import Artifact, ArtifactType
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.documents import DocumentRef, GroundTruthRef
 from cinoc.domain.evaluation import EvaluationSpec, EvaluationView
-from cinoc.domain.pipeline import PipelineSpec
 from cinoc.domain.run import RunManifest
 from cinoc.evaluation.analysis import PhilologyPayload
 from cinoc.evaluation.archives import CATEGORY_ORDER, archival_counts
 from cinoc.evaluation.registry import MetricRegistry, register_default_metrics
 from cinoc.evaluation.runner import evaluate_run
+from tests.declared_specs import declared_pipeline
 
 FIXED = datetime(2026, 1, 1, tzinfo=UTC)
 
@@ -118,7 +118,7 @@ def test_through_evaluate_run(tmp_path: Path) -> None:
         corpus_name="c",
         n_documents=1,
         pipeline_specs=(
-            PipelineSpec(name="eng", initial_inputs=(ArtifactType.IMAGE,)),
+            declared_pipeline("eng"),
         ),
         code_version="1.0",
         started_at=FIXED,

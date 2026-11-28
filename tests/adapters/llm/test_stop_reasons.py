@@ -264,7 +264,9 @@ def test_max_tokens_reached_marks_the_unit_truncated(
     # la couverture dit pourquoi ; la qualité opérationnelle, elle, note la
     # sortie réelle (la coupure compte dans le CER).
     (pipeline,) = result.pipelines
-    (cer,) = (s for s in pipeline.aggregate if s.metric == "cer")
+    (cer,) = (
+        s for s in result.principal_aggregate(pipeline) if s.metric == "cer"
+    )
     assert cer.value is None
     assert (cer.support, cer.expected) == (0, 1)
     assert cer.coverage == {"truncated_output": 1}
@@ -289,7 +291,11 @@ def test_a_refusal_or_an_error_fails_the_unit_as_engine(
 
     (unit,) = result.usage
     assert (unit.outcome, unit.reason) == ("failed", "engine")
-    (cer,) = (s for s in result.pipelines[0].aggregate if s.metric == "cer")
+    (cer,) = (
+        s
+        for s in result.principal_aggregate(result.pipelines[0])
+        if s.metric == "cer"
+    )
     assert (cer.value, cer.support, cer.expected) == (None, 0, 1)
 
 

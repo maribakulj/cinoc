@@ -26,11 +26,15 @@
     var map = {};
     var pipelines = run && run.pipelines;
     if (!Array.isArray(pipelines)) return map;
+    // L'agrégat principal n'est pas stocké : il se dérive de la politique
+    // d'échec du run (exclude -> conditionnel, empty_page -> opérationnel).
+    var policy = run.manifest && run.manifest.failure_policy;
+    var key = policy === "empty_page" ? "operational_aggregate" : "conditional_aggregate";
     for (var i = 0; i < pipelines.length; i++) {
       var p = pipelines[i];
-      if (!p || typeof p.pipeline !== "string" || !Array.isArray(p.aggregate)) continue;
-      for (var j = 0; j < p.aggregate.length; j++) {
-        var s = p.aggregate[j];
+      if (!p || typeof p.pipeline !== "string" || !Array.isArray(p[key])) continue;
+      for (var j = 0; j < p[key].length; j++) {
+        var s = p[key][j];
         if (s && s.metric === "cer" && typeof s.value === "number" && isFinite(s.value)) {
           map[p.pipeline + " · " + (p.view || "")] = s.value;
         }

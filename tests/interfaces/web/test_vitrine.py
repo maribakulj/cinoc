@@ -28,7 +28,9 @@ def _write_report(reports_dir: Path, name: str = "run1", *, metric: str = "") ->
             PipelineResult(
                 pipeline="p",
                 view="text",
-                aggregate=(MetricScore(metric=metric, value=0.1, support=1),),
+                conditional_aggregate=(
+                    MetricScore(metric=metric, value=0.1, support=1),
+                ),
             ),
         )
         if metric

@@ -48,7 +48,7 @@ def _run(
             PipelineResult(
                 pipeline="tesseract",
                 view="text",
-                aggregate=(
+                conditional_aggregate=(
                     MetricScore(metric="cer", value=cer, support=2),
                     MetricScore(metric="wer", value=None),  # non applicable → ignoré
                 ),

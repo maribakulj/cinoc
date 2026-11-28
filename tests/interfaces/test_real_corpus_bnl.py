@@ -135,7 +135,9 @@ def test_bnl_real_metrics_are_plausible(bnl_result: RunResult) -> None:
     assert {p.pipeline for p in bnl_result.pipelines} == set(_ENGINES)
     assert {p.view for p in bnl_result.pipelines} == {"text", "caseless"}
     for pipeline in bnl_result.pipelines:
-        scores = {s.metric: s.value for s in pipeline.aggregate}
+        scores = {
+            s.metric: s.value for s in bnl_result.principal_aggregate(pipeline)
+        }
         # cer_diplo, diacritic_err et le profil d'erreur (del_rate/ins_rate) ne sont
         # demandés que dans la vue brute « text » (cf. tests dédiés plus bas).
         expected = (
@@ -156,7 +158,9 @@ def test_bnl_insertion_rate_flags_easyocr_hallucination(bnl_result: RunResult) -
     l'invariant de décomposition del_rate + ins_rate ≤ wer tient pour chacun (le
     reste = substitutions). Vue « text »."""
     text = {
-        p.pipeline: {s.metric: s.value for s in p.aggregate}
+        p.pipeline: {
+            s.metric: s.value for s in bnl_result.principal_aggregate(p)
+        }
         for p in bnl_result.pipelines
         if p.view == "text"
     }
@@ -174,7 +178,9 @@ def test_bnl_diacritic_error_splits_germanic_vs_latin(bnl_result: RunResult) -> 
     ä/ö/ü mal rendus vs GT précomposée, ~80 % d'erreur) là où le modèle français et
     easyocr les restituent bien (~10-14 %). Mesuré dans la vue « text »."""
     diac = {
-        p.pipeline: {s.metric: s.value for s in p.aggregate}["diacritic_err"]
+        p.pipeline: {
+            s.metric: s.value for s in bnl_result.principal_aggregate(p)
+        }["diacritic_err"]
         for p in bnl_result.pipelines
         if p.view == "text"
     }
@@ -191,7 +197,9 @@ def test_bnl_cer_diplomatic_isolates_long_s(bnl_result: RunResult) -> None:
     récupère cette part **purement typographique**. Les moteurs non-Fraktur
     (``deu``/``fra``/``easyocr``) n'émettent aucun ſ → aucun écart."""
     text = {
-        p.pipeline: {s.metric: s.value for s in p.aggregate}
+        p.pipeline: {
+            s.metric: s.value for s in bnl_result.principal_aggregate(p)
+        }
         for p in bnl_result.pipelines
         if p.view == "text"
     }
@@ -228,7 +236,10 @@ def test_bnl_posthoc_shows_the_pair_that_differs(bnl_result: RunResult) -> None:
     mer = payloads[("text", "mer")]
     assert mer.test == "friedman" and mer.family_size == 6
     assert mer.p_holm is not None and mer.p_holm < 0.05
-    assert [(p.a, p.b) for p in mer.pairwise if p.significant] == [("easyocr", "fra")]
+    assert mer.critical_distance is not None
+    assert [
+        (p.a, p.b) for p in mer.pairwise if p.rank_gap > mer.critical_distance
+    ] == [("easyocr", "fra")]
     assert len(mer.cd_groups) == 2 and set(mer.cd_groups[0]) & set(mer.cd_groups[1])
     assert all(payload.intervals == () for payload in payloads.values())
     html = default_report_renderer().render(bnl_result, title="Cinoc — BNL")

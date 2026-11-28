@@ -41,7 +41,14 @@ def load_representation(uri: str, artifact_type: ArtifactType) -> object:
             f"{uri!r} ({exc})."
         ) from exc
     if artifact_type in _TEXT_TYPES:
-        return read_plaintext(data)
+        try:
+            return read_plaintext(data)
+        except UnicodeDecodeError as exc:
+            # Un octet non UTF-8 rend la sortie (ou la vérité terrain)
+            # illisible : un fait de l'unité, jamais la perte du run (D9).
+            raise EvaluationError(
+                f"texte non UTF-8 ({artifact_type.value}) : {uri!r} ({exc})."
+            ) from exc
     if artifact_type is ArtifactType.LAYOUT:
         return _load_layout(uri, data)
     if artifact_type is ArtifactType.ENTITIES:

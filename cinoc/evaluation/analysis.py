@@ -7,7 +7,7 @@ seulement **lu** par les rapports. Chaque famille ajoute son payload Pydantic
 figé ici, discriminé par ``kind``, dans le même commit que son calcul et son
 consommateur (garde-fou « pas de consommateur = supprimé »).
 
-Familles : ``inference`` (verdict statistique corrigé multi-comparaisons),
+Familles : ``inference`` (tests exploratoires, p corrigées multi-comparaisons),
 ``economics`` (coûts, débit, Pareto), ``diagnostics`` (confusions, pires
 lignes, documents difficiles), ``calibration`` (ECE/MCE), ``taxonomy``
 (classes d'erreurs par règles pures — quelles erreurs, pas seulement combien).
@@ -55,14 +55,15 @@ class PipelineInterval(BaseModel):
 
 
 class PairwiseDifference(BaseModel):
-    """Verdict Nemenyi d'une paire : écart de rangs vs distance critique."""
+    """Écart de rangs moyens d'une paire (post-hoc de Nemenyi), à lire contre la
+    distance critique du payload. Aucun booléen « significatif » : l'écart est
+    un nombre, la lecture est exploratoire (D11)."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     a: str = Field(min_length=1, max_length=128)
     b: str = Field(min_length=1, max_length=128)
     rank_gap: float = Field(ge=0)
-    significant: bool
 
 
 #: Test omnibus apparié : Wilcoxon signé-rangs à 2 pipelines, Friedman au-delà.
@@ -88,9 +89,9 @@ class InferencePayload(BaseModel):
     ``status`` : **exploratoire**, toujours — y compris quand le test n'est pas
     calculé. Jusqu'à la tranche I (inférence conditionnelle), aucun résultat de
     l'ancienne inférence n'est confirmatoire : les p restent publiées comme
-    **nombres**, jamais comme un verdict (``CONTRATS.md`` § 2.1 d, révision
-    n° 7). Les booléens ``PairwiseDifference.significant`` sont ceux du
-    post-hoc de Nemenyi, une lecture **de la distance critique**, non un verdict.
+    **nombres**, sans décision (``CONTRATS.md`` § 2.1 d, révision
+    n° 7). Le post-hoc de Nemenyi publie des écarts de rangs, sans booléen :
+    la lecture se fait contre la distance critique et les barres CD.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -637,6 +638,10 @@ class CorrectionPayload(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     kind: Literal["correction"] = "correction"
+    #: Les suites d'éditions (séquences d'une même correction) suivent
+    #: l'alignement de RapidFuzz ; les comptes S/D/I du bilan, eux, sont
+    #: canoniques.
+    alignment_path: AlignmentPath = "rapidfuzz"
     metric: str = Field(min_length=1, max_length=128)
     catastrophic_threshold: float = Field(gt=0)
     overedit_threshold: float = Field(gt=0)
@@ -825,6 +830,8 @@ class TextualFidelityPayload(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     kind: Literal["textual_fidelity"] = "textual_fidelity"
+    #: L'alignement mot-à-mot est celui de RapidFuzz (``alignment_path``).
+    alignment_path: AlignmentPath = "rapidfuzz"
     max_freq: int = Field(ge=1)
     pipelines: tuple[PipelineTextualFidelity, ...] = ()
 
@@ -1108,6 +1115,9 @@ class WordErrorPayload(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     kind: Literal["word_errors"] = "word_errors"
+    #: Les mots ratés suivent l'alignement de RapidFuzz (``alignment_path``),
+    #: non les comptes canoniques des métriques ; rendu à côté de la carte.
+    alignment_path: AlignmentPath = "rapidfuzz"
     pipelines: tuple[str, ...] = Field(min_length=2)
     words: tuple[WordError, ...] = ()
 
@@ -1123,7 +1133,7 @@ _MAX_DECISION_SAMPLES = 40
 
 
 class DecisionReasonCount(BaseModel):
-    """Combien de lignes portent un motif de refus ou de relecture."""
+    """Combien de lignes portent un code (refus, repli ou motif de relecture)."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -1140,15 +1150,22 @@ class DecisionReviewReason(BaseModel):
     detail: str | None = Field(default=None, max_length=_MAX_LINE_CHARS)
 
 
+#: Les classes **déclarées** d'une ligne de correction structurée (§ 2.1 f) :
+#: disjointes. ``corrected`` (hors ``review_required``), ``review_required``,
+#: ``abstained`` (source proposée inchangée), ``refused`` (refus technique, avec
+#: son code), ``fallback`` (repli, incident d'exécution, avec son code).
+LineClass = Literal["corrected", "review_required", "abstained", "refused", "fallback"]
+
+
 class DecisionSample(BaseModel):
-    """Une ligne, son avant, son après, et le motif s'il y en a un."""
+    """Une ligne, son avant, son après, sa classe déclarée et son motif."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     document_id: str = Field(min_length=1, max_length=256)
     page_id: str = Field(min_length=1, max_length=256)
     line_id: str = Field(min_length=1, max_length=256)
-    status: str = Field(min_length=1, max_length=64)
+    line_class: LineClass
     source_text: str = Field(max_length=_MAX_LINE_CHARS)
     final_text: str = Field(max_length=_MAX_LINE_CHARS)
     reason_code: str | None = Field(default=None, max_length=128)
@@ -1157,26 +1174,29 @@ class DecisionSample(BaseModel):
 
 
 class PipelineDecisions(BaseModel):
-    """Bilan des décisions d'un pipeline correcteur.
+    """Bilan des décisions d'un pipeline correcteur, **tel que l'adaptateur le
+    déclare** : la classe de chaque ligne vient de lui et n'est jamais déduite
+    d'une comparaison de textes (D6).
 
-    ``kept`` n'est pas ``n_lines - changed`` : une ligne peut être **refusée
-    par une garde** après qu'un modèle a proposé autre chose. Confondre les deux
-    ferait passer un refus pour une absence de proposition.
+    Les classes sont **disjointes** : ``corrected`` n'inclut pas
+    ``review_required``, et le total des corrections est leur somme. Les trois
+    premières sont des décisions du correcteur ; ``refused`` (garde-fou ou
+    revue : la source est gardée, avec son code) est une décision valide, pas
+    une panne ; ``fallback`` est un incident d'exécution (aucune proposition
+    exploitable) qui rend l'étape **partielle**.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     pipeline: str = Field(min_length=1, max_length=128)
     n_lines: int = Field(ge=0)
-    changed: int = Field(ge=0)
-    #: Lignes où le modèle a proposé un changement que l'application a refusé.
-    refused: int = Field(ge=0)
-    #: Lignes qu'aucune proposition n'a touchées.
-    untouched: int = Field(ge=0)
-    #: Indépendant du changement : le texte retenu peut encore exiger un jugement.
-    #: Une archive sans ce champ ne permet pas de conclure qu'il valait zéro.
-    review_required: int | None = Field(default=None, ge=0)
-    reasons: tuple[DecisionReasonCount, ...] = ()
+    corrected: int = Field(ge=0)
+    review_required: int = Field(ge=0)
+    abstained: int = Field(ge=0)
+    #: Refus techniques par code, triés.
+    refused: tuple[DecisionReasonCount, ...] = ()
+    #: Replis (incidents d'exécution) par code, triés.
+    fallback: tuple[DecisionReasonCount, ...] = ()
     review_reasons: tuple[DecisionReasonCount, ...] = ()
     samples: tuple[DecisionSample, ...] = ()
 
@@ -1255,6 +1275,7 @@ __all__ = [
     "InterEngineComplementarity",
     "InterEngineDivergence",
     "InterEnginePayload",
+    "LineClass",
     "LinePercentiles",
     "LinesPayload",
     "MarginalCost",

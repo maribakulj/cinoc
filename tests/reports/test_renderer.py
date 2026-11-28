@@ -49,7 +49,9 @@ def _result() -> RunResult:
             PipelineResult(
                 pipeline="p",
                 view="text",
-                aggregate=(MetricScore(metric="cer", value=0.1, support=1),),
+                conditional_aggregate=(
+                    MetricScore(metric="cer", value=0.1, support=1),
+                ),
             ),
         ),
         documents=docs,

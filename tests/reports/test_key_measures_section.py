@@ -26,7 +26,7 @@ FIXED = datetime(2026, 1, 1, tzinfo=UTC)
 def _pipe(name: str, cer: float) -> PipelineResult:
     return PipelineResult(
         pipeline=name, view="text",
-        aggregate=(
+        conditional_aggregate=(
             MetricScore(metric="cer", value=cer, support=900),
             MetricScore(metric="wer", value=round(cer * 2, 4), support=160),
             MetricScore(metric="char_accuracy", value=round(1 - cer, 4), support=900),
@@ -129,14 +129,14 @@ def test_incomplete_aggregate_shows_scored_over_expected() -> None:
     result = _result()
     pero = result.pipelines[1].model_copy(
         update={
-            "aggregate": (
+            "conditional_aggregate": (
                 MetricScore(metric="cer", value=0.045, support=19, expected=20),
             )
         }
     )
     tess = result.pipelines[0].model_copy(
         update={
-            "aggregate": (
+            "conditional_aggregate": (
                 MetricScore(metric="cer", value=0.07, support=20, expected=20),
             )
         }
@@ -180,7 +180,7 @@ def test_none_without_cer() -> None:
         manifest=manifest,
         pipelines=(PipelineResult(
             pipeline="p", view="text",
-            aggregate=(MetricScore(metric="wer", value=0.1, support=1),),
+            conditional_aggregate=(MetricScore(metric="wer", value=0.1, support=1),),
         ),),
     )
     assert KeyMeasuresSection().render(result, SectionContext()) is None
@@ -198,9 +198,9 @@ def _friedman_result(**update: object) -> RunResult:
         ),
         cd_groups=(("a", "b"), ("b", "c")),
         pairwise=(
-            PairwiseDifference(a="a", b="b", rank_gap=0.8, significant=False),
-            PairwiseDifference(a="a", b="c", rank_gap=1.6, significant=True),
-            PairwiseDifference(a="b", b="c", rank_gap=0.8, significant=False),
+            PairwiseDifference(a="a", b="b", rank_gap=0.8),
+            PairwiseDifference(a="a", b="c", rank_gap=1.6),
+            PairwiseDifference(a="b", b="c", rank_gap=0.8),
         ),
     ).model_copy(update=update)
     return RunResult(

@@ -6,10 +6,15 @@ et les trois axes de l'observation (``CONTRATS.md`` § 2.1 b) :
 
 - **applicabilité** — la vérité terrain du document alimente-t-elle la
   métrique, la voit-elle (``applicable`` · ``no_ground_truth`` ·
-  ``not_transcribed`` · ``not_in_view``) ;
+  ``not_transcribed`` · ``not_in_view``). ``not_in_view`` est une propriété du
+  **pipeline** (``declares_view``) : lue sur les types de sortie déclarés de ses
+  étapes, jamais sur ce qu'une unité a produit (D1) ;
 - **disponibilité** — la sortie existe-t-elle et se lit-elle dans le type de
   la métrique (``available`` · ``output_missing`` · ``output_unreadable`` ·
-  ``gt_unreadable`` · ``step_failed`` · ``step_cancelled``) ;
+  ``gt_unreadable`` · ``step_failed`` · ``step_cancelled``). Une unité attendue
+  dont la sortie est inexploitable (échec, délai, sortie absente **ou illisible**)
+  porte sa statistique « sortie vide » (``stat_vide``), qui entre dans la qualité
+  opérationnelle (D2, D3) ;
 - **validité** — est-elle entière (``valid`` · ``partial_output`` ·
   ``truncated_output``). L'état d'exécution est **lu** (``DocumentUsage``,
   déclaré par l'étape et porté par l'exécuteur) : il n'est jamais reconstruit
@@ -38,6 +43,7 @@ from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.documents import DocumentRef, GroundTruthRef
 from cinoc.domain.evaluation import EvaluationSpec, EvaluationView
 from cinoc.domain.layout import CanonicalLayout
+from cinoc.domain.pipeline import PipelineSpec
 from cinoc.domain.usage import FailureReason, UnitOutcome
 from cinoc.evaluation.context import DocContext
 from cinoc.evaluation.errors import EvaluationError
@@ -80,13 +86,17 @@ def _observed(
     axes: tuple[Applicability, Availability, Validity],
     *,
     noted: bool,
+    empty: Counts | None,
 ) -> MetricScore:
     """``MetricScore`` par document : l'observation et ses trois axes.
 
     ``noted`` : l'observation entre dans ``stat`` et ``value`` (axes au vert, ou
     politique ``empty_page``). Sinon, sa statistique est gardée à part
     (``stat_partielle``) quand la sortie est partielle ou tronquée, et dropée
-    sinon (un échec n'a rien produit).
+    sinon (un échec n'a rien produit). ``empty`` : la statistique « sortie
+    vide » d'une unité sans sortie exploitable, **toujours** publiée (``stat_vide``)
+    — c'est ce qui entre dans la qualité opérationnelle, et ce qui la rend
+    recalculable depuis le JSON (D3).
     """
     applicability, availability, validity = axes
     base = MetricScore(
@@ -94,6 +104,7 @@ def _observed(
         applicability=applicability,
         availability=availability,
         validity=validity,
+        stat_vide=empty,
     )
     if observation is None:
         return base
@@ -250,9 +261,10 @@ def score_unit(
     """Note une unité : statistique, axes, et statistique opérationnelle.
 
     ``outcome`` et ``reason`` : l'état d'exécution **déclaré** de l'étape que la
-    vue note (``view_outcome``), lu tel quel. ``in_view`` : faux quand l'unité a
-    rendu des sorties mais aucune d'un type candidat de la vue — la vue ne voit
-    pas ce que ce pipeline produit.
+    vue note (``view_outcome``), lu tel quel. ``in_view`` : faux quand le
+    **pipeline** ne déclare aucun type candidat de la vue (``declares_view``) —
+    ``not_in_view`` est une propriété du pipeline, jamais de ce qu'une unité a
+    produit ou non : ses échecs n'y changent rien (D1).
     """
     failed = outcome == "failed"
     validity: Validity = (
@@ -273,14 +285,14 @@ def score_unit(
     for name in view.metric_names:
         metric = metric_of(registry, name)
         applicability = probe.applicability(metric)
+        if not in_view:
+            applicability = "not_in_view"
         availability: Availability
         observation: Observation | None = None
         if failed:
             availability = lost
         elif candidate is None:
             availability = "output_missing"
-            if applicability == "applicable" and not in_view:
-                applicability = "not_in_view"
         elif candidate.uri is None:
             availability = "output_missing"
         elif applicability != "applicable":
@@ -297,10 +309,14 @@ def score_unit(
                 # Niveau absent (``CLAUDE.md`` §3) : la métrique n'a rien à lire.
                 applicability = "not_in_view"
         applicable = applicability == "applicable"
+        # Aucune sortie **exploitable** : l'exécution n'a rien rendu, ou ce
+        # qu'elle a rendu ne se lit pas. Une sortie illisible est un échec de
+        # production, notée comme une sortie vide, jamais mieux (D2, Q1).
         nothing_produced = availability in (
             "step_failed",
             "step_cancelled",
             "output_missing",
+            "output_unreadable",
         )
         empty = (
             probe.empty_statistic(metric)
@@ -319,6 +335,7 @@ def score_unit(
                 observation,
                 (applicability, availability, validity),
                 noted=validity == "valid" or empty_page,
+                empty=empty,
             )
         )
     analyse = not failed and (validity == "valid" or empty_page)
@@ -385,7 +402,9 @@ def view_outcome(
     l'étape) l'est pour la vue seulement si une étape jusqu'à celle qu'elle note
     (comprise) l'est : une correction aval coupée laisse la lecture amont
     complète (A2) ; une étape amont incomplète rend ce qui en dérive incomplet.
-    Sans étapes nommées, l'issue de l'unité s'applique à toutes les vues.
+    Une étape à la fois incomplète et coupée est ``partial`` (la part manquante
+    l'emporte sur l'axe 3). Sans étapes nommées, l'issue de l'unité s'applique à
+    toutes les vues.
     """
     if unit is None or unit.outcome in ("ok", "failed") or not unit.step_issues:
         return "ok" if unit is None else unit.outcome
@@ -394,21 +413,41 @@ def view_outcome(
         if scored_step in steps
         else steps
     )
-    issues = [unit.step_issues[s] for s in upstream if s in unit.step_issues]
+    issues = [
+        issue for s in upstream for issue in unit.step_issues.get(s, ())
+    ]
     if "partial" in issues:
         return "partial"
     return "truncated" if "truncated" in issues else "ok"
 
 
-def missing_ground_truths(
+def declares_view(view: EvaluationView, pipeline: PipelineSpec) -> bool:
+    """La vue **voit** ce que ce pipeline produit : une étape (celle que
+    ``target_step`` nomme, sinon l'une quelconque) **déclare** un type de sortie
+    candidat de la vue. Lu sur la spec, jamais sur ce qu'une unité a produit :
+    c'est ce qui fait de ``not_in_view`` une propriété du pipeline (D1)."""
+    steps = (
+        [step for step in pipeline.steps if step.id == view.target_step]
+        if view.target_step is not None
+        else list(pipeline.steps)
+    )
+    return any(
+        output in view.candidate_types for step in steps for output in step.output_types
+    )
+
+
+def unusable_ground_truths(
     corpus: CorpusSpec, evaluation: EvaluationSpec, registry: MetricRegistry
 ) -> list[tuple[str, str]]:
     """``(document, uri)`` des vérités terrain que la vue lira et qui sont
-    **absentes du disque** — à refuser **avant** le premier appel de moteur
-    (F8, § 2.1 e) : jamais exécuté et facturé sur tout le corpus pour
-    s'effondrer à l'évaluation. Seules les vérités terrain que les métriques des
-    vues liraient comptent ; un nom de métrique inconnu est refusé ailleurs."""
-    missing: dict[tuple[str, str], None] = {}
+    **absentes du disque ou illisibles** (octets non UTF-8, mise en page ou
+    entités invalides) — à refuser **avant** le premier appel de moteur (F8,
+    D9 ; § 2.1 e) : jamais exécuté et facturé sur tout le corpus pour
+    s'effondrer à l'évaluation. La vérité terrain est donc **décodée** ici, une
+    fois par fichier et par type. Seules celles que les métriques des vues
+    liraient comptent ; un nom de métrique inconnu est refusé ailleurs."""
+    unusable: dict[tuple[str, str], None] = {}
+    checked: dict[tuple[str, ArtifactType], bool] = {}
     for view in evaluation.views:
         for name in view.metric_names:
             metric = registry.document_metric(name)
@@ -416,9 +455,25 @@ def missing_ground_truths(
                 continue
             for document in corpus.documents:
                 resolved = _resolve_ground_truth(document, view, metric.input_types[0])
-                if resolved is not None and not Path(resolved[0].uri).is_file():
-                    missing[(document.id, resolved[0].uri)] = None
-    return list(missing)
+                if resolved is None:
+                    continue
+                uri, native = resolved[0].uri, resolved[1]
+                if (uri, native) not in checked:
+                    checked[(uri, native)] = _readable(uri, native)
+                if not checked[(uri, native)]:
+                    unusable[(document.id, uri)] = None
+    return list(unusable)
+
+
+def _readable(uri: str, native_type: ArtifactType) -> bool:
+    if not Path(uri).is_file():
+        return False
+    try:
+        load_representation(uri, native_type)
+    except EvaluationError as exc:
+        logger.warning("[scoring] vérité terrain illisible (%s) : %s", uri, exc)
+        return False
+    return True
 
 
 def _resolve_ground_truth(
@@ -468,8 +523,9 @@ def _prepare(representation: object, view: EvaluationView) -> object:
 __all__ = [
     "ReferenceProbe",
     "UnitScores",
+    "declares_view",
     "metric_of",
-    "missing_ground_truths",
     "score_unit",
+    "unusable_ground_truths",
     "view_outcome",
 ]

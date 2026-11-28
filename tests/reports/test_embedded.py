@@ -61,7 +61,9 @@ def test_report_embeds_both_scripts_and_palette_css() -> None:
         pipelines=(
             PipelineResult(
                 pipeline="tesseract", view="text",
-                aggregate=(MetricScore(metric="cer", value=0.1, support=1),),
+                conditional_aggregate=(
+                    MetricScore(metric="cer", value=0.1, support=1),
+                ),
             ),
         ),
     )

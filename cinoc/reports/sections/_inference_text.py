@@ -7,10 +7,10 @@ pas. Tout est une **lecture** du payload — aucun recalcul, aucune prose
 générée : le nom du test, les p, la distance critique et les paires viennent
 tels quels de ``evaluation.inference``.
 
-**Aucun verdict.** Jusqu'à la tranche I (inférence conditionnelle), tout
+**Aucune décision.** Jusqu'à la tranche I (inférence conditionnelle), tout
 résultat de test de l'ancienne inférence est **exploratoire** (``status`` du
 payload) : les p sont des nombres, le test porte l'étiquette ``exploratoire``,
-et ni « significatif » ni son contraire n'est employé comme verdict
+et ni « significatif » ni son contraire ne qualifie un résultat
 (``CONTRATS.md`` § 2.1 d, révision n° 7). Le post-hoc de Nemenyi nomme les
 paires que la distance critique **sépare**, comme paires.
 """
@@ -63,11 +63,14 @@ def exploratory_label(lang: str) -> str:
 
 def separated_pairs(payload: InferencePayload) -> str:
     """« a – b · c – d » des paires que la distance critique sépare (vide :
-    aucune) — une lecture du post-hoc de Nemenyi, pas un verdict."""
+    aucune) : celles qui ne partagent **aucune** barre CD — une lecture du
+    post-hoc de Nemenyi, sans seuil de plus."""
     return " · ".join(
         f"{escape(pair.a)} – {escape(pair.b)}"
         for pair in payload.pairwise
-        if pair.significant
+        if not any(
+            pair.a in group and pair.b in group for group in payload.cd_groups
+        )
     )
 
 

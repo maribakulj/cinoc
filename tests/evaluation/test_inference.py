@@ -67,7 +67,13 @@ def test_friedman_nemenyi_match_scipy() -> None:
     assert ranks == pytest.approx({"alpha": 1.375, "gamma": 1.625, "beta": 3.0})
     assert [r.pipeline for r in payload.mean_ranks] == ["alpha", "gamma", "beta"]
     assert payload.cd_groups == (("alpha", "gamma"), ("beta",))
-    significant = {(pair.a, pair.b): pair.significant for pair in payload.pairwise}
+    # Plus de booléen publié (D11) : l'écart de rangs se lit contre la distance
+    # critique du payload.
+    assert payload.critical_distance is not None
+    significant = {
+        (pair.a, pair.b): pair.rank_gap > payload.critical_distance
+        for pair in payload.pairwise
+    }
     assert significant == {
         ("alpha", "beta"): True,
         ("alpha", "gamma"): False,
@@ -90,7 +96,12 @@ def test_cd_bars_overlap_instead_of_implying_a_difference() -> None:
     assert ranks == pytest.approx({"a": 1.2, "b": 2.0, "c": 2.8})
     assert payload.critical_distance == pytest.approx(1.048, abs=1e-3)
     assert payload.cd_groups == (("a", "b"), ("b", "c"))
-    assert [(p.a, p.b) for p in payload.pairwise if p.significant] == [("a", "c")]
+    assert payload.critical_distance is not None
+    assert [
+        (p.a, p.b)
+        for p in payload.pairwise
+        if p.rank_gap > payload.critical_distance
+    ] == [("a", "c")]
 
 
 def test_critical_value_is_exact_for_any_k_and_alpha() -> None:

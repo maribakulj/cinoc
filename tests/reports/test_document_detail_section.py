@@ -61,8 +61,8 @@ def _result(*, with_worst: bool = False) -> RunResult:
     return RunResult(
         manifest=manifest,
         pipelines=(
-            PipelineResult(pipeline="tesseract", view="text", aggregate=()),
-            PipelineResult(pipeline="pero", view="text", aggregate=()),
+            PipelineResult(pipeline="tesseract", view="text", conditional_aggregate=()),
+            PipelineResult(pipeline="pero", view="text", conditional_aggregate=()),
         ),
         documents=docs,
         analyses=analyses,

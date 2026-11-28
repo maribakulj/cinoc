@@ -36,7 +36,7 @@ def _result(*documents: RunDocumentResult) -> RunResult:
         completed_at=FIXED,
     )
     pipelines = tuple(
-        PipelineResult(pipeline=p, view="text", aggregate=())
+        PipelineResult(pipeline=p, view="text", conditional_aggregate=())
         for p in dict.fromkeys(d.pipeline for d in documents)
     )
     return RunResult(manifest=manifest, pipelines=pipelines, documents=documents)

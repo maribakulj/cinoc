@@ -36,7 +36,7 @@ def _result(*valeurs: float | None, metric: str = "cer") -> RunResult:
             PipelineResult(
                 pipeline=f"p{i}",
                 view="text",
-                aggregate=(MetricScore(metric=metric, value=v),),
+                conditional_aggregate=(MetricScore(metric=metric, value=v),),
             )
             for i, v in enumerate(valeurs)
         ),

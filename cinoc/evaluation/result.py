@@ -25,6 +25,7 @@ from typing import Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from cinoc.domain.evaluation import FailurePolicy
 from cinoc.domain.run import RunManifest
 from cinoc.domain.usage import (
     FailureReason,
@@ -38,7 +39,7 @@ from cinoc.evaluation.statistics import ScalarReason, Statistic
 
 #: Version du schéma. Une rupture **explicite** : un ``RunResult`` d'une autre
 #: version est refusé à la lecture, jamais converti (CLAUDE.md §5.1).
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 
 #: Axe 1 — la métrique s'applique-t-elle à ce document (§ 2.1 b) ? Les
@@ -87,7 +88,10 @@ class MetricScore(BaseModel):
     rien n'a été mesuré. Par défaut, ``stat`` n'est présente que si les axes 1
     à 3 sont au vert ; la statistique d'une observation **partielle** ou
     **tronquée**, calculée sur ce qui a été produit, est gardée dans
-    ``stat_partielle`` (§ 2.1 f).
+    ``stat_partielle`` (§ 2.1 f) ; celle d'une unité **sans sortie exploitable**
+    (échec, délai, sortie absente ou illisible), c'est-à-dire la statistique
+    « sortie vide » qui entre dans la qualité opérationnelle, est dans
+    ``stat_vide`` (D3).
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -104,10 +108,21 @@ class MetricScore(BaseModel):
     #: la sortie est partielle ou tronquée (axe 3) — conservée, non notée par
     #: défaut. ``None`` pour une observation complète, ou sans aucune sortie.
     stat_partielle: Statistic | None = None
-    #: **Agrégat** : le macro (moyenne des scalaires sur D^M_P, par document ou
-    #: par grappe selon la pondération du corpus), ``None`` si la métrique n'en
-    #: a pas (dénominateur d'hypothèse) ou si D^M_P est vide ; ``macro_support``
-    #: = |D^M_P|.
+    #: **Par document** : la statistique « sortie vide » — celle de la référence
+    #: face à une sortie vide du type noté —, présente pour toute unité attendue
+    #: dont la sortie est inexploitable (échec, délai, sortie absente ou
+    #: illisible). C'est ce qui entre dans la qualité **opérationnelle** à la
+    #: place de la sortie (§ 2.1 c, D3) : l'archive porte tout ce qui permet de
+    #: recalculer chaque agrégat. ``None`` pour une sortie lisible.
+    stat_vide: Statistic | None = None
+    #: **Inter-moteurs** : ``exploratory`` pour tout scalaire issu de l'ancienne
+    #: inférence (``significance_p``) — jusqu'à la tranche I, aucun résultat de
+    #: test n'est confirmatoire (§ 2.1 d, rév. 7). ``None`` ailleurs.
+    status: Literal["exploratory"] | None = None
+    #: **Agrégat** : le macro (moyenne **exacte** des scalaires sur D^M_P, par
+    #: document ou par grappe selon la pondération du corpus), ``None`` si la
+    #: métrique n'en a pas (dénominateur d'hypothèse) ou si D^M_P est vide ;
+    #: ``macro_support`` = |D^M_P|.
     macro: float | None = None
     macro_support: int | None = Field(default=None, ge=0)
     #: **Agrégat** : ``{motif : nombre d'attendus non entrés}`` — le motif est la
@@ -126,9 +141,13 @@ class MetricScore(BaseModel):
     support: int | None = Field(default=None, ge=0)
     #: **Agrégat seulement** — « n attendus » à côté de ``support`` (« n notés ») :
     #: les observations ``applicable`` (axe 1), qu'elles aient été notées ou non.
-    #: L'écart entre les deux est exactement ce que la politique d'échec a
-    #: retiré de l'agrégat ; ses motifs sont dans ``coverage``. ``None``
-    #: par-document.
+    #: Dans la qualité **conditionnelle**, l'écart entre les deux est ce que les
+    #: axes 2 et 3 ont écarté (échecs, sorties partielles ou tronquées) ; ses
+    #: motifs sont dans ``coverage``. Dans la qualité **opérationnelle**, les
+    #: échecs sont notés comme une sortie vide et les partielles telles que
+    #: produites : seul reste hors de ``support`` ce que rien ne permet de noter
+    #: (vérité terrain illisible). ``expected`` et ``coverage`` sont les mêmes
+    #: pour les deux. ``None`` par-document.
     expected: int | None = Field(default=None, ge=0)
 
     @model_validator(mode="after")
@@ -159,6 +178,11 @@ class RunDocumentResult(BaseModel):
     #: Projection de ``DocumentRef.metadata["stratum"]`` ; consommée par la
     #: composition / filtres / CER par strate (rendus seulement si présent).
     stratum: str | None = Field(default=None, max_length=128)
+    #: Grappe du document (``DocumentRef.cluster``) ; ``None`` si le corpus n'en
+    #: déclare pas — un document sans grappe forme la sienne (B3). Portée par
+    #: chaque document pour que le macro par grappe se recalcule depuis le seul
+    #: JSON (D4, invariant I).
+    cluster: str | None = Field(default=None, max_length=256)
     #: **Référence** image du document (chemin corpus-relatif ou URL IIIF),
     #: jamais les octets → déterminisme/hash du résultat intacts. Résolue en
     #: vignette **au rendu** (adapter, hors résultat). ``None`` = pas d'image.
@@ -174,25 +198,34 @@ class PipelineResult(BaseModel):
       tronquées notées telles que produites, échecs notés comme une sortie
       vide : ce que l'utilisateur reçoit réellement.
 
-    ``aggregate`` est la qualité **principale**, choisie par la politique
-    d'échec du run (``RunManifest.failure_policy``) : ``exclude`` → conditionnelle,
-    ``empty_page`` → opérationnelle. Les deux portent la même couverture
-    (``expected``, ``coverage``) : ni l'une ni l'autre ne s'améliore sans que la
-    couverture le dise. Population cible et pondération des grappes (B3) du
+    L'agrégat **principal** n'est pas stocké : ``principal_aggregate`` le dérive
+    de la politique d'échec du run (``RunManifest.failure_policy`` : ``exclude``
+    → conditionnelle, ``empty_page`` → opérationnelle). Les deux portent la même
+    couverture (``expected``, ``coverage``) : ni l'une ni l'autre ne s'améliore
+    sans que la couverture le dise. Population cible et pondération des grappes (B3) du
     corpus sont publiées avec elles ; ``line_outcomes`` somme les issues de
     lignes des unités (correction structurée, § 2.1 f).
+
+    Un pipeline qui **ne voit pas** la vue (aucune étape ne déclare un type
+    candidat) n'a pas d'entrée ici : il n'entre dans aucun agrégat de cette vue
+    (D1).
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     pipeline: str = Field(min_length=1, max_length=128)
     view: str = Field(min_length=1, max_length=128)
-    aggregate: tuple[MetricScore, ...] = Field(default_factory=tuple)
     conditional_aggregate: tuple[MetricScore, ...] = Field(default_factory=tuple)
     operational_aggregate: tuple[MetricScore, ...] = Field(default_factory=tuple)
     target_population: str | None = Field(default=None, max_length=512)
     cluster_weighting: Literal["document", "cluster"] = "document"
     line_outcomes: LineOutcomes | None = None
+
+    def principal_aggregate(self, policy: FailurePolicy) -> tuple[MetricScore, ...]:
+        """La qualité que ``policy`` désigne comme **principale** (Q9)."""
+        if policy == "empty_page":
+            return self.operational_aggregate
+        return self.conditional_aggregate
 
 
 class DocumentUsage(BaseModel):
@@ -231,12 +264,13 @@ class DocumentUsage(BaseModel):
     reason: FailureReason | None = None
     message: str | None = Field(default=None, max_length=2000)
     line_outcomes: LineOutcomes | None = None
-    #: L'état déclaré **par étape** (``partial`` · ``truncated``), vide si
-    #: l'unité est complète. Chaque vue lit celui de **son** étape et des
+    #: L'état déclaré **par étape** : l'ensemble **trié** de ses issues
+    #: (``partial`` · ``truncated``, les deux si l'étape est coupée et incomplète),
+    #: vide si l'unité est complète. Chaque vue lit celui de **son** étape et des
     #: étapes qui la précèdent ; absent d'une unité qui ne nomme pas ses étapes,
     #: ``outcome`` s'applique à toutes les vues (la tranche 2 le porte au
-    #: ``StepRecord``).
-    step_issues: dict[str, StepIssue] = Field(default_factory=dict)
+    #: ``StepRecord``, sans changer sa sémantique).
+    step_issues: dict[str, tuple[StepIssue, ...]] = Field(default_factory=dict)
     resumed: bool = False
 
     @model_validator(mode="after")
@@ -245,6 +279,11 @@ class DocumentUsage(BaseModel):
             raise ValueError(
                 "un motif d'échec accompagne une issue « failed », et elle seule."
             )
+        for issues in self.step_issues.values():
+            if not issues or list(issues) != sorted(set(issues)):
+                raise ValueError(
+                    "les issues d'une étape forment un ensemble trié, non vide."
+                )
         return self
 
 
@@ -253,18 +292,21 @@ class RunResult(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    #: 6 (refonte des contrats, tranches 1a et 1b, D-313 — **une** livraison, v6
-    #: n'a jamais été publiée : 1b y ajoute des champs optionnels, sans bump) :
-    #: une observation porte la **statistique suffisante** de sa famille
-    #: (``stat``) et non plus un ratio et un poids ; l'agrégat est la
-    #: finalisation de la somme des statistiques
-    #: (micro exact), un scalaire indéfini dit pourquoi (``scalar_reason``),
-    #: une exactitude publie son taux d'erreur non tronqué, et une observation
-    #: ses axes. Les valeurs de plusieurs métriques changent (F1 micro, pages
-    #: blanches au micro, plancher au corpus, comptes canoniques) : un JSON
-    #: antérieur est **refusé** avec un message, jamais relu ni converti — on le
-    #: re-note depuis son archive (``cinoc run --resume-dir … --offline``).
-    schema_version: Literal[6] = 6
+    #: 7 (refonte des contrats, D-313). v6 (tranches 1a, 1b) : une observation
+    #: porte la **statistique suffisante** de sa famille (``stat``) et non plus
+    #: un ratio et un poids ; l'agrégat est la finalisation de la somme des
+    #: statistiques (micro exact), un scalaire indéfini dit pourquoi
+    #: (``scalar_reason``), une exactitude publie son taux d'erreur non tronqué,
+    #: une observation ses axes. v7 (revue de 1a + 1b) : ``aggregate`` n'est plus
+    #: stocké (``principal_aggregate`` le dérive de ``failure_policy``), chaque
+    #: observation porte sa statistique « sortie vide » (``stat_vide``) et chaque
+    #: document sa grappe (``cluster``) — tout agrégat se recalcule depuis le
+    #: JSON —, ``step_issues`` est un ensemble trié d'issues par étape, un
+    #: pipeline hors vue n'a pas d'entrée d'agrégat. Les valeurs de plusieurs
+    #: métriques changent d'une version à l'autre : un JSON antérieur est
+    #: **refusé** avec un message, jamais relu ni converti — on le re-note depuis
+    #: son archive (``cinoc run --resume-dir … --offline``).
+    schema_version: Literal[7] = 7
     manifest: RunManifest
     pipelines: tuple[PipelineResult, ...] = Field(default_factory=tuple)
     documents: tuple[RunDocumentResult, ...] = Field(default_factory=tuple)
@@ -279,6 +321,12 @@ class RunResult(BaseModel):
     #: — ordre déterministe. Les rapports lisent, ne recalculent pas.
     analyses: tuple[Analysis, ...] = Field(default_factory=tuple)
 
+    def principal_aggregate(self, entry: PipelineResult) -> tuple[MetricScore, ...]:
+        """L'agrégat **principal** d'un pipeline, dérivé de la politique d'échec
+        du run : ``exclude`` → la qualité conditionnelle, ``empty_page`` → la
+        qualité opérationnelle. Jamais stocké une seconde fois (Q9)."""
+        return entry.principal_aggregate(self.manifest.failure_policy)
+
     @model_validator(mode="before")
     @classmethod
     def _refuse_other_schemas(cls, data: Any) -> Any:
@@ -287,10 +335,9 @@ class RunResult(BaseModel):
             if version != SCHEMA_VERSION:
                 raise ValueError(
                     f"RunResult au schéma v{version}, attendu v{SCHEMA_VERSION} : "
-                    "les observations y étaient des ratios pondérés, sans "
-                    "statistique suffisante — le fichier n'est ni relu ni "
-                    "converti. Re-notez le run depuis son archive "
-                    "(cinoc run --resume-dir <archive> --offline)."
+                    "le sens ou la forme des agrégats a changé depuis — le "
+                    "fichier n'est ni relu ni converti. Re-notez le run depuis "
+                    "son archive (cinoc run --resume-dir <archive> --offline)."
                 )
         return data
 

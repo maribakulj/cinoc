@@ -23,7 +23,6 @@ from cinoc.domain.documents import DocumentRef, GroundTruthRef
 from cinoc.domain.errors import AdapterStepError
 from cinoc.domain.evaluation import EvaluationSpec, EvaluationView
 from cinoc.domain.layout import CanonicalLayout, LayoutPage, Line, Region
-from cinoc.domain.pipeline import PipelineSpec
 from cinoc.domain.run import RunManifest
 from cinoc.evaluation.context import DocContext
 from cinoc.evaluation.metrics.layout import region_cer
@@ -33,6 +32,7 @@ from cinoc.pipeline.fanout import run_region_fanout
 from cinoc.pipeline.run_control import RunControl
 from cinoc.pipeline.types import RunContext
 from cinoc.reports.renderer import default_report_renderer
+from tests.declared_specs import declared_pipeline
 
 FIXED = datetime(2026, 1, 1, tzinfo=UTC)
 LAYOUT_VIEW = EvaluationView(
@@ -134,7 +134,7 @@ def _manifest() -> RunManifest:
         corpus_name="c",
         n_documents=1,
         pipeline_specs=(
-            PipelineSpec(name="seg", initial_inputs=(ArtifactType.IMAGE,)),
+            declared_pipeline("seg"),
         ),
         code_version="1.0",
         started_at=FIXED,
@@ -191,7 +191,7 @@ def test_end_to_end_region_cer(tmp_path: Path) -> None:
         tmp_path, {"r1": "hello world", "r2": "second blocX"}
     )
     result = _evaluate(tmp_path, filled)
-    aggregate = result.pipelines[0].aggregate[0]  # type: ignore[attr-defined]
+    aggregate = result.principal_aggregate(result.pipelines[0])[0]  # type: ignore[attr-defined]
     assert aggregate.metric == "region_cer"
     assert aggregate.value == pytest.approx(1 / 23)
     assert aggregate.support == 1
@@ -212,7 +212,7 @@ def test_partial_failure_does_not_abort_page(tmp_path: Path) -> None:
     assert page.regions[1].lines == ()  # r2 laissée vide, page non abattue
     # r1 exact (0/11) ; r2 vide → suppression totale de "second block" (12/12).
     result = _evaluate(tmp_path, filled)
-    aggregate = result.pipelines[0].aggregate[0]  # type: ignore[attr-defined]
+    aggregate = result.principal_aggregate(result.pipelines[0])[0]  # type: ignore[attr-defined]
     assert aggregate.value == pytest.approx(12 / 23)
 
 

@@ -88,7 +88,10 @@ def _registry() -> ModuleRegistry:
 
 def _cer(result: RunResult) -> float | None:
     (score,) = (
-        s for p in result.pipelines for s in p.aggregate if s.metric == "cer"
+        s
+        for p in result.pipelines
+        for s in result.principal_aggregate(p)
+        if s.metric == "cer"
     )
     return score.value
 

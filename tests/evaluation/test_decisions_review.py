@@ -5,6 +5,9 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
+from pydantic import ValidationError
+
 from cinoc.domain.run import RunManifest
 from cinoc.evaluation.analysis import PipelineDecisions
 from cinoc.evaluation.decisions import decisions_analysis
@@ -17,7 +20,7 @@ from tests.evaluation.test_decisions import _ligne, _outputs, _payload
 def test_review_counts_lines_once_per_reason_and_keeps_every_detail(
     tmp_path: Path,
 ) -> None:
-    first = _ligne("L1", "a", "b") | {
+    first = _ligne("L1", "a", "b", line_class="review_required") | {
         "status": "review_required",
         "review_reasons": [
             {"code": "systematic_removal", "detail": "a"},
@@ -26,19 +29,21 @@ def test_review_counts_lines_once_per_reason_and_keeps_every_detail(
         ],
     }
     # A hyphen partner can be referred without changing its own text.
-    second = _ligne("L2", "c", "c") | {
+    second = _ligne("L2", "c", "c", line_class="review_required") | {
         "status": "review_required",
         "review_reasons": [{"code": "systematic_removal", "detail": "c"}],
     }
     row = _payload(
         decisions_analysis("text", _outputs(tmp_path, first, second))
     ).pipelines[0]
-    assert (row.changed, row.untouched, row.refused, row.review_required) == (
-        1,
-        1,
-        0,
-        2,
-    )
+    # Classes **disjointes** (§ 2.1 f) : une ligne à relire n'est pas comptée
+    # corrigée, qu'elle ait changé ou non.
+    assert (
+        row.corrected,
+        row.abstained,
+        sum(r.n for r in row.refused),
+        row.review_required,
+    ) == (0, 0, 0, 2)
     assert {r.code: r.n for r in row.review_reasons} == {
         "systematic_removal": 2,
         "digits_changed": 1,
@@ -47,25 +52,29 @@ def test_review_counts_lines_once_per_reason_and_keeps_every_detail(
     assert len(row.samples) == 2
 
 
-def test_archives_without_review_fields_remain_readable_and_unknown() -> None:
-    row = PipelineDecisions.model_validate(
-        {
-            "pipeline": "p",
-            "n_lines": 1,
-            "changed": 1,
-            "refused": 0,
-            "untouched": 0,
-        }
-    )
-    assert row.review_required is None
-    assert row.review_reasons == ()
+def test_a_bilan_of_the_old_shape_is_refused_not_read() -> None:
+    """Les classes sont **déclarées** et disjointes : un bilan à l'ancienne
+    forme (changées, intactes — reconstruites d'après les textes) n'est pas relu
+    comme tel, il est refusé (rupture de schéma, v7)."""
+    with pytest.raises(ValidationError):
+        PipelineDecisions.model_validate(
+            {
+                "pipeline": "p",
+                "n_lines": 1,
+                "changed": 1,
+                "refused": 0,
+                "untouched": 0,
+            }
+        )
 
 
 def test_review_count_does_not_depend_on_sample_limit_or_available_reasons(
     tmp_path: Path,
 ) -> None:
     lines = [
-        _ligne(f"L{i}", "a", "b") | {"status": "review_required"} for i in range(41)
+        _ligne(f"L{i}", "a", "b", line_class="review_required")
+        | {"status": "review_required"}
+        for i in range(41)
     ]
     row = _payload(decisions_analysis("text", _outputs(tmp_path, *lines))).pipelines[0]
     assert row.review_required == 41
@@ -82,13 +91,22 @@ def test_decision_counts_use_complete_text_not_the_display_excerpt(
             "text",
             _outputs(
                 tmp_path,
-                _ligne("L1", prefix + "x", prefix + "y", proposed=prefix + "y"),
-                _ligne("L2", prefix + "x", prefix + "x", proposed=prefix + "x"),
-                _ligne("L3", prefix + "x", prefix + "x", proposed=prefix + "y"),
+                _ligne(
+                    "L1", prefix + "x", prefix + "y", proposed=prefix + "y",
+                    line_class="corrected",
+                ),
+                _ligne(
+                    "L2", prefix + "x", prefix + "x", proposed=prefix + "x",
+                    line_class="abstained",
+                ),
+                _ligne(
+                    "L3", prefix + "x", prefix + "x", proposed=prefix + "y",
+                    line_class="refused",
+                ),
             ),
         )
     ).pipelines[0]
-    assert (row.changed, row.untouched, row.refused) == (1, 1, 1)
+    assert (row.corrected, row.abstained, sum(r.n for r in row.refused)) == (1, 1, 1)
     assert row.samples[0].source_text == row.samples[0].final_text == prefix
 
 
@@ -98,7 +116,7 @@ def test_review_status_and_reasons_are_escaped_in_the_report(tmp_path: Path) -> 
         "text",
         _outputs(
             tmp_path,
-            _ligne("L1", "a", "b")
+            _ligne("L1", "a", "b", line_class="review_required")
             | {
                 "status": malicious,
                 "review_reasons": [{"code": malicious, "detail": malicious}],

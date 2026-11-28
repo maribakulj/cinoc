@@ -146,7 +146,11 @@ def test_verdicts_match_scipy_on_5000_seeded_draws() -> None:
                 posthocs += 1
                 large_k_posthocs += len(names) >= 30
                 expected = _nemenyi_pairs(matrix, names, alpha)
-                got = {(pair.a, pair.b): pair.significant for pair in payload.pairwise}
+                assert payload.critical_distance is not None
+                got = {
+                    (pair.a, pair.b): pair.rank_gap > payload.critical_distance
+                    for pair in payload.pairwise
+                }
                 assert got == expected
                 significant_pairs += sum(expected.values())
                 # Barres CD ⇔ paires : indiscernables ⇔ une barre en commun.
