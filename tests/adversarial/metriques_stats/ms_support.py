@@ -5,7 +5,8 @@ disque, ``evaluate_run`` (couche 3) et le registre par défaut. Aucun
 monkeypatch du code testé.
 
 Importé de la contre-expertise (commit ``04a1c17b``) ; la refonte y ajoute
-``Bench.truncate`` (une sortie coupée, issue ``truncated``), pour R6.
+``Bench.truncate`` (une sortie coupée, issue ``truncated``), pour R6, et
+``Bench.partial`` (étape déclarée partielle, issue ``partial``), pour § 2.1 f.
 """
 
 from __future__ import annotations
@@ -27,6 +28,7 @@ from cinoc.evaluation.analysis import InferencePayload
 from cinoc.evaluation.registry import MetricRegistry, register_default_metrics
 from cinoc.evaluation.result import DocumentUsage, MetricScore, RunResult
 from cinoc.evaluation.runner import evaluate_run
+from tests.adversarial._contrat import issue_partielle
 
 FIXED = datetime(2026, 1, 1, tzinfo=UTC)
 
@@ -56,6 +58,7 @@ class Bench:
     )
     failed: list[tuple[str, str]] = field(default_factory=list)
     truncated: set[tuple[str, str]] = field(default_factory=set)
+    partials: set[tuple[str, str]] = field(default_factory=set)
     pipelines: list[str] = field(default_factory=list)
 
     def _write(self, name: str, content: str | bytes) -> Path:
@@ -102,6 +105,13 @@ class Bench:
         self.output(pipeline, doc_id, content)
         self.truncated.add((pipeline, doc_id))
 
+    def partial(self, pipeline: str, doc_id: str, content: str) -> None:
+        """Sortie ``content`` d'une étape **déclarée partielle** (§ 2.1 f) :
+        l'unité est ``partial``, ce qui a été produit reste lisible."""
+        issue_partielle()
+        self.output(pipeline, doc_id, content)
+        self.partials.add((pipeline, doc_id))
+
     def fail(self, pipeline: str, doc_id: str) -> None:
         if pipeline not in self.pipelines:
             self.pipelines.append(pipeline)
@@ -132,7 +142,13 @@ class Bench:
                         document_id=d,
                         pipeline=p,
                         usage=ResourceUsage(duration_seconds=1.0),
-                        outcome="truncated" if (p, d) in self.truncated else "ok",
+                        outcome=(
+                            "truncated"
+                            if (p, d) in self.truncated
+                            else "partial"
+                            if (p, d) in self.partials
+                            else "ok"
+                        ),
                     )
                 )
         manifest = RunManifest(

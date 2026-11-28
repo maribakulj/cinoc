@@ -20,7 +20,12 @@ import pytest
 
 from cinoc.adapters.extension import AdapterStepError
 from cinoc.evaluation.result import RunResult
-from tests.adversarial._contrat import couverture, politique_empty_page, support_micro
+from tests.adversarial._contrat import (
+    agregat_operationnel,
+    couverture,
+    politique_empty_page,
+    support_micro,
+)
 
 from ._kit import (
     Behaviour,
@@ -127,13 +132,51 @@ def test_max_error__echec_note_comme_une_page_vide(tmp_path: Path, metric: str) 
 
 @pytest.mark.valide
 def test_max_error__un_echec_compte_comme_note_deplace_lagregat(tmp_path: Path) -> None:
-    """``bow_precision`` pèse par la taille de l'**hypothèse** : l'échec noté 0
-    a un poids nul. S'il est compté dans « n notés » (3/3), l'agrégat doit en
-    porter la trace ; il vaut pourtant exactement celui des deux pages réussies."""
-    result = _three_engines(tmp_path, ("bow_precision",), failure_policy="max_error")
-    agg = aggregate(result, "panne", "bow_precision")
-    failed = per_document(result, "panne", "b", "bow_precision")
-    assert not (agg.support == 3 and agg.value == 1.0), (
-        f"échec noté {failed.value} (poids {failed.support}) ; agrégat "
-        f"{agg.value} sur {agg.support}/{agg.expected} — identique sans l'échec"
+    """Reformulé (§ 2.1 e, f, A7 ; ``max_error`` est retiré). Intention conservée :
+    un échec **compté comme noté** (sous ``empty_page``, une sortie vide) ne doit
+    pas laisser l'agrégat identique à celui des pages réussies sans que rien ne le
+    dise. Ce qui change, calculé à la main sur ``panne`` (a et c parfaits, b en
+    échec, référence de 7 mots) :
+
+    - **ce qui est noté** : l'échec n'est plus noté 0 mais comme une hypothèse
+      vide (tp 0, fp 0, fn 7), non plus par ``max_error`` ;
+    - ``bow_precision`` (dénominateur : l'hypothèse) **ne bouge pas**, par
+      construction : une sortie vide n'ajoute ni vrai ni faux positif, Σtp/Σ|hyp|
+      reste 14/14 = 1,0. Le document est désormais compté (support 3/3, scalaire
+      indéfini ``zero_denominator``), et sa trace est dans la statistique (fn = 7),
+      non dans la précision : l'ancien attendu « l'agrégat de précision doit
+      changer » n'est plus vrai du côté précision ;
+    - ``bow_recall`` (dénominateur : la référence) **bouge** : de 14/14 = 1,0 (a et
+      c seuls, par défaut) à 14/21 = 2/3 sous ``empty_page`` ; ``bow_f1`` suit :
+      2·14/(2·14 + 0 + 7) = 0,8 ;
+    - par défaut, aucune imputation : précision et rappel valent 1,0 sur 2 notés
+      sur 3 attendus, et la couverture dit ``step_failed`` : 1.
+    """
+    metrics = ("bow_precision", "bow_recall", "bow_f1")
+    sensible = _three_engines(
+        tmp_path / "sensible", metrics, failure_policy=politique_empty_page()
+    )
+    precision = aggregate(sensible, "panne", "bow_precision")
+    rappel = aggregate(sensible, "panne", "bow_recall")
+    f1 = aggregate(sensible, "panne", "bow_f1")
+    assert rappel.value == pytest.approx(14 / 21), (
+        f"un échec noté comme sortie vide doit déplacer le rappel : {rappel.value}"
+    )
+    assert f1.value == pytest.approx(0.8)
+    assert precision.value == pytest.approx(1.0), "précision : sortie vide"
+    assert (support_micro(precision), precision.expected) == (3, 3)
+    assert (support_micro(rappel), rappel.expected) == (3, 3)
+    # Par défaut : aucune imputation (agrégat conditionnel) ; la qualité
+    # opérationnelle, publiée à côté, note l'échec comme une sortie vide.
+    defaut = _three_engines(tmp_path / "defaut", metrics)
+    for metric in metrics:
+        agg = aggregate(defaut, "panne", metric)
+        assert agg.value == pytest.approx(1.0), metric
+        assert (support_micro(agg), agg.expected) == (2, 3), metric
+        assert couverture(agg) == {"step_failed": 1}, metric
+    assert agregat_operationnel(defaut, "panne", "bow_recall").value == pytest.approx(
+        14 / 21
+    )
+    assert agregat_operationnel(defaut, "panne", "bow_precision").value == (
+        pytest.approx(1.0)
     )

@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+import pytest
+
 from cinoc.domain.run import RunManifest
 from cinoc.evaluation.analysis import (
     Analysis,
@@ -25,6 +27,7 @@ from cinoc.evaluation.analysis import (
 from cinoc.evaluation.result import MetricScore, RunResult
 from cinoc.reports.section import SectionContext
 from cinoc.reports.sections.cross_engine import CrossEngineSection
+from tests.adversarial._contrat import etiquette_exploratoire, verdicts
 
 FIXED = datetime(2026, 1, 1, tzinfo=UTC)
 
@@ -66,6 +69,7 @@ def _wilcoxon(p: float, p_holm: float, family: int) -> InferencePayload:
     )
 
 
+@pytest.mark.tranche("1b")
 def test_significant_verdict_and_parsed_columns() -> None:
     html = CrossEngineSection().render(
         _result("text:cer:significance_p", 0.03, _wilcoxon(0.03, 0.03, 1)),
@@ -77,18 +81,24 @@ def test_significant_verdict_and_parsed_columns() -> None:
     assert ">Texte<" in html and ">cer<" in html
     assert "0,0300" in html
     assert "Wilcoxon signé-rangs" in html  # le test nommé, pas « Wilcoxon / Friedman »
-    assert ">significatif<" in html  # p corrigée = 0,03 < 0,05
+    # Rév. 7 (inverse) : plus de verdict « significatif » ; la p reste un nombre
+    # (0,0300 ci-dessus) et le test est étiqueté exploratoire.
+    assert not verdicts(html)
+    assert etiquette_exploratoire(html)
 
 
+
+@pytest.mark.tranche("1b")
 def test_verdict_reads_the_holm_corrected_p() -> None:
-    """p brute 0,03 parmi 7 tests : corrigée 0,21 → non significatif (D7)."""
+    """p brute 0,03 parmi 7 tests : corrigée 0,21 (D7). Rév. 7 : les deux p sont
+    publiées comme nombres, sans verdict « non significatif »."""
     html = CrossEngineSection().render(
         _result("text:cer:significance_p", 0.03, _wilcoxon(0.03, 0.21, 7)),
         SectionContext(),
     )
     assert html is not None
     assert "0,0300" in html and "0,2100" in html
-    assert "non sig." in html and ">significatif<" not in html
+    assert not verdicts(html) and etiquette_exploratoire(html)
     assert "Holm sur les 7 test(s)" in html
 
 
@@ -156,6 +166,7 @@ def _friedman(**update: object) -> InferencePayload:
     return payload.model_copy(update=update)
 
 
+@pytest.mark.tranche("1b")
 def test_inference_block_renders_ranks_posthoc_and_intervals() -> None:
     result = _result("text:cer:significance_p", 0.0017, _friedman())
     html = CrossEngineSection().render(result, SectionContext())
@@ -170,7 +181,10 @@ def test_inference_block_renders_ranks_posthoc_and_intervals() -> None:
     assert "0,1062" in html
     # Les paires, pas des groupes disjoints : seule alpha – gamma diffère, et
     # les barres qui se chevauchent le montrent.
-    assert "paires significatives : alpha – gamma." in html
+    # Rév. 7 : la paire que la distance critique sépare reste nommée (comme
+    # paire), sans la dire « significative ».
+    assert "alpha – gamma" in html and "paires significatives" not in html
+    assert not verdicts(html)
     assert "{alpha, beta} · {beta, gamma}" in html
     assert "groupes indiscernables" not in html
     # Déterminisme bit-à-bit du rendu.
@@ -253,20 +267,23 @@ def test_inter_engine_blocks_render_with_documented_bound() -> None:
     assert html == CrossEngineSection().render(_inter_engine_result(), SectionContext())
 
 
+@pytest.mark.tranche("1b")
 def test_renders_english_labels() -> None:
     # Mêmes fixtures, contexte EN : libellés anglais présents, FR absents.
     result = _result("text:cer:significance_p", 0.03, _wilcoxon(0.03, 0.03, 1))
     html = CrossEngineSection().render(result, SectionContext(lang="en"))
     assert html is not None
     assert "Inter-engine significance" in html and "Significativité" not in html
-    assert "significant" in html and "significatif" not in html
+    assert etiquette_exploratoire(html, "en") and not etiquette_exploratoire(html)
+    assert not verdicts(html) and "significatif" not in html
     assert "Wilcoxon signed-rank" in html and "raw p" in html
     posthoc = CrossEngineSection().render(
         _result("text:cer:significance_p", 0.0017, _friedman()),
         SectionContext(lang="en"),
     )
     assert posthoc is not None
-    assert "significant pairs: alpha – gamma." in posthoc
+    assert "alpha – gamma" in posthoc and "significant pairs" not in posthoc
+    assert not verdicts(posthoc)
     assert "CD bars" in posthoc and "Barres CD" not in posthoc
     assert "aggregate (micro)" in posthoc and "agrégat" not in posthoc
     assert ">View<" in html and ">Vue<" not in html

@@ -31,6 +31,7 @@ from cinoc.domain.pipeline import PipelineSpec, PipelineStep
 from cinoc.domain.run_spec import RunSpec
 from cinoc.evaluation.result import RunResult
 from cinoc.reports import default_report_renderer
+from tests.adversarial._contrat import etiquette_exploratoire
 
 _FIXTURES = (
     Path(__file__).resolve().parent.parent
@@ -211,6 +212,7 @@ def test_bnl_cross_engine_significance_is_live(bnl_result: RunResult) -> None:
     )
 
 
+@pytest.mark.tranche("1b")
 def test_bnl_posthoc_shows_the_pair_that_differs(bnl_result: RunResult) -> None:
     """S11 (D-283) : 5 moteurs, mode rapide — le test est un **Friedman**, il
     tourne sans qu'on le demande, et le post-hoc nomme la **seule** paire que
@@ -231,7 +233,13 @@ def test_bnl_posthoc_shows_the_pair_that_differs(bnl_result: RunResult) -> None:
     assert all(payload.intervals == () for payload in payloads.values())
     html = default_report_renderer().render(bnl_result, title="Cinoc — BNL")
     assert "Friedman : p = " in html and "Wilcoxon :" not in html
-    assert "paires significatives : easyocr – fra." in html
+    # Rév. 7 : la paire reste nommée, sans verdict « significative », et le
+    # test est étiqueté exploratoire dans le rapport.
+    assert "easyocr – fra" in html and "paires significatives" not in html
+    section = html.split("<h2>Significativité inter-moteurs</h2>", 1)[1].split(
+        "<h2>", 1
+    )[0]
+    assert etiquette_exploratoire(section)
 
 
 def test_bnl_report_is_octet_stable(bnl_result: RunResult) -> None:

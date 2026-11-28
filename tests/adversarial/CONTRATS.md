@@ -46,7 +46,7 @@ Ce sont des précisions ciblées, pas une révision générale.
 | B9b | § 6.3 | La calibration empirique est validée en principe, pas comme preuve générale. Une calibration à α = 0,05 ne démontre rien aux seuils extrêmes qu'exige Holm. |
 | B9c | § 2.1 d | Aucune solution validée. Les familles à dénominateur d'hypothèse rendent **« inférence non estimable »** ; les options passent en recherche (§ 6.3). |
 | Tranches | § 5 | Ordre : 1a, 1b, 2, 3, 4 (métrologiques), puis I (inférence conditionnelle) ; R (recherche) sans échéance. |
-| Tests de 1a et 1b | § 4.1 | Liste exacte : 17 tests valides importés, dont 2 reformulés ; 9 discutables reformulés ; tests à écrire. |
+| Tests de 1a et 1b | § 4.1 | Liste exacte : 17 tests valides importés, dont 3 reformulés (rév. 7 : `mx::…deplace_lagregat`) ; 9 discutables reformulés ; tests à écrire, dont les tests de la révision n° 7 (§ 4.1, « 1b · Tests de la révision n° 7 »). |
 | Historique | annexe | Les révisions 1 à 5 sont déplacées en annexe, sans modification de leur contenu. |
 
 ## Principe : garanties métrologiques et garanties inférentielles
@@ -569,7 +569,7 @@ Les chemins sont relatifs à `tests/adversarial/`. **ms** = `metriques_stats/tes
 
 Test à inverser : `tests/evaluation/test_metrics_text.py::test_cer_weight_is_reference_length`.
 
-**1b · Valides importés (6)**, plus **2 valides reformulés** :
+**1b · Valides importés (6, dont 1 reformulé par la révision n° 7)**, plus **2 valides reformulés** :
 
 | Test | Invariant | Attendu |
 |---|---|---|
@@ -577,7 +577,7 @@ Test à inverser : `tests/evaluation/test_metrics_text.py::test_cer_weight_is_re
 | app `::test_applicabilite__artefact_reference_mais_absent_du_disque_nabat_que_son_unite` | A2 | tel quel |
 | app `::test_applicabilite__fanout_entierement_en_echec_nest_pas_une_unite_ok` | A2 | tel quel |
 | app `::test_applicabilite__sortie_incompatible_refusee_ou_attendue` | A2, F8 | tel quel |
-| mx `::test_max_error__un_echec_compte_comme_note_deplace_lagregat` | A7 | tel quel |
+| mx `::test_max_error__un_echec_compte_comme_note_deplace_lagregat` | A7, § 2.1 f | **reformulé (rév. 7)** : `max_error` est retiré. Sous `empty_page`, l'échec est une hypothèse vide (tp 0, fp 0, fn 7). `bow_precision` (dénominateur : l'hypothèse) **ne bouge pas** (14/14), par construction ; `bow_recall` bouge de 14/14 à 14/21, `bow_f1` vaut 0,8. Par défaut : 1,0 sur 2 notés sur 3 attendus, couverture `step_failed` : 1 ; l'agrégat **opérationnel** vaut 14/21 (rappel). |
 | ms `::test_ner_payload__label_absent_de_la_gt__ne_plante_pas` | A2 (rappel indéfini à l'axe 4) | tel quel |
 | app `::test_applicabilite__reference_vide_nest_pas_comptee_notee` | A1, A4 | **reformulé (T1)** : micro de A = 12/120 = 0,100 ; 12 documents au support micro, 6 au macro (pages blanches hors de D^M). |
 | app `::test_applicabilite__pipeline_non_applicable_nannule_pas_le_test_des_autres` | A6 | **reformulé (support)** : C, non applicable, ne change pas le support apparié de (A, B), qui compte 8 documents. La p (0,0078) relève de la tranche I. |
@@ -601,12 +601,35 @@ Test à inverser : `tests/evaluation/test_metrics_text.py::test_cer_weight_is_re
 - B3 : population cible et pondération des grappes publiées, macro par grappe différent du macro par document ;
 - propriétés P de A1 et A2.
 
+**1b · Tests de la révision n° 7** (écrits, rouges ; formes d'API fixées dans `tests/adversarial/_contrat.py`) :
+
+| Fichier | Test | Invariant / ligne de la rév. 7 |
+|---|---|---|
+| `applicabilite_echecs/test_ce_observations_partielles.py` | `test_f_observation_partielle__conservee_avec_sa_statistique[cer, bow_recall]` | § 2.1 f, une observation partielle est conservée (`stat_partielle`), jamais jetée |
+| id. | `test_f_deux_agregats__conditionnel_et_operationnel_avec_couverture[cer, bow_recall]` | § 2.1 f, deux qualités (CER : 1/28 et 21/56 ; rappel : 9/10 et 3/5) et couverture 2 / 1 / 1 / 4 |
+| id. | `test_f_sans_partielle_ni_echec__les_deux_qualites_coincident` | § 2.1 f, sans part manquante les deux qualités sont égales |
+| id. | `test_f_evaluation_lit_letat_declare__etape_complete_texte_identique`, `…__etape_partielle_texte_complet` | § 2.1 f, l'évaluation lit l'état déclaré, ne le reconstruit pas |
+| id. | `test_f_persistance__aller_retour_json_conserve_partielle_agregats_couverture` | § 2.1 f, persistance |
+| `applicabilite_echecs/test_ce_saknussemm_issues.py` | `test_f_quatre_classes__comptees_par_unite_et_par_pipeline` | § 2.1 f, quatre classes comptées par unité et par pipeline (corrigée, `review_required`, abstention, refus par code, repli par code) |
+| id. | `test_f_seul_le_repli_rend_lunite_partielle` | § 2.1 f, seul le repli rend l'unité `partial` |
+| id. | `test_f_unite_entierement_en_repli__jamais_ok_et_observation_partielle[chunk_error_absorbed, all_attempts_exhausted]` | § 2.1 f, 100 % en repli n'est jamais `ok` (la seconde variante dure ≈ 12 s : délais d'attente de la bibliothèque) |
+| id. | `test_f_le_cer_ne_depend_pas_de_la_classe` | § 2.1 f, même texte sorti des trois décisions et du repli : même statistique, seul l'axe 3 change |
+| id. | `test_f_unite_partielle_mixte__statistique_partielle_sur_le_texte_produit` | § 2.1 f, `stat_partielle` (2, 0, 0, 75) |
+| id. | `test_f_persistance__aller_retour_json_conserve_les_comptes_de_classes` | § 2.1 f, persistance |
+| `metriques_stats/test_ms_exploratoire_alignement.py` | `test_exploratoire__le_payload_dinference_porte_son_statut[wilcoxon, friedman]` | rév. 7, statut `exploratory` du payload ; p publiées comme nombres |
+| id. | `test_exploratoire__aucun_libelle_de_verdict_dans_les_sections[…]` (16 cas) | rév. 7, aucun verdict dans `cross_engine` et `key_measures`, FR et EN |
+| id. | `test_exploratoire__le_texte_dinference_n_emploie_aucun_verdict[…]` (4 cas) | rév. 7, `_inference_text` |
+| id. | `test_alignement__confusions_et_taxonomie_portent_leur_chemin`, `…__les_comptes_portent_la_convention_canonique` | rév. 7, `alignment_path` `"rapidfuzz"` / `"canonical"` |
+| id. | `test_alignement__confusions_sans_concordance_…`, `…__taxonomie_sans_concordance_…`, `…__concordance_vraie_…` | rév. 7, « ab » → « ba » : la concordance avec les comptes canoniques vaut faux ; vraie sans ex æquo |
+
+**Inversés par la révision n° 7** (verdict « significatif » remplacé par l'étiquette « exploratoire » ; assertions numériques inchangées) : `tests/reports/test_cross_engine_section.py::{test_significant_verdict_and_parsed_columns, test_verdict_reads_the_holm_corrected_p, test_inference_block_renders_ranks_posthoc_and_intervals, test_renders_english_labels}` ; `tests/reports/test_key_measures_section.py::{test_significance_as_neutral_fact_wilcoxon, test_three_engines_are_a_friedman_with_its_pairs, test_a_friedman_not_rejected_after_holm_says_so}` ; `tests/interfaces/test_real_corpus_bnl.py::test_bnl_posthoc_shows_the_pair_that_differs` ; `tests/interfaces/web/test_history_trends.py::{test_history_says_when_a_slope_is_not_significant, test_history_says_when_a_slope_is_significant, test_history_renders_significant_change_point}`.
+
 Tests à inverser :
 - `tests/app/test_unit_outcome.py::test_max_error_is_zero_for_a_higher_is_better_metric` ;
 - `…::test_max_error_scores_the_failure_like_an_empty_page`, qui devient le test de `empty_page` ;
 - `applicabilite_echecs/…::test_troncature__notee_attendue_et_signalee` (vert), qui devient « exclu par défaut, noté sous `empty_page` ».
 
-**Bilan 1a + 1b** : 17 valides (15 importés tels quels, 2 reformulés) et 9 discutables reformulés.
+**Bilan 1a + 1b** : 17 valides (14 importés tels quels, 3 reformulés) et 9 discutables reformulés, plus les tests de la révision n° 7 (42 cas écrits, 11 tests inversés).
 
 Les autres tests sont répartis ainsi :
 - **valides** (34) : 3 coûts d'échec partiel, 5 `correction`/`decisions` et 5 `a5` en tranche 2 (`a5` aussi en 3) ; 2 `a7` et 7 de provenance en tranche 3 ; 12 de mise en page en tranche 4 ;

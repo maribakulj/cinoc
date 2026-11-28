@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from fastapi import FastAPI
 from fastapi.templating import Jinja2Templates
 from fastapi.testclient import TestClient
@@ -11,6 +12,7 @@ from fastapi.testclient import TestClient
 from cinoc.adapters.storage.history_store import HistoryRecord, HistoryStore
 from cinoc.interfaces.web.app import _TEMPLATES_DIR
 from cinoc.interfaces.web.routers.home import build_home_router
+from tests.adversarial._contrat import etiquette_exploratoire, verdicts
 
 
 def _history_body(tmp_path: Path, store: HistoryStore, lang: str = "fr") -> str:
@@ -85,9 +87,11 @@ def test_history_renders_slope_without_rupture_on_short_series(
     assert "rupture dès" not in body
 
 
+@pytest.mark.tranche("1b")
 def test_history_renders_significant_change_point(tmp_path: Path) -> None:
-    # 6 runs à 0.30 puis 6 à 0.10 : Pettitt significatif (K=36, p≈0.031) —
-    # la carte nomme le premier run du nouveau régime (r07) et la p-value.
+    # 6 runs à 0.30 puis 6 à 0.10 : Pettitt (K=36, p≈0.031) — la carte nomme le
+    # premier run du nouveau régime (r07) et la p-value. Rév. 7 : l'étiquette est
+    # « exploratoire », aucun verdict « significatif » n'est employé.
     store = HistoryStore(tmp_path / "h.db")
     store.add(
         [
@@ -100,12 +104,16 @@ def test_history_renders_significant_change_point(tmp_path: Path) -> None:
     assert "rupture dès r07" in body
     assert "(p=0.031)" in body
     assert "-0.2000" in body  # Δ signé (amélioration)
+    assert etiquette_exploratoire(body) and not verdicts(body)
+    assert etiquette_exploratoire(_history_body(tmp_path, store, lang="en"), "en")
 
 
+@pytest.mark.tranche("1b")
 def test_history_says_when_a_slope_is_not_significant(tmp_path: Path) -> None:
     """Défaut 10 de l'audit D-264 : la pente s'affichait sans test. Six runs
-    qui fluctuent (p = 0,186) : la carte donne la p-value et dit « non
-    significative » — la pente n'est pas présentée comme une tendance."""
+    qui fluctuent (p = 0,186) : la carte donne la p-value. Rév. 7 (inverse) : elle
+    ne dit plus « non significative » mais étiquette la pente « exploratoire »
+    (un test de l'ancienne inférence n'est jamais un verdict)."""
     store = HistoryStore(tmp_path / "h.db")
     store.add(
         [
@@ -115,11 +123,13 @@ def test_history_says_when_a_slope_is_not_significant(tmp_path: Path) -> None:
     )
     body = _history_body(tmp_path, store)
     assert "p=0.186" in body
-    assert "non significative" in body
+    assert etiquette_exploratoire(body) and not verdicts(body)
     english = _history_body(tmp_path, store, lang="en")
-    assert "p=0.186 · not significant" in english
+    assert "p=0.186" in english and "p=0.186 · not significant" not in english
+    assert etiquette_exploratoire(english, "en") and not verdicts(english)
 
 
+@pytest.mark.tranche("1b")
 def test_history_says_when_a_slope_is_significant(tmp_path: Path) -> None:
     store = HistoryStore(tmp_path / "h.db")
     store.add(
@@ -129,8 +139,12 @@ def test_history_says_when_a_slope_is_significant(tmp_path: Path) -> None:
         ]
     )
     body = _history_body(tmp_path, store)
-    assert "significative (p ≤ 0,05)" in body
-    assert "non significative" not in body
+    # Rév. 7 (inverse) : la p (linregress : 3,4·10⁻⁶, affichée « 0.000 ») reste
+    # publiée comme nombre ; plus de « significative (p ≤ 0,05) », la pente est
+    # étiquetée exploratoire.
+    assert "p=0.000" in body
+    assert etiquette_exploratoire(body) and not verdicts(body)
+    assert "significative (p ≤ 0,05)" not in body
 
 
 def test_history_says_two_runs_cannot_be_tested(tmp_path: Path) -> None:

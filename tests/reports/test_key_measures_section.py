@@ -5,6 +5,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+import pytest
+
 from cinoc.domain.run import RunManifest
 from cinoc.evaluation.analysis import (
     Analysis,
@@ -16,6 +18,7 @@ from cinoc.evaluation.analysis import (
 from cinoc.evaluation.result import MetricScore, PipelineResult, RunResult
 from cinoc.reports.section import Section, SectionContext
 from cinoc.reports.sections.key_measures import KeyMeasuresSection
+from tests.adversarial._contrat import etiquette_exploratoire, verdicts
 
 FIXED = datetime(2026, 1, 1, tzinfo=UTC)
 
@@ -104,13 +107,17 @@ def test_dot_plot_with_ci_when_inference_present() -> None:
     assert "dot = the table’s CER (micro" in english and "point =" not in english
 
 
+@pytest.mark.tranche("1b")
 def test_significance_as_neutral_fact_wilcoxon() -> None:
     # k=2 → Wilcoxon : le RÉSULTAT DU TEST est un fait, pas un gagnant.
     html = KeyMeasuresSection().render(_result(p=0.002), SectionContext())
     assert html is not None
     assert "Wilcoxon signé-rangs" in html and "p = 0,0020" in html
     assert "corrigée de Holm sur 1 test(s) : 0,0020" in html
-    assert "significative" in html  # qualifie la DIFFÉRENCE, pas un moteur
+    # Rév. 7 (inverse) : la phrase donne les p comme nombres, sans qualifier la
+    # différence de « significative » ; le test est étiqueté exploratoire.
+    assert not verdicts(html)
+    assert etiquette_exploratoire(html)
     # Le support du test (cas complets, apparié) est dit : ce n'est pas celui
     # d'un agrégat quand un moteur a perdu une unité.
     assert "(20 cas complets)" in html
@@ -206,6 +213,7 @@ def _friedman_result(**update: object) -> RunResult:
     )
 
 
+@pytest.mark.tranche("1b")
 def test_three_engines_are_a_friedman_with_its_pairs() -> None:
     """D7 : à 3 pipelines le test est un Friedman — jamais « Wilcoxon » — et
     le post-hoc nomme la seule paire qui diffère."""
@@ -213,14 +221,18 @@ def test_three_engines_are_a_friedman_with_its_pairs() -> None:
     assert html is not None
     assert "Friedman : p = 0,0017" in html and "Wilcoxon" not in html
     assert "entre les 3 moteurs" in html
-    assert "paires significatives : a – c." in html
+    assert "a – c" in html and "paires significatives" not in html
+    assert not verdicts(html)
     # La phrase qui tirait une significativité de groupes disjoints est retirée.
     assert "hors d'un même groupe" not in html
     en = KeyMeasuresSection().render(_friedman_result(), SectionContext(lang="en"))
     assert en is not None
-    assert "Friedman: p = 0.0017" in en and "significant pairs: a – c." in en
+    assert "Friedman: p = 0.0017" in en
+    assert "a – c" in en and "significant pairs" not in en
+    assert not verdicts(en)
 
 
+@pytest.mark.tranche("1b")
 def test_a_friedman_not_rejected_after_holm_says_so() -> None:
     html = KeyMeasuresSection().render(
         _friedman_result(
@@ -231,7 +243,7 @@ def test_a_friedman_not_rejected_after_holm_says_so() -> None:
     )
     assert html is not None
     assert "p = 0,0572, corrigée de Holm sur 7 test(s) : 0,3430" in html
-    assert "non significative" in html
+    assert not verdicts(html) and etiquette_exploratoire(html)
     assert "Post-hoc de Nemenyi non effectué" in html
 
 

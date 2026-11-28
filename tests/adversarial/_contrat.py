@@ -54,6 +54,31 @@ Invention hors référence (§ 2.1 c, N3, C5) — une analyse
     ``documents``, ``invented`` ({pipeline : unités}) ; ``coverage`` :
     {pipeline : (mesurées, attendues)} sur les pages sans référence
 
+Observations partielles et issues de la correction structurée (§ 2.1 f,
+révision n° 7) — formes **fixées ici** (le contrat nomme ``stat_partielle``
+et le statut ``exploratory`` ; le reste est la forme choisie par le test) :
+    ``MetricScore.stat_partielle`` : la statistique calculée sur ce qui a été
+    produit (axe 3 ``partial_output``/``truncated_output``), ``None`` sans sortie
+    ``PipelineResult.operational_aggregate`` : un ``MetricScore`` par métrique,
+    la qualité opérationnelle (partielles notées telles que produites, échecs
+    notés comme sortie vide) ; ``PipelineResult.aggregate`` reste la qualité
+    conditionnelle. La couverture (``expected``, ``coverage``,
+    ``micro_support``) est celle de l'agrégat conditionnel, reprise à
+    l'identique sur l'opérationnel
+    ``StepOutput.partial`` : motif (``str``) d'un module qui déclare son étape
+    partielle, sur le modèle de ``StepOutput.truncation`` ; l'unité devient
+    ``UnitOutcome = "partial"``
+    ``DocumentUsage.line_outcomes`` (par unité) et ``PipelineResult.line_outcomes``
+    (par pipeline) : ``corrected``, ``review_required``, ``abstained`` (entiers),
+    ``refused`` et ``fallback`` ({code : nombre}) — ``Mapping`` ou attributs
+
+Verdicts exploratoires et chemins d'alignement (révision n° 7) :
+    ``InferencePayload.status == "exploratory"`` ;
+    ``DiagnosticsPayload.alignment_path`` et ``TaxonomyPayload.alignment_path``
+    ``== "rapidfuzz"`` ; ``EditCounts.alignment_path == "canonical"`` ;
+    ``matches_canonical_counts`` (booléen) sur les deux payloads : vrai si la
+    ventilation S/D/I de l'analyse égale celle des comptes canoniques
+
 Déclarations (§ 2.1 b, c, e) :
     ``FailurePolicy`` ∋ ``empty_page`` ; ``UnitOutcome`` ∋ ``partial`` ;
     ``GroundTruthRef.status`` ∈ {transcribed, not_transcribed} (l'importeur) ;
@@ -63,13 +88,17 @@ Déclarations (§ 2.1 b, c, e) :
 
 from __future__ import annotations
 
+import dataclasses
+import re
 from collections.abc import Mapping
 from typing import Any, get_args
 
 from cinoc.domain.corpus import CorpusSpec
 from cinoc.domain.documents import DocumentRef, GroundTruthRef
 from cinoc.domain.evaluation import FailurePolicy
-from cinoc.evaluation.result import PipelineResult, RunResult
+from cinoc.domain.usage import UnitOutcome
+from cinoc.evaluation.result import MetricScore, PipelineResult, RunResult
+from cinoc.pipeline.types import StepOutput
 
 
 class ContratNonImplemente(NotImplementedError):
@@ -104,7 +133,10 @@ def statistique(score: object) -> Any:
 
 def composante(score: object, nom: str) -> Any:
     """Composante ``nom`` de la statistique de ``score`` (§ 2.1 a)."""
-    stat = statistique(score)
+    return _composante_de(statistique(score), nom)
+
+
+def _composante_de(stat: object, nom: str) -> Any:
     if stat is None:
         raise AssertionError(f"statistique absente, composante {nom!r} attendue")
     if isinstance(stat, Mapping):
@@ -243,4 +275,145 @@ def corpus_declare(
             "target_population": target_population,
             "cluster_weighting": cluster_weighting,
         }
+    )
+
+
+# --- Observations partielles et issues saknussemm (§ 2.1 f, révision n° 7) --
+
+#: Les cinq compteurs publiés par unité et par pipeline (§ 2.1 f).
+COMPTES_ENTIERS = ("corrected", "review_required", "abstained")
+COMPTES_PAR_CODE = ("refused", "fallback")
+
+
+def issue_partielle() -> str:
+    """``"partial"``, si ``UnitOutcome`` le déclare (§ 2.1 e, f)."""
+    if "partial" not in get_args(UnitOutcome):
+        raise ContratNonImplemente(
+            f"UnitOutcome = {get_args(UnitOutcome)} sans 'partial' "
+            "(CONTRATS.md § 2.1 e, f)"
+        )
+    return "partial"
+
+
+def statistique_partielle(score: object) -> Any:
+    """Statistique calculée sur ce qui a été produit, gardée à part (§ 2.1 b, f)."""
+    return exige(score, "stat_partielle", "§ 2.1 b, f, stat_partielle")
+
+
+def composante_partielle(score: object, nom: str) -> Any:
+    """Composante ``nom`` de ``stat_partielle`` (§ 2.1 f)."""
+    return _composante_de(statistique_partielle(score), nom)
+
+
+def agregat_operationnel(
+    result: RunResult, pipeline: str, metric: str, view: str = "texte"
+) -> MetricScore:
+    """Agrégat **opérationnel** d'un (pipeline, vue, métrique) (§ 2.1 f).
+
+    ``PipelineResult.aggregate`` reste l'agrégat conditionnel (défaut).
+    """
+    for entry in result.pipelines:
+        if (entry.pipeline, entry.view) == (pipeline, view):
+            publies = exige(
+                entry, "operational_aggregate", "§ 2.1 f, qualité opérationnelle"
+            )
+            for score in publies:
+                if score.metric == metric:
+                    return score  # type: ignore[no-any-return]
+            raise AssertionError(f"métrique {metric!r} absente de l'opérationnel")
+    raise AssertionError(f"({pipeline!r}, {view!r}) absent des résultats")
+
+
+def sortie_partielle(sortie: StepOutput, raison: str) -> StepOutput:
+    """``sortie`` déclarée **partielle** par son module (§ 2.1 f, couche 5)."""
+    noms = {champ.name for champ in dataclasses.fields(StepOutput)}
+    if "partial" not in noms:
+        raise ContratNonImplemente(
+            "StepOutput.partial absent : un module ne peut pas déclarer son "
+            "étape partielle (CONTRATS.md § 2.1 f, « Où vit chaque état »)"
+        )
+    return dataclasses.replace(sortie, partial=raison)  # type: ignore[call-arg]
+
+
+def comptes_lignes(objet: object) -> dict[str, Any]:
+    """Comptes de lignes d'une unité (``DocumentUsage``) ou d'un pipeline
+    (``PipelineResult``) : ``corrected``, ``review_required``, ``abstained``,
+    ``refused`` et ``fallback`` (§ 2.1 f). Forme normalisée en dictionnaire."""
+    ou = "§ 2.1 f, comptes publiés par unité et par pipeline"
+    brut = exige(objet, "line_outcomes", ou)
+
+    def lire(nom: str) -> Any:
+        if isinstance(brut, Mapping):
+            if nom not in brut:
+                raise ContratNonImplemente(f"line_outcomes[{nom!r}] absent ({ou})")
+            return brut[nom]
+        return exige(brut, nom, ou)
+
+    return {
+        **{nom: int(lire(nom)) for nom in COMPTES_ENTIERS},
+        **{nom: dict(lire(nom)) for nom in COMPTES_PAR_CODE},
+    }
+
+
+def somme_comptes(unites: list[dict[str, Any]]) -> dict[str, Any]:
+    """Somme des comptes de lignes de plusieurs unités (oracle des totaux)."""
+    total: dict[str, Any] = {
+        **dict.fromkeys(COMPTES_ENTIERS, 0),
+        **{nom: {} for nom in COMPTES_PAR_CODE},
+    }
+    for comptes in unites:
+        for nom in COMPTES_ENTIERS:
+            total[nom] += comptes[nom]
+        for nom in COMPTES_PAR_CODE:
+            for code, n in comptes[nom].items():
+                total[nom][code] = total[nom].get(code, 0) + n
+    return total
+
+
+# --- Verdicts exploratoires et chemins d'alignement (révision n° 7) ---------
+
+
+#: Un libellé de **verdict** (rév. 7, § 2.1 d) : « significatif(s) /
+#: significative(s) » (FR), « significant » (EN) et leurs abréviations
+#: « non sig. » / « not sig. ». Les noms communs « significativité » et
+#: « significance » n'en sont pas.
+VERDICT = re.compile(
+    r"(?i)\bsignificati(?:f|fs|ve|ves)\b|\bsignificant\b|\b(?:non|not) sig\."
+)
+
+
+def verdicts(texte: str) -> list[str]:
+    """Les libellés de verdict que ``texte`` emploie (vide : aucun)."""
+    return VERDICT.findall(texte)
+
+
+def etiquette_exploratoire(texte: str, lang: str = "fr") -> bool:
+    """``texte`` porte l'étiquette « exploratoire » (FR) / « exploratory » (EN)
+    d'un résultat de test (rév. 7). Le singulier seulement : les sections
+    écrivent déjà « les exploratoires » / « exploratory metrics|ones » pour une
+    *catégorie de métriques*, sans rapport avec un verdict de test."""
+    motif = (
+        r"\bexploratoire\b"
+        if lang == "fr"
+        else r"\bexploratory\b(?!\s+(?:metrics?|ones)\b)"
+    )
+    return re.search(motif, texte, re.IGNORECASE) is not None
+
+
+def statut_inference(payload: object) -> Any:
+    """Statut du payload d'inférence : ``"exploratory"`` (révision n° 7)."""
+    return exige(payload, "status", "rév. 7, verdicts de l'ancienne inférence")
+
+
+def chemin_alignement(objet: object) -> Any:
+    """``alignment_path`` d'une analyse qualitative (``"rapidfuzz"``) ou de
+    comptes (``"canonical"``) (rév. 7, § 2.1 a, § 6.2)."""
+    return exige(objet, "alignment_path", "rév. 7, chemins d'alignement étiquetés")
+
+
+def concordance_canonique(payload: object) -> Any:
+    """Vrai si la ventilation S/D/I de l'analyse égale celle des comptes
+    canoniques ; faux sinon (rév. 7 : l'analyse ne prétend pas les décomposer)."""
+    return exige(
+        payload, "matches_canonical_counts", "rév. 7, chemins d'alignement étiquetés"
     )

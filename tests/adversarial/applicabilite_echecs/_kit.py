@@ -33,6 +33,7 @@ from cinoc.domain.pipeline import PipelineSpec, PipelineStep
 from cinoc.domain.run_spec import RunSpec
 from cinoc.domain.usage import ResourceUsage
 from cinoc.evaluation.result import MetricScore, RunResult
+from tests.adversarial._contrat import sortie_partielle
 
 T = ArtifactType
 
@@ -48,7 +49,9 @@ class TextBrick:
     lever. ``usage`` est remonté à chaque succès (moteur facturé). ``inline``
     : documents pour lesquels l'artefact est rendu **sans contenu**
     (``uri=None``) ; ``dangling`` : documents pour lesquels l'URI désigne un
-    fichier jamais écrit ; ``truncate`` : documents dont la sortie est coupée.
+    fichier jamais écrit ; ``truncate`` : documents dont la sortie est coupée ;
+    ``partial`` : documents pour lesquels la brique déclare son étape partielle
+    (§ 2.1 f), avec le texte complet ou non qu'elle a rendu.
     """
 
     name: str
@@ -59,6 +62,7 @@ class TextBrick:
     inline: frozenset[str] = frozenset()
     dangling: frozenset[str] = frozenset()
     truncate: frozenset[str] = frozenset()
+    partial: frozenset[str] = frozenset()
     calls: list[str] = field(default_factory=list)
     version: str = "1.0"
 
@@ -97,11 +101,14 @@ class TextBrick:
             uri=None if document_id in self.inline else str(path),
             content_hash=compute_content_hash(payload),
         )
-        return StepOutput(
+        output = StepOutput(
             artifacts={self.out_type: artifact},
             usage=self.usage,
             truncation="max_tokens" if document_id in self.truncate else None,
         )
+        if document_id in self.partial:
+            output = sortie_partielle(output, "ce_partial")
+        return output
 
 
 @dataclass(frozen=True)
