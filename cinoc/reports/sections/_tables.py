@@ -186,10 +186,11 @@ def other_quality_legend(result: RunResult, lang: str) -> str:
         lang,
         f"Chaque valeur est celle de la qualité <b>{principal}</b> ; quand "
         f"l'autre qualité (<b>{other}</b>) diffère, elle est écrite à côté avec "
-        "sa couverture « notées/attendues ».",
+        "sa couverture « notées/attendues » ; sans second chiffre, les deux "
+        "qualités sont égales.",
         f"Each value is the <b>{principal}</b> quality; when the other quality "
         f"(<b>{other}</b>) differs, it is written next to it with its coverage "
-        "“scored/expected”.",
+        "“scored/expected”; with no second figure, the two qualities are equal.",
     )
 
 

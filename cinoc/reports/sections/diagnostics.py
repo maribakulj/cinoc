@@ -65,7 +65,7 @@ def _confusion_chip(pair: CharConfusion, max_count: int) -> str:
 
 def _is_truncated(block: PipelineConfusions) -> bool:
     """La liste est tronquée : moins de paires montrées que de paires distinctes."""
-    return block.n_pairs is not None and len(block.pairs) < block.n_pairs
+    return len(block.pairs) < block.n_pairs
 
 
 def _truncation_note(block: PipelineConfusions, lang: str) -> str:
@@ -76,10 +76,10 @@ def _truncation_note(block: PipelineConfusions, lang: str) -> str:
     k, n, s = len(block.pairs), block.n_pairs, block.n_substitutions
     text = localized(
         lang,
-        f"Liste tronquée : les {k} plus fréquentes sur {n} : "
-        f"{k} paires sur {n} paires distinctes ({s} substitutions).",
-        f"Truncated list: the {k} most frequent of {n}: "
-        f"{k} of {n} distinct pairs ({s} substitutions).",
+        f"Liste tronquée : les {k} paires les plus fréquentes sur {n} paires "
+        f"distinctes ({s} substitutions).",
+        f"Truncated list: the {k} most frequent of {n} distinct pairs "
+        f"({s} substitutions).",
     )
     return f'<p class="muted cf-truncated">{text}</p>'
 
@@ -109,13 +109,8 @@ def _confusion_flow(
     text = _CONFUSION_TEXT.get(lang, _CONFUSION_TEXT["fr"])
     # Ces confusions ne sont les substitutions du CER que si l'alignement qui les
     # nomme égale les comptes canoniques (``matches_canonical_counts``, D8) **et**
-    # que la liste est complète : une liste tronquée ne décompose rien (N7), pas
-    # plus qu'une liste dont on ne sait pas si elle l'est.
-    complete = all(
-        block.n_pairs is not None and not _is_truncated(block)
-        for block in payload.confusions
-        if block.pairs
-    )
+    # que la liste est complète : une liste tronquée ne décompose rien (N7).
+    complete = not any(_is_truncated(block) for block in payload.confusions)
     decomposes = (
         text["decomposes"] if payload.matches_canonical_counts and complete else ""
     )

@@ -255,16 +255,15 @@ class PipelineConfusions(BaseModel):
     ``pairs`` est **tronquée** aux plus fréquentes : ``n_pairs`` (paires
     distinctes) et ``n_substitutions`` (leur total) disent sur quoi elle porte,
     pour qu'une liste de dix paires ne passe pas pour la décomposition des
-    substitutions d'un corpus qui en compte douze (N7). ``None`` : un JSON qui ne
-    l'écrivait pas.
+    substitutions d'un corpus qui en compte douze (N7).
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     pipeline: str = Field(min_length=1, max_length=128)
     pairs: tuple[CharConfusion, ...] = ()
-    n_pairs: int | None = Field(default=None, ge=0)
-    n_substitutions: int | None = Field(default=None, ge=0)
+    n_pairs: int = Field(ge=0)
+    n_substitutions: int = Field(ge=0)
 
 
 class WorstLine(BaseModel):
@@ -1204,10 +1203,10 @@ class PipelineDecisions(BaseModel):
     #: sous-compterait sans le dire — et le pipeline qui en porte une l'est
     #: aussi. Aucun compte n'est alors publié : ``None``, jamais un zéro.
     status: Literal["not_declared"] | None = None
-    n_lines: int | None = Field(default=None, ge=0)
-    corrected: int | None = Field(default=None, ge=0)
-    review_required: int | None = Field(default=None, ge=0)
-    abstained: int | None = Field(default=None, ge=0)
+    n_lines: int | None = Field(ge=0)
+    corrected: int | None = Field(ge=0)
+    review_required: int | None = Field(ge=0)
+    abstained: int | None = Field(ge=0)
     #: Refus techniques par code, triés.
     refused: tuple[DecisionReasonCount, ...] = ()
     #: Replis (incidents d'exécution) par code, triés.

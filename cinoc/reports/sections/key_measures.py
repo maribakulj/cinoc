@@ -177,6 +177,7 @@ class KeyMeasuresSection:
                     result, pipes, cols, durations, order, lang,
                     homonym_hints(result.manifest),
                 )
+                + f'<p class="muted">{other_quality_legend(result, lang)}</p>\n'
                 + self._dotplot(result, view, order, lang)
                 + self._significance(
                     result, view, lang, view_label(view, lang) if multi else None
@@ -216,7 +217,6 @@ class KeyMeasuresSection:
         )
         return Html(
             f"<h2>{title}</h2>\n<p class=\"muted\">{caption}</p>\n"
-            f'<p class="muted">{other_quality_legend(result, lang)}</p>\n'
             + "".join(blocks)
             + _duration_note(durations, lang)
         )

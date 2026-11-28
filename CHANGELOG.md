@@ -146,6 +146,8 @@ suivantes ne les répètent pas.
     déclarée de même nom (le macro par grappe ne les fusionne plus) ;
     `stat_partielle` est `None` pour une sortie illisible, même partielle ou
     tronquée (sa statistique vide va dans `stat_vide`).
+  - dette connue, antérieure : le texte du widget « comparer un run »
+    (`compare.js`) n'existe qu'en français ; il n'a pas de version anglaise.
 
 **Format**
 
@@ -170,7 +172,7 @@ suivantes ne les répètent pas.
   Seconde revue de 1a + 1b : un JSON **sans** `schema_version` est refusé comme
   un JSON antérieur (le chargeur et le widget « comparer un run »), le CSV
   exporte les **deux qualités** (colonnes `quality` et `principal`), `diagnostics`
-  porte `n_pairs` et `n_substitutions` par pipeline (une liste de confusions
+  porte `n_pairs` et `n_substitutions` par pipeline, obligatoires (une liste de confusions
   tronquée le dit), et `decisions` porte `status` : `not_declared` pour un
   sidecar sans `line_class`, sans aucun compte.
 

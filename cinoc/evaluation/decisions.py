@@ -146,7 +146,14 @@ def _pipeline_decisions(
     if not vu:
         return None
     if undeclared:
-        return PipelineDecisions(pipeline=pipeline, status="not_declared")
+        return PipelineDecisions(
+            pipeline=pipeline,
+            status="not_declared",
+            n_lines=None,
+            corrected=None,
+            review_required=None,
+            abstained=None,
+        )
     return PipelineDecisions(
         pipeline=pipeline,
         n_lines=sum(counts.values()),
