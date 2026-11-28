@@ -233,41 +233,23 @@ def _somme(stats: list[dict[str, int]]) -> dict[str, int]:
     return {nom: sum(s[nom] for s in stats) for nom in _COMPOSANTES}
 
 
-def grappe_serialisee(
-    data: Mapping[str, Any], document: str, declarees: set[str]
-) -> str:
-    """La grappe de ``document`` **lue dans le JSON** (``CONTRATS.md`` D4).
+def grappe_serialisee(data: Mapping[str, Any], document: str) -> str:
+    """La grappe de ``document`` **lue dans le JSON** (``CONTRATS.md`` D4, nom
+    fixé le 28/11 : champ ``cluster`` de l'entrée ``documents``).
 
-    Le nom du champ n'est pas fixé : on cherche, dans tout objet qui désigne le
-    document (``document_id`` ou ``id``), une valeur qui est l'une des grappes
-    déclarées par le corpus. Aucune trouvée : l'archive ne dit pas la grappe.
+    Correction du 28/11 : la version précédente cherchait une valeur parmi des
+    grappes « déclarées » qu'aucun appelant ne fournissait — l'ensemble était
+    vide et la recherche échouait quel que soit le JSON.
     """
-
-    def parcourir(noeud: object) -> str | None:
-        if isinstance(noeud, dict):
-            if document in (noeud.get("document_id"), noeud.get("id")):
-                for valeur in noeud.values():
-                    if isinstance(valeur, str) and valeur in declarees:
-                        return valeur
-            for valeur in noeud.values():
-                trouve = parcourir(valeur)
-                if trouve is not None:
-                    return trouve
-        elif isinstance(noeud, list):
-            for element in noeud:
-                trouve = parcourir(element)
-                if trouve is not None:
-                    return trouve
-        return None
-
-    trouvee = parcourir(data)
-    if trouvee is None:
-        raise AssertionError(
-            f"la grappe du document {document!r} est absente du JSON du RunResult "
-            "(CONTRATS.md D4 : l'archive porte, pour chaque document, sa grappe)"
-        )
-    return trouvee
-
+    for entree in data.get("documents", ()):
+        if entree.get("document_id") == document:
+            grappe = entree.get("cluster")
+            assert isinstance(grappe, str) and grappe, (
+                f"la grappe du document {document!r} est absente du JSON "
+                "(champ « cluster » de l'entrée documents, CONTRATS.md D4)"
+            )
+            return grappe
+    raise AssertionError(f"le document {document!r} est absent du JSON")
 
 def _contributions(
     data: Mapping[str, Any],
@@ -363,13 +345,12 @@ def recalcule(
     ]
     if scalaires:
         if ponderation == "cluster":
-            declarees = set(grappes.values()) if grappes else set()
             par_grappe: dict[str, list[Fraction]] = {}
             for document, scalaire in scalaires:
                 cle = (
                     grappes[document]
                     if grappes
-                    else grappe_serialisee(data, document, declarees)
+                    else grappe_serialisee(data, document)
                 )
                 par_grappe.setdefault(cle, []).append(scalaire)
             moyennes = [sum(g) / len(g) for g in par_grappe.values()]
